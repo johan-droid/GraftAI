@@ -9,7 +9,8 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # Load env FIRST so all modules can read env vars
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
+dotenv_path = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(dotenv_path=dotenv_path)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

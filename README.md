@@ -253,6 +253,17 @@ pytest
 - Confirm HTTPS with TLS terminated at CDN/load balancer
 - Enable periodic dependency audit and security scanning.
 
+### Render-specific backend deployment
+
+- Set `Start Command:`
+  - `cd backend && uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT --workers 4 --proxy-headers`
+  - alternative: `cd backend && gunicorn -w 4 -k uvicorn.workers.UvicornWorker backend.api.main:app --bind 0.0.0.0:$PORT`
+- Environment variables:
+  - `PYTHONPATH=/opt/render/project/src/backend` if Render is using repository root as workdir
+  - `CORS_ORIGINS=https://yourfrontend.com`
+  - `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `JWT_SECRET`, `ENV=production`, `DEBUG=false`
+- Add fallback entrypoint in root: `app.py` (already provided) so this is compatible with `uvicorn app:app`.
+
 ---
 
 ## Troubleshooting

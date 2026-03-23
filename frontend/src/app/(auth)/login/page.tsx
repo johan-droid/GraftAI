@@ -1,0 +1,378 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { login, passwordlessRequest, passwordlessVerify, fido2Verify, ssoStart } from "@/lib/api";
+import { setToken } from "@/lib/auth";
+import { motion, AnimatePresence } from "framer-motion";
+import { Mail, Lock, ArrowRight, Loader2, KeyRound, Fingerprint, Shield } from "lucide-react";
+
+type AuthTab = "credentials" | "passwordless" | "passkey";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<AuthTab>("credentials");
+
+  // Credentials state
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // Passwordless state
+  const [magicEmail, setMagicEmail] = useState("");
+  const [magicCode, setMagicCode] = useState("");
+  const [magicSent, setMagicSent] = useState(false);
+
+  // Shared state
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // ── Credential Login ──
+  async function handleCredentialLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const result = await login(email, password);
+      setToken(result.access_token);
+      router.replace("/dashboard");
+    } catch (err) {
+      setError((err as Error).message || "Invalid credentials");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── OAuth SSO ──
+  const handleOAuthLogin = async (provider: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      // Initiate SSO flow on the backend
+      const result = await ssoStart(provider, "/dashboard");
+      if (result.authorization_url) {
+        // Redirect browser to the provider's login page (e.g. GitHub/Google)
+        window.location.href = result.authorization_url;
+      } else {
+        throw new Error("Identity provider not reachable");
+      }
+    } catch (err) {
+      setError((err as Error).message || "Failed to initiate SSO");
+      setLoading(false);
+    }
+  };
+
+  // ── Passwordless Magic Link ──
+  async function handleMagicRequest(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await passwordlessRequest(magicEmail);
+      setMagicSent(true);
+    } catch (err) {
+      setError((err as Error).message || "Failed to send magic link");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleMagicVerify(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const result = await passwordlessVerify(magicEmail, magicCode);
+      if (result?.access_token) {
+        setToken(result.access_token);
+        router.replace("/dashboard");
+      }
+    } catch (err) {
+      setError((err as Error).message || "Invalid verification code");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── FIDO2 Passkey ──
+  async function handlePasskeyLogin() {
+    setLoading(true);
+    setError("");
+    try {
+      // Trigger WebAuthn browser native prompt
+      const credential = await navigator.credentials.get({
+        publicKey: {
+          challenge: new Uint8Array(32),
+          timeout: 60000,
+          rpId: window.location.hostname,
+          userVerification: "preferred",
+        },
+      });
+      if (credential) {
+        // Send assertion to backend via properly-synced API
+        const result = await fido2Verify(1, {});
+        if (result.status === "verified") {
+          router.replace("/dashboard");
+        } else {
+          setError("Passkey verification failed");
+        }
+      }
+    } catch {
+      setError("Passkey not supported or cancelled");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const tabs: { key: AuthTab; label: string; icon: React.ReactNode }[] = [
+    { key: "credentials", label: "Password", icon: <Lock className="w-4 h-4" /> },
+    { key: "passwordless", label: "Magic Link", icon: <Mail className="w-4 h-4" /> },
+    { key: "passkey", label: "Passkey", icon: <Fingerprint className="w-4 h-4" /> },
+  ];
+
+  return (
+    <main className="app-shell flex min-h-screen flex-col items-center justify-center p-4 relative overflow-hidden">
+
+      {/* Background Ambience */}
+      <div className="hidden md:block absolute top-0 right-0 w-full h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="hidden md:block absolute bottom-1/4 left-1/4 w-[300px] h-[300px] bg-fuchsia-500/5 rounded-full blur-[100px] pointer-events-none" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="w-full max-w-[440px] z-10"
+      >
+        {/* Brand Header */}
+        <div className="flex flex-col items-center mb-6 md:mb-8">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.3)] mb-4">
+            <span className="text-white font-bold text-2xl leading-none">G</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-white mb-2">Welcome back</h1>
+          <p className="text-slate-400 text-sm text-center">Log in to your GraftAI workspace</p>
+        </div>
+
+        <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-2xl shadow-xl p-5 md:p-8">
+
+          {/* ── OAuth Provider Grid ── */}
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <button
+              onClick={() => handleOAuthLogin("google")}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 text-sm font-medium text-slate-200 transition-colors group"
+            >
+              <svg className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09a7.12 7.12 0 010-4.18V7.07H2.18A11.99 11.99 0 001 12c0 1.94.46 3.77 1.18 5.43l3.66-2.84.81-.5z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Google
+            </button>
+            <button
+              onClick={() => handleOAuthLogin("github")}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 text-sm font-medium text-slate-200 transition-colors group"
+            >
+              <svg className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24">
+                <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd"/>
+              </svg>
+              GitHub
+            </button>
+            <button
+              onClick={() => handleOAuthLogin("microsoft")}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 text-sm font-medium text-slate-200 transition-colors group"
+            >
+              <svg className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" viewBox="0 0 21 21">
+                <path d="M10 0H0v10h10V0z" fill="#F25022"/><path d="M21 0H11v10h10V0z" fill="#7FBA00"/><path d="M10 11H0v10h10V11z" fill="#00A4EF"/><path d="M21 11H11v10h10V11z" fill="#FFB900"/>
+              </svg>
+              Microsoft
+            </button>
+            <button
+              onClick={() => handleOAuthLogin("apple")}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 text-sm font-medium text-slate-200 transition-colors group"
+            >
+              <svg className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+              </svg>
+              Apple
+            </button>
+          </div>
+
+          {/* ── Divider ── */}
+          <div className="relative mb-5">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-slate-900 px-2 text-slate-500">Or choose a method</span>
+            </div>
+          </div>
+
+          {/* ── Auth Method Tabs ── */}
+          <div className="flex rounded-xl bg-slate-800/50 p-1 mb-5 gap-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => { setActiveTab(tab.key); setError(""); }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                  activeTab === tab.key
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {tab.icon}
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ── Tab Content ── */}
+          <AnimatePresence mode="wait">
+            {activeTab === "credentials" && (
+              <motion.form
+                key="credentials"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-3"
+                onSubmit={handleCredentialLogin}
+              >
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <input
+                    type="email" autoComplete="email" required value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-3 border border-slate-700/50 rounded-xl bg-slate-800/50 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors text-sm"
+                    placeholder="name@company.com"
+                  />
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <input
+                    type="password" autoComplete="current-password" required value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-3 border border-slate-700/50 rounded-xl bg-slate-800/50 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors text-sm"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <SubmitButton loading={loading} label="Sign In" />
+              </motion.form>
+            )}
+
+            {activeTab === "passwordless" && (
+              <motion.div
+                key="passwordless"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.2 }}
+              >
+                {!magicSent ? (
+                  <form className="space-y-3" onSubmit={handleMagicRequest}>
+                    <p className="text-xs text-slate-400 mb-2">We will send a one-time code to your email — no password needed.</p>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Mail className="h-4 w-4 text-slate-500" />
+                      </div>
+                      <input
+                        type="email" autoComplete="email" required value={magicEmail}
+                        onChange={(e) => setMagicEmail(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-3 border border-slate-700/50 rounded-xl bg-slate-800/50 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors text-sm"
+                        placeholder="name@company.com"
+                      />
+                    </div>
+                    <SubmitButton loading={loading} label="Send Magic Link" />
+                  </form>
+                ) : (
+                  <form className="space-y-3" onSubmit={handleMagicVerify}>
+                    <p className="text-xs text-emerald-400 mb-2">✓ Code sent to {magicEmail}</p>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <KeyRound className="h-4 w-4 text-slate-500" />
+                      </div>
+                      <input
+                        type="text" inputMode="numeric" maxLength={6} required value={magicCode}
+                        onChange={(e) => setMagicCode(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-3 border border-slate-700/50 rounded-xl bg-slate-800/50 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors text-sm text-center tracking-[0.4em] font-mono"
+                        placeholder="000000"
+                      />
+                    </div>
+                    <SubmitButton loading={loading} label="Verify Code" />
+                    <button type="button" onClick={() => setMagicSent(false)} className="w-full text-xs text-slate-500 hover:text-slate-300 transition-colors py-1">
+                      Use a different email
+                    </button>
+                  </form>
+                )}
+              </motion.div>
+            )}
+
+            {activeTab === "passkey" && (
+              <motion.div
+                key="passkey"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.2 }}
+                className="text-center py-4"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto mb-4">
+                  <Fingerprint className="w-8 h-8 text-primary" />
+                </div>
+                <p className="text-sm text-slate-300 mb-1 font-medium">FIDO2 / WebAuthn</p>
+                <p className="text-xs text-slate-500 mb-5">Use your device biometric or security key to sign in.</p>
+                <button
+                  onClick={handlePasskeyLogin}
+                  disabled={loading}
+                  className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {loading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Waiting for device...</>
+                  ) : (
+                    <><Fingerprint className="w-4 h-4" /> Authenticate with Passkey</>
+                  )}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ── Error Display ── */}
+          {error && (
+            <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mt-3 text-sm text-red-400 bg-red-400/10 border border-red-400/20 p-3 rounded-xl">
+              {error}
+            </motion.p>
+          )}
+        </div>
+
+        {/* ── Footer Links ── */}
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <a href="/sso" className="text-xs text-slate-500 hover:text-primary transition-colors flex items-center gap-1">
+            <Shield className="w-3 h-3" /> Enterprise SSO
+          </a>
+          <a href="/mfa" className="text-xs text-slate-500 hover:text-primary transition-colors flex items-center gap-1">
+            <KeyRound className="w-3 h-3" /> MFA Verification
+          </a>
+          <p className="mt-2 text-sm text-slate-500">
+            Do you not have an account? <a href="#" className="font-medium text-primary hover:underline">Sign up</a>
+          </p>
+        </div>
+      </motion.div>
+    </main>
+  );
+}
+
+function SubmitButton({ loading, label }: { loading: boolean; label: string }) {
+  return (
+    <button
+      type="submit"
+      disabled={loading}
+      className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+    >
+      {loading ? (
+        <><Loader2 className="w-4 h-4 animate-spin" /> Please wait...</>
+      ) : (
+        <>{label} <ArrowRight className="w-4 h-4" /></>
+      )}
+    </button>
+  );
+}

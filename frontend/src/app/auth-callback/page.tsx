@@ -1,0 +1,62 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { setToken } from "@/lib/auth";
+
+export default function AuthCallback() {
+  const router = useRouter();
+  const [status, setStatus] = useState("Processing...");
+
+  const code = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("code") : null;
+  const state = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("state") : null;
+
+  useEffect(() => {
+    if (!code || !state) {
+      return;
+    }
+
+    const fetchCallback = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          setStatus(data.detail || "SSO callback failed");
+          return;
+        }
+
+        if (data.token?.access_token) {
+          setToken(data.token.access_token);
+          const finalRedirect = data.redirect_to || "/dashboard";
+          router.replace(finalRedirect);
+          return;
+        }
+
+        setStatus("No access token returned from callback");
+      } catch (err) {
+        setStatus((err as Error).message);
+      }
+    };
+
+    fetchCallback();
+  }, [code, state, router]);
+
+  if (!code || !state) {
+    return (
+      <main className="app-shell flex min-h-screen items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900">
+          <p className="text-base text-slate-700 dark:text-slate-200">Missing SSO code/state</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="app-shell flex min-h-screen items-center justify-center px-4 py-8">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900">
+        <p className="text-base text-slate-700 dark:text-slate-200">{status}</p>
+      </div>
+    </main>
+  );
+}

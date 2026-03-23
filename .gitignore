@@ -48,10 +48,9 @@ dist/
 target/
 
 # Docker
-Dockerfile
+# (Dockerfile is tracked in repository for backend/frontend build flows)
 docker-compose.yml
 docker-compose.override.yml
-**/Dockerfile
 
 # Vercel
 vercel.yml

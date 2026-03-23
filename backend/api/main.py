@@ -1,5 +1,12 @@
 import os
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
+
+# Ensure project root is on sys.path so `import backend...` works even when the process starts from inside backend/
+project_root = Path(__file__).resolve().parents[1]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 # Load env FIRST so all modules can read env vars
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))

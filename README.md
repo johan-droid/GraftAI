@@ -16,7 +16,13 @@
   </p>
 
   <br />
-  <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/graft_ai_dashboard_mockup_1774358620516.png" width="90%" style="border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.4);" />
+  <h2 align="center">✨ Real Feature Showcase</h2>
+  <div align="center">
+    <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/login_page_1774358778006.png" width="45%" style="border-radius: 10px; margin: 5px;" />
+    <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/register_page_1774358788690.png" width="45%" style="border-radius: 10px; margin: 5px;" />
+    <br />
+    <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/sso_page_1774358801194.png" width="91%" style="border-radius: 10px; margin: 5px;" />
+  </div>
   <br />
   <br />
 </div>

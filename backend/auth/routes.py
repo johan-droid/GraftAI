@@ -96,44 +96,35 @@ def sso_start(provider: str = "github", redirect_to: str = "/dashboard"):
 
 @router.get("/sso/callback")
 async def sso_callback(code: str, state: str, request: Request, db: AsyncSession = Depends(get_db)):
-    # If this endpoint is hit directly by the OAuth2 provider callback (browser navigation)
-    # and not via frontend fetch from `/auth-callback`, route to frontend callback page.
-    # If this endpoint is hit directly by the OAuth2 provider callback (browser navigation)
-    # and not via frontend fetch from `/auth-callback`, route to frontend callback page.
-    # This avoids showing raw JSON in the browser and preserves SPA behavior.
-    # Distinguish between a top-level browser navigation (from Google) and an API fetch (from the frontend).
-    # Google Sign-In redirect is a top-level GET navigation.
-    # Frontend fetch() is a CORS or same-origin request with specific headers.
+    """
+    This endpoint is hit TWICE during OAuth:
+    1. By Google (browser navigation) → we redirect to the frontend WITHOUT consuming state.
+    2. By the frontend's fetch() call → we consume the state and return JSON with the token.
+    """
     fetch_mode = request.headers.get("sec-fetch-mode", "").lower()
     fetch_dest = request.headers.get("sec-fetch-dest", "").lower()
-    origin = request.headers.get("origin")
     accept_header = request.headers.get("accept", "").lower()
-    
-    # It's a navigation if:
-    # 1. Explicitly marked as navigate/document
-    # 2. OR it's a GET without an 'Origin' header (standard top-level navigation)
-    # 3. AND it doesn't explicitly look like a JSON fetch
+
     is_json_accept = "application/json" in accept_header
     is_navigation = (fetch_mode == "navigate" or fetch_dest == "document")
-    
+
     if not fetch_mode and not fetch_dest:
-        # Fallback for older browsers: navigations don't have Origin, fetch() does.
-        is_navigation = (not origin) and (not is_json_accept)
+        is_navigation = not is_json_accept
 
     if is_navigation and not is_json_accept:
-        # The goal is to redirect the user to the frontend callback page.
-        # We respect FRONTEND_BASE_URL first. If not provided, we fall back to the production URL.
+        # STEP 1: Browser redirect from Google → send to frontend. DO NOT consume state.
         frontend_base = os.getenv("FRONTEND_BASE_URL", "https://graft-ai-two.vercel.app").rstrip("/")
-        
-        # Security: Only redirect to known frontend origins or localhost during dev.
-        # If the request arrived here, the OAuth flow is already completed or at least initiated.
-        return RedirectResponse(f"{frontend_base}/auth-callback?code={code}&state={state}", status_code=302)
+        return RedirectResponse(
+            f"{frontend_base}/auth-callback?code={code}&state={state}",
+            status_code=302,
+        )
 
+    # STEP 2: Frontend API call → complete the OAuth flow (consumes the state).
     try:
         payload = sso.complete_oauth2_flow(code=code, state=state)
         profile = payload["profile"]
         email = profile.get("email")
-        
+
         # Sync user to database
         if email:
             result = await db.execute(select(UserTable).where(UserTable.email == email))
@@ -147,7 +138,7 @@ async def sso_callback(code: str, state: str, request: Request, db: AsyncSession
                 db.add(user)
                 await db.commit()
                 await db.refresh(user)
-            
+
             user_id = str(user.id)
         else:
             user_id = str(profile.get("id", "unknown"))

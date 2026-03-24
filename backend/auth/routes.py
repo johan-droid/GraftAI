@@ -110,7 +110,12 @@ async def sso_callback(code: str, state: str, request: Request, db: AsyncSession
     is_navigation = fetch_mode == "navigate" or (not fetch_mode and not is_json_request)
 
     if is_navigation and not is_json_request:
-        frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+        # The goal is to redirect the user to the frontend callback page.
+        # We respect FRONTEND_BASE_URL first. If not provided, we fall back to the production URL.
+        frontend_base = os.getenv("FRONTEND_BASE_URL", "https://graft-ai-two.vercel.app").rstrip("/")
+        
+        # Security: Only redirect to known frontend origins or localhost during dev.
+        # If the request arrived here, the OAuth flow is already completed or at least initiated.
         return RedirectResponse(f"{frontend_base}/auth-callback?code={code}&state={state}", status_code=302)
 
     try:

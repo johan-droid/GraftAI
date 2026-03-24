@@ -47,10 +47,15 @@ def self_pinger():
 threading.Thread(target=self_pinger, daemon=True).start()
 
 # CORS — read allowed origins from env, fallback to local dev + production frontend
-# Set this in Render env vars as:
-# CORS_ORIGINS=http://localhost:3000,https://graft-ai-two.vercel.app
 _cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://graft-ai-two.vercel.app")
+_frontend_url = os.getenv("FRONTEND_BASE_URL")
+
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+if _frontend_url:
+    _cors_origins.append(_frontend_url.strip())
+
+# Remove duplicates while preserving order
+_cors_origins = list(dict.fromkeys(_cors_origins))
 
 app.add_middleware(
     CORSMiddleware,

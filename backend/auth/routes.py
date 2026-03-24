@@ -101,15 +101,19 @@ async def sso_callback(code: str, state: str, request: Request, db: AsyncSession
     # If this endpoint is hit directly by the OAuth2 provider callback (browser navigation)
     # and not via frontend fetch from `/auth-callback`, route to frontend callback page.
     # This avoids showing raw JSON in the browser and preserves SPA behavior.
-    accept_header = request.headers.get("accept", "").lower()
+    # Distinguish between a top-level browser navigation (from Google) and an API fetch (from the frontend).
     fetch_mode = request.headers.get("sec-fetch-mode", "").lower()
+    fetch_dest = request.headers.get("sec-fetch-dest", "").lower()
+    accept_header = request.headers.get("accept", "").lower()
     
-    # Redirect if it's a top-level navigation (navigate) OR if JSON is NOT explicitly requested
-    # while it's NOT a CORS/Fetch request.
-    is_json_request = "application/json" in accept_header
-    is_navigation = fetch_mode == "navigate" or (not fetch_mode and not is_json_request)
+    # It's a navigation if the browser is loading a new document (top-level)
+    is_navigation = fetch_mode == "navigate" or fetch_dest == "document"
+    
+    # If fetch headers are missing (older browsers), fallback to Accept header
+    if not fetch_mode and not fetch_dest:
+        is_navigation = "application/json" not in accept_header
 
-    if is_navigation and not is_json_request:
+    if is_navigation:
         # The goal is to redirect the user to the frontend callback page.
         # We respect FRONTEND_BASE_URL first. If not provided, we fall back to the production URL.
         frontend_base = os.getenv("FRONTEND_BASE_URL", "https://graft-ai-two.vercel.app").rstrip("/")

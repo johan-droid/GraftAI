@@ -12,6 +12,9 @@ import logging
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+from backend.auth.schemes import get_current_user_id
+from fastapi import Depends
+
 try:
     from groq import Groq
 except ImportError:
@@ -22,7 +25,6 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 class AIRequest(BaseModel):
     prompt: str
     context: Optional[List[str]] = None
-    user_id: Optional[int] = None
 
 class AIResponse(BaseModel):
     result: str
@@ -60,10 +62,12 @@ def _generate_with_groq(prompt: str, model_name: str = "llama-3.3-70b-versatile"
 
 
 @router.post("/chat", response_model=AIResponse)
-async def ai_chat(request: AIRequest):
+async def ai_chat(request: AIRequest, user_id: int = Depends(get_current_user_id)):
     # Retrieve relevant context from vector DB (if populated)
+    # Using personal namespace for data isolation
+    namespace = f"user_{user_id}"
     try:
-        docs = vector_store.similarity_search(request.prompt, k=3)
+        docs = vector_store.similarity_search(request.prompt, k=3, namespace=namespace)
         context_text = "\n".join([doc.page_content for doc in docs]) if docs else ""
     except Exception as e:
         logger.warning(f"Vector store similarity search failed: {type(e).__name__}")

@@ -6,8 +6,12 @@ const STORAGE_KEY = "graftai_is_logged_in";
 
 export function getToken() {
   if (typeof window === "undefined") return null;
-  // We no longer return the raw JWT for security (XSS).
-  // Return a flag so the UI knows to attempt authenticated requests.
+  /**
+   * We store a simple boolean flag to indicate if a session exists.
+   * This is NOT the authentication secret (which is kept in a secure HttpOnly cookie).
+   * This flag allows the UI to render the correct 'Logged In' state immediately
+   * without waiting for a backend check, preventing UI flicker.
+   */
   return localStorage.getItem(STORAGE_KEY);
 }
 

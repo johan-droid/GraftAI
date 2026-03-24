@@ -5,6 +5,7 @@ from typing import Optional
 import os
 import httpx
 import redis
+from backend.services.access_control import check_user_role
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
@@ -82,9 +83,12 @@ async def decode_token(token: str) -> Optional[dict]:
                 issuer=AUTH0_ISSUER,
             )
             return payload
-        except JWTError:
-            # Fallback to local JWT if Auth0 validation fails (e.g. local test tokens).
-            pass
+        except JWTError as exc:
+            # If Auth0 is configured, we must NOT fall back to local keys.
+            # This prevents signature bypass if the local SECRET_KEY is leaked.
+            import logging
+            logging.getLogger(__name__).error(f"Auth0 JWT validation failed: {exc}")
+            return None
 
     # Local symmetric JWT strategy (HS256) fallback.
     try:
@@ -124,3 +128,35 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
             headers={"WWW-Authenticate": "Bearer"},
         )
     return payload
+
+
+def get_current_user_id(current_user: dict = Depends(get_current_user)) -> int:
+    """
+    Dependency that extracts and validates the user ID from the authenticated user payload.
+    Ensures 'sub' exists and is a valid integer to prevent IDOR via body-supplied IDs.
+    """
+    user_id_raw = current_user.get("sub")
+    if not user_id_raw:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User identity (sub) missing from token",
+        )
+    try:
+        return int(user_id_raw)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user identity format",
+        )
+
+def is_admin_user(user_id: int = Depends(get_current_user_id)) -> int:
+    """
+    Dependency that ensures the current user has the 'admin' role.
+    Returns the user_id if successful, otherwise raises 403 Forbidden.
+    """
+    if not check_user_role(user_id, "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrative privileges required"
+        )
+    return user_id

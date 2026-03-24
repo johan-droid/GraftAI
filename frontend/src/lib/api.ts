@@ -20,7 +20,6 @@ import { clearToken, getToken } from "@/lib/auth";
 interface ApiOptions {
   method?: string;
   body?: Record<string, unknown> | null;
-  token?: string;
 }
 
 async function resolveUnauthorized() {
@@ -31,17 +30,11 @@ async function resolveUnauthorized() {
 }
 
 async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
-  const { method = "GET", body, token } = options;
+  const { method = "GET", body } = options;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-
-  // Only use Authorization header if a token is EXPLICITLY passed.
-  // Standard browser requests rely on secure HttpOnly cookies (credentials: "include").
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
@@ -97,10 +90,9 @@ export async function register(email: string, password: string, fullName?: strin
 // Auth: Session Check
 // Backend: GET /auth/check (Bearer token in header)
 // ──────────────────────────────────────
-export async function verifyToken(token: string) {
+export async function verifyToken() {
   return apiFetch<{ authenticated: boolean; user: Record<string, unknown> }>("/auth/check", {
     method: "GET",
-    token,
   });
 }
 
@@ -141,15 +133,15 @@ export async function passwordlessVerify(email: string, code: string) {
 // Backend: POST /auth/mfa/setup?user_id=...  (query param)
 // Backend: POST /auth/mfa/verify?user_id=...&token=...  (query params)
 // ──────────────────────────────────────
-export async function mfaSetup(userId: number) {
-  return apiFetch("/auth/mfa/setup?" + new URLSearchParams({ user_id: String(userId) }), {
+export async function mfaSetup() {
+  return apiFetch("/auth/mfa/setup", {
     method: "POST",
   });
 }
 
-export async function mfaVerify(userId: number, token: string) {
+export async function mfaVerify(token: string) {
   return apiFetch<{ status: string }>(
-    "/auth/mfa/verify?" + new URLSearchParams({ user_id: String(userId), token }),
+    "/auth/mfa/verify?" + new URLSearchParams({ token }),
     { method: "POST" }
   );
 }
@@ -160,21 +152,21 @@ export async function mfaVerify(userId: number, token: string) {
 // Backend: POST /auth/fido2/register  (Pydantic body: {user_id, attestation})
 // Backend: POST /auth/fido2/verify    (Pydantic body: {user_id, assertion})
 // ──────────────────────────────────────
-export async function fido2StartRegistration(userId: number) {
-  return apiFetch("/auth/fido2/register?" + new URLSearchParams({ user_id: String(userId) }));
+export async function fido2StartRegistration() {
+  return apiFetch("/auth/fido2/register");
 }
 
-export async function fido2CompleteRegistration(userId: number, attestation: Record<string, unknown>) {
+export async function fido2CompleteRegistration(attestation: Record<string, unknown>) {
   return apiFetch<{ status: string }>("/auth/fido2/register", {
     method: "POST",
-    body: { user_id: userId, attestation },
+    body: { attestation },
   });
 }
 
-export async function fido2Verify(userId: number, assertion: Record<string, unknown>) {
+export async function fido2Verify(assertion: Record<string, unknown>) {
   return apiFetch<{ status: string }>("/auth/fido2/verify", {
     method: "POST",
-    body: { user_id: userId, assertion },
+    body: { assertion },
   });
 }
 
@@ -183,17 +175,17 @@ export async function fido2Verify(userId: number, assertion: Record<string, unkn
 // Backend: POST /auth/did/issue?user_id=...  (query param)
 // Backend: POST /auth/did/verify  (Pydantic body: {user_id, did})
 // ──────────────────────────────────────
-export async function didIssue(userId: number) {
+export async function didIssue() {
   return apiFetch<{ did: string }>(
-    "/auth/did/issue?" + new URLSearchParams({ user_id: String(userId) }),
+    "/auth/did/issue",
     { method: "POST" }
   );
 }
 
-export async function didVerify(userId: number, did: string) {
+export async function didVerify(did: string) {
   return apiFetch<{ status: string }>("/auth/did/verify", {
     method: "POST",
-    body: { user_id: userId, did },
+    body: { did },
   }
   );
 }
@@ -213,15 +205,15 @@ export async function ssoStart(provider: string = "github", redirectTo: string =
 // Backend: GET /auth/access-control/check-role?user_id=...&role=...
 // Backend: GET /auth/access-control/check-attribute?user_id=...&attribute=...&value=...
 // ──────────────────────────────────────
-export async function checkRole(userId: number, role: string) {
+export async function checkRole(role: string) {
   return apiFetch<{ allowed: boolean }>(
-    "/auth/access-control/check-role?" + new URLSearchParams({ user_id: String(userId), role })
+    "/auth/access-control/check-role?" + new URLSearchParams({ role })
   );
 }
 
-export async function checkAttribute(userId: number, attribute: string, value: string) {
+export async function checkAttribute(attribute: string, value: string) {
   return apiFetch<{ allowed: boolean }>(
-    "/auth/access-control/check-attribute?" + new URLSearchParams({ user_id: String(userId), attribute, value })
+    "/auth/access-control/check-attribute?" + new URLSearchParams({ attribute, value })
   );
 }
 
@@ -254,7 +246,7 @@ export async function sendAiChat(prompt: string, context?: string[]) {
 export async function getProactiveSuggestion(context?: string) {
   return apiFetch<{ suggestion: string }>("/proactive/suggest", {
     method: "POST",
-    body: { user_id: 1, context },
+    body: { context },
   });
 }
 
@@ -273,7 +265,7 @@ export async function listPlugins() {
 export async function setConsent(consentType: string, granted: boolean) {
   return apiFetch<{ status: string }>("/consent/set", {
     method: "POST",
-    body: { user_id: 1, consent_type: consentType, granted },
+    body: { consent_type: consentType, granted },
   });
 }
 

@@ -14,5 +14,6 @@ class UserTable(Base):
     is_superuser = Column(Boolean, default=False, nullable=False)
     hashed_password = Column(String(512))
     timezone = Column(String(100), default="UTC")
+    tenant_id = Column(Integer, index=True) # For Row-Level Security (RLS)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)

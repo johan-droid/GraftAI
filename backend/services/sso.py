@@ -1,13 +1,19 @@
 """
 SSO (OAuth2, OIDC) authentication implementation with Redis-backed state storage.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import uuid
 import json
 from fastapi import HTTPException
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 import redis
+import hmac
+import hashlib
+import logging
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Redis client for state storage (shared across workers)
 _redis_client = None
@@ -18,6 +24,35 @@ def _get_redis_client():
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         _redis_client = redis.from_url(redis_url, decode_responses=True)
     return _redis_client
+
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    # Fallback for dev only; production should raise error (already done in routes.py)
+    SECRET_KEY = "insecure-dev-fallback"
+
+def _sign_state(state: str) -> str:
+    """Sign a state string with HMAC-SHA256."""
+    key = SECRET_KEY or "insecure-dev-fallback"
+    return hmac.new(key.encode(), state.encode(), hashlib.sha256).hexdigest()
+
+def _verify_state(signed_state: str) -> str | None:
+    """Verify a signed state and return the original state string."""
+    if ":" not in signed_state:
+        return None
+    state, signature = signed_state.split(":", 1)
+    expected = _sign_state(state)
+    if hmac.compare_digest(expected, signature):
+        return state
+    return None
+
+# SSRF protection: only allow these domains for userinfo_url
+ALLOWED_SSO_DOMAINS = [
+    "api.github.com",
+    "www.googleapis.com",
+    "graph.microsoft.com",
+    "appleid.apple.com"
+]
 
 
 def _store_oauth_state(state: str, data: dict, ttl_seconds: int = 300):
@@ -116,28 +151,38 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
     authorization_url, state = session.create_authorization_url(
         config["auth_url"], **extra_params
     )
+    
+    # Sign the state to prevent tampering (SSRF/CSRF hardening)
+    signature = _sign_state(state)
+    signed_state = f"{state}:{signature}"
+    
     _store_oauth_state(state, {
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "redirect_to": redirect_to,
         "provider": provider.lower(),
     }, ttl_seconds=300)
 
     return {
-        "authorization_url": authorization_url,
-        "state": state,
+        "authorization_url": authorization_url.replace(f"state={state}", f"state={signed_state}"),
+        "state": signed_state,
         "expires_in_seconds": 300,
         "redirect_to": redirect_to,
         "provider": provider,
     }
 
 
-async def complete_oauth2_flow(code: str, state: str):
+async def complete_oauth2_flow(code: str, signed_state: str):
+    # Verify HMAC signature first
+    state = _verify_state(signed_state)
+    if not state:
+        raise HTTPException(status_code=403, detail="OAuth state signature verification failed")
+
     data = _get_oauth_state(state)
     if not data:
         raise RuntimeError("Invalid or expired state")
 
-    created_at = datetime.fromisoformat(data.get("created_at", datetime.utcnow().isoformat()))
-    if datetime.utcnow() - created_at > timedelta(minutes=5):
+    created_at = datetime.fromisoformat(data.get("created_at", datetime.now(timezone.utc).isoformat()))
+    if datetime.now(timezone.utc) - created_at > timedelta(minutes=5):
         raise RuntimeError("OAuth2 state expired")
 
     provider_name = data.get("provider", "github")
@@ -167,6 +212,13 @@ async def complete_oauth2_flow(code: str, state: str):
     userinfo_url = config.get("userinfo_url")
 
     if userinfo_url:
+        # SSRF Protection: validate userinfo_url against allowlist
+        from urllib.parse import urlparse
+        domain = urlparse(userinfo_url).netloc
+        if domain not in ALLOWED_SSO_DOMAINS:
+             logger.error(f"Potential SSRF blocked: {userinfo_url}")
+             raise HTTPException(status_code=400, detail="Disallowed userinfo URL")
+
         # Standard OAuth2/OIDC: fetch user info via ASYNC client
         headers = {"Authorization": f"Bearer {token.get('access_token')}"}
         async with httpx.AsyncClient(timeout=10.0) as client:

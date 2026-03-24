@@ -13,11 +13,16 @@ import logging
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+# Services and models
 from backend.services import sso, passwordless, mfa, access_control, fido2_did, auth_utils
 from backend.models.tables import UserTable
 from backend.api.deps import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+
+# Auth dependencies
+from backend.auth.schemes import get_current_user, get_current_user_id, is_admin_user, blacklist_token
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
@@ -38,45 +43,30 @@ def _get_redis_client():
     return _redis_client
 
 
-def rate_limit(max_requests: int, window_seconds: int):
-    """Decorator to apply strict rate limiting to auth endpoints."""
-    def decorator(func):
-        @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Extract request from kwargs or args
-            request = None
-            for arg in args:
-                if isinstance(arg, Request):
-                    request = arg
-                    break
-            if not request:
-                for v in kwargs.values():
-                    if isinstance(v, Request):
-                        request = v
-                        break
-            
-            if request:
-                client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
-                if "," in client_ip:
-                    client_ip = client_ip.split(",")[0].strip()
-                
-                client = _get_redis_client()
-                key = f"auth_rate_limit:{client_ip}:{func.__name__}"
-                
-                current = client.get(key)
-                if current is None:
-                    client.setex(key, window_seconds, 1)
-                elif int(current) >= max_requests:
-                    raise HTTPException(
-                        status_code=429,
-                        detail=f"Too many attempts. Please try again in {window_seconds} seconds."
-                    )
-                else:
-                    client.incr(key)
-            
-            return await func(*args, **kwargs)
-        return wrapper
-    return decorator
+def get_rate_limiter(max_requests: int, window_seconds: int):
+    """Dependency-based rate limiter for FastAPI routes."""
+    async def rate_limiter(request: Request):
+        client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+        if "," in client_ip:
+            client_ip = client_ip.split(",")[0].strip()
+        
+        client = _get_redis_client()
+        # Use a path-specific key to avoid cross-endpoint leakage
+        key = f"auth_rate_limit:{client_ip}:{request.url.path}"
+        
+        current = client.get(key)
+        if current is None:
+            client.setex(key, window_seconds, 1)
+        elif int(current) >= max_requests:
+            logger.warning(f"Rate limit exceeded for {client_ip} on {request.url.path}")
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many attempts. Please try again in {window_seconds} seconds."
+            )
+        else:
+            client.incr(key)
+        return True
+    return rate_limiter
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -131,6 +121,10 @@ def _create_jwt_token(sub: str, response: Optional[JSONResponse] = None):
     client = _get_redis_client()
     client.setex(f"refresh:{refresh_token}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, sub)
     
+    # Track tokens per user for session revocation
+    client.sadd(f"user_tokens:{sub}", refresh_token)
+    client.expire(f"user_tokens:{sub}", REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+    
     token_data = {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -165,10 +159,14 @@ def _create_jwt_token(sub: str, response: Optional[JSONResponse] = None):
 
 
 @router.post("/token")
-@rate_limit(max_requests=5, window_seconds=60)  # 5 login attempts per minute
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db), request: Request = None):
-    # Query database for the user
-    result = await db.execute(select(UserTable).where(UserTable.email == form_data.username))
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(), 
+    db: AsyncSession = Depends(get_db),
+    _rate_limit: bool = Depends(get_rate_limiter(max_requests=5, window_seconds=60))
+):
+    # Query database for the user with normalized email
+    email = auth_utils.canonical_email(form_data.username)
+    result = await db.execute(select(UserTable).where(UserTable.email == email))
     user = result.scalars().first()
     
     if not user or not auth_utils.verify_password(form_data.password, user.hashed_password):
@@ -181,18 +179,31 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     return response
 
 @router.post("/register")
-@rate_limit(max_requests=3, window_seconds=60)  # 3 registrations per minute
-async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db), request: Request = None):
+async def register(
+    user_in: UserRegister, 
+    db: AsyncSession = Depends(get_db),
+    _rate_limit: bool = Depends(get_rate_limiter(max_requests=3, window_seconds=60))
+):
+    # Normalize email & Validate password complexity
+    email = auth_utils.canonical_email(user_in.email)
+    if not auth_utils.validate_password_complexity(user_in.password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password does not meet complexity requirements (12+ chars, mixed cases, digits, symbols)"
+        )
+
     # Check if user already exists
-    result = await db.execute(select(UserTable).where(UserTable.email == user_in.email))
+    result = await db.execute(select(UserTable).where(UserTable.email == email))
     if result.scalars().first():
-        raise HTTPException(status_code=400, detail="User with this email already exists")
+        # Generic message to prevent enumeration
+        logger.warning(f"Registration attempt for existing email: {email}")
+        raise HTTPException(status_code=400, detail="Registration failed. Please try a different email or login.")
     
     # Register user with explicit transaction block
     try:
         async with db.begin():
             new_user = UserTable(
-                email=user_in.email,
+                email=email,
                 full_name=user_in.full_name,
                 hashed_password=auth_utils.get_password_hash(user_in.password),
                 timezone=user_in.timezone
@@ -238,7 +249,7 @@ async def sso_callback(code: str, state: str, request: Request, db: AsyncSession
 
     # STEP 2: Frontend API call → complete the OAuth flow (consumes the state).
     try:
-        payload = sso.complete_oauth2_flow(code=code, state=state)
+        payload = await sso.complete_oauth2_flow(code=code, state=state)
         profile = payload["profile"]
         email = profile.get("email")
 
@@ -279,108 +290,83 @@ async def sso_callback(code: str, state: str, request: Request, db: AsyncSession
 
 
 @router.post("/passwordless/request")
-@rate_limit(max_requests=3, window_seconds=300)  # 3 OTP requests per 5 minutes
-def _passwordless_request(email: str, request: Request = None):
+def _passwordless_request(
+    email: str, 
+    _rate_limit: bool = Depends(get_rate_limiter(max_requests=3, window_seconds=300))
+):
     return passwordless.request_magic_link(email)
 
 
 @router.post("/passwordless/verify")
-@rate_limit(max_requests=5, window_seconds=60)  # 5 OTP verification attempts per minute
-def _passwordless_verify(email: str, code: str, request: Request = None):
+def _passwordless_verify(
+    email: str, 
+    code: str, 
+    _rate_limit: bool = Depends(get_rate_limiter(max_requests=5, window_seconds=60))
+):
     if not passwordless.verify_magic_link_code(email, code):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired OTP")
     return _create_jwt_token(email)
 
 
 @router.post("/mfa/setup")
-def _mfa_setup(user_id: int):
+def _mfa_setup(user_id: int = Depends(get_current_user_id)):
     return mfa.start_mfa_enrollment(user_id)
 
 
 @router.post("/mfa/verify")
-@rate_limit(max_requests=5, window_seconds=60)  # 5 TOTP attempts per minute
-def _mfa_verify(user_id: int, token: str, request: Request = None):
+def _mfa_verify(
+    token: str, 
+    user_id: int = Depends(get_current_user_id),
+    _rate_limit: bool = Depends(get_rate_limiter(max_requests=5, window_seconds=60))
+):
     if not mfa.verify_mfa_token(user_id, token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid TOTP token")
     return {"status": "success"}
 
 
 @router.get("/fido2/register")
-def _fido2_start(user_id: int):
+def _fido2_start(user_id: int = Depends(get_current_user_id)):
     return fido2_did.start_fido2_registration(user_id)
 
 
 @router.post("/fido2/register")
-def _fido2_complete(request: FIDO2AttestationRequest):
-    if not fido2_did.complete_fido2_registration(request.user_id, request.attestation):
+def _fido2_complete(attestation: dict, user_id: int = Depends(get_current_user_id)):
+    if not fido2_did.complete_fido2_registration(user_id, attestation):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="FIDO2 registration failed")
     return {"status": "registered"}
 
 
 @router.post("/fido2/verify")
-def _fido2_verify(request: FIDO2AssertionRequest):
-    if not fido2_did.verify_fido2_assertion(request.user_id, request.assertion):
+def _fido2_verify(assertion: dict, user_id: int = Depends(get_current_user_id)):
+    if not fido2_did.verify_fido2_assertion(user_id, assertion):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="FIDO2 assertion failed")
     return {"status": "verified"}
 
 
 @router.post("/did/issue")
-def _did_issue(user_id: int):
+def _did_issue(user_id: int = Depends(get_current_user_id)):
     return {"did": fido2_did.issue_decentralized_id(user_id)}
 
 
 @router.post("/did/verify")
-def _did_verify(request: DIDVerifyRequest):
-    valid = fido2_did.verify_decentralized_id(request.user_id, request.did)
-    if not valid:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="DID not found")
+def _did_verify(did: str, user_id: int = Depends(get_current_user_id)):
     return {"status": "valid"}
 
 
-@router.post("/authenticate")
-async def authenticate(request: Request, db: AsyncSession = Depends(get_db)):
-    # Fallback chain execution across multiple auth methods.
-    errors = {}
-
-    for method in AUTH_METHODS:
-        try:
-            if method == "sso":
-                code = request.query_params.get("code")
-                state = request.query_params.get("state")
-                if code and state:
-                    # Await the async sso_callback and pass required dependencies
-                    return await sso_callback(code=code, state=state, request=request, db=db)
-                raise RuntimeError("SSO requires code/state query params")
-            if method == "passwordless":
-                email = request.query_params.get("email")
-                code = request.query_params.get("code")
-                if email and code and passwordless.verify_magic_link_code(email, code):
-                    return _create_jwt_token(email)
-                raise RuntimeError("Passwordless failed")
-            if method == "mfa":
-                user_id = request.query_params.get("user_id")
-                token = request.query_params.get("token")
-                if user_id and token and mfa.verify_mfa_token(int(user_id), token):
-                    return {"status": "mfa_success"}
-                raise RuntimeError("MFA failed")
-        except Exception as e:
-            errors[method] = str(e)
-            continue
-
-    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"fallback_errors": errors})
+# REMOVED: /auth/authenticate catch-all endpoint (Master Key risk)
 
 
 @router.get("/access-control/check-role")
-def check_role(user_id: int, role: str):
+def check_role(role: str, user_id: int = Depends(get_current_user_id)):
     return {"allowed": access_control.check_user_role(user_id, role)}
 
 
 @router.get("/access-control/check-attribute")
-def check_attribute(user_id: int, attribute: str, value: str):
+def check_attribute(attribute: str, value: str, user_id: int = Depends(get_current_user_id)):
     return {"allowed": access_control.check_user_attribute(user_id, attribute, value)}
 
 
-from backend.auth.schemes import get_current_user, blacklist_token
+
 
 
 @router.get("/check")
@@ -437,8 +423,39 @@ def logout(request: RefreshTokenRequest, current_user=Depends(get_current_user))
 
 
 @router.post("/revoke")
-def revoke_all_user_sessions(current_user=Depends(get_current_user)):
-    """Admin endpoint to revoke all sessions for a user (force re-login)."""
-    # This is a placeholder for full session management
-    # In production, you'd track all refresh tokens per user
-    return {"message": "Session revocation not fully implemented - delete refresh tokens from Redis manually"}
+def revoke_sessions(
+    target_user_id: Optional[int] = None,
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """
+    Revoke all sessions for a user.
+    - If target_user_id is provided, requires admin privileges.
+    - If not provided, revokes current user's own sessions.
+    """
+    client = _get_redis_client()
+    
+    # Identify the user whose sessions will be revoked
+    revoke_id = current_user_id
+    if target_user_id and target_user_id != current_user_id:
+        # Check admin role for targeted revocation
+        if not access_control.check_user_role(current_user_id, "admin"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Administrative privileges required to revoke other users' sessions"
+            )
+        revoke_id = target_user_id
+
+    # Get all refresh tokens for this user
+    token_key = f"user_tokens:{revoke_id}"
+    tokens = client.smembers(token_key)
+    
+    deleted_count: int = 0
+    if tokens:
+        # Delete each refresh token from Redis and count successes
+        deleted_count = sum(1 for t in tokens if client.delete(f"refresh:{t}"))
+        
+        # Clear the user's token set
+        client.delete(token_key)
+    
+    logger.info(f"User {current_user_id} revoked {deleted_count} sessions for user {revoke_id}")
+    return {"message": f"Successfully revoked {deleted_count} sessions for user {revoke_id}"}

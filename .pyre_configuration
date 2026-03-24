@@ -1,9 +1,5 @@
 {
   "source_directories": [
-    ".",
-    "backend"
-  ],
-  "search_path": [
-    {"site-package": "C:\\Users\\sahoo\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages"}
+    "."
   ]
 }

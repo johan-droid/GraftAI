@@ -6,6 +6,7 @@ import random
 import json
 import os
 import redis
+from .auth_utils import canonical_email
 
 # Redis client for OTP storage
 _redis_client = None
@@ -23,6 +24,7 @@ OTP_TTL_SECONDS = 300
 def request_magic_link(email: str):
     code = f"{random.randint(100000, 999999)}"
     expiry = datetime.utcnow() + timedelta(seconds=OTP_TTL_SECONDS)
+    email = canonical_email(email)
     client = _get_redis_client()
     otp_data = json.dumps({"code": code, "expires": expiry.isoformat()})
     client.setex(f"otp:{email}", OTP_TTL_SECONDS, otp_data)
@@ -37,6 +39,7 @@ def request_magic_link(email: str):
 
 
 def verify_magic_link_code(email: str, code: str):
+    email = canonical_email(email)
     client = _get_redis_client()
     raw_data = client.get(f"otp:{email}")
     if not raw_data:

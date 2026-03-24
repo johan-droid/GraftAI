@@ -38,3 +38,33 @@ def get_password_hash(password: str) -> str:
     except Exception as e:
         logger.error(f"Password hashing failed: {type(e).__name__}")
         raise RuntimeError("Internal authentication error")
+
+
+def canonical_email(email: str) -> str:
+    """Normalize email for consistent lookup and to prevent enumeration/bypass."""
+    if not email:
+        return ""
+    return email.strip().lower()
+
+
+def validate_password_complexity(password: str) -> bool:
+    """Check for enterprise-grade password complexity: 12+ chars, mixed cases, digits, symbols."""
+    # Length check (NIST/OWASP recommendation: 12+)
+    if len(password) < 12:
+        return False
+    
+    import re
+    # Check for lowercase
+    if not re.search(r"[a-z]", password):
+        return False
+    # Check for uppercase
+    if not re.search(r"[A-Z]", password):
+        return False
+    # Check for numbers
+    if not re.search(r"\d", password):
+        return False
+    # Check for special characters
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False
+        
+    return True

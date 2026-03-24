@@ -30,6 +30,7 @@ from backend.services.consent import router as consent_router
 from backend.services.proactive import router as proactive_router
 from backend.services.upgrade import router as upgrade_router
 from backend.services.plugin_api import router as plugin_router
+from backend.auth.schemes import get_current_user
 
 # Rate limiting setup
 _redis_client = None
@@ -40,6 +41,22 @@ def _get_redis_client():
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         _redis_client = redis.from_url(redis_url, decode_responses=True)
     return _redis_client
+
+
+# Atomic Rate Limiting Lua Script
+RATE_LIMIT_LUA = """
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local current = redis.call('INCR', key)
+if current == 1 then
+    redis.call('EXPIRE', key, window)
+end
+if current > limit then
+    return 0
+end
+return 1
+"""
 
 
 def _parse_rate_limit(rate_limit: str):
@@ -85,14 +102,14 @@ class RateLimitMiddleware:
         if "," in client_ip:
             client_ip = client_ip.split(",")[0].strip()
         
-        # Check rate limit
+        # Atomic check-and-increment via Lua
         client = _get_redis_client()
         key = f"rate_limit:{client_ip}:{request.url.path}"
         
-        current = client.get(key)
-        if current is None:
-            client.setex(key, self.window, 1)
-        elif int(current) >= self.max_requests:
+        # Use eval to run the scriptatomically
+        allowed = client.eval(RATE_LIMIT_LUA, 1, key, self.max_requests, self.window)
+        
+        if not allowed:
             # Rate limit exceeded
             response = JSONResponse(
                 status_code=429,
@@ -100,8 +117,6 @@ class RateLimitMiddleware:
             )
             await response(scope, receive, send)
             return
-        else:
-            client.incr(key)
         
         await self.app(scope, receive, send)
 
@@ -138,14 +153,17 @@ app.add_middleware(
 )
 
 # ── Routers ──
+# Auth is public for login/register
 app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(ai_router)
-app.include_router(analytics_router)
-app.include_router(consent_router)
-app.include_router(proactive_router)
-app.include_router(upgrade_router)
-app.include_router(plugin_router)
+
+# All other services are protected by default (Broken Access Control fix)
+app.include_router(users_router, dependencies=[Depends(get_current_user)])
+app.include_router(ai_router, dependencies=[Depends(get_current_user)])
+app.include_router(analytics_router, dependencies=[Depends(get_current_user)])
+app.include_router(consent_router, dependencies=[Depends(get_current_user)])
+app.include_router(proactive_router, dependencies=[Depends(get_current_user)])
+app.include_router(upgrade_router, dependencies=[Depends(get_current_user)])
+app.include_router(plugin_router, dependencies=[Depends(get_current_user)])
 
 
 from backend.utils import db as db_utils
@@ -160,9 +178,40 @@ async def create_database_tables():
     try:
         async with db_utils.engine.begin() as conn:
             await conn.run_sync(ModelsBase.metadata.create_all)
-        print("✅ Database tables verified/created successfully.")
+        logger.info("✅ Database tables verified/created successfully.")
     except Exception as e:
         logger.error(f"⚠ Failed to create or verify database tables: {type(e).__name__}")
+
+
+@app.on_event("startup")
+async def verify_password_system():
+    """Verify bcrypt installation and functionality on startup."""
+    from backend.services.auth_utils import get_password_hash, verify_password
+    try:
+        test_pw = "StartupSelfTest99!"
+        test_hash = get_password_hash(test_pw)
+        if not verify_password(test_pw, test_hash):
+            raise RuntimeError("Password verification self-test failed")
+        logger.info("✅ Password hashing system verified.")
+    except Exception as e:
+        logger.error(f"CRITICAL: Password hashing system failure: {e}")
+        # In production, you might want to exit here if auth is compromised
+        # os._exit(1)
+
+
+@app.on_event("startup")
+async def verify_auth0_config():
+    """Ensure Auth0 config is consistent to avoid silent JWT validation failures."""
+    domain = os.getenv("AUTH0_DOMAIN")
+    audience = os.getenv("AUTH0_AUDIENCE")
+    
+    if (domain and not audience) or (audience and not domain):
+        logger.warning(
+            "⚠ Incomplete Auth0 configuration detected. "
+            "Both AUTH0_DOMAIN and AUTH0_AUDIENCE must be set for Auth0 JWT validation to work."
+        )
+    elif domain and audience:
+        logger.info(f"✅ Auth0 configuration detected for domain: {domain}")
 
 
 @app.get("/")

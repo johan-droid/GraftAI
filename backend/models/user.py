@@ -10,5 +10,6 @@ class User(DBModel):
     is_superuser: bool = False
     hashed_password: Optional[str] = None
     timezone: Optional[str] = None
+    tenant_id: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

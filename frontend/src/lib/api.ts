@@ -1,4 +1,9 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://localhost:8000";
+
+console.debug("API_BASE_URL set to", API_BASE_URL);
 
 import { clearToken, getToken, isTokenExpired } from "@/lib/auth";
 

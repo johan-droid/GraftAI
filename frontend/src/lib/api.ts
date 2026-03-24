@@ -139,9 +139,9 @@ export async function mfaSetup() {
   });
 }
 
-export async function mfaVerify(token: string) {
+export async function mfaVerify(user_id: number, token: string) {
   return apiFetch<{ status: string }>(
-    "/auth/mfa/verify?" + new URLSearchParams({ token }),
+    "/auth/mfa/verify?" + new URLSearchParams({ user_id: String(user_id), token }),
     { method: "POST" }
   );
 }

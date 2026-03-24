@@ -1,5 +1,9 @@
 import os
+import logging
 from dotenv import load_dotenv
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Ensure backend/.env is loaded when app is run from project root
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -36,17 +40,17 @@ if DATABASE_URL:
             future=True,
             connect_args=_connect_args,
             pool_pre_ping=True,
-            pool_size=10,
-            max_overflow=20,
+            pool_size=3, # optimized for 4+ workers to stay within Neon limits
+            max_overflow=7,
             pool_timeout=30,
         )
         AsyncSessionLocal = sessionmaker(
             bind=engine, class_=AsyncSession, expire_on_commit=False
         )
     except Exception as e:
-        print(f"⚠ Database engine creation failed: {e}")
+        logger.error(f"⚠ Database engine creation failed: {type(e).__name__}")
 else:
-    print("⚠ DATABASE_URL not set — database features disabled")
+    logger.warning("⚠ DATABASE_URL not set — database features disabled")
 
 
 async def get_db():

@@ -25,7 +25,7 @@ httpx = ">=0.28.1"
 authlib = ">=1.2.0"
 pyotp = ">=2.9.0"
 groq = ">=0.4.0"
-python-multipart = "*"
+python-multipart = ">=0.0.18"
 passlib = {version = "^1.7.4", extras = ["bcrypt"]}
 
 [tool.poetry.dev-dependencies]

@@ -2,51 +2,34 @@
 
 import { useMemo, useState } from "react";
 
-const STORAGE_KEY = "graftai_access_token";
+const STORAGE_KEY = "graftai_is_logged_in";
 
 export function getToken() {
   if (typeof window === "undefined") return null;
+  // We no longer return the raw JWT for security (XSS).
+  // Return a flag so the UI knows to attempt authenticated requests.
   return localStorage.getItem(STORAGE_KEY);
 }
 
 export function setToken(token: string) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, token);
-  document.cookie = `graftai_access_token=${token}; path=/; max-age=${60 * 60 * 24};`; // 1 day
+  // Never store the actual token in localStorage.
+  // We only set a flag so the UI knows we are 'authenticated' without seeing the secret.
+  localStorage.setItem(STORAGE_KEY, "true");
 }
 
 export function clearToken() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(STORAGE_KEY);
-  document.cookie = "graftai_access_token=; path=/; max-age=0";
+  // Backend will handle clearing the HttpOnly cookie via /auth/logout
 }
 
-export function decodeJwtPayload(token: string) {
-  try {
-    const [, payload] = token.split(".");
-    if (!payload) return null;
-    const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(decodeURIComponent(Array.prototype.map.call(decoded, (c: string) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")));
-  } catch {
-    return null;
-  }
-}
-
-export function isTokenExpired(token: string) {
-  const payload = decodeJwtPayload(token);
-  if (!payload || !payload.exp) return true;
-  const expiresAt = payload.exp * 1000;
-  return Date.now() > expiresAt;
-}
+// NOTE: decodeJwtPayload and isTokenExpired are removed because 
+// HttpOnly cookies prevent the frontend from reading the JWT.
+// Session expiry is now handled by the backend (401 response).
 
 export function ensureTokenValid() {
-  const token = getToken();
-  if (!token) return false;
-  if (isTokenExpired(token)) {
-    clearToken();
-    return false;
-  }
-  return true;
+  return Boolean(getToken());
 }
 
 export function useAuth() {

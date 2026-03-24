@@ -1,14 +1,49 @@
 """
-SSO (OAuth2, OIDC) authentication implementation with fallback support.
+SSO (OAuth2, OIDC) authentication implementation with Redis-backed state storage.
 """
 from datetime import datetime, timedelta
 import os
 import uuid
+import json
 from fastapi import HTTPException
-from authlib.integrations.requests_client import OAuth2Session
+from authlib.integrations.httpx_client import AsyncOAuth2Client
+import redis
 
-# In-memory state manager for demonstration purposes
-_oauth_state_cache: dict[str, dict] = {}
+# Redis client for state storage (shared across workers)
+_redis_client = None
+
+def _get_redis_client():
+    global _redis_client
+    if _redis_client is None:
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        _redis_client = redis.from_url(redis_url, decode_responses=True)
+    return _redis_client
+
+
+def _store_oauth_state(state: str, data: dict, ttl_seconds: int = 300):
+    """Store OAuth state in Redis with TTL."""
+    client = _get_redis_client()
+    # Serialize session object separately - we need to reconstruct it later
+    session = data.pop("session", None)
+    state_data = {
+        "data": json.dumps(data),
+        "session_state": getattr(session, "state", None),
+        "session_scope": getattr(session, "scope", None),
+    }
+    client.setex(f"oauth:state:{state}", ttl_seconds, json.dumps(state_data))
+
+
+def _get_oauth_state(state: str) -> dict | None:
+    """Retrieve and delete OAuth state from Redis."""
+    client = _get_redis_client()
+    key = f"oauth:state:{state}"
+    raw_data = client.get(key)
+    if not raw_data:
+        return None
+    client.delete(key)
+    state_data = json.loads(raw_data)
+    data = json.loads(state_data["data"])
+    return data
 
 # Multi-provider configuration
 PROVIDERS = {
@@ -64,6 +99,8 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
     if not all([client_id, client_secret]):
         raise RuntimeError(f"OAuth2 credentials for {provider} are not configured")
 
+    # Using sync discovery/init; create_authorization_url is local computation
+    from authlib.integrations.requests_client import OAuth2Session
     session = OAuth2Session(
         client_id=client_id,
         client_secret=client_secret,
@@ -79,12 +116,11 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
     authorization_url, state = session.create_authorization_url(
         config["auth_url"], **extra_params
     )
-    _oauth_state_cache[state] = {
-        "created_at": datetime.utcnow(),
-        "session": session,
+    _store_oauth_state(state, {
+        "created_at": datetime.utcnow().isoformat(),
         "redirect_to": redirect_to,
         "provider": provider.lower(),
-    }
+    }, ttl_seconds=300)
 
     return {
         "authorization_url": authorization_url,
@@ -95,40 +131,48 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
     }
 
 
-def complete_oauth2_flow(code: str, state: str):
-    data = _oauth_state_cache.pop(state, None)
+async def complete_oauth2_flow(code: str, state: str):
+    data = _get_oauth_state(state)
     if not data:
         raise RuntimeError("Invalid or expired state")
 
-    if datetime.utcnow() - data.get("created_at", datetime.utcnow()) > timedelta(minutes=5):
+    created_at = datetime.fromisoformat(data.get("created_at", datetime.utcnow().isoformat()))
+    if datetime.utcnow() - created_at > timedelta(minutes=5):
         raise RuntimeError("OAuth2 state expired")
 
     provider_name = data.get("provider", "github")
     config = PROVIDERS.get(provider_name)
     if not config:
         raise RuntimeError(f"Provider config for {provider_name} not found")
-    session = data.get("session")
-    if session is None:
-        raise RuntimeError("OAuth2 session not found in state cache")
 
-    token = session.fetch_token(
-        config.get("token_url"),
-        code=code,
-        client_id=config.get("client_id"),
-        client_secret=config.get("client_secret"),
-        authorization_response=f"?code={code}&state={state}",
-    )
+    # Reconstruct Async Client
+    client_id = config["client_id"]
+    client_secret = config["client_secret"]
+    
+    async with AsyncOAuth2Client(
+        client_id=client_id,
+        client_secret=client_secret,
+        scope=config["scope"],
+        redirect_uri=OAUTH2_REDIRECT_URI,
+        state=state,
+    ) as session:
+        token = await session.fetch_token(
+            config.get("token_url"),
+            code=code,
+            authorization_response=f"?code={code}&state={state}",
+        )
 
     import httpx
 
     userinfo_url = config.get("userinfo_url")
 
     if userinfo_url:
-        # Standard OAuth2/OIDC: fetch user info from the provider's endpoint
+        # Standard OAuth2/OIDC: fetch user info via ASYNC client
         headers = {"Authorization": f"Bearer {token.get('access_token')}"}
-        userinfo_resp = httpx.get(userinfo_url, headers=headers)
-        userinfo_resp.raise_for_status()
-        profile = userinfo_resp.json()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            userinfo_resp = await client.get(userinfo_url, headers=headers)
+            userinfo_resp.raise_for_status()
+            profile = userinfo_resp.json()
     else:
         # Apple Sign In: user info is embedded in the ID token
         id_token = token.get("id_token", "")

@@ -1,7 +1,12 @@
 import os
 import sys
+import re
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Ensure project root is on sys.path so `import backend...` works even when the process starts from inside backend/
 project_root = Path(__file__).resolve().parents[1]
@@ -12,8 +17,10 @@ if str(project_root) not in sys.path:
 dotenv_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import redis
 
 from backend.auth.routes import router as auth_router
 from backend.api.users import router as users_router
@@ -24,39 +31,92 @@ from backend.services.proactive import router as proactive_router
 from backend.services.upgrade import router as upgrade_router
 from backend.services.plugin_api import router as plugin_router
 
+# Rate limiting setup
+_redis_client = None
+
+def _get_redis_client():
+    global _redis_client
+    if _redis_client is None:
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        _redis_client = redis.from_url(redis_url, decode_responses=True)
+    return _redis_client
+
+
+def _parse_rate_limit(rate_limit: str):
+    """Parse rate limit string like '100/minute' into (count, window_seconds)."""
+    match = re.match(r'(\d+)/(\w+)', rate_limit)
+    if not match:
+        return 100, 60  # default: 100 per minute
+    
+    count = int(match.group(1))
+    unit = match.group(2).lower()
+    
+    # Convert to seconds
+    multipliers = {
+        'second': 1,
+        'seconds': 1,
+        'minute': 60,
+        'minutes': 60,
+        'hour': 3600,
+        'hours': 3600,
+        'day': 86400,
+        'days': 86400,
+    }
+    window = multipliers.get(unit, 60)
+    return count, window
+
+
+class RateLimitMiddleware:
+    """Simple Redis-backed rate limiting middleware."""
+    
+    def __init__(self, app, rate_limit: str = "100/minute"):
+        self.app = app
+        self.max_requests, self.window = _parse_rate_limit(rate_limit)
+    
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        
+        request = Request(scope)
+        
+        # Get client IP
+        client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+        if "," in client_ip:
+            client_ip = client_ip.split(",")[0].strip()
+        
+        # Check rate limit
+        client = _get_redis_client()
+        key = f"rate_limit:{client_ip}:{request.url.path}"
+        
+        current = client.get(key)
+        if current is None:
+            client.setex(key, self.window, 1)
+        elif int(current) >= self.max_requests:
+            # Rate limit exceeded
+            response = JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Please try again later."}
+            )
+            await response(scope, receive, send)
+            return
+        else:
+            client.incr(key)
+        
+        await self.app(scope, receive, send)
+
+
+# Parse rate limit from env
+_rate_limit_str = os.getenv("RATE_LIMIT", "100/minute")
+
 app = FastAPI(
     title="GraftAI Backend",
     description="Production API for GraftAI — AI-powered scheduling platform",
     version="1.0.0",
 )
 
-# --- Self-pinger background task ---
-import threading
-import time
-import httpx
-
-def self_pinger():
-    """Background task to keep the service awake by hitting the public URL."""
-    # Preferred: Use public URL to trigger external router activity
-    public_url = os.getenv("APP_BASE_URL", "https://graftai.onrender.com").rstrip("/")
-    health_url = f"{public_url}/health"
-    
-    # Also keep a local check just in case
-    local_url = "http://localhost:8000/health"
-    
-    while True:
-        try:
-            # Ping public URL to keep Render awake
-            httpx.get(health_url, timeout=10.0)
-            # Ping local URL for internal health
-            httpx.get(local_url, timeout=5.0)
-        except Exception:
-            pass
-        # Ping every 30 seconds
-        time.sleep(30)
-
-# Start the self-pinger in a background thread
-threading.Thread(target=self_pinger, daemon=True).start()
+# Add rate limiting middleware BEFORE CORS
+app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
 
 # CORS — read allowed origins from env, fallback to local dev + production frontend
 _cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://graft-ai-two.vercel.app")
@@ -73,8 +133,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # ── Routers ──
@@ -95,14 +155,14 @@ from backend.models.tables import Base as ModelsBase
 @app.on_event("startup")
 async def create_database_tables():
     if not db_utils.engine:
-        print("⚠ Database engine is not configured; skipping auto-migration.")
+        logger.warning("⚠ Database engine is not configured; skipping auto-migration.")
         return
     try:
         async with db_utils.engine.begin() as conn:
             await conn.run_sync(ModelsBase.metadata.create_all)
         print("✅ Database tables verified/created successfully.")
     except Exception as e:
-        print(f"⚠ Failed to create or verify database tables: {e}")
+        logger.error(f"⚠ Failed to create or verify database tables: {type(e).__name__}")
 
 
 @app.get("/")

@@ -1,20 +1,40 @@
+import logging
 from passlib.context import CryptContext
 
-# Use bcrypt_sha256 first to avoid bcrypt's 72-byte limitation while still supporting existing bcrypt hashes.
-pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
+# Initialize logger
+logger = logging.getLogger(__name__)
+
+# Use standard bcrypt scheme for better compatibility.
+# For Python 3.12+ / passlib 1.7.x compatibility, ensure 'bcrypt' package is installed.
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception as e:
+        logger.error(f"Password verification failed: {type(e).__name__}")
+        return False
 
 
-def get_password_hash(password):
+def get_password_hash(password: str) -> str:
+    """
+    Hash a password using bcrypt. 
+    Note: Standard Bcrypt has a 72-character limit; any characters beyond this are ignored. 
+    We enforce this limit at the application level to be explicit and secure.
+    """
     if not isinstance(password, str):
         raise TypeError("Password must be a string")
 
-    # bcrypt only handles 72 bytes; bcrypt_sha256 pre-hashes and avoids this limit.
-    b = password.encode("utf-8")
-    if len(b) > 4096:
-        raise ValueError("Password is too long")
-
-    return pwd_context.hash(password)
+    try:
+        # Bcrypt limit is 72 bytes. We check UTF-8 length.
+        if len(password.encode("utf-8")) > 72:
+            logger.warning("Password hashing rejected: length exceeds bcrypt limit (72 bytes)")
+            raise ValueError("Password is too long (max 72 characters for security)")
+            
+        return pwd_context.hash(password)
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Password hashing failed: {type(e).__name__}")
+        raise RuntimeError("Internal authentication error")

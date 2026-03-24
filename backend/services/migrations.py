@@ -1,6 +1,11 @@
-﻿import os
+import os
+import logging
 from pathlib import Path
 from sqlalchemy import create_engine
+
+# Initialize logger
+logger = logging.getLogger(__name__)
+
 from backend.utils.db import DATABASE_URL
 from backend.models.tables import Base
 
@@ -41,5 +46,5 @@ if __name__ == '__main__':
         run_migrations()
         print('✅ Database migrations were successfully applied.')
     except Exception as exc:
-        print(f'❌ Failed to apply migrations: {exc}')
+        logger.error(f'❌ Failed to apply migrations: {type(exc).__name__}')
         raise

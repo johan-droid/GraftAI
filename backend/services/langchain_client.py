@@ -1,5 +1,9 @@
 # LangChain and Vector DB Client Setup
 import os
+import logging
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 try:
     from dotenv import load_dotenv  # type: ignore
 except ImportError:
@@ -42,7 +46,7 @@ try:
                 # No need for pinecone.init() in v3.0+
                 _pc = PineconeClient(api_key=PINECONE_API_KEY)
             except Exception as pe:
-                print(f"[!] Pinecone client init skipped: {pe}")
+                logger.error(f"[!] Pinecone client init skipped: {type(pe).__name__}")
 
     # Initialize LLM and embeddings
     if OPENAI_API_KEY and ChatOpenAI is not None:
@@ -57,10 +61,10 @@ try:
                     pinecone_api_key=PINECONE_API_KEY
                 )
         except Exception as le:
-            print(f"[!] LangChain LLM/embeddings init skipped: {le}")
+            logger.error(f"[!] LangChain LLM/embeddings init skipped: {type(le).__name__}")
 
 except Exception as e:
-    print(f"[!] LangChain/Pinecone initialization skipped: {e}")
+    logger.error(f"[!] LangChain/Pinecone initialization skipped: {type(e).__name__}")
 
 
 # ── Fallback stubs so the rest of the app never crashes ──

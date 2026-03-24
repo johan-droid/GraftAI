@@ -15,7 +15,7 @@ if (typeof window !== "undefined") {
   }
 }
 
-import { clearToken, getToken, isTokenExpired } from "@/lib/auth";
+import { clearToken, getToken } from "@/lib/auth";
 
 interface ApiOptions {
   method?: string;
@@ -32,25 +32,22 @@ async function resolveUnauthorized() {
 
 async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
   const { method = "GET", body, token } = options;
-  const tokenToUse = token || getToken();
-
-  if (tokenToUse && isTokenExpired(tokenToUse)) {
-    await resolveUnauthorized();
-    throw new Error("Session expired");
-  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
-  if (tokenToUse) {
-    headers["Authorization"] = `Bearer ${tokenToUse}`;
+  // Only use Authorization header if a token is EXPLICITLY passed.
+  // Standard browser requests rely on secure HttpOnly cookies (credentials: "include").
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    credentials: "include", // Ensure HttpOnly cookies are sent
   });
 
   if (!res.ok) {
@@ -114,12 +111,9 @@ export async function doitAuthCheck() {
 }
 
 export async function refreshSession() {
-  const token = getToken();
-  if (!token) {
-    throw new Error("No token to refresh");
-  }
-  if (isTokenExpired(token)) {
-    throw new Error("Token expired");
+  const isLoggedIn = getToken();
+  if (!isLoggedIn) {
+    throw new Error("No session to refresh");
   }
   return doitAuthCheck();
 }

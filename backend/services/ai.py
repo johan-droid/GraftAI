@@ -7,6 +7,10 @@ import os
 import hashlib
 from .langchain_client import llm, vector_store, OPENAI_MODEL
 from .cache import get_cache, set_cache
+import logging
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 try:
     from groq import Groq
@@ -58,8 +62,12 @@ def _generate_with_groq(prompt: str, model_name: str = "llama-3.3-70b-versatile"
 @router.post("/chat", response_model=AIResponse)
 async def ai_chat(request: AIRequest):
     # Retrieve relevant context from vector DB (if populated)
-    docs = vector_store.similarity_search(request.prompt, k=3)
-    context_text = "\n".join([doc.page_content for doc in docs]) if docs else ""
+    try:
+        docs = vector_store.similarity_search(request.prompt, k=3)
+        context_text = "\n".join([doc.page_content for doc in docs]) if docs else ""
+    except Exception as e:
+        logger.warning(f"Vector store similarity search failed: {type(e).__name__}")
+        context_text = ""
 
     # Compose prompt with context
     full_prompt = f"Context:\n{context_text}\n\nUser: {request.prompt}\nAI:"
@@ -79,7 +87,7 @@ async def ai_chat(request: AIRequest):
             model_used = "llama-3.3-70b-versatile"
         except Exception as e:
             # fallback to langchain/OpenAI-style LLM
-            print("Groq call failed, falling back to existing LLM:", e)
+            logger.warning(f"Groq call failed, falling back to existing LLM: {type(e).__name__}")
             result_text = ""
 
     if not result_text:

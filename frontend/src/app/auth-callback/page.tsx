@@ -19,7 +19,7 @@ export default function AuthCallback() {
     const fetchCallback = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
           {
             headers: {
               "Accept": "application/json",

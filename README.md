@@ -49,22 +49,22 @@
 
 ## 🚀 Core Features
 
-### 🔐 1. Identity & Sovereignty
-* **Universal SSO**: Native integration with Google, GitHub, Microsoft, and Apple.
+### 🔐 1. Identity & Sovereignty (Hardened)
+* **HttpOnly Cookie Auth**: Production-grade session management using `HttpOnly`, `Secure`, `SameSite=Strict` cookies to mitigate XSS and CSRF risks.
+* **Universal SSO**: Native, race-condition-free integration with Google, GitHub, Microsoft, and Apple.
 * **Biometric Auth**: Passwordless login using FIDO2/WebAuthn (TouchID/FaceID).
-* **Identity Guard**: Multi-factor authentication (TOTP) and proactive session isolation.
-* **Cookie-less Magic**: Secure magic link delivery for instant, zero-password access.
+* **Sovereign JWT**: Asynchronous token validation with Auth0 JWKS integration and fail-safe local fallback.
 
 ### 🤖 2. Proactive AI Intelligence
 * **Contextual Memory**: Powered by RAG (Retrieval Augmented Generation) for long-term user context.
-* **Proactive Scheduling**: AI doesn't just react; it analyzes patterns and suggests optimized slots.
+* **Resilient Pinecone**: Advanced vector store integration with robust fallback handling to ensure AI availability during provider outages.
 * **Natural Language UI**: Chat-driven scheduling that understands nuances like "find a quick sync before my flight."
-* **Advanced RAG**: Integrated via Pinecone with strict tenant isolation for enterprise data.
+* **Advanced RAG**: Strictly isolated multi-tenant indexing for enterprise-grade data privacy.
 
 ### 📊 3. Enterprise Observability
 * **Live Analytics**: Real-time tracking of meeting health and team productivity.
-* **Proactive Reminders**: Smart notifications that trigger based on context, not just time.
-* **Multi-Cloud Ready**: Designed for horizontal scaling across Kubernetes/Docker or Serverless.
+* **Non-Blocking API**: Fully asynchronous backend orchestration ensuring extreme concurrency and low latency.
+* **Multi-Cloud Ready**: Optimized for horizontal scaling with tuned database connection pooling (SQLAlchemy 2.0 Async).
 
 ---
 
@@ -72,21 +72,21 @@
 
 ```mermaid
 graph LR
-    subgraph "High-Performance Edge"
-        UI["Modern UI (Tailwind 4 + Framer)"]
-        Guard["Route Guards & JWKS Middleware"]
+    subgraph "Hardened Edge"
+        UI["Modern UI (Next.js 15+ + Tailwind 4)"]
+        Guard["Cookie-Based Auth Middleware"]
     end
 
     subgraph "Intelligent Core"
-        API["FastAPI Orchestrator"]
+        API["FastAPI Async Orchestrator"]
         Auth["Sovereign Identity Service"]
-        Agent["AI Agent Service (LangChain)"]
+        Agent["Resilient AI Agent (LangChain)"]
     end
 
     subgraph "Sovereign Persistence"
-        RDS["PostgreSQL 16 (Async IO)"]
-        VDB["Pinecone (Serverless)"]
-        Cache["Redis (Auth State)"]
+        RDS["PostgreSQL 16 (Tuned Connection Pool)"]
+        VDB["Pinecone (with Fallback)"]
+        Cache["Redis (Auth Revocation & Rate Limiting)"]
     end
 
     UI --> API
@@ -123,7 +123,7 @@ cd backend
 python -m venv .venv
 # Activate venv
 pip install -r requirements.txt
-python app.py  # Wrapper with built-in anti-sleep pinger
+python app.py  # High-performance Uvicorn worker manager
 ```
 
 ### 3. Frontend Experience
@@ -137,10 +137,11 @@ npm run dev
 
 ## 🛡️ Security Posture
 GraftAI implements the **Zero-Trust Security Model**:
+*   **HttpOnly Isolation**: JWTs are never exposed to JavaScript, preventing XSS-based account takeovers.
+-   **CSRF Hardening**: Enforced `SameSite=Strict` and CORS origin-filtering.
 *   **Encrypted Payloads**: All data is encrypted at rest (AES-256) and in transit (TLS 1.3).
 *   **Sandboxed AI**: AI agents operate in a restricted environment with limited resource access.
-*   **Strict CORS**: Production-grade origin filtering and header protection.
-*   **Audit Logging**: Every authentication event is logged for enterprise compliance.
+*   **Audit Logging**: Every authentication and database transaction is logged as exception-safe events.
 
 ---
 

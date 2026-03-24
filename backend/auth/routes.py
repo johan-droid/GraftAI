@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Optional
 from jose import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 
 from backend.services import sso, passwordless, mfa, access_control, fido2_did, auth_utils
@@ -43,10 +43,11 @@ class UserRegister(BaseModel):
 
 
 def _create_jwt_token(sub: str):
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = jwt.encode({
         "sub": sub,
-        "exp": datetime.utcnow() + access_token_expires
+        "exp": int(expires_at.timestamp())
     }, SECRET_KEY, algorithm=ALGORITHM)
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -104,6 +105,8 @@ async def sso_callback(code: str, state: str, request: Request, db: AsyncSession
     fetch_mode = request.headers.get("sec-fetch-mode", "").lower()
     fetch_dest = request.headers.get("sec-fetch-dest", "").lower()
     accept_header = request.headers.get("accept", "").lower()
+
+    print("[sso_callback] code=", code, "state=", state, "fetch_mode=", fetch_mode, "fetch_dest=", fetch_dest, "accept=", accept_header)
 
     is_json_accept = "application/json" in accept_header
     is_navigation = (fetch_mode == "navigate" or fetch_dest == "document")

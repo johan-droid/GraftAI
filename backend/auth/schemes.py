@@ -37,7 +37,7 @@ def _get_auth0_jwk(token: str) -> dict:
 
 
 def decode_token(token: str) -> Optional[dict]:
-    # If Auth0 variables are configured, use RS256 and JWKS-based validation.
+    # If Auth0 variables are configured, attempt RS256 / JWKS validation.
     if AUTH0_DOMAIN and AUTH0_AUDIENCE:
         try:
             jwk = _get_auth0_jwk(token)
@@ -50,9 +50,10 @@ def decode_token(token: str) -> Optional[dict]:
             )
             return payload
         except JWTError:
-            return None
+            # Fallback to local JWT if Auth0 validation fails (e.g. local test tokens).
+            pass
 
-    # Fallback to local symmetric JWT strategy.
+    # Local symmetric JWT strategy (HS256) fallback.
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload

@@ -30,6 +30,23 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# --- Self-pinger background task ---
+import threading
+import time
+import requests
+
+def self_pinger():
+    while True:
+        try:
+            # Ping the local health endpoint to keep the server alive
+            requests.get("http://localhost:8000/health")
+        except Exception:
+            pass
+        time.sleep(30)
+
+# Start the self-pinger in a background thread
+threading.Thread(target=self_pinger, daemon=True).start()
+
 # CORS — read allowed origins from env, fallback to local dev + production frontend
 # Set this in Render env vars as:
 # CORS_ORIGINS=http://localhost:3000,https://graft-ai-two.vercel.app

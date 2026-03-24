@@ -153,7 +153,7 @@ export async function mfaVerify(token: string) {
 // Backend: POST /auth/fido2/verify    (Pydantic body: {user_id, assertion})
 // ──────────────────────────────────────
 export async function fido2StartRegistration() {
-  return apiFetch("/auth/fido2/register");
+  return apiFetch<{ user_id: number; challenge: string }>("/auth/fido2/register");
 }
 
 export async function fido2CompleteRegistration(attestation: Record<string, unknown>) {

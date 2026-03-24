@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, passwordlessRequest, passwordlessVerify, fido2Verify, ssoStart } from "@/lib/api";
+import { login, passwordlessRequest, passwordlessVerify, fido2Verify, fido2StartRegistration, ssoStart } from "@/lib/api";
 import { setToken } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, ArrowRight, Loader2, KeyRound, Fingerprint, Shield } from "lucide-react";
@@ -99,18 +99,30 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      // Trigger WebAuthn browser native prompt
-      const credential = await navigator.credentials.get({
+      // Start a FIDO2 challenge from backend and store it in Redis
+      const start = await fido2StartRegistration();
+      const challenge = new TextEncoder().encode(start.challenge);
+
+      // Trigger WebAuthn browser native prompt with backend-supplied challenge
+      const credential = (await navigator.credentials.get({
         publicKey: {
-          challenge: new Uint8Array(32),
+          challenge,
           timeout: 60000,
           rpId: window.location.hostname,
           userVerification: "preferred",
         },
-      });
+      })) as PublicKeyCredential | null;
+
       if (credential) {
-        // Send assertion to backend via properly-synced API
-        const result = await fido2Verify(1, {});
+        // Send assertion metadata to backend for verification. Keep as loose object shape.
+        const assertion: Record<string, unknown> = {
+          challenge: start.challenge,
+          id: credential.id,
+          type: credential.type,
+          rawId: credential.rawId,
+        };
+
+        const result = await fido2Verify(assertion);
         if (result.status === "verified") {
           router.replace("/dashboard");
         } else {

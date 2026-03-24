@@ -89,6 +89,13 @@ export async function login(username: string, password: string) {
   return res.json() as Promise<{ access_token: string; token_type: string }>;
 }
 
+export async function register(email: string, password: string, fullName?: string, timezone?: string) {
+  return apiFetch<{ message: string; id: number }>("/auth/register", {
+    method: "POST",
+    body: { email, password, full_name: fullName, timezone },
+  });
+}
+
 // ──────────────────────────────────────
 // Auth: Session Check
 // Backend: GET /auth/check (Bearer token in header)

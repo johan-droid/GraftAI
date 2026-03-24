@@ -7,7 +7,11 @@ from jose import jwt
 from datetime import datetime, timedelta
 import os
 
-from backend.services import sso, passwordless, mfa, access_control, fido2_did
+from ..services import sso, passwordless, mfa, access_control, fido2_did, auth_utils
+from ..models.tables import UserTable
+from ..api.deps import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key")
 ALGORITHM = "HS256"
@@ -31,6 +35,12 @@ class DIDVerifyRequest(BaseModel):
     user_id: int
     did: str
 
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    full_name: Optional[str] = None
+    timezone: Optional[str] = None
+
 
 def _create_jwt_token(sub: str):
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -42,12 +52,38 @@ def _create_jwt_token(sub: str):
 
 
 @router.post("/token")
-def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    # A safe default fallback user for quick startup.
-    if form_data.username != "admin" or form_data.password != "password":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    # Query database for the user
+    result = await db.execute(select(UserTable).where(UserTable.email == form_data.username))
+    user = result.scalars().first()
+    
+    if not user or not auth_utils.verify_password(form_data.password, user.hashed_password):
+        # A safe default fallback user for quick startup (admin/password)
+        if form_data.username == "admin" and form_data.password == "password":
+            return _create_jwt_token("admin")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
-    return _create_jwt_token(form_data.username)
+    return _create_jwt_token(str(user.id))
+
+@router.post("/register")
+async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
+    # Check if user already exists
+    result = await db.execute(select(UserTable).where(UserTable.email == user_in.email))
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+    
+    # Create new user
+    new_user = UserTable(
+        email=user_in.email,
+        full_name=user_in.full_name,
+        hashed_password=auth_utils.get_password_hash(user_in.password),
+        timezone=user_in.timezone
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    
+    return {"message": "User registered successfully", "id": new_user.id}
 
 
 @router.get("/sso/start")
@@ -59,7 +95,7 @@ def sso_start(provider: str = "github", redirect_to: str = "/dashboard"):
 
 
 @router.get("/sso/callback")
-def sso_callback(code: str, state: str, request: Request):
+async def sso_callback(code: str, state: str, request: Request, db: AsyncSession = Depends(get_db)):
     # If this endpoint is hit directly by the OAuth2 provider callback (browser navigation)
     # and not via frontend fetch from `/auth-callback`, route to frontend callback page.
     # This avoids showing raw JSON in the browser and preserves SPA behavior.
@@ -70,7 +106,28 @@ def sso_callback(code: str, state: str, request: Request):
 
     try:
         payload = sso.complete_oauth2_flow(code=code, state=state)
-        own_token = _create_jwt_token(str(payload["profile"].get("id", "unknown")))
+        profile = payload["profile"]
+        email = profile.get("email")
+        
+        # Sync user to database
+        if email:
+            result = await db.execute(select(UserTable).where(UserTable.email == email))
+            user = result.scalars().first()
+            if not user:
+                user = UserTable(
+                    email=email,
+                    full_name=profile.get("name"),
+                    is_active=True
+                )
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+            
+            user_id = str(user.id)
+        else:
+            user_id = str(profile.get("id", "unknown"))
+
+        own_token = _create_jwt_token(user_id)
         return {"auth": payload, "token": own_token, "redirect_to": payload.get("redirect_to", "/dashboard")}
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -174,7 +231,7 @@ def check_attribute(user_id: int, attribute: str, value: str):
     return {"allowed": access_control.check_user_attribute(user_id, attribute, value)}
 
 
-from backend.auth.schemes import get_current_user
+from .schemes import get_current_user
 
 
 @router.get("/check")

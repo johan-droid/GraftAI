@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
     full_name VARCHAR(255),
     is_active BOOLEAN DEFAULT TRUE,
     is_superuser BOOLEAN DEFAULT FALSE,
+    hashed_password VARCHAR(255),
+    timezone VARCHAR(100),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

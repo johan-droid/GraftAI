@@ -15,6 +15,7 @@ authlib
 pyotp
 httpx
 python-multipart
+passlib[bcrypt]
 
 # Cache
 redis

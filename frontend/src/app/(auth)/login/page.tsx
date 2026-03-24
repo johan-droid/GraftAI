@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { login, passwordlessRequest, passwordlessVerify, fido2Verify, ssoStart } from "@/lib/api";
@@ -353,7 +354,7 @@ export default function LoginPage() {
             <KeyRound className="w-3 h-3" /> MFA Verification
           </a>
           <p className="mt-2 text-sm text-slate-500">
-            Do you not have an account? <a href="#" className="font-medium text-primary hover:underline">Sign up</a>
+            Do you not have an account? <Link href="/register" className="font-medium text-primary hover:underline">Sign up</Link>
           </p>
         </div>
       </motion.div>

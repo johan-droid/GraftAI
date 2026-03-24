@@ -168,6 +168,23 @@ export default function Dashboard() {
             </Link>
           </div>
 
+          {/* Connect Calendar Prompt */}
+          <div className="mt-6 p-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 to-transparent relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:scale-110 transition-transform">
+              <CalendarIcon className="w-8 h-8 text-primary" />
+            </div>
+            <h4 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              Sync your Calendar
+            </h4>
+            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+              Connect your calendar to enable AI-powered scheduling and timezone sync.
+            </p>
+            <button className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all shadow-lg active:scale-95">
+              Connect Now
+            </button>
+          </div>
+
           {/* Proactive AI Suggestion */}
           {aiSuggestion && (
             <div className="mt-4 p-3 rounded-xl border border-primary/20 bg-primary/5">

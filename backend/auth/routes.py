@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -97,65 +97,57 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
-def _create_jwt_token(sub: str, response: Optional[JSONResponse] = None):
-    """Create access and refresh tokens and optionally set HttpOnly cookies."""
+def _create_jwt_token(sub: str):
+    """Create access and refresh tokens and persist refresh token in Redis."""
     now = datetime.now(timezone.utc)
-    
-    # Access token - short lived
+
     access_expires_at = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = jwt.encode({
         "sub": sub,
         "exp": int(access_expires_at.timestamp()),
         "type": "access"
     }, SECRET_KEY, algorithm=ALGORITHM)
-    
-    # Refresh token - long lived, stored in Redis
+
     refresh_expires_at = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     refresh_token = jwt.encode({
         "sub": sub,
         "exp": int(refresh_expires_at.timestamp()),
         "type": "refresh"
     }, SECRET_KEY, algorithm=ALGORITHM)
-    
-    # Store refresh token in Redis
+
     client = _get_redis_client()
     client.setex(f"refresh:{refresh_token}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, sub)
-    
-    # Track tokens per user for session revocation
     client.sadd(f"user_tokens:{sub}", refresh_token)
     client.expire(f"user_tokens:{sub}", REFRESH_TOKEN_EXPIRE_DAYS * 86400)
-    
-    token_data = {
+
+    return {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     }
 
-    if response:
-        # Secure, HttpOnly cookie (no Secure = True on localhost unless needed)
-        is_prod = os.getenv("NODE_ENV") == "production"
-        response.set_cookie(
-            key="graftai_access_token",
-            value=access_token,
-            httponly=True,
-            secure=is_prod,
-            samesite="strict",
-            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            path="/"
-        )
-        # Refresh token is also better as a cookie (XSS protection)
-        response.set_cookie(
-            key="graftai_refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=is_prod,
-            samesite="strict",
-            max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-            path="/auth/refresh"
-        )
-    
-    return token_data
+
+def _attach_jwt_cookies(response: Response, token_data: dict):
+    is_prod = os.getenv("NODE_ENV") == "production"
+    response.set_cookie(
+        key="graftai_access_token",
+        value=token_data["access_token"],
+        httponly=True,
+        secure=is_prod,
+        samesite="strict",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="graftai_refresh_token",
+        value=token_data["refresh_token"],
+        httponly=True,
+        secure=is_prod,
+        samesite="strict",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/auth/refresh",
+    )
 
 
 @router.post("/token")
@@ -172,10 +164,9 @@ async def login(
     if not user or not auth_utils.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
-    response = JSONResponse(content={"status": "success"})
-    tokens = _create_jwt_token(str(user.id), response=response)
-    # Return basic user info + token meta in body, but real tokens in HttpOnly cookies
-    response.body = JSONResponse(content={"token": tokens, "user": {"id": user.id, "email": user.email}}).body
+    tokens = _create_jwt_token(str(user.id))
+    response = JSONResponse(content={"token": tokens, "user": {"id": user.id, "email": user.email}})
+    _attach_jwt_cookies(response, tokens)
     return response
 
 @router.post("/register")
@@ -276,15 +267,15 @@ async def sso_callback(code: str, state: str, request: Request, db: AsyncSession
         else:
             user_id = str(profile.get("id", "unknown"))
 
-        response = JSONResponse(content={"status": "success"})
-        own_token = _create_jwt_token(user_id, response=response)
-        
-        return JSONResponse(content={
-            "auth": payload, 
-            "token": own_token, 
+        own_token = _create_jwt_token(user_id)
+        response = JSONResponse(content={
+            "auth": payload,
+            "token": own_token,
             "user_id": user_id,
-            "redirect_to": payload.get("redirect_to", "/dashboard")
-        }, headers=dict(response.headers))
+            "redirect_to": payload.get("redirect_to", "/dashboard"),
+        })
+        _attach_jwt_cookies(response, own_token)
+        return response
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -299,13 +290,16 @@ def _passwordless_request(
 
 @router.post("/passwordless/verify")
 def _passwordless_verify(
-    email: str, 
-    code: str, 
+    email: str,
+    code: str,
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=5, window_seconds=60))
 ):
     if not passwordless.verify_magic_link_code(email, code):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired OTP")
-    return _create_jwt_token(email)
+    token_data = _create_jwt_token(email)
+    response = JSONResponse(content=token_data)
+    _attach_jwt_cookies(response, token_data)
+    return response
 
 
 @router.post("/mfa/setup")
@@ -403,7 +397,10 @@ def refresh_token(request: RefreshTokenRequest):
         )
     
     # Generate new token pair
-    return _create_jwt_token(user_id)
+    token_data = _create_jwt_token(user_id)
+    response = JSONResponse(content=token_data)
+    _attach_jwt_cookies(response, token_data)
+    return response
 
 
 @router.post("/logout")

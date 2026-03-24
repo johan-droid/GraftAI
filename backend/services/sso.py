@@ -171,13 +171,13 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
     }
 
 
-async def complete_oauth2_flow(code: str, signed_state: str):
+async def complete_oauth2_flow(code: str, state: str):
     # Verify HMAC signature first
-    state = _verify_state(signed_state)
-    if not state:
+    original_state = _verify_state(state)
+    if not original_state:
         raise HTTPException(status_code=403, detail="OAuth state signature verification failed")
 
-    data = _get_oauth_state(state)
+    data = _get_oauth_state(original_state)
     if not data:
         raise RuntimeError("Invalid or expired state")
 

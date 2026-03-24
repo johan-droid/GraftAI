@@ -98,11 +98,20 @@ def sso_start(provider: str = "github", redirect_to: str = "/dashboard"):
 async def sso_callback(code: str, state: str, request: Request, db: AsyncSession = Depends(get_db)):
     # If this endpoint is hit directly by the OAuth2 provider callback (browser navigation)
     # and not via frontend fetch from `/auth-callback`, route to frontend callback page.
+    # If this endpoint is hit directly by the OAuth2 provider callback (browser navigation)
+    # and not via frontend fetch from `/auth-callback`, route to frontend callback page.
     # This avoids showing raw JSON in the browser and preserves SPA behavior.
-    accept_header = request.headers.get("accept", "")
-    if "application/json" not in accept_header:
+    accept_header = request.headers.get("accept", "").lower()
+    fetch_mode = request.headers.get("sec-fetch-mode", "").lower()
+    
+    # Redirect if it's a top-level navigation (navigate) OR if JSON is NOT explicitly requested
+    # while it's NOT a CORS/Fetch request.
+    is_json_request = "application/json" in accept_header
+    is_navigation = fetch_mode == "navigate" or (not fetch_mode and not is_json_request)
+
+    if is_navigation and not is_json_request:
         frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
-        return RedirectResponse(f"{frontend_base}/auth-callback?code={code}&state={state}")
+        return RedirectResponse(f"{frontend_base}/auth-callback?code={code}&state={state}", status_code=302)
 
     try:
         payload = sso.complete_oauth2_flow(code=code, state=state)

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { setToken } from "@/lib/auth";
+import { API_BASE_URL } from "@/lib/api";
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -18,8 +19,9 @@ export default function AuthCallback() {
 
     const fetchCallback = async () => {
       try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || API_BASE_URL;
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
+          `${backendUrl}/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
           {
             headers: {
               "Accept": "application/json",

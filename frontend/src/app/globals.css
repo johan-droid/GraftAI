@@ -38,6 +38,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
 }
 
 /* Ambient background glow — smaller on mobile, larger on desktop */
@@ -75,6 +76,33 @@ button, a, [role="button"] {
 /* Smooth scrolling on iOS */
 * {
   -webkit-overflow-scrolling: touch;
+}
+
+/* Adaptive 120Hz motion - prefers reduced motion for accessibility */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Optimize for 120Hz displays */
+  * {
+    animation-duration: 8ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 150ms !important;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+}
+
+/* Reduced motion preference - disable animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Safe area insets for notched phones */

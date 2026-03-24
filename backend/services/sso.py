@@ -73,18 +73,22 @@ def complete_oauth2_flow(code: str, state: str):
     if not data:
         raise RuntimeError("Invalid or expired state")
 
-    if datetime.utcnow() - data["created_at"] > timedelta(minutes=5):
+    if datetime.utcnow() - data.get("created_at", datetime.utcnow()) > timedelta(minutes=5):
         raise RuntimeError("OAuth2 state expired")
 
     provider_name = data.get("provider", "github")
     config = PROVIDERS.get(provider_name)
-    session: OAuth2Session = data["session"]
+    if not config:
+        raise RuntimeError(f"Provider config for {provider_name} not found")
+    session = data.get("session")
+    if session is None:
+        raise RuntimeError("OAuth2 session not found in state cache")
 
     token = session.fetch_token(
-        config["token_url"],
+        config.get("token_url"),
         code=code,
-        include_client_id=True,
-        client_secret=config["client_secret"],
+        client_id=config.get("client_id"),
+        client_secret=config.get("client_secret"),
         authorization_response=f"?code={code}&state={state}",
     )
 

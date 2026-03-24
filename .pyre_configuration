@@ -3,6 +3,6 @@
     "."
   ],
   "search_path": [
-    "backend/.venv/Lib/site-packages"
+    {"site-package": "C:\\Users\\sahoo\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages"}
   ]
 }

@@ -33,13 +33,12 @@ app = FastAPI(
 # --- Self-pinger background task ---
 import threading
 import time
-import requests
+import httpx
 
 def self_pinger():
     while True:
         try:
-            # Ping the local health endpoint to keep the server alive
-            requests.get("http://localhost:8000/health")
+            httpx.get("http://localhost:8000/health")
         except Exception:
             pass
         time.sleep(30)

@@ -3,7 +3,17 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   "http://localhost:8000";
 
-console.debug("API_BASE_URL set to", API_BASE_URL);
+if (typeof window !== "undefined") {
+  console.debug("API_BASE_URL set to", API_BASE_URL);
+  if (
+    process.env.NODE_ENV === "production" &&
+    (API_BASE_URL.startsWith("http://localhost") || API_BASE_URL.startsWith("http://127.0.0.1"))
+  ) {
+    console.warn(
+      "Running in production with localhost backend URL. Please set NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_BACKEND_URL to your deployed backend domain."
+    );
+  }
+}
 
 import { clearToken, getToken, isTokenExpired } from "@/lib/auth";
 

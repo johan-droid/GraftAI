@@ -30,8 +30,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS — read allowed origins from env, fallback to localhost for dev
-_cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+# CORS — read allowed origins from env, fallback to local dev + production frontend
+# Set this in Render env vars as:
+# CORS_ORIGINS=http://localhost:3000,https://graft-ai-two.vercel.app
+_cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://graft-ai-two.vercel.app")
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
 
 app.add_middleware(

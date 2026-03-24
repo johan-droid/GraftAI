@@ -1,7 +1,7 @@
 # Core
 fastapi
 uvicorn[standard]
-pydantic[email]
+pydantic[email]==2.7.4
 python-dotenv
 
 # Database
@@ -20,12 +20,12 @@ python-multipart
 redis
 
 # AI & LLM
-groq
-langchain
-langchain-openai
-langchain-community
-pinecone
-langchain-pinecone
+groq==0.4.0
+langchain==1.2.11
+langchain-openai==1.1.12
+langchain-community==0.4.1
+pinecone-client==3.0.0
+langchain-pinecone==0.0.1
 
 # Dev
 pytest==8.2.0

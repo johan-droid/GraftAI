@@ -5,7 +5,7 @@ description = "Backend for GraftAI — AI-powered scheduling platform"
 authors = ["GraftAI Team"]
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.13"
+python = ">=3.12,<4.0"
 fastapi = "0.110.0"
 uvicorn = {version = "0.29.0", extras = ["standard"]}
 pydantic = {version = "2.7.4", extras = ["email"]}
@@ -16,7 +16,7 @@ python-jose = {version = "3.3.0", extras = ["cryptography"]}
 langchain = "1.2.11"
 langchain-openai = "1.1.12"
 langchain-community = "0.4.1"
-pinecone-client = "3.0.0"
+pinecone-client = "5.0.0"
 pyyaml = "6.0"
 psycopg2-binary = "2.9.9"
 python-dotenv = "1.0.1"

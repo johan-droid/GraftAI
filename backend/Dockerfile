@@ -8,7 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml poetry.lock* /app/
-RUN pip install --upgrade pip poetry && \
+# Ensure pyyaml uses pure-Python fallback if C extension build fails in cloud CI
+ENV PYTHON_PYYAML_NO_EXTENSIONS=1
+RUN pip install --upgrade pip setuptools wheel Cython poetry && \
     poetry config virtualenvs.create false && \
     poetry install --no-dev --no-interaction --no-ansi
 

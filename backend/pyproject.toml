@@ -28,6 +28,7 @@ groq = "^0.4.0"
 pytest = "^8.0.0"
 pytest-asyncio = "^0.25.0"
 black = "^24.0.0"
+Cython = "^0.29.21"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

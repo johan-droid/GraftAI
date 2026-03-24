@@ -31,3 +31,9 @@ langchain-pinecone
 pytest==8.2.0
 pytest-asyncio==0.25.0
 black
+
+# Build fix for pyyaml on modern setuptools
+Cython>=0.29.21
+pip>=26.0.1
+setuptools>=69.0.0
+

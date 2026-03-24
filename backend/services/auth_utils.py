@@ -6,7 +6,23 @@ logger = logging.getLogger(__name__)
 
 # Use standard bcrypt scheme for better compatibility.
 # For Python 3.12+ / passlib 1.7.x compatibility, ensure 'bcrypt' package is installed.
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# We validate immediately at import time to fail fast in case the backend is incompatible.
+
+def _init_pwd_context() -> CryptContext:
+    try:
+        ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        # quick self-test to catch bcrypt backend load problems early
+        ctx.hash("StartupSelfTest99!")
+        return ctx
+    except Exception as e:
+        logger.critical(
+            "Missing or incompatible bcrypt backend. "
+            "Please install bcrypt<4 and passlib>=1.7.4. "
+            f"Underlying error: {type(e).__name__}: {e}"
+        )
+        raise
+
+pwd_context = _init_pwd_context()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

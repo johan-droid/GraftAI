@@ -194,9 +194,9 @@ async def verify_password_system():
             raise RuntimeError("Password verification self-test failed")
         logger.info("✅ Password hashing system verified.")
     except Exception as e:
-        logger.error(f"CRITICAL: Password hashing system failure: {e}")
-        # In production, you might want to exit here if auth is compromised
-        # os._exit(1)
+        logger.critical(f"CRITICAL: Password hashing system failure: {e}")
+        # Fail startup if password hashing is not working, to avoid broken auth.
+        raise RuntimeError("Password hashing system initialization failed") from e
 
 
 @app.on_event("startup")

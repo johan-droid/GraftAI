@@ -32,7 +32,8 @@ PROVIDERS = {
 
 # During OAuth2 login the provider should return to the frontend callback endpoint.
 # This matches the existing Next.js `/auth-callback` page flow in frontend/src/app/auth-callback/page.tsx
-OAUTH2_REDIRECT_URI = os.getenv("OAUTH2_REDIRECT_URI", "http://localhost:3000/auth-callback")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
+OAUTH2_REDIRECT_URI = os.getenv("OAUTH2_REDIRECT_URI", f"{APP_BASE_URL}/auth/sso/callback")
 
 
 def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard"):

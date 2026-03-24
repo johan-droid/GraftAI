@@ -11,6 +11,7 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENV = os.getenv("PINECONE_ENV", "us-west1-gcp")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+PINECONE_INDEX = os.getenv("PINECONE_INDEX", "scheduler-context")
 
 vector_store = None
 llm = None
@@ -51,7 +52,7 @@ try:
                 embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
                 # Using the modern PineconeVectorStore from langchain-pinecone
                 vector_store = PineconeVectorStore(
-                    index_name="scheduler-context", 
+                    index_name=PINECONE_INDEX, 
                     embedding=embeddings,
                     pinecone_api_key=PINECONE_API_KEY
                 )

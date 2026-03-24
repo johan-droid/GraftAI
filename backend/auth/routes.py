@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Optional
@@ -58,7 +59,15 @@ def sso_start(provider: str = "github", redirect_to: str = "/dashboard"):
 
 
 @router.get("/sso/callback")
-def sso_callback(code: str, state: str):
+def sso_callback(code: str, state: str, request: Request):
+    # If this endpoint is hit directly by the OAuth2 provider callback (browser navigation)
+    # and not via frontend fetch from `/auth-callback`, route to frontend callback page.
+    # This avoids showing raw JSON in the browser and preserves SPA behavior.
+    accept_header = request.headers.get("accept", "")
+    if "application/json" not in accept_header:
+        frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+        return RedirectResponse(f"{frontend_base}/auth-callback?code={code}&state={state}")
+
     try:
         payload = sso.complete_oauth2_flow(code=code, state=state)
         own_token = _create_jwt_token(str(payload["profile"].get("id", "unknown")))

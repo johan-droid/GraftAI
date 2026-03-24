@@ -30,7 +30,16 @@ if DATABASE_URL:
         if _needs_ssl:
             _connect_args["ssl"] = True
 
-        engine = create_async_engine(_clean_url, echo=False, future=True, connect_args=_connect_args)
+        engine = create_async_engine(
+            _clean_url,
+            echo=False,
+            future=True,
+            connect_args=_connect_args,
+            pool_pre_ping=True,
+            pool_size=10,
+            max_overflow=20,
+            pool_timeout=30,
+        )
         AsyncSessionLocal = sessionmaker(
             bind=engine, class_=AsyncSession, expire_on_commit=False
         )

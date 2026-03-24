@@ -42,5 +42,21 @@ def test_auth_check_without_token_returns_401():
     assert response.status_code == 401
 
 
+def test_password_hash_and_verify_long_password():
+    from backend.services.auth_utils import get_password_hash, verify_password
+
+    long_password = "a" * 128
+    hashed = get_password_hash(long_password)
+    assert verify_password(long_password, hashed)
+
+
+def test_password_hash_too_long_raises_value_error():
+    from backend.services.auth_utils import get_password_hash
+
+    too_long_password = "a" * 5000
+    with pytest.raises(ValueError):
+        get_password_hash(too_long_password)
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

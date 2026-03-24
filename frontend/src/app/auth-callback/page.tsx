@@ -29,7 +29,9 @@ export default function AuthCallback() {
         const data = await response.json();
 
         if (!response.ok) {
-          setStatus(data.detail || "SSO callback failed");
+          const errorMsg = data.detail || `Server error (${response.status})`;
+          console.error("SSO Error:", data);
+          setStatus(errorMsg);
           return;
         }
 
@@ -42,7 +44,8 @@ export default function AuthCallback() {
 
         setStatus("No access token returned from callback");
       } catch (err) {
-        setStatus((err as Error).message);
+        console.error("Fetch failure:", err);
+        setStatus("Connection error: Ensure NEXT_PUBLIC_API_BASE_URL is set on Vercel.");
       }
     };
 

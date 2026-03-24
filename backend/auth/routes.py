@@ -7,9 +7,9 @@ from jose import jwt
 from datetime import datetime, timedelta
 import os
 
-from ..services import sso, passwordless, mfa, access_control, fido2_did, auth_utils
-from ..models.tables import UserTable
-from ..api.deps import get_db
+from backend.services import sso, passwordless, mfa, access_control, fido2_did, auth_utils
+from backend.models.tables import UserTable
+from backend.api.deps import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -102,18 +102,25 @@ async def sso_callback(code: str, state: str, request: Request, db: AsyncSession
     # and not via frontend fetch from `/auth-callback`, route to frontend callback page.
     # This avoids showing raw JSON in the browser and preserves SPA behavior.
     # Distinguish between a top-level browser navigation (from Google) and an API fetch (from the frontend).
+    # Google Sign-In redirect is a top-level GET navigation.
+    # Frontend fetch() is a CORS or same-origin request with specific headers.
     fetch_mode = request.headers.get("sec-fetch-mode", "").lower()
     fetch_dest = request.headers.get("sec-fetch-dest", "").lower()
+    origin = request.headers.get("origin")
     accept_header = request.headers.get("accept", "").lower()
     
-    # It's a navigation if the browser is loading a new document (top-level)
-    is_navigation = fetch_mode == "navigate" or fetch_dest == "document"
+    # It's a navigation if:
+    # 1. Explicitly marked as navigate/document
+    # 2. OR it's a GET without an 'Origin' header (standard top-level navigation)
+    # 3. AND it doesn't explicitly look like a JSON fetch
+    is_json_accept = "application/json" in accept_header
+    is_navigation = (fetch_mode == "navigate" or fetch_dest == "document")
     
-    # If fetch headers are missing (older browsers), fallback to Accept header
     if not fetch_mode and not fetch_dest:
-        is_navigation = "application/json" not in accept_header
+        # Fallback for older browsers: navigations don't have Origin, fetch() does.
+        is_navigation = (not origin) and (not is_json_accept)
 
-    if is_navigation:
+    if is_navigation and not is_json_accept:
         # The goal is to redirect the user to the frontend callback page.
         # We respect FRONTEND_BASE_URL first. If not provided, we fall back to the production URL.
         frontend_base = os.getenv("FRONTEND_BASE_URL", "https://graft-ai-two.vercel.app").rstrip("/")
@@ -249,7 +256,7 @@ def check_attribute(user_id: int, attribute: str, value: str):
     return {"allowed": access_control.check_user_attribute(user_id, attribute, value)}
 
 
-from .schemes import get_current_user
+from backend.auth.schemes import get_current_user
 
 
 @router.get("/check")

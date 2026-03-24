@@ -4,9 +4,18 @@ import time
 import httpx
 
 def self_pinger():
+    """Background task to keep the service awake by hitting the public URL."""
+    # Wait a bit for the server to start
+    time.sleep(10)
+    
+    public_url = os.getenv("APP_BASE_URL", "https://graftai.onrender.com").rstrip("/")
+    health_url = f"{public_url}/health"
+    local_url = "http://localhost:8000/health"
+    
     while True:
         try:
-            httpx.get("http://localhost:8000/health")
+            httpx.get(health_url, timeout=10.0)
+            httpx.get(local_url, timeout=5.0)
         except Exception:
             pass
         time.sleep(30)

@@ -36,11 +36,23 @@ import time
 import httpx
 
 def self_pinger():
+    """Background task to keep the service awake by hitting the public URL."""
+    # Preferred: Use public URL to trigger external router activity
+    public_url = os.getenv("APP_BASE_URL", "https://graftai.onrender.com").rstrip("/")
+    health_url = f"{public_url}/health"
+    
+    # Also keep a local check just in case
+    local_url = "http://localhost:8000/health"
+    
     while True:
         try:
-            httpx.get("http://localhost:8000/health")
+            # Ping public URL to keep Render awake
+            httpx.get(health_url, timeout=10.0)
+            # Ping local URL for internal health
+            httpx.get(local_url, timeout=5.0)
         except Exception:
             pass
+        # Ping every 30 seconds
         time.sleep(30)
 
 # Start the self-pinger in a background thread

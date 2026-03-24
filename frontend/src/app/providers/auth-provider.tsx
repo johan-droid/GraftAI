@@ -21,6 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [consecutiveRefreshFailures, setConsecutiveRefreshFailures] = useState(0);
 
   useEffect(() => {
     const initialize = async () => {
@@ -34,10 +35,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const result = await doitAuthCheck();
         setUser(result.user);
         setIsAuthenticated(true);
-      } catch {
-        clearToken();
-        setUser(null);
-        setIsAuthenticated(false);
+      } catch (error) {
+        console.warn("Initial auth check failed, retrying once", error);
+        // Temporary network issue / mobile cold start robustness
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        try {
+          const result2 = await doitAuthCheck();
+          setUser(result2.user);
+          setIsAuthenticated(true);
+        } catch (error2) {
+          console.warn("Auth check retry failed", error2);
+          clearToken();
+          setUser(null);
+          setIsAuthenticated(false);
+        }
       } finally {
         setLoading(false);
       }
@@ -48,12 +59,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const interval = setInterval(async () => {
       try {
         await refreshSession();
+        setConsecutiveRefreshFailures(0);
       } catch {
-        clearToken();
-        setUser(null);
-        setIsAuthenticated(false);
+        setConsecutiveRefreshFailures((prev) => {
+          const next = prev + 1;
+          if (next >= 3) {
+            clearToken();
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+          return next;
+        });
       }
-    }, 30 * 1000); // 30 sec
+    }, 60 * 1000); // 1 minute
 
     return () => clearInterval(interval);
   }, []);
@@ -84,10 +102,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const result = await refreshSession();
       setUser(result.user);
       setIsAuthenticated(true);
-    } catch {
-      clearToken();
-      setUser(null);
-      setIsAuthenticated(false);
+      setConsecutiveRefreshFailures(0);
+    } catch (error) {
+      setConsecutiveRefreshFailures((prev) => {
+        const next = prev + 1;
+        if (next >= 3) {
+          clearToken();
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+        return next;
+      });
+      console.warn("Refresh session failed", error);
     }
   };
 

@@ -88,6 +88,23 @@ app.include_router(upgrade_router)
 app.include_router(plugin_router)
 
 
+from backend.utils import db as db_utils
+from backend.models.tables import Base as ModelsBase
+
+
+@app.on_event("startup")
+async def create_database_tables():
+    if not db_utils.engine:
+        print("⚠ Database engine is not configured; skipping auto-migration.")
+        return
+    try:
+        async with db_utils.engine.begin() as conn:
+            await conn.run_sync(ModelsBase.metadata.create_all)
+        print("✅ Database tables verified/created successfully.")
+    except Exception as e:
+        print(f"⚠ Failed to create or verify database tables: {e}")
+
+
 @app.get("/")
 def root():
     return {"message": "GraftAI Backend API is running."}

@@ -173,23 +173,42 @@ app = FastAPI(
 
 
 # --- Middleware Registration ---
-# 1. Rate Limiting (Distributed via Redis)
-app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
+# ⚠️  ORDER IS CRITICAL: CORS must be outermost so that browser OPTIONS
+#     preflight requests are answered BEFORE hitting the rate limiter.
 
-# 2. CORS (Hardened for Production)
+# 1. CORS — Outermost layer (handles preflight OPTIONS first)
+#    Collect all trusted origins from env vars + known hardcoded values.
+_raw_extra = os.getenv("EXTRA_CORS_ORIGINS", "")  # comma-separated extra origins
+_extra_origins = [o.strip() for o in _raw_extra.split(",") if o.strip()]
+
 cors_origins = [
-    os.getenv("FRONTEND_URL", "http://localhost:3000"),
-    os.getenv("LOAD_BALANCER_URL", "http://localhost:8080"),
+    # ── Production ──────────────────────────────────
+    "https://graft-ai-two.vercel.app",           # Vercel production frontend
+    "https://graftai.onrender.com",              # Render backend self-reference
+    # ── Configurable via Render env vars ────────────
+    *([os.getenv("FRONTEND_URL")] if os.getenv("FRONTEND_URL") else []),
+    *([os.getenv("LOAD_BALANCER_URL")] if os.getenv("LOAD_BALANCER_URL") else []),
+    # ── Any extra origins injected at deploy time ────
+    *_extra_origins,
+    # ── Local development ────────────────────────────
+    "http://localhost:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3000",
+    "http://localhost:8080",
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["X-Backend-Server", "X-Request-Id"],
+    max_age=600,  # Cache preflight for 10 minutes to reduce OPTIONS overhead
 )
+
+# 2. Rate Limiting — Inner layer (applied only to real requests, not OPTIONS)
+app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
 
 # --- Router Inclusion ---
 app.include_router(auth_router)

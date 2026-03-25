@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from backend.api.deps import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.services import scheduler
+from backend.utils.sanitization import sanitize_recursive
 import logging
 
 # Initialize logger
@@ -63,7 +64,8 @@ async def create_event(
     user_id: int = Depends(get_current_user_id)
 ):
     """Create a new event and sync to AI."""
-    event_dict = event_in.model_dump()
+    # Sanitize incoming data to prevent XSS in description/metadata
+    event_dict = sanitize_recursive(event_in.model_dump())
     event_dict["user_id"] = user_id
     
     try:
@@ -80,7 +82,8 @@ async def update_event(
     user_id: int = Depends(get_current_user_id)
 ):
     """Update event and trigger real-time AI context update."""
-    update_data = event_in.model_dump(exclude_unset=True)
+    # Sanitize incoming update data
+    update_data = sanitize_recursive(event_in.model_dump(exclude_unset=True))
     event = await scheduler.update_event(db, event_id, user_id, update_data)
     
     if not event:
@@ -92,11 +95,12 @@ async def update_event(
 async def get_available_slots(
     date: datetime,
     duration: int = 30,
+    target_timezone: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
     """Detect available time slots for scheduling (Smart Pipeline)."""
-    return await scheduler.find_available_slots(db, user_id, date, duration)
+    return await scheduler.find_available_slots(db, user_id, date, duration, target_timezone=target_timezone)
 
 @router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_event(

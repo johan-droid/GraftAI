@@ -25,6 +25,7 @@ import redis
 from backend.auth.routes import router as auth_router
 from backend.api.calendar import router as calendar_router
 from backend.api.users import router as users_router
+from backend.api.uploads import router as uploads_router
 from backend.services.ai import router as ai_router
 from backend.services.analytics import router as analytics_router
 from backend.services.consent import router as consent_router
@@ -210,16 +211,23 @@ app.add_middleware(
 # 2. Rate Limiting — Inner layer (applied only to real requests, not OPTIONS)
 app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
 
-# --- Router Inclusion ---
-app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(calendar_router)
-app.include_router(ai_router)
-app.include_router(proactive_router)
-app.include_router(analytics_router)
-app.include_router(consent_router)
-app.include_router(upgrade_router)
-app.include_router(plugin_router)
+# --- Router Inclusion (API v1) ---
+from fastapi import APIRouter
+
+v1_router = APIRouter(prefix="/api/v1")
+
+v1_router.include_router(auth_router)
+v1_router.include_router(users_router)
+v1_router.include_router(uploads_router)
+v1_router.include_router(calendar_router)
+v1_router.include_router(ai_router)
+v1_router.include_router(proactive_router)
+v1_router.include_router(analytics_router)
+v1_router.include_router(consent_router)
+v1_router.include_router(upgrade_router)
+v1_router.include_router(plugin_router)
+
+app.include_router(v1_router)
 
 
 @app.get("/")

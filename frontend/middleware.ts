@@ -1,16 +1,12 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { auth } from "@/lib/auth-server";
 
-export function middleware(req: NextRequest) {
-  // We completely bypass middleware-based auth protection because the
-  // `graftai_access_token` is an HttpOnly cookie set on the BACKEND domain
-  // (e.g. graftai.onrender.com). The Next.js frontend server (vercel.app)
-  // physically cannot read this cookie.
-  // Auth protection is handled strictly on the client side via the <AuthProvider>
-  // and the backend API itself.
-  return NextResponse.next();
-}
+export default auth.middleware({
+  // Redirects unauthenticated users from dashboard to login
+  loginUrl: "/login",
+});
 
 export const config = {
-  matcher: [] // Disable middleware execution to speed up navigations
+  matcher: [
+    "/dashboard/:path*", // Protect all dashboard sub-routes
+  ],
 };

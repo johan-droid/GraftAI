@@ -3,7 +3,8 @@ from fastapi.responses import RedirectResponse, JSONResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from jose import jwt
+import jwt
+from jwt import PyJWTError as JWTError
 from datetime import datetime, timedelta, timezone
 import os
 import redis
@@ -101,27 +102,35 @@ def _create_jwt_token(sub: str):
     """Create access and refresh tokens and persist refresh token in Redis."""
     now = datetime.now(timezone.utc)
 
+    # Access Token
     access_expires_at = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = jwt.encode({
-        "sub": sub,
+    access_payload = {
+        "sub": str(sub),
         "exp": int(access_expires_at.timestamp()),
-        "type": "access"
-    }, SECRET_KEY, algorithm=ALGORITHM)
+        "iat": int(now.timestamp()),
+        "type": "access",
+        "iss": "graftai-sovereign"
+    }
+    access_token = jwt.encode(access_payload, SECRET_KEY, algorithm=ALGORITHM)
 
+    # Refresh Token
     refresh_expires_at = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    refresh_token = jwt.encode({
-        "sub": sub,
+    refresh_payload = {
+        "sub": str(sub),
         "exp": int(refresh_expires_at.timestamp()),
-        "type": "refresh"
-    }, SECRET_KEY, algorithm=ALGORITHM)
+        "iat": int(now.timestamp()),
+        "type": "refresh",
+        "iss": "graftai-sovereign"
+    }
+    refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
 
     client = _get_redis_client()
-    client.setex(f"refresh:{refresh_token}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, sub)
+    client.setex(f"refresh:{refresh_token}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, str(sub))
     client.sadd(f"user_tokens:{sub}", refresh_token)
     
-    # Register this specific access session in Redis for stickiness tracking
-    session_key = f"active_session:{access_token[-20:]}" # Use suffix as identifier
-    client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, sub)
+    # Register this specific access session in Redis
+    session_key = f"active_session:{access_token[-20:]}"
+    client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, str(sub))
     
     client.expire(f"user_tokens:{sub}", REFRESH_TOKEN_EXPIRE_DAYS * 86400)
 
@@ -400,7 +409,7 @@ def refresh_token(request: RefreshTokenRequest):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token type"
             )
-    except jwt.JWTError:
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token"

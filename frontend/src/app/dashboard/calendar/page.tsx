@@ -26,6 +26,7 @@ import {
   API_BASE_URL 
 } from "@/lib/api";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 const CATEGORIES = {
   meeting: { label: "Meeting", color: "#8A2BE2", dot: "bg-violet-500" },
@@ -43,7 +44,11 @@ export default function PremiumCalendarPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [isCreating, setIsCreating] = useState(false);
-  const [recommendations, setRecommendations] = useState<{start: string, end: string}[]>([]);
+  const [recommendations, setRecommendations] = useState<{start: string, end: string, local_label?: string, guest_label?: string}[]>([]);
+  
+  // Coordination State
+  const [coordinationMode, setCoordinationMode] = useState(false);
+  const [targetTimezone, setTargetTimezone] = useState("UTC");
 
   // Calendar Logic
   const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
@@ -87,14 +92,18 @@ export default function PremiumCalendarPage() {
     const fetchSlotsData = async () => {
       try {
         const dateISO = currentDate.toISOString();
-        const data = await getAvailableSlots(dateISO, 60);
+        const data = await getAvailableSlots(
+          dateISO, 
+          60, 
+          coordinationMode ? targetTimezone : undefined
+        );
         setRecommendations(data.slice(0, 3)); // show top 3
       } catch (err) {
         console.error("Failed to fetch slots:", err);
       }
     };
     fetchSlotsData();
-  }, [currentDate]);
+  }, [currentDate, coordinationMode, targetTimezone]);
 
   const toggleMonth = (dir: "prev" | "next") => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + (dir === "next" ? 1 : -1), 1));
@@ -126,7 +135,7 @@ export default function PremiumCalendarPage() {
      if(!confirm("Are you sure? This will also purge AI long-term memory for this event.")) return;
      try {
        const res = await deleteEvent(id);
-       if (res.ok) {
+       if (res && (res as any).status !== 'error') {
          setEvents(prev => prev.filter(e => e.id !== id));
          setEditingEvent(null);
        }
@@ -162,18 +171,18 @@ export default function PremiumCalendarPage() {
   return (
     <div className="min-h-screen space-y-8 pb-12">
       {/* Header with Dashboard Link */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-white mb-2">
-            Sovereign <span className="text-primary">Calendar</span>
+            Sovereign <span className="text-primary text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-400">Calendar</span>
           </h1>
           <p className="text-slate-400 font-medium">AI-Synchronized high-fidelity scheduling engine.</p>
         </div>
         <div className="flex items-center gap-4">
-           <button className="p-3 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-colors shadow-lg">
+           <button className="p-3 bg-slate-900 border border-slate-800 rounded-full hover:bg-slate-800 transition-colors shadow-lg">
              <Settings className="w-5 h-5 text-slate-400" />
            </button>
-           <Link href="/dashboard" className="px-6 py-3 bg-primary/10 border border-primary/20 text-primary rounded-xl hover:bg-primary/20 transition-all font-semibold flex items-center gap-2">
+           <Link href="/dashboard" className="px-8 py-3 bg-primary/10 border border-primary/20 text-primary rounded-full hover:bg-primary/20 transition-all font-bold flex items-center gap-2 shadow-sm">
              <CalendarCheck2 className="w-5 h-5" /> Dashboard
            </Link>
         </div>
@@ -256,34 +265,98 @@ export default function PremiumCalendarPage() {
 
         {/* Categories Sidebar */}
         <div className="lg:col-span-4 space-y-6">
-           <div className="bg-slate-950/40 border border-slate-800/60 rounded-[2rem] p-8 backdrop-blur-xl h-full shadow-xl">
-             <h3 className="text-xl font-bold text-white mb-6">AI Recommendations</h3>
+           <div className="bg-white/40 dark:bg-slate-950/40 border border-slate-200/60 dark:border-slate-800/60 rounded-[2.5rem] p-8 backdrop-blur-xl h-full shadow-2xl">
+             
+             {/* Coordination Controls */}
+             <div className="mb-8 p-6 bg-primary/10 border border-primary/20 rounded-[2rem] shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-primary uppercase tracking-widest">Cross-Country</h3>
+                  <button 
+                    onClick={() => setCoordinationMode(!coordinationMode)}
+                    className={cn(
+                      "w-12 h-6 rounded-full transition-all relative shadow-inner",
+                      coordinationMode ? "bg-primary" : "bg-slate-300 dark:bg-slate-700"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all",
+                      coordinationMode ? "translate-x-6" : "translate-x-0"
+                    )} />
+                  </button>
+                </div>
+                
+                <AnimatePresence>
+                  {coordinationMode && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-3 overflow-hidden"
+                    >
+                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Guest Timezone</label>
+                      <select 
+                        value={targetTimezone}
+                        onChange={(e) => setTargetTimezone(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none"
+                      >
+                        <option value="UTC">Universal Coordinated Time (UTC)</option>
+                        <option value="America/New_York">New York (EST/EDT)</option>
+                        <option value="Europe/London">London (GMT/BST)</option>
+                        <option value="Asia/Tokyo">Tokyo (JST)</option>
+                        <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                        <option value="Asia/Dubai">Dubai (GST)</option>
+                      </select>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+             </div>
+
+             <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">AI Recommendations</h3>
              <div className="space-y-4">
                 {recommendations.length > 0 ? recommendations.map((slot, i) => (
-                  <div key={i} className="p-4 bg-slate-900 border border-slate-800 rounded-2xl">
-                     <div className="flex items-center gap-2 mb-2">
-                       <Clock className="w-4 h-4 text-primary" />
-                       <span className="text-sm font-bold text-white">Suggested Slot</span>
+                  <div key={i} className="p-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
+                     <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Plus className="w-4 h-4 text-primary cursor-pointer" />
                      </div>
-                     <p className="text-xs text-slate-400 font-mono">
-                        {new Date(slot.start).toLocaleTimeString()} - {new Date(slot.end).toLocaleTimeString()}
-                     </p>
+                     <div className="flex items-center gap-2 mb-3">
+                       <Clock className="w-4 h-4 text-primary" />
+                       <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Optimal Overlap</span>
+                     </div>
+                     
+                     <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Local</span>
+                           <span className="text-xs font-mono text-slate-800 dark:text-slate-100 font-bold">
+                              {slot.local_label || `${new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                           </span>
+                        </div>
+                        {slot.guest_label && (
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-50 dark:border-slate-800">
+                             <span className="text-[10px] text-primary/60 font-bold uppercase tracking-wider">Guest</span>
+                             <span className="text-xs font-mono text-primary font-bold">
+                                {slot.guest_label}
+                             </span>
+                          </div>
+                        )}
+                     </div>
                   </div>
                 )) : (
-                  <p className="text-sm text-slate-500 italic">No slots found for this month.</p>
+                  <div className="py-8 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                    <p className="text-sm text-slate-400 font-medium italic">No premium slots available</p>
+                  </div>
                 )}
              </div>
 
-             <div className="mt-8 pt-8 border-t border-slate-800">
-                <h3 className="text-xl font-bold text-white mb-6">Legends</h3>
-                <div className="space-y-4">
+             <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Categories</h3>
+                <div className="space-y-3">
                     {Object.entries(CATEGORIES).map(([key, value]) => (
-                      <div key={key} className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-slate-800/60">
+                      <div key={key} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-100 dark:border-slate-800 group transition-all hover:bg-white dark:hover:bg-slate-800">
                         <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${value.dot}`} />
-                          <span className="text-sm font-semibold text-slate-300">{value.label}</span>
+                          <div className={`w-3 h-3 rounded-full ${value.dot} ring-4 ring-${value.dot.replace('bg-', '')}/10`} />
+                          <span className="text-sm font-bold text-slate-600 dark:text-slate-400">{value.label}</span>
                         </div>
-                        <span className="text-xs text-slate-500 font-mono">
+                        <span className="text-xs text-slate-400 font-mono font-bold">
                           {events.filter(e => e.category === key).length}
                         </span>
                       </div>
@@ -291,12 +364,12 @@ export default function PremiumCalendarPage() {
                 </div>
              </div>
 
-             <div className="mt-8 p-6 bg-primary/5 border border-primary/20 rounded-3xl">
+             <div className="mt-8 p-6 bg-gradient-to-br from-primary/10 to-violet-500/10 border border-primary/20 rounded-[2rem] shadow-sm">
                 <h4 className="flex items-center gap-2 text-primary font-bold mb-2">
-                  <CheckCircle2 className="w-5 h-5" /> AI Feedback Loop
+                  <CheckCircle2 className="w-5 h-5" /> Vector Recall
                 </h4>
-                <p className="text-xs text-slate-400 leading-relaxed italic">
-                  Every change is fed into your personal AI's long-term memory for perfect situational awareness.
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+                  Modifications are instantly indexed in your AI's long-term memory for situational awareness.
                 </p>
              </div>
            </div>
@@ -392,10 +465,10 @@ export default function PremiumCalendarPage() {
 
               {/* Modal Footer */}
               <div className="p-8 bg-zinc-950/40 flex justify-end gap-3">
-                 <button onClick={handleCreateEvent} className="px-6 py-3 bg-slate-900 border border-slate-800 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center gap-2">
+                 <button onClick={handleCreateEvent} className="px-8 py-3 bg-slate-900 border border-slate-800 text-white rounded-full font-bold hover:bg-slate-800 transition-all flex items-center gap-2">
                    Add Event
                  </button>
-                 <button onClick={() => setIsModalOpen(false)} className="px-6 py-3 bg-primary text-white rounded-xl font-bold hover:shadow-[0_0_20px_rgba(138,43,226,0.5)] transition-all">
+                 <button onClick={() => setIsModalOpen(false)} className="px-8 py-3 bg-primary text-white rounded-full font-bold hover:shadow-[0_0_20px_rgba(138,43,226,0.5)] transition-all">
                    Done
                  </button>
               </div>
@@ -437,7 +510,7 @@ export default function PremiumCalendarPage() {
                           type="text" 
                           value={editingEvent.title}
                           onChange={(e) => setEditingEvent({...editingEvent, title: e.target.value})}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-primary transition-all"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-full px-8 py-4 text-white focus:outline-none focus:border-primary transition-all shadow-inner"
                         />
                       </div>
                       <div>
@@ -455,7 +528,7 @@ export default function PremiumCalendarPage() {
                             <select 
                                value={editingEvent.status}
                                onChange={(e) => setEditingEvent({...editingEvent, status: e.target.value})}
-                               className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-primary appearance-none"
+                               className="w-full bg-slate-950 border border-slate-800 rounded-full px-8 py-4 text-white focus:outline-none focus:border-primary appearance-none shadow-inner"
                             >
                                <option value="confirmed">Confirmed</option>
                                <option value="pending">Pending</option>
@@ -479,20 +552,20 @@ export default function PremiumCalendarPage() {
                       <button 
                          type="button" 
                          onClick={() => handleDeleteEvent(editingEvent.id)}
-                         className="px-6 py-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all"
+                         className="px-6 py-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm"
                       >
                          <Trash2 className="w-5 h-5" />
                       </button>
                       <button 
                          type="button" 
                          onClick={() => setEditingEvent(null)}
-                         className="flex-1 px-6 py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-700 transition-all"
+                         className="flex-1 px-8 py-4 bg-slate-800 text-white rounded-full font-bold hover:bg-slate-700 transition-all shadow-sm"
                       >
                          Cancel
                       </button>
                       <button 
                          type="submit"
-                         className="flex-[2] px-6 py-4 bg-primary text-white rounded-2xl font-bold hover:shadow-[0_0_30px_rgba(138,43,226,0.6)] transition-all flex items-center justify-center gap-2"
+                         className="flex-[2] px-8 py-4 bg-primary text-white rounded-full font-bold hover:shadow-[0_0_30px_rgba(138,43,226,0.6)] transition-all flex items-center justify-center gap-2"
                       >
                          <CheckCircle2 className="w-5 h-5" /> Save & Sync AI
                       </button>

@@ -16,7 +16,7 @@ if (typeof window !== "undefined") {
   }
 }
 
-import { clearToken, getToken } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 
 interface ApiOptions {
   method?: string;
@@ -24,7 +24,6 @@ interface ApiOptions {
 }
 
 async function resolveUnauthorized() {
-  clearToken();
   if (typeof window !== "undefined") {
     window.location.href = "/login";
   }
@@ -37,11 +36,22 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
     "Content-Type": "application/json",
   };
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  // ── Neon Auth Integration ──
+  // Check for session and add Bearer token if available
+  try {
+    const session = await authClient.getSession();
+    if (session?.data?.session?.token) {
+      headers["Authorization"] = `Bearer ${session.data.session.token}`;
+    }
+  } catch (err) {
+    console.debug("No active session found for apiFetch", err);
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/v1${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
-    credentials: "include", // Ensure HttpOnly cookies are sent
+    credentials: "include", // Ensure session cookies are also sent
   });
 
   if (!res.ok) {
@@ -58,136 +68,15 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
 }
 
 // ──────────────────────────────────────
-// Auth: Credential Login
-// Backend: POST /auth/token (OAuth2PasswordRequestForm → form-urlencoded)
-// ──────────────────────────────────────
-export interface LoginResult {
-  access_token: string;
-  token_type?: string;
-  refresh_token?: string;
-  user?: Record<string, unknown>;
-}
-
-export async function login(username: string, password: string): Promise<LoginResult> {
-  const body = new URLSearchParams();
-  body.append("username", username);
-  body.append("password", password);
-
-  const res = await fetch(`${API_BASE_URL}/auth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-    credentials: "include", // Ensure HttpOnly auth cookies are set
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Login failed");
-  }
-
-  const data = await res.json();
-  // Backend currently returns { token: { access_token..., token_type... }, user: {...} }
-  if (data?.token?.access_token) {
-    return { access_token: data.token.access_token, token_type: data.token.token_type, refresh_token: data.token.refresh_token, user: data.user };
-  }
-
-  return data;
-}
-
-export async function register(email: string, password: string, fullName?: string, timezone?: string) {
-  return apiFetch<{ message: string; id: number }>("/auth/register", {
-    method: "POST",
-    body: { email, password, full_name: fullName, timezone },
-  });
-}
-
-// ──────────────────────────────────────
 // Auth: Session Check
-// Backend: GET /auth/check (Bearer token in header)
 // ──────────────────────────────────────
-export async function verifyToken() {
-  return apiFetch<{ authenticated: boolean; user: Record<string, unknown> }>("/auth/check", {
-    method: "GET",
-  });
-}
-
-export async function doitAuthCheck() {
-  return apiFetch<{ authenticated: boolean; user: Record<string, unknown> }>("/auth/check", {
-    method: "GET",
-  });
-}
-
 export async function refreshSession() {
-  const isLoggedIn = getToken();
-  if (!isLoggedIn) {
+  const session = await authClient.getSession();
+  if (!session?.data?.session) {
     throw new Error("No session to refresh");
   }
-  return doitAuthCheck();
+  return session.data;
 }
-
-// ──────────────────────────────────────
-// Auth: Passwordless Magic Link
-// Backend: POST /auth/passwordless/request?email=...  (query param)
-// Backend: POST /auth/passwordless/verify?email=...&code=...  (query params)
-// ──────────────────────────────────────
-export async function passwordlessRequest(email: string) {
-  return apiFetch("/auth/passwordless/request?" + new URLSearchParams({ email }), {
-    method: "POST",
-  });
-}
-
-export async function passwordlessVerify(email: string, code: string) {
-  return apiFetch<{ access_token: string; token_type: string }>(
-    "/auth/passwordless/verify?" + new URLSearchParams({ email, code }),
-    { method: "POST" }
-  );
-}
-
-// ──────────────────────────────────────
-// Auth: MFA
-// Backend: POST /auth/mfa/setup?user_id=...  (query param)
-// Backend: POST /auth/mfa/verify?user_id=...&token=...  (query params)
-// ──────────────────────────────────────
-export async function mfaSetup() {
-  return apiFetch("/auth/mfa/setup", {
-    method: "POST",
-  });
-}
-
-export async function mfaVerify(user_id: number, token: string) {
-  return apiFetch<{ status: string }>(
-    "/auth/mfa/verify?" + new URLSearchParams({ user_id: String(user_id), token }),
-    { method: "POST" }
-  );
-}
-
-// ──────────────────────────────────────
-// Auth: FIDO2 / WebAuthn
-// Backend: GET  /auth/fido2/register?user_id=...
-// Backend: POST /auth/fido2/register  (Pydantic body: {user_id, attestation})
-// Backend: POST /auth/fido2/verify    (Pydantic body: {user_id, assertion})
-// ──────────────────────────────────────
-export async function fido2StartRegistration() {
-  return apiFetch<{ user_id: number; challenge: string }>("/auth/fido2/register");
-}
-
-export async function fido2CompleteRegistration(attestation: Record<string, unknown>) {
-  return apiFetch<{ status: string }>("/auth/fido2/register", {
-    method: "POST",
-    body: { attestation },
-  });
-}
-
-export async function fido2Verify(assertion: Record<string, unknown>) {
-  return apiFetch<{ status: string }>("/auth/fido2/verify", {
-    method: "POST",
-    body: { assertion },
-  });
-}
-
-// ──────────────────────────────────────
-// Auth: DID (Decentralized Identity)
-// Backend: POST /auth/did/issue?user_id=...  (query param)
 // Backend: POST /auth/did/verify  (Pydantic body: {user_id, did})
 // ──────────────────────────────────────
 export async function didIssue() {
@@ -247,10 +136,10 @@ export async function getAnalyticsSummary() {
 // Services: AI Chat
 // Backend: POST /ai/chat  (Pydantic body)
 // ──────────────────────────────────────
-export async function sendAiChat(prompt: string, context?: string[]) {
+export async function sendAiChat(prompt: string, context?: string[], timezone?: string) {
   return apiFetch<{ result: string; model_used?: string }>("/ai/chat", {
     method: "POST",
-    body: { prompt, context },
+    body: { prompt, context, timezone },
   });
 }
 
@@ -338,12 +227,47 @@ export async function updateEvent(id: number, data: Partial<CalendarEvent>) {
 }
 
 export async function deleteEvent(id: number) {
-  return fetch(`${API_BASE_URL}/calendar/events/${id}`, {
+  // Use apiFetch for consistency and token injection
+  return apiFetch<{ status: string }>(`/calendar/events/${id}`, {
     method: "DELETE",
-    credentials: "include",
   });
 }
 
-export async function getAvailableSlots(date: string, duration: number = 60) {
-  return apiFetch<{start: string; end: string}[]>(`/calendar/slots?date=${encodeURIComponent(date)}&duration=${duration}`);
+export async function uploadFile(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const headers: Record<string, string> = {};
+  
+  // Manually inject session token for file uploads since we use raw fetch for FormData
+  try {
+    const session = await authClient.getSession();
+    if (session?.data?.session?.token) {
+      headers["Authorization"] = `Bearer ${session.data.session.token}`;
+    }
+  } catch (err) {
+    console.debug("No session for upload", err);
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/uploads`, {
+    method: "POST",
+    headers,
+    body: formData,
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Upload failed");
+  }
+
+  return res.json() as Promise<{ filename: string; path: string; size: number }>;
+}
+
+export async function getAvailableSlots(date: string, duration: number = 60, targetTimezone?: string) {
+  let url = `/calendar/slots?date=${encodeURIComponent(date)}&duration=${duration}`;
+  if (targetTimezone) {
+    url += `&target_timezone=${encodeURIComponent(targetTimezone)}`;
+  }
+  return apiFetch<{start: string; end: string; local_label?: string; guest_label?: string}[]>(url);
 }

@@ -3,6 +3,8 @@ fastapi
 uvicorn[standard]
 pydantic[email]>=2.10,<3
 python-dotenv
+bleach>=6.1.0
+pytz
 
 # Database
 asyncpg
@@ -10,12 +12,14 @@ psycopg2-binary
 sqlalchemy[asyncio]
 
 # Auth
-python-jose[cryptography]
+PyJWT>=2.10.0
+cryptography>=42.0.0
+# ... other auth packages ...
 authlib
 pyotp
 httpx
 python-multipart>=0.0.18
-passlib[bcrypt]==1.7.4
+argon2-cffi>=23.1.0
 bcrypt<4.0
 
 # Cache

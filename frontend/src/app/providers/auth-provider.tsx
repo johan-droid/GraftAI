@@ -1,124 +1,51 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { clearToken, getToken, setToken } from "@/lib/auth";
-import { doitAuthCheck, refreshSession } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 
-type User = { sub?: string } & Record<string, unknown> | null;
+// Define a type for the user matching Neon Auth structure
+type User = {
+  id: string;
+  email: string;
+  name: string;
+  image?: string;
+} | null;
 
 interface AuthContextValue {
   user: User;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (token: string) => void;
-  logout: () => void;
-  refresh: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [consecutiveRefreshFailures, setConsecutiveRefreshFailures] = useState(0);
+  const router = useRouter();
+  const { data: session, isPending: loading } = authClient.useSession();
+  
+  const user = session?.user ? {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+    image: session.user.image,
+  } : null;
 
-  useEffect(() => {
-    const initialize = async () => {
-      const token = getToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+  const isAuthenticated = !!session;
 
-      try {
-        const result = await doitAuthCheck();
-        setUser(result.user);
-        setIsAuthenticated(true);
-      } catch (error) {
-        console.warn("Initial auth check failed, retrying once", error);
-        // Temporary network issue / mobile cold start robustness
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        try {
-          const result2 = await doitAuthCheck();
-          setUser(result2.user);
-          setIsAuthenticated(true);
-        } catch (error2) {
-          console.warn("Auth check retry failed", error2);
-          clearToken();
-          setUser(null);
-          setIsAuthenticated(false);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initialize();
-
-    const interval = setInterval(async () => {
-      try {
-        await refreshSession();
-        setConsecutiveRefreshFailures(0);
-      } catch {
-        setConsecutiveRefreshFailures((prev) => {
-          const next = prev + 1;
-          if (next >= 3) {
-            clearToken();
-            setUser(null);
-            setIsAuthenticated(false);
-          }
-          return next;
-        });
-      }
-    }, 60 * 1000); // 1 minute
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const loginFn = async (token: string) => {
-    setToken(token);
-    try {
-      const result = await doitAuthCheck();
-      setUser(result.user);
-      setIsAuthenticated(true);
-    } catch {
-      setUser(null);
-      setIsAuthenticated(false);
-    }
-  };
-
-  const logoutFn = () => {
-    clearToken();
-    setUser(null);
-    setIsAuthenticated(false);
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
-  };
-
-  const refreshFn = async () => {
-    try {
-      const result = await refreshSession();
-      setUser(result.user);
-      setIsAuthenticated(true);
-      setConsecutiveRefreshFailures(0);
-    } catch (error) {
-      setConsecutiveRefreshFailures((prev) => {
-        const next = prev + 1;
-        if (next >= 3) {
-          clearToken();
-          setUser(null);
-          setIsAuthenticated(false);
-        }
-        return next;
-      });
-      console.warn("Refresh session failed", error);
-    }
+  const logoutFn = async () => {
+    await authClient.signOut();
+    router.replace("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, loading, login: loginFn, logout: logoutFn, refresh: refreshFn }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      isAuthenticated, 
+      loading, 
+      logout: logoutFn 
+    }}>
       {children}
     </AuthContext.Provider>
   );

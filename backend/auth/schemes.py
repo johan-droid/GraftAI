@@ -1,6 +1,7 @@
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status, Request
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 from typing import Optional
 import os
 import httpx
@@ -13,15 +14,16 @@ if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
 
+NEON_AUTH_BASE_URL = os.getenv("NEON_AUTH_BASE_URL", "https://ep-steep-glade-a1b1tcdq.ap-southeast-1.aws.neon.tech/neondb/auth")
+NEON_JWKS_URL = f"{NEON_AUTH_BASE_URL}/.well-known/jwks.json"
+
+# Inferred Origin from NEON_AUTH_BASE_URL
+from urllib.parse import urlparse
+_parsed_neon = urlparse(NEON_AUTH_BASE_URL)
+NEON_AUTH_ORIGIN = f"{_parsed_neon.scheme}://{_parsed_neon.netloc}"
+
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
 AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
-
-# Ensure both are set to enable Auth0 validation
-if (AUTH0_DOMAIN and not AUTH0_AUDIENCE) or (AUTH0_AUDIENCE and not AUTH0_DOMAIN):
-    import logging
-    logging.getLogger(__name__).warning("Partial Auth0 configuration detected. Both AUTH0_DOMAIN and AUTH0_AUDIENCE must be set to enable Auth0 JWT validation.")
-
-AUTH0_ISSUER = f"https://{AUTH0_DOMAIN}/" if AUTH0_DOMAIN else ""
 
 # Redis client for token blacklist
 _redis_client = None
@@ -49,6 +51,35 @@ def is_token_blacklisted(token: str) -> bool:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
 
+async def _get_neon_signing_key(token: str) -> any:
+    """Fetch Neon Auth JWKS and extract the Ed25519 public key."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    import base64
+
+    try:
+        header = jwt.get_unverified_header(token)
+        kid = header.get("kid")
+        if not kid:
+            raise JWTError("Missing kid in token header")
+
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(NEON_JWKS_URL)
+            response.raise_for_status()
+            jwks = response.json()
+
+        for key in jwks.get("keys", []):
+            if key.get("kid") == kid:
+                # Neon uses Ed25519 (EdDSA) with "x" param
+                x = key["x"]
+                # Add padding if necessary
+                public_key_bytes = base64.urlsafe_b64decode(x + "==")
+                return Ed25519PublicKey.from_public_bytes(public_key_bytes)
+
+        raise JWTError("Matching kid not found in Neon JWKS")
+    except Exception as exc:
+        raise JWTError(f"Neon JWKS retrieval failed: {exc}")
+
+
 async def _get_auth0_jwk(token: str) -> dict:
     unverified_header = jwt.get_unverified_header(token)
     kid = unverified_header.get("kid")
@@ -73,38 +104,52 @@ async def _get_auth0_jwk(token: str) -> dict:
 
 async def decode_token(token: str) -> Optional[dict]:
     """
-    Intelligent token decoder that selects validation strategy based on token algorithm.
-    This enables seamless interop between Auth0 (SSO) and Sovereign (Local) sessions.
+    Intelligent token decoder that selects validation strategy based on token algorithm and issuer.
+    Supports: Auth0 (RS256), Supabase (RS256), and Sovereign Local (HS256).
     """
     try:
         header = jwt.get_unverified_header(token)
         alg = header.get("alg")
+        # Pre-decode to check issuer without verification (safe for strategy selection)
+        unverified_payload = jwt.decode(token, options={"verify_signature": False})
+        iss = unverified_payload.get("iss", "")
     except Exception:
         return None
 
-    # Strategy 1: Auth0 / External Identity (RS256)
-    if alg == "RS256" and AUTH0_DOMAIN and AUTH0_AUDIENCE:
+    # Strategy 1: Neon Auth (EdDSA)
+    if alg == "EdDSA":
         try:
-            jwk = await _get_auth0_jwk(token)
-            payload = jwt.decode(
-                token,
-                jwk,
-                algorithms=["RS256"],
-                audience=AUTH0_AUDIENCE,
-                issuer=AUTH0_ISSUER,
-            )
-            return payload
+            if NEON_AUTH_ORIGIN in iss:
+                signing_key = await _get_neon_signing_key(token)
+                return jwt.decode(
+                    token, 
+                    key=signing_key, 
+                    algorithms=["EdDSA"], 
+                    issuer=NEON_AUTH_ORIGIN,
+                    audience=NEON_AUTH_ORIGIN
+                )
         except JWTError as exc:
             import logging
-            logging.getLogger(__name__).error(f"External JWT (Auth0) validation failed: {exc}")
+            logging.getLogger(__name__).error(f"Neon Auth JWT validation failed: {exc}")
+            return None
+
+    # Strategy 2: External Identity (Auth0 RS256)
+    if alg == "RS256":
+        try:
+            # ── Auth0 Strategy ──
+            if AUTH0_DOMAIN and "auth0.com" in iss:
+                jwk = await _get_auth0_jwk(token)
+                return jwt.decode(token, key=jwk, algorithms=["RS256"], audience=AUTH0_AUDIENCE)
+        except JWTError as exc:
+            import logging
+            logging.getLogger(__name__).error(f"External JWT validation failed: {exc}")
             return None
 
     # Strategy 2: Local Sovereign Session (HS256)
     if alg == "HS256":
         try:
             # We explicitly use only the local SECRET_KEY for HS256 to prevent 'alg none' or RS256/HS256 confusion attacks.
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            return payload
+            return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         except JWTError:
             return None
 

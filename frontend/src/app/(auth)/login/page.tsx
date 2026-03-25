@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, passwordlessRequest, passwordlessVerify, fido2Verify, fido2StartRegistration, ssoStart } from "@/lib/api";
-import { setToken } from "@/lib/auth"; // Kept for possible non-context usage if any, though contextLogin is preferred
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { authClient } from "@/lib/auth-client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, ArrowRight, Loader2, KeyRound, Fingerprint, Shield } from "lucide-react";
 
@@ -13,7 +11,6 @@ type AuthTab = "credentials" | "passwordless" | "passkey";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login: contextLogin } = useAuthContext();
   const [activeTab, setActiveTab] = useState<AuthTab>("credentials");
 
   // Credentials state
@@ -35,11 +32,16 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const result = await login(email, password);
-      const accessToken = result.access_token;
-      if (accessToken) {
-        await contextLogin(accessToken);
+      const { data, error: authError } = await authClient.signIn.email({
+        email,
+        password,
+        callbackURL: "/dashboard",
+      });
+
+      if (authError) {
+        throw new Error(authError.message || "Invalid credentials");
       }
+
       router.replace("/dashboard");
     } catch (err) {
       setError((err as Error).message || "Invalid credentials");
@@ -49,18 +51,14 @@ export default function LoginPage() {
   }
 
   // ── OAuth SSO ──
-  const handleOAuthLogin = async (provider: string) => {
+  const handleOAuthLogin = async (provider: any) => {
     setLoading(true);
     setError("");
     try {
-      // Initiate SSO flow on the backend
-      const result = await ssoStart(provider, "/dashboard");
-      if (result.authorization_url) {
-        // Redirect browser to the provider's login page (e.g. GitHub/Google)
-        window.location.href = result.authorization_url;
-      } else {
-        throw new Error("Identity provider not reachable");
-      }
+      await authClient.signIn.social({
+        provider,
+        callbackURL: "/dashboard",
+      });
     } catch (err) {
       setError((err as Error).message || "Failed to initiate SSO");
       setLoading(false);
@@ -73,27 +71,14 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      await passwordlessRequest(magicEmail);
+      const { data, error: authError } = await authClient.signIn.magicLink({
+        email: magicEmail,
+        callbackURL: "/dashboard",
+      });
+      if (authError) throw authError;
       setMagicSent(true);
     } catch (err) {
       setError((err as Error).message || "Failed to send magic link");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleMagicVerify(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      const result = await passwordlessVerify(magicEmail, magicCode);
-      if (result?.access_token) {
-        await contextLogin(result.access_token);
-        router.replace("/dashboard");
-      }
-    } catch (err) {
-      setError((err as Error).message || "Invalid verification code");
     } finally {
       setLoading(false);
     }
@@ -104,38 +89,13 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      // Start a FIDO2 challenge from backend and store it in Redis
-      const start = await fido2StartRegistration();
-      const challenge = new TextEncoder().encode(start.challenge);
-
-      // Trigger WebAuthn browser native prompt with backend-supplied challenge
-      const credential = (await navigator.credentials.get({
-        publicKey: {
-          challenge,
-          timeout: 60000,
-          rpId: window.location.hostname,
-          userVerification: "preferred",
-        },
-      })) as PublicKeyCredential | null;
-
-      if (credential) {
-        // Send assertion metadata to backend for verification. Keep as loose object shape.
-        const assertion: Record<string, unknown> = {
-          challenge: start.challenge,
-          id: credential.id,
-          type: credential.type,
-          rawId: credential.rawId,
-        };
-
-        const result = await fido2Verify(assertion);
-        if (result.status === "verified") {
-          router.replace("/dashboard");
-        } else {
-          setError("Passkey verification failed");
-        }
-      }
-    } catch {
-      setError("Passkey not supported or cancelled");
+      const { data, error: authError } = await authClient.signIn.passkey({
+        email, // Optionally provide email if known, or let SDK handle it
+      });
+      if (authError) throw authError;
+      router.replace("/dashboard");
+    } catch (err) {
+      setError("Passkey authentication failed or was cancelled");
     } finally {
       setLoading(false);
     }
@@ -288,7 +248,7 @@ export default function LoginPage() {
               >
                 {!magicSent ? (
                   <form className="space-y-3" onSubmit={handleMagicRequest}>
-                    <p className="text-xs text-slate-400 mb-2">We will send a one-time code to your email — no password needed.</p>
+                    <p className="text-xs text-slate-400 mb-2">We will send a magic link to your email — no password needed.</p>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Mail className="h-4 w-4 text-slate-500" />
@@ -303,24 +263,18 @@ export default function LoginPage() {
                     <SubmitButton loading={loading} label="Send Magic Link" />
                   </form>
                 ) : (
-                  <form className="space-y-3" onSubmit={handleMagicVerify}>
-                    <p className="text-xs text-emerald-400 mb-2">✓ Code sent to {magicEmail}</p>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <KeyRound className="h-4 w-4 text-slate-500" />
-                      </div>
-                      <input
-                        type="text" inputMode="numeric" maxLength={6} required value={magicCode}
-                        onChange={(e) => setMagicCode(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-3 border border-slate-700/50 rounded-xl bg-slate-800/50 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors text-sm text-center tracking-[0.4em] font-mono"
-                        placeholder="000000"
-                      />
+                  <div className="text-center py-6 space-y-4">
+                    <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
+                      <Mail className="w-6 h-6 text-emerald-500" />
                     </div>
-                    <SubmitButton loading={loading} label="Verify Code" />
-                    <button type="button" onClick={() => setMagicSent(false)} className="w-full text-xs text-slate-500 hover:text-slate-300 transition-colors py-1">
+                    <div>
+                      <h3 className="text-emerald-400 font-medium mb-1">Check your email</h3>
+                      <p className="text-xs text-slate-400">We've sent a magic link to {magicEmail}. Click the link to sign in instantly.</p>
+                    </div>
+                    <button type="button" onClick={() => setMagicSent(false)} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
                       Use a different email
                     </button>
-                  </form>
+                  </div>
                 )}
               </motion.div>
             )}

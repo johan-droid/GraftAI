@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { register } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 import { motion } from "framer-motion";
 import { Mail, Lock, User, ArrowRight, Loader2, Globe, ShieldCheck } from "lucide-react";
 import Link from "next/link";
@@ -32,7 +32,17 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
     try {
-      await register(email, password, fullName, timezone);
+      const { data, error: authError } = await authClient.signUp.email({
+        email,
+        password,
+        name: fullName,
+        callbackURL: "/dashboard",
+      });
+
+      if (authError) {
+        throw new Error(authError.message || "Registration failed");
+      }
+
       setSuccess(true);
       setTimeout(() => {
         router.push("/login");

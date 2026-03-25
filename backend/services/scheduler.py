@@ -8,6 +8,7 @@ from backend.models.tables import EventTable
 from .langchain_client import vector_store
 from langchain_core.documents import Document
 import json
+import pytz
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -36,17 +37,42 @@ async def find_available_slots(
     date: datetime,
     duration_minutes: int = 30,
     working_start: int = 9, # 9 AM
-    working_end: int = 18   # 6 PM
+    working_end: int = 18,  # 6 PM
+    target_timezone: Optional[str] = None
 ) -> List[Dict[str, str]]:
     """
-    Intelligent slot-finding algorithm.
+    Intelligent slot-finding algorithm with Cross-Country Coordination.
     Scans the database for overlaps and returns free windows.
+    If target_timezone is provided, finds the intersection of business hours.
     """
-    # Define the boundaries of the day in UTC
+    # 1. Resolve Timezones
+    user_tz = pytz.UTC # Default to UTC, should be passed from frontend
+    guest_tz = pytz.timezone(target_timezone) if target_timezone else None
+    
+    # 2. Define User's Day Boundaries (Normalized to UTC for DB queries)
+    # We assume 'date' is at 00:00:00 in some base (usually UTC from frontend)
     day_start = date.replace(hour=working_start, minute=0, second=0, microsecond=0)
     day_end = date.replace(hour=working_end, minute=0, second=0, microsecond=0)
     
-    # Fetch existing events for the day
+    # 3. Intersection Logic (If Guest TZ is provided)
+    if guest_tz:
+        # We need to find the window that is 9-6 in BOTH timezones
+        # This is the 'Sovereign Intersection'
+        # Start by defining guest's 9-6 for that same 'day'
+        guest_day_start = guest_tz.localize(datetime(date.year, date.month, date.day, working_start, 0)).astimezone(pytz.UTC)
+        guest_day_end = guest_tz.localize(datetime(date.year, date.month, date.day, working_end, 0)).astimezone(pytz.UTC)
+        
+        # Intersection: Max of starts, Min of ends
+        day_start = max(day_start.replace(tzinfo=pytz.UTC), guest_day_start)
+        day_end = min(day_end.replace(tzinfo=pytz.UTC), guest_day_end)
+        
+        # If they don't overlap at all (e.g. SF vs Tokyo), return empty or shifted suggestion
+        if day_start >= day_end:
+            logger.warning(f"No business hour overlap found between UTC and {target_timezone}")
+            return []
+
+    # Ensure naive datetime for DB consistency if needed, but here we work with UTC
+    # 4. Fetch existing events for the day
     existing_events = await get_events_for_range(db, user_id, day_start, day_end)
     
     available_slots = []
@@ -55,20 +81,32 @@ async def find_available_slots(
     while current_time + timedelta(minutes=duration_minutes) <= day_end:
         potential_end = current_time + timedelta(minutes=duration_minutes)
         
-        # Check for overlap with any existing event
+        # Check for overlap
         has_overlap = False
         for event in existing_events:
-            if not (potential_end <= event.start_time or current_time >= event.end_time):
+            # Normalize event times to UTC comparison
+            ev_start = event.start_time.replace(tzinfo=pytz.UTC) if event.start_time.tzinfo is None else event.start_time
+            ev_end = event.end_time.replace(tzinfo=pytz.UTC) if event.end_time.tzinfo is None else event.end_time
+            
+            if not (potential_end <= ev_start or current_time >= ev_end):
                 has_overlap = True
-                # Skip to the end of the overlapping event
-                current_time = event.end_time
+                current_time = ev_end
                 break
         
         if not has_overlap:
-            available_slots.append({
+            # We add human-friendly labels for the frontend dual-view
+            slot_data = {
                 "start": current_time.isoformat(),
-                "end": potential_end.isoformat()
-            })
+                "end": potential_end.isoformat(),
+                "local_label": current_time.strftime('%I:%M %p'),
+            }
+            if guest_tz:
+                # Calculate what time this is in the guest's timezone
+                guest_time = current_time.astimezone(guest_tz)
+                slot_data["guest_label"] = guest_time.strftime('%I:%M %p')
+                slot_data["guest_tz_name"] = target_timezone
+            
+            available_slots.append(slot_data)
             current_time = potential_end
             
     return available_slots
@@ -93,17 +131,15 @@ async def sync_event_to_ai(event: EventTable):
             "category": event.category,
             "description": event.description or "No description provided.",
             "schedule": {
-                "start": event.start_time.isoformat(),
-                "end": event.end_time.isoformat(),
+                "start": event.start_time.strftime('%Y-%m-%d %H:%M'),
+                "end": event.end_time.strftime('%Y-%m-%d %H:%M'),
                 "duration_minutes": int(duration),
-                "timezone": "UTC"
+                "human_readable": f"{event.start_time.strftime('%A, %b %d at %I:%M %p')}"
             },
             "status": {
                 "current": event.status,
-                "is_remote": event.is_remote,
                 "is_confirmed": event.status == "confirmed"
-            },
-            "context": event.metadata_payload or {}
+            }
         }
         
         # We store the JSON as the page content for perfect LLM parsing (one-shot reasoning)

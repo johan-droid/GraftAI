@@ -1,33 +1,26 @@
 import logging
-from passlib.context import CryptContext
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-# Use standard bcrypt scheme for better compatibility.
-# For Python 3.12+ / passlib 1.7.x compatibility, ensure 'bcrypt' package is installed.
-# We validate immediately at import time to fail fast in case the backend is incompatible.
-
-def _init_pwd_context() -> CryptContext:
-    try:
-        ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        # quick self-test to catch bcrypt backend load problems early
-        ctx.hash("StartupSelfTest99!")
-        return ctx
-    except Exception as e:
-        logger.critical(
-            "Missing or incompatible bcrypt backend. "
-            "Please install bcrypt<4 and passlib>=1.7.4. "
-            f"Underlying error: {type(e).__name__}: {e}"
-        )
-        raise
-
-pwd_context = _init_pwd_context()
+# Argon2 is the winner of the Password Hashing Competition (PHC) and is recommended by OWASP/NIST.
+ph = PasswordHasher(
+    time_cost=3,      # Number of iterations
+    memory_cost=65536, # 64MB memory usage
+    parallelism=4,     # Number of threads
+    hash_len=32,       # Length of the hash
+    salt_len=16        # Length of the salt
+)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against an Argon2 hash."""
     try:
-        return pwd_context.verify(plain_password, hashed_password)
+        return ph.verify(hashed_password, plain_password)
+    except VerifyMismatchError:
+        return False
     except Exception as e:
         logger.error(f"Password verification failed: {type(e).__name__}")
         return False
@@ -35,22 +28,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """
-    Hash a password using bcrypt. 
-    Note: Standard Bcrypt has a 72-character limit; any characters beyond this are ignored. 
-    We enforce this limit at the application level to be explicit and secure.
+    Hash a password using Argon2.
     """
     if not isinstance(password, str):
         raise TypeError("Password must be a string")
 
     try:
-        # Bcrypt limit is 72 bytes. We check UTF-8 length.
-        if len(password.encode("utf-8")) > 72:
-            logger.warning("Password hashing rejected: length exceeds bcrypt limit (72 bytes)")
-            raise ValueError("Password is too long (max 72 characters for security)")
-            
-        return pwd_context.hash(password)
-    except ValueError:
-        raise
+        return ph.hash(password)
     except Exception as e:
         logger.error(f"Password hashing failed: {type(e).__name__}")
         raise RuntimeError("Internal authentication error")

@@ -33,8 +33,8 @@ from backend.services.upgrade import router as upgrade_router
 from backend.services.plugin_api import router as plugin_router
 from backend.auth.schemes import get_current_user
 
-# ... existing imports ...
-from backend.auth.schemes import get_current_user
+from backend.utils import db as db_utils
+from backend.models.tables import Base as ModelsBase
 
 # Rate limiting setup
 _redis_client = None
@@ -128,71 +128,23 @@ class RateLimitMiddleware:
 # Parse rate limit from env
 _rate_limit_str = os.getenv("RATE_LIMIT", "100/minute")
 
-app = FastAPI(
-    title="GraftAI Backend",
-    description="Production API for GraftAI — AI-powered scheduling platform",
-    version="1.0.0",
-)
+from contextlib import asynccontextmanager
 
-# Add rate limiting middleware BEFORE CORS
-app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
-
-# CORS — read allowed origins from env, fallback to local dev + production frontend
-_cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://graft-ai-two.vercel.app")
-_frontend_url = os.getenv("FRONTEND_BASE_URL")
-
-_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
-if _frontend_url:
-    _cors_origins.append(_frontend_url.strip())
-
-# Remove duplicates while preserving order
-_cors_origins = list(dict.fromkeys(_cors_origins))
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-)
-
-# ── Routers ──
-# Auth is public for login/register
-app.include_router(auth_router)
-
-# All other services are protected by default (Broken Access Control fix)
-app.include_router(users_router, dependencies=[Depends(get_current_user)])
-app.include_router(calendar_router, dependencies=[Depends(get_current_user)])
-app.include_router(ai_router, dependencies=[Depends(get_current_user)])
-app.include_router(analytics_router, dependencies=[Depends(get_current_user)])
-app.include_router(consent_router, dependencies=[Depends(get_current_user)])
-app.include_router(proactive_router, dependencies=[Depends(get_current_user)])
-app.include_router(upgrade_router, dependencies=[Depends(get_current_user)])
-app.include_router(plugin_router, dependencies=[Depends(get_current_user)])
-
-
-from backend.utils import db as db_utils
-from backend.models.tables import Base as ModelsBase
-
-
-@app.on_event("startup")
-async def create_database_tables():
-    if not db_utils.engine:
-        logger.warning("⚠ Database engine is not configured; skipping auto-migration.")
-        return
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup ---
+    # 1. DB Verification
+    if db_utils.engine:
+        try:
+            async with db_utils.engine.begin() as conn:
+                await conn.run_sync(ModelsBase.metadata.create_all)
+            logger.info("✅ Database tables verified/created successfully.")
+        except Exception as e:
+            logger.error(f"⚠ Failed to create or verify database tables: {type(e).__name__}")
+    
+    # 2. Password Self-Test
     try:
-        async with db_utils.engine.begin() as conn:
-            await conn.run_sync(ModelsBase.metadata.create_all)
-        logger.info("✅ Database tables verified/created successfully.")
-    except Exception as e:
-        logger.error(f"⚠ Failed to create or verify database tables: {type(e).__name__}")
-
-
-@app.on_event("startup")
-async def verify_password_system():
-    """Verify bcrypt installation and functionality on startup."""
-    from backend.services.auth_utils import get_password_hash, verify_password
-    try:
+        from backend.services.auth_utils import get_password_hash, verify_password
         test_pw = "StartupSelfTest99!"
         test_hash = get_password_hash(test_pw)
         if not verify_password(test_pw, test_hash):
@@ -200,23 +152,24 @@ async def verify_password_system():
         logger.info("✅ Password hashing system verified.")
     except Exception as e:
         logger.critical(f"CRITICAL: Password hashing system failure: {e}")
-        # Fail startup if password hashing is not working, to avoid broken auth.
         raise RuntimeError("Password hashing system initialization failed") from e
-
-
-@app.on_event("startup")
-async def verify_auth0_config():
-    """Ensure Auth0 config is consistent to avoid silent JWT validation failures."""
+    
+    # 3. Auth0 Verification
     domain = os.getenv("AUTH0_DOMAIN")
     audience = os.getenv("AUTH0_AUDIENCE")
-    
-    if (domain and not audience) or (audience and not domain):
-        logger.warning(
-            "⚠ Incomplete Auth0 configuration detected. "
-            "Both AUTH0_DOMAIN and AUTH0_AUDIENCE must be set for Auth0 JWT validation to work."
-        )
-    elif domain and audience:
+    if domain and audience:
         logger.info(f"✅ Auth0 configuration detected for domain: {domain}")
+
+    yield
+    # --- Shutdown ---
+    # Clean up global connections if needed
+
+app = FastAPI(
+    title="GraftAI Backend",
+    description="Production API for GraftAI — AI-powered scheduling platform",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 
 @app.get("/")

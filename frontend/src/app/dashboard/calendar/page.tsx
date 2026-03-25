@@ -16,22 +16,16 @@ import {
   CheckCircle2,
   CalendarCheck2
 } from "lucide-react";
+import { 
+  getEvents, 
+  createEvent, 
+  updateEvent, 
+  deleteEvent, 
+  getAvailableSlots, 
+  CalendarEvent as Event,
+  API_BASE_URL 
+} from "@/lib/api";
 import Link from "next/link";
-import { API_BASE_URL } from "@/lib/api";
-
-interface Event {
-  id: number;
-  user_id: number;
-  title: string;
-  description: string;
-  category: "meeting" | "event" | "birthday" | "task";
-  color: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  is_remote: boolean;
-  metadata_payload: any;
-}
 
 const CATEGORIES = {
   meeting: { label: "Meeting", color: "#8A2BE2", dot: "bg-violet-500" },
@@ -47,6 +41,9 @@ export default function PremiumCalendarPage() {
   const [loading, setLoading] = useState(true);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [recommendations, setRecommendations] = useState<{start: string, end: string}[]>([]);
 
   // Calendar Logic
   const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
@@ -67,24 +64,36 @@ export default function PremiumCalendarPage() {
   }, [currentDate]);
 
   // Fetch events for current month range
+  const fetchEventsData = async () => {
+    setLoading(true);
+    try {
+      const startISO = startDate.toISOString();
+      const endISO = endDate.toISOString();
+      const data = await getEvents(startISO, endISO);
+      setEvents(data);
+    } catch (err) {
+      console.error("Failed to fetch events:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchEvents = async () => {
-      setLoading(true);
+    fetchEventsData();
+  }, [currentDate]);
+
+  // Fetch AI Recommendations (Available Slots)
+  useEffect(() => {
+    const fetchSlotsData = async () => {
       try {
-        const startISO = startDate.toISOString();
-        const endISO = endDate.toISOString();
-        const res = await fetch(`${API_BASE_URL}/calendar/events?start=${startISO}&end=${endISO}`);
-        if (res.ok) {
-          const data = await res.json();
-          setEvents(data);
-        }
+        const dateISO = currentDate.toISOString();
+        const data = await getAvailableSlots(dateISO, 60);
+        setRecommendations(data.slice(0, 3)); // show top 3
       } catch (err) {
-        console.error("Failed to fetch events:", err);
-      } finally {
-        setLoading(false);
+        console.error("Failed to fetch slots:", err);
       }
     };
-    fetchEvents();
+    fetchSlotsData();
   }, [currentDate]);
 
   const toggleMonth = (dir: "prev" | "next") => {
@@ -105,18 +114,48 @@ export default function PremiumCalendarPage() {
     if (!editingEvent) return;
     
     try {
-      const res = await fetch(`${API_BASE_URL}/calendar/events/${editingEvent.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingEvent),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setEvents(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
-        setEditingEvent(null);
-      }
+      const updated = await updateEvent(editingEvent.id, editingEvent);
+      setEvents(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+      setEditingEvent(null);
     } catch (err) {
       console.error("Update failed:", err);
+    }
+  };
+
+  const handleDeleteEvent = async (id: number) => {
+     if(!confirm("Are you sure? This will also purge AI long-term memory for this event.")) return;
+     try {
+       const res = await deleteEvent(id);
+       if (res.ok) {
+         setEvents(prev => prev.filter(e => e.id !== id));
+         setEditingEvent(null);
+       }
+     } catch (err) {
+       console.error("Delete failed:", err);
+     }
+  };
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if(!selectedDate) return;
+
+    const newEventData: Partial<Event> = {
+      title: "New AI Synced Meeting",
+      description: "Auto-generated and fed into LLM vector memory.",
+      category: "meeting",
+      start_time: selectedDate.toISOString(),
+      end_time: new Date(selectedDate.getTime() + 3600000).toISOString(),
+      is_remote: true,
+      status: "confirmed",
+      metadata_payload: {}
+    };
+
+    try {
+      const created = await createEvent(newEventData);
+      setEvents(prev => [...prev, created]);
+      setIsCreating(false);
+    } catch (err) {
+      console.error("Create failed:", err);
     }
   };
 
@@ -151,11 +190,11 @@ export default function PremiumCalendarPage() {
               </h2>
               <div className="flex gap-2 p-1 bg-slate-900/80 rounded-2xl border border-slate-800">
                 <button onClick={() => toggleMonth("prev")} className="p-2 hover:bg-slate-800 rounded-xl transition-colors">
-                  <ChevronLeft className="w-5 h-5 text-white" />
+                   <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
                 <div className="w-[1px] bg-slate-800 my-1 mx-1" />
                 <button onClick={() => toggleMonth("next")} className="p-2 hover:bg-slate-800 rounded-xl transition-colors">
-                  <ChevronRight className="w-5 h-5 text-white" />
+                   <ChevronRight className="w-5 h-5 text-white" />
                 </button>
               </div>
             </div>
@@ -218,27 +257,46 @@ export default function PremiumCalendarPage() {
         {/* Categories Sidebar */}
         <div className="lg:col-span-4 space-y-6">
            <div className="bg-slate-950/40 border border-slate-800/60 rounded-[2rem] p-8 backdrop-blur-xl h-full shadow-xl">
-             <h3 className="text-xl font-bold text-white mb-6">Legends</h3>
+             <h3 className="text-xl font-bold text-white mb-6">AI Recommendations</h3>
              <div className="space-y-4">
-                {Object.entries(CATEGORIES).map(([key, value]) => (
-                  <div key={key} className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-slate-800/60">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${value.dot}`} />
-                      <span className="text-sm font-semibold text-slate-300">{value.label}</span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-mono">
-                      {events.filter(e => e.category === key).length}
-                    </span>
+                {recommendations.length > 0 ? recommendations.map((slot, i) => (
+                  <div key={i} className="p-4 bg-slate-900 border border-slate-800 rounded-2xl">
+                     <div className="flex items-center gap-2 mb-2">
+                       <Clock className="w-4 h-4 text-primary" />
+                       <span className="text-sm font-bold text-white">Suggested Slot</span>
+                     </div>
+                     <p className="text-xs text-slate-400 font-mono">
+                        {new Date(slot.start).toLocaleTimeString()} - {new Date(slot.end).toLocaleTimeString()}
+                     </p>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-sm text-slate-500 italic">No slots found for this month.</p>
+                )}
              </div>
 
-             <div className="mt-12 p-6 bg-primary/5 border border-primary/20 rounded-3xl">
-                <h4 className="flex items-center gap-2 text-primary font-bold mb-3">
-                  <CalendarIcon className="w-5 h-5" /> Smart Engine
+             <div className="mt-8 pt-8 border-t border-slate-800">
+                <h3 className="text-xl font-bold text-white mb-6">Legends</h3>
+                <div className="space-y-4">
+                    {Object.entries(CATEGORIES).map(([key, value]) => (
+                      <div key={key} className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-slate-800/60">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${value.dot}`} />
+                          <span className="text-sm font-semibold text-slate-300">{value.label}</span>
+                        </div>
+                        <span className="text-xs text-slate-500 font-mono">
+                          {events.filter(e => e.category === key).length}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+             </div>
+
+             <div className="mt-8 p-6 bg-primary/5 border border-primary/20 rounded-3xl">
+                <h4 className="flex items-center gap-2 text-primary font-bold mb-2">
+                  <CheckCircle2 className="w-5 h-5" /> AI Feedback Loop
                 </h4>
                 <p className="text-xs text-slate-400 leading-relaxed italic">
-                  The scheduler is currently observing your habits and syncs with the LLM orchestrator every 5 minutes.
+                  Every change is fed into your personal AI's long-term memory for perfect situational awareness.
                 </p>
              </div>
            </div>
@@ -303,6 +361,9 @@ export default function PremiumCalendarPage() {
                                  <Clock className="w-3 h-3" /> 
                                  {new Date(evt.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                </span>
+                               <span className="flex items-center gap-1 text-[10px] text-primary/70 font-bold bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                                 <CheckCircle2 className="w-3 h-3" /> AI SYNCED
+                               </span>
                              </div>
                              <h4 className="text-xl font-bold text-white group-hover:text-primary transition-colors">{evt.title}</h4>
                              <p className="text-sm text-slate-400 leading-relaxed">{evt.description}</p>
@@ -331,7 +392,7 @@ export default function PremiumCalendarPage() {
 
               {/* Modal Footer */}
               <div className="p-8 bg-zinc-950/40 flex justify-end gap-3">
-                 <button className="px-6 py-3 bg-slate-900 border border-slate-800 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center gap-2">
+                 <button onClick={handleCreateEvent} className="px-6 py-3 bg-slate-900 border border-slate-800 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center gap-2">
                    Add Event
                  </button>
                  <button onClick={() => setIsModalOpen(false)} className="px-6 py-3 bg-primary text-white rounded-xl font-bold hover:shadow-[0_0_20px_rgba(138,43,226,0.5)] transition-all">
@@ -415,6 +476,13 @@ export default function PremiumCalendarPage() {
                    </div>
 
                    <div className="pt-6 flex gap-3">
+                      <button 
+                         type="button" 
+                         onClick={() => handleDeleteEvent(editingEvent.id)}
+                         className="px-6 py-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all"
+                      >
+                         <Trash2 className="w-5 h-5" />
+                      </button>
                       <button 
                          type="button" 
                          onClick={() => setEditingEvent(null)}

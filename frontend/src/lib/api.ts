@@ -294,3 +294,56 @@ export async function upgradeLLM(modelName: string, version?: string) {
     body: { model_name: modelName, version },
   });
 }
+
+// ──────────────────────────────────────
+// Services: Calendar
+// Backend: GET /calendar/events
+// Backend: POST /calendar/events
+// Backend: PATCH /calendar/events/{id}
+// Backend: DELETE /calendar/events/{id}
+// Backend: GET /calendar/slots
+// ──────────────────────────────────────
+export interface CalendarEvent {
+  id: number;
+  user_id: number;
+  title: string;
+  description?: string;
+  category: "meeting" | "event" | "birthday" | "task";
+  color?: string;
+  start_time: string;
+  end_time: string;
+  is_remote: boolean;
+  status: string;
+  metadata_payload?: any;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function getEvents(start: string, end: string) {
+  return apiFetch<CalendarEvent[]>(`/calendar/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+}
+
+export async function createEvent(data: Partial<CalendarEvent>) {
+  return apiFetch<CalendarEvent>("/calendar/events", {
+    method: "POST",
+    body: data as Record<string, unknown>,
+  });
+}
+
+export async function updateEvent(id: number, data: Partial<CalendarEvent>) {
+  return apiFetch<CalendarEvent>(`/calendar/events/${id}`, {
+    method: "PATCH",
+    body: data as Record<string, unknown>,
+  });
+}
+
+export async function deleteEvent(id: number) {
+  return fetch(`${API_BASE_URL}/calendar/events/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+}
+
+export async function getAvailableSlots(date: string, duration: number = 60) {
+  return apiFetch<{start: string; end: string}[]>(`/calendar/slots?date=${encodeURIComponent(date)}&duration=${duration}`);
+}

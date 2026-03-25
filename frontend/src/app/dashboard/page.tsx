@@ -180,9 +180,11 @@ export default function Dashboard() {
             <p className="text-xs text-slate-400 mb-4 leading-relaxed">
               Connect your calendar to enable AI-powered scheduling and timezone sync.
             </p>
-            <button className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all shadow-lg active:scale-95">
-              Connect Now
-            </button>
+            <Link href="/dashboard/calendar" className="block w-full">
+              <button className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all shadow-lg active:scale-95">
+                Connect Now
+              </button>
+            </Link>
           </div>
 
           {/* Proactive AI Suggestion */}

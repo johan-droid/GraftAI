@@ -129,13 +129,18 @@ def _create_jwt_token(sub: str):
 
 
 def _attach_jwt_cookies(response: Response, token_data: dict):
+    # For SPA frontends on different domains/origins, SameSite=None is required so
+    # browser includes cookies in cross-site requests. Secure is required for None.
     is_prod = os.getenv("NODE_ENV") == "production"
+    same_site_value = "none" if is_prod else "lax"
+    secure_value = is_prod
+
     response.set_cookie(
         key="graftai_access_token",
         value=token_data["access_token"],
         httponly=True,
-        secure=is_prod,
-        samesite="strict",
+        secure=secure_value,
+        samesite=same_site_value,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -143,10 +148,10 @@ def _attach_jwt_cookies(response: Response, token_data: dict):
         key="graftai_refresh_token",
         value=token_data["refresh_token"],
         httponly=True,
-        secure=is_prod,
-        samesite="strict",
+        secure=secure_value,
+        samesite=same_site_value,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/auth/refresh",
+        path="/",
     )
 
 

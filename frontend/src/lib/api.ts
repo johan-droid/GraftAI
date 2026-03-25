@@ -61,7 +61,14 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
 // Auth: Credential Login
 // Backend: POST /auth/token (OAuth2PasswordRequestForm → form-urlencoded)
 // ──────────────────────────────────────
-export async function login(username: string, password: string) {
+export interface LoginResult {
+  access_token: string;
+  token_type?: string;
+  refresh_token?: string;
+  user?: Record<string, unknown>;
+}
+
+export async function login(username: string, password: string): Promise<LoginResult> {
   const body = new URLSearchParams();
   body.append("username", username);
   body.append("password", password);
@@ -70,6 +77,7 @@ export async function login(username: string, password: string) {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
+    credentials: "include", // Ensure HttpOnly auth cookies are set
   });
 
   if (!res.ok) {
@@ -77,7 +85,13 @@ export async function login(username: string, password: string) {
     throw new Error(errorData.detail || "Login failed");
   }
 
-  return res.json() as Promise<{ access_token: string; token_type: string }>;
+  const data = await res.json();
+  // Backend currently returns { token: { access_token..., token_type... }, user: {...} }
+  if (data?.token?.access_token) {
+    return { access_token: data.token.access_token, token_type: data.token.token_type, refresh_token: data.token.refresh_token, user: data.user };
+  }
+
+  return data;
 }
 
 export async function register(email: string, password: string, fullName?: string, timezone?: string) {

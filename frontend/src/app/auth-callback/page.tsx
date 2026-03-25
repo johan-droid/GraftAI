@@ -26,6 +26,7 @@ export default function AuthCallback() {
             headers: {
               "Accept": "application/json",
             },
+            credentials: "include", // Keep cookies from backend for session
           }
         );
         const data = await response.json();

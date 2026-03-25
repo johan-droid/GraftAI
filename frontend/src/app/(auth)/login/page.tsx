@@ -34,7 +34,10 @@ export default function LoginPage() {
     setError("");
     try {
       const result = await login(email, password);
-      setToken(result.access_token);
+      const accessToken = result.access_token;
+      if (accessToken) {
+        setToken(accessToken);
+      }
       router.replace("/dashboard");
     } catch (err) {
       setError((err as Error).message || "Invalid credentials");

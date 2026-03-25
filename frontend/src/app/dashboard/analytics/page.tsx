@@ -7,7 +7,7 @@ import Link from "next/link";
 
 export default function AnalyticsPage() {
   const [summary, setSummary] = useState<string>("");
-  const [details, setDetails] = useState({ meetings: 0, hours: 0, growth: 0 });
+  const [details, setDetails] = useState<{ meetings: number; hours: number; growth: number }>({ meetings: 0, hours: 0, growth: 0 });
   const [status, setStatus] = useState("Loading analytics...");
   const [loading, setLoading] = useState(true);
 
@@ -16,7 +16,11 @@ export default function AnalyticsPage() {
       .then((data) => {
         setSummary(data.summary);
         if (data.details) {
-          setDetails(data.details as any);
+          setDetails({
+            meetings: data.details.meetings || 0,
+            hours: data.details.hours || 0,
+            growth: data.details.growth || 0,
+          });
         }
         setStatus("Analytics loaded successfully.");
       })

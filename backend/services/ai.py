@@ -16,9 +16,9 @@ from backend.auth.schemes import get_current_user_id
 from fastapi import Depends
 
 try:
-    from groq import Groq
+    from groq import AsyncGroq
 except ImportError:
-    Groq = None
+    AsyncGroq = None
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -30,21 +30,21 @@ class AIResponse(BaseModel):
     result: str
     model_used: Optional[str] = None
 
-def _generate_with_groq(prompt: str, model_name: str = "llama-3.3-70b-versatile") -> str:
-    if Groq is None:
+async def _generate_with_groq(prompt: str, model_name: str = "llama-3.3-70b-versatile") -> str:
+    if AsyncGroq is None:
         raise RuntimeError("Groq SDK not installed. Please pip install groq")
 
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY environment variable not set")
 
-    client = Groq(api_key=api_key)
-    resp = client.chat.completions.create(
-        model=model_name,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=512,
-        temperature=0.2,
-    )
+    async with AsyncGroq(api_key=api_key) as client:
+        resp = await client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=512,
+            temperature=0.2,
+        )
 
     if hasattr(resp, "choices") and resp.choices:
         first = resp.choices[0]
@@ -85,9 +85,9 @@ async def ai_chat(request: AIRequest, user_id: int = Depends(get_current_user_id
     model_used = None
 
     # Prefer Groq if configured
-    if os.getenv("GROQ_API_KEY") and Groq is not None:
+    if os.getenv("GROQ_API_KEY") and AsyncGroq is not None:
         try:
-            result_text = _generate_with_groq(full_prompt)
+            result_text = await _generate_with_groq(full_prompt)
             model_used = "llama-3.3-70b-versatile"
         except Exception as e:
             # fallback to langchain/OpenAI-style LLM

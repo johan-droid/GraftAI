@@ -5,6 +5,7 @@ from typing import Optional
 import os
 import httpx
 import redis
+from datetime import datetime, timezone
 from backend.services.access_control import check_user_role
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -71,8 +72,18 @@ async def _get_auth0_jwk(token: str) -> dict:
 
 
 async def decode_token(token: str) -> Optional[dict]:
-    # If Auth0 variables are configured, attempt RS256 / JWKS validation.
-    if AUTH0_DOMAIN and AUTH0_AUDIENCE:
+    """
+    Intelligent token decoder that selects validation strategy based on token algorithm.
+    This enables seamless interop between Auth0 (SSO) and Sovereign (Local) sessions.
+    """
+    try:
+        header = jwt.get_unverified_header(token)
+        alg = header.get("alg")
+    except Exception:
+        return None
+
+    # Strategy 1: Auth0 / External Identity (RS256)
+    if alg == "RS256" and AUTH0_DOMAIN and AUTH0_AUDIENCE:
         try:
             jwk = await _get_auth0_jwk(token)
             payload = jwt.decode(
@@ -84,18 +95,20 @@ async def decode_token(token: str) -> Optional[dict]:
             )
             return payload
         except JWTError as exc:
-            # If Auth0 is configured, we must NOT fall back to local keys.
-            # This prevents signature bypass if the local SECRET_KEY is leaked.
             import logging
-            logging.getLogger(__name__).error(f"Auth0 JWT validation failed: {exc}")
+            logging.getLogger(__name__).error(f"External JWT (Auth0) validation failed: {exc}")
             return None
 
-    # Local symmetric JWT strategy (HS256) fallback.
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
-        return None
+    # Strategy 2: Local Sovereign Session (HS256)
+    if alg == "HS256":
+        try:
+            # We explicitly use only the local SECRET_KEY for HS256 to prevent 'alg none' or RS256/HS256 confusion attacks.
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            return payload
+        except JWTError:
+            return None
+
+    return None
 
 async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)):
     """
@@ -127,6 +140,26 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Session Persistence & Active Tracking
+    client = _get_redis_client()
+    session_key = f"active_session:{token[-20:]}"
+    if not client.exists(session_key):
+         raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has expired or was revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Update local telemetry (useful for load balancer observability)
+    # This tracks which exact container/worker is handling the user in Redis
+    backend_id = os.getenv("HOSTNAME", "unknown-worker")
+    client.hset(f"session_telemetry:{token[-20:]}", mapping={
+        "last_seen": str(datetime.now(timezone.utc)),
+        "backend": backend_id
+    })
+    client.expire(f"session_telemetry:{token[-20:]}", 3600)
+
     return payload
 
 

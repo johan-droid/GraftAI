@@ -118,6 +118,11 @@ def _create_jwt_token(sub: str):
     client = _get_redis_client()
     client.setex(f"refresh:{refresh_token}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, sub)
     client.sadd(f"user_tokens:{sub}", refresh_token)
+    
+    # Register this specific access session in Redis for stickiness tracking
+    session_key = f"active_session:{access_token[-20:]}" # Use suffix as identifier
+    client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, sub)
+    
     client.expire(f"user_tokens:{sub}", REFRESH_TOKEN_EXPIRE_DAYS * 86400)
 
     return {

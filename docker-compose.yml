@@ -26,16 +26,36 @@ services:
     depends_on:
       - postgres
       - redis
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     env_file:
       - ./backend/.env
     environment:
       ENV: production
       DATABASE_URL: postgresql+asyncpg://graftai:graftai@postgres:5432/graftai
       REDIS_URL: redis://redis:6379/0
-      CORS_ORIGINS: http://localhost:3000
+      # CORS origins must now trust the load balancer and frontend
+      CORS_ORIGINS: http://localhost:8000,http://localhost:3000
       ENABLED_AUTH_METHODS: "sso,passwordless,mfa"
+
+  # Custom Load Balancer for horizontal scaling
+  load_balancer:
+    build: 
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "8000:80"
+    networks:
+      - default
 
   frontend:
     build:
@@ -43,11 +63,12 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      - backend
+      - load_balancer
     env_file:
       - ./frontend/.env.production
     environment:
       - NODE_ENV=production
+      # Frontend now talks to the Load Balancer proxying the backend
       - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
     ports:
       - "3000:3000"

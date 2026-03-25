@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 import redis
 
 from backend.auth.routes import router as auth_router
+from backend.api.calendar import router as calendar_router
 from backend.api.users import router as users_router
 from backend.services.ai import router as ai_router
 from backend.services.analytics import router as analytics_router
@@ -30,6 +31,9 @@ from backend.services.consent import router as consent_router
 from backend.services.proactive import router as proactive_router
 from backend.services.upgrade import router as upgrade_router
 from backend.services.plugin_api import router as plugin_router
+from backend.auth.schemes import get_current_user
+
+# ... existing imports ...
 from backend.auth.schemes import get_current_user
 
 # Rate limiting setup
@@ -158,6 +162,7 @@ app.include_router(auth_router)
 
 # All other services are protected by default (Broken Access Control fix)
 app.include_router(users_router, dependencies=[Depends(get_current_user)])
+app.include_router(calendar_router, dependencies=[Depends(get_current_user)])
 app.include_router(ai_router, dependencies=[Depends(get_current_user)])
 app.include_router(analytics_router, dependencies=[Depends(get_current_user)])
 app.include_router(consent_router, dependencies=[Depends(get_current_user)])

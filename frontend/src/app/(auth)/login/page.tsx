@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { login, passwordlessRequest, passwordlessVerify, fido2Verify, fido2StartRegistration, ssoStart } from "@/lib/api";
-import { setToken } from "@/lib/auth";
+import { setToken } from "@/lib/auth"; // Kept for possible non-context usage if any, though contextLogin is preferred
+import { useAuthContext } from "@/app/providers/auth-provider";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, ArrowRight, Loader2, KeyRound, Fingerprint, Shield } from "lucide-react";
 
@@ -12,6 +13,7 @@ type AuthTab = "credentials" | "passwordless" | "passkey";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login: contextLogin } = useAuthContext();
   const [activeTab, setActiveTab] = useState<AuthTab>("credentials");
 
   // Credentials state
@@ -36,7 +38,7 @@ export default function LoginPage() {
       const result = await login(email, password);
       const accessToken = result.access_token;
       if (accessToken) {
-        setToken(accessToken);
+        await contextLogin(accessToken);
       }
       router.replace("/dashboard");
     } catch (err) {
@@ -87,7 +89,7 @@ export default function LoginPage() {
     try {
       const result = await passwordlessVerify(magicEmail, magicCode);
       if (result?.access_token) {
-        setToken(result.access_token);
+        await contextLogin(result.access_token);
         router.replace("/dashboard");
       }
     } catch (err) {

@@ -2,12 +2,13 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { setToken } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/api";
+import { useAuthContext } from "@/app/providers/auth-provider";
 
 function AuthCallbackInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { login } = useAuthContext();
   const [status, setStatus] = useState("Processing...");
 
   const code = searchParams.get("code");
@@ -40,7 +41,7 @@ function AuthCallbackInner() {
         }
 
         if (data.token?.access_token) {
-          setToken(data.token.access_token);
+          await login(data.token.access_token);
           const finalRedirect = data.redirect_to || "/dashboard";
           router.replace(finalRedirect);
           return;

@@ -1,37 +1,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/login", "/register", "/auth-callback", "/mfa", "/sso", "/favicon.ico"];
-
 export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-
-  // Static assets and internal next.js files
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.includes("favicon.ico") ||
-    pathname.startsWith("/static")
-  ) {
-    return NextResponse.next();
-  }
-
-  // Allow public paths
-  if (PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(path + "/"))) {
-    return NextResponse.next();
-  }
-
-  // Check for graftai_access_token in cookies for root dashboard access
-  const token = req.cookies.get("graftai_access_token");
-
-  if (!token && pathname.startsWith("/dashboard")) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
-
+  // We completely bypass middleware-based auth protection because the
+  // `graftai_access_token` is an HttpOnly cookie set on the BACKEND domain
+  // (e.g. graftai.onrender.com). The Next.js frontend server (vercel.app)
+  // physically cannot read this cookie.
+  // Auth protection is handled strictly on the client side via the <AuthProvider>
+  // and the backend API itself.
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/auth-callback"]
+  matcher: [] // Disable middleware execution to speed up navigations
 };

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, delete
 from backend.models.tables import EventTable
 from .langchain_client import vector_store
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 import json
 
 # Initialize logger

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAnalyticsSummary } from "@/lib/api";
-import { Activity, ArrowUpRight, Loader2 } from "lucide-react";
+import { ArrowUpRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 export default function AnalyticsPage() {

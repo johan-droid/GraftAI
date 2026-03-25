@@ -11,17 +11,17 @@ from backend.models.tables import Base
 
 
 def _normalize_sync_url(database_url: str) -> str:
-    if database_url.startswith('postgresql+asyncpg://'):
-        return database_url.replace('postgresql+asyncpg://', 'postgresql://', 1)
-    if database_url.startswith('mysql+aiomysql://'):
-        return database_url.replace('mysql+aiomysql://', 'mysql+pymysql://', 1)
+    if database_url.startswith("postgresql+asyncpg://"):
+        return database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    if database_url.startswith("mysql+aiomysql://"):
+        return database_url.replace("mysql+aiomysql://", "mysql+pymysql://", 1)
     return database_url
 
 
 def run_migrations(db_url: str = None, migration_file: str = None):
     db_url = db_url or DATABASE_URL
     if not db_url:
-        raise RuntimeError('DATABASE_URL is not set')
+        raise RuntimeError("DATABASE_URL is not set")
 
     sync_url = _normalize_sync_url(db_url)
     engine = create_engine(sync_url, future=True)
@@ -29,9 +29,9 @@ def run_migrations(db_url: str = None, migration_file: str = None):
     if migration_file:
         migration_path = Path(migration_file).resolve()
         if not migration_path.exists():
-            raise FileNotFoundError(f'Migrations file not found: {migration_path}')
+            raise FileNotFoundError(f"Migrations file not found: {migration_path}")
 
-        sql = migration_path.read_text(encoding='utf-8')
+        sql = migration_path.read_text(encoding="utf-8")
         with engine.begin() as conn:
             conn.exec_driver_sql(sql)
     else:
@@ -41,10 +41,10 @@ def run_migrations(db_url: str = None, migration_file: str = None):
     return True
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         run_migrations()
-        print('✅ Database migrations were successfully applied.')
+        print("✅ Database migrations were successfully applied.")
     except Exception as exc:
-        logger.error(f'❌ Failed to apply migrations: {type(exc).__name__}')
+        logger.error(f"❌ Failed to apply migrations: {type(exc).__name__}")
         raise

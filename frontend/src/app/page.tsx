@@ -129,7 +129,7 @@ export default function Home() {
             </motion.h1>
 
             <motion.p variants={itemVariants} className="text-lg md:text-2xl text-slate-400 max-w-3xl mb-12 leading-relaxed">
-              GraftAI is the world's first autonomous calendar layer that syncs your life with an 
+              GraftAI is the world&apos;s first autonomous calendar layer that syncs your life with an 
               intelligent vector loop. No more booking calls. No more double bookings.
             </motion.p>
 

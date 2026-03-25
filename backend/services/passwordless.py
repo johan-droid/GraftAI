@@ -1,6 +1,7 @@
 """
 Passwordless auth module with Redis-backed OTP storage.
 """
+
 from datetime import datetime, timedelta
 import random
 import json
@@ -11,12 +12,14 @@ from .auth_utils import canonical_email
 # Redis client for OTP storage
 _redis_client = None
 
+
 def _get_redis_client():
     global _redis_client
     if _redis_client is None:
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         _redis_client = redis.from_url(redis_url, decode_responses=True)
     return _redis_client
+
 
 OTP_TTL_SECONDS = 300
 
@@ -44,7 +47,7 @@ def verify_magic_link_code(email: str, code: str):
     raw_data = client.get(f"otp:{email}")
     if not raw_data:
         return False
-    
+
     entry = json.loads(raw_data)
     if entry.get("code") != code:
         return False
@@ -55,4 +58,3 @@ def verify_magic_link_code(email: str, code: str):
 
     client.delete(f"otp:{email}")
     return True
-

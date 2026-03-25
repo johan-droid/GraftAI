@@ -131,7 +131,7 @@ export default function AICopilotPage() {
           <div>
             <h3 className="text-sm font-bold text-slate-800 dark:text-white">{greeting}, explorer!</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              It's {currentTime} in your timezone. Ready to schedule your cross-country meetings?
+              It&apos;s {currentTime} in your timezone. Ready to schedule your cross-country meetings?
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">

@@ -2,6 +2,7 @@ from pydantic import EmailStr, Field
 from .base import DBModel
 from typing import Optional
 
+
 class User(DBModel):
     id: int
     email: EmailStr

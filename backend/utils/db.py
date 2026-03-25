@@ -25,7 +25,12 @@ if DATABASE_URL:
         # Strip them and pass ssl=True via connect_args instead.
         _parsed = urlparse(DATABASE_URL)
         _params = parse_qs(_parsed.query)
-        _needs_ssl = _params.pop("sslmode", [None])[0] in ("require", "verify-ca", "verify-full", "prefer")
+        _needs_ssl = _params.pop("sslmode", [None])[0] in (
+            "require",
+            "verify-ca",
+            "verify-full",
+            "prefer",
+        )
         _params.pop("channel_binding", None)
         _clean_query = urlencode({k: v[0] for k, v in _params.items()}, doseq=False)
         _clean_url = urlunparse(_parsed._replace(query=_clean_query))
@@ -40,7 +45,7 @@ if DATABASE_URL:
             future=True,
             connect_args=_connect_args,
             pool_pre_ping=True,
-            pool_size=3, # optimized for 4+ workers to stay within Neon limits
+            pool_size=3,  # optimized for 4+ workers to stay within Neon limits
             max_overflow=7,
             pool_timeout=30,
         )

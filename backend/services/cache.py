@@ -25,11 +25,16 @@ def _get_redis():
 
     try:
         from redis import Redis as RedisPy
-        _redis = RedisPy.from_url(redis_url, decode_responses=True, socket_connect_timeout=5)
+
+        _redis = RedisPy.from_url(
+            redis_url, decode_responses=True, socket_connect_timeout=5
+        )
         _redis.ping()
         return _redis
     except Exception as e:
-        logger.warning(f"⚠ Redis connection failed ({type(e).__name__}) — using in-memory cache fallback")
+        logger.warning(
+            f"⚠ Redis connection failed ({type(e).__name__}) — using in-memory cache fallback"
+        )
         _redis = None
         return None
 

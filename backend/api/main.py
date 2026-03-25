@@ -40,6 +40,7 @@ from backend.models.tables import Base as ModelsBase
 # Rate limiting setup
 _redis_client = None
 
+
 def _get_redis_client():
     global _redis_client
     if _redis_client is None:
@@ -66,23 +67,23 @@ return 1
 
 def _parse_rate_limit(rate_limit: str):
     """Parse rate limit string like '100/minute' into (count, window_seconds)."""
-    match = re.match(r'(\d+)/(\w+)', rate_limit)
+    match = re.match(r"(\d+)/(\w+)", rate_limit)
     if not match:
         return 100, 60  # default: 100 per minute
-    
+
     count = int(match.group(1))
     unit = match.group(2).lower()
-    
+
     # Convert to seconds
     multipliers = {
-        'second': 1,
-        'seconds': 1,
-        'minute': 60,
-        'minutes': 60,
-        'hour': 3600,
-        'hours': 3600,
-        'day': 86400,
-        'days': 86400,
+        "second": 1,
+        "seconds": 1,
+        "minute": 60,
+        "minutes": 60,
+        "hour": 3600,
+        "hours": 3600,
+        "day": 86400,
+        "days": 86400,
     }
     window = multipliers.get(unit, 60)
     return count, window
@@ -90,39 +91,41 @@ def _parse_rate_limit(rate_limit: str):
 
 class RateLimitMiddleware:
     """Simple Redis-backed rate limiting middleware."""
-    
+
     def __init__(self, app, rate_limit: str = "100/minute"):
         self.app = app
         self.max_requests, self.window = _parse_rate_limit(rate_limit)
-    
+
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        
+
         request = Request(scope)
-        
+
         # Get client IP
-        client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+        client_ip = request.headers.get(
+            "x-forwarded-for", request.client.host if request.client else "unknown"
+        )
         if "," in client_ip:
             client_ip = client_ip.split(",")[0].strip()
-        
+
         # Atomic check-and-increment via Lua
         client = _get_redis_client()
         key = f"rate_limit:{client_ip}:{request.url.path}"
-        
+
         # Use eval to run the scriptatomically
         allowed = client.eval(RATE_LIMIT_LUA, 1, key, self.max_requests, self.window)
-        
+
         if not allowed:
             # Rate limit exceeded
             response = JSONResponse(
                 status_code=429,
-                content={"detail": "Rate limit exceeded. Please try again later."}
+                content={"detail": "Rate limit exceeded. Please try again later."},
             )
             await response(scope, receive, send)
             return
-        
+
         await self.app(scope, receive, send)
 
 
@@ -130,6 +133,7 @@ class RateLimitMiddleware:
 _rate_limit_str = os.getenv("RATE_LIMIT", "100/minute")
 
 from contextlib import asynccontextmanager
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -141,11 +145,14 @@ async def lifespan(app: FastAPI):
                 await conn.run_sync(ModelsBase.metadata.create_all)
             logger.info("✅ Database tables verified/created successfully.")
         except Exception as e:
-            logger.error(f"⚠ Failed to create or verify database tables: {type(e).__name__}")
-    
+            logger.error(
+                f"⚠ Failed to create or verify database tables: {type(e).__name__}"
+            )
+
     # 2. Password Self-Test
     try:
         from backend.services.auth_utils import get_password_hash, verify_password
+
         test_pw = "StartupSelfTest99!"
         test_hash = get_password_hash(test_pw)
         if not verify_password(test_pw, test_hash):
@@ -154,7 +161,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.critical(f"CRITICAL: Password hashing system failure: {e}")
         raise RuntimeError("Password hashing system initialization failed") from e
-    
+
     # 3. Auth0 Verification
     domain = os.getenv("AUTH0_DOMAIN")
     audience = os.getenv("AUTH0_AUDIENCE")
@@ -165,11 +172,12 @@ async def lifespan(app: FastAPI):
     # --- Shutdown ---
     # Clean up global connections if needed
 
+
 app = FastAPI(
     title="GraftAI Backend",
     description="Production API for GraftAI — AI-powered scheduling platform",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -184,8 +192,8 @@ _extra_origins = [o.strip() for o in _raw_extra.split(",") if o.strip()]
 
 cors_origins = [
     # ── Production ──────────────────────────────────
-    "https://graft-ai-two.vercel.app",           # Vercel production frontend
-    "https://graftai.onrender.com",              # Render backend self-reference
+    "https://graft-ai-two.vercel.app",  # Vercel production frontend
+    "https://graftai.onrender.com",  # Render backend self-reference
     # ── Configurable via Render env vars ────────────
     *([os.getenv("FRONTEND_URL")] if os.getenv("FRONTEND_URL") else []),
     *([os.getenv("LOAD_BALANCER_URL")] if os.getenv("LOAD_BALANCER_URL") else []),
@@ -236,7 +244,7 @@ def root():
         "message": "GraftAI Sovereign API is online.",
         "version": "1.0.0",
         "scaling_pool": "3 Replicas (Active)",
-        "rate_limit_active": True
+        "rate_limit_active": True,
     }
 
 

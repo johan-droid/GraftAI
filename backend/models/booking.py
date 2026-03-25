@@ -1,6 +1,7 @@
 from .base import DBModel
 from typing import Optional
 
+
 class Booking(DBModel):
     id: int
     user_id: int

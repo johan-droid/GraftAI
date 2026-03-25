@@ -1,6 +1,7 @@
 """
 RBAC/ABAC (roles/attributes) implementation with Redis-backed storage.
 """
+
 from typing import Any, List
 import json
 import os
@@ -8,6 +9,7 @@ import redis
 
 # Redis client for roles and attributes
 _redis_client = None
+
 
 def _get_redis_client():
     global _redis_client
@@ -48,4 +50,3 @@ def check_user_attribute(user_id: int, attribute: str, value: Any) -> bool:
         return False
     attrs = json.loads(attrs_json)
     return attrs.get(attribute) == value
-

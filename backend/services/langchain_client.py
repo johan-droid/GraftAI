@@ -39,9 +39,9 @@ try:
         try:
             from pinecone import Pinecone as PineconeClient  # type: ignore
         except (ImportError, ModuleNotFoundError):
-            PineconeClient = None # Set to None if import fails
+            PineconeClient = None  # Set to None if import fails
 
-        if PineconeClient: # Only proceed if PineconeClient was successfully imported
+        if PineconeClient:  # Only proceed if PineconeClient was successfully imported
             try:
                 # No need for pinecone.init() in v3.0+
                 _pc = PineconeClient(api_key=PINECONE_API_KEY)
@@ -56,18 +56,21 @@ try:
                 embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
                 # Using the modern PineconeVectorStore from langchain-pinecone
                 vector_store = PineconeVectorStore(
-                    index_name=PINECONE_INDEX, 
+                    index_name=PINECONE_INDEX,
                     embedding=embeddings,
-                    pinecone_api_key=PINECONE_API_KEY
+                    pinecone_api_key=PINECONE_API_KEY,
                 )
         except Exception as le:
-            logger.error(f"[!] LangChain LLM/embeddings init skipped: {type(le).__name__}")
+            logger.error(
+                f"[!] LangChain LLM/embeddings init skipped: {type(le).__name__}"
+            )
 
 except Exception as e:
     logger.error(f"[!] LangChain/Pinecone initialization skipped: {type(e).__name__}")
 
 
 # ── Fallback stubs so the rest of the app never crashes ──
+
 
 class _DummyVectorStore:
     def similarity_search(self, query, k=3):
@@ -76,8 +79,10 @@ class _DummyVectorStore:
 
 class _DummyLLM:
     """Returns a safe fallback response when no real LLM is configured."""
+
     def invoke(self, messages, **kwargs):
         from types import SimpleNamespace
+
         return SimpleNamespace(content="AI service is not configured.")
 
     def __call__(self, messages, **kwargs):

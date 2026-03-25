@@ -1,6 +1,7 @@
 """
 FIDO2 and decentralized identity (DID) support with Redis-backed storage.
 """
+
 import uuid
 import json
 import os
@@ -9,6 +10,7 @@ import redis
 
 # Redis client for FIDO2 and DID storage
 _redis_client = None
+
 
 def _get_redis_client():
     global _redis_client
@@ -31,11 +33,11 @@ def complete_fido2_registration(user_id: int, attestation: dict) -> bool:
     raw_data = client.get(f"fido:{user_id}")
     if not raw_data:
         return False
-    
+
     record = json.loads(raw_data)
     if record.get("registered"):
         return False
-    
+
     record["registered"] = True
     record["attestation"] = attestation
     client.setex(f"fido:{user_id}", 86400, json.dumps(record))  # 24h TTL
@@ -47,7 +49,7 @@ def verify_fido2_assertion(user_id: int, assertion: dict) -> bool:
     raw_data = client.get(f"fido:{user_id}")
     if not raw_data:
         return False
-    
+
     record = json.loads(raw_data)
     if not record.get("registered"):
         return False
@@ -65,4 +67,3 @@ def verify_decentralized_id(user_id: int, did: str) -> bool:
     client = _get_redis_client()
     stored_did = client.get(f"did:{user_id}")
     return stored_did == did
-

@@ -14,7 +14,8 @@ import {
   Edit3, 
   X, 
   CheckCircle2,
-  CalendarCheck2
+  CalendarCheck2,
+  Loader2
 } from "lucide-react";
 import { 
   getEvents, 
@@ -23,7 +24,6 @@ import {
   deleteEvent, 
   getAvailableSlots, 
   CalendarEvent as Event,
-  API_BASE_URL 
 } from "@/lib/api";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -33,7 +33,10 @@ const CATEGORIES = {
   event: { label: "Event", color: "#FFD700", dot: "bg-yellow-500" },
   birthday: { label: "Birthday", color: "#FF69B4", dot: "bg-pink-500" },
   task: { label: "Task", color: "#00CED1", dot: "bg-cyan-500" },
-};
+} as const;
+
+type CalendarCategory = keyof typeof CATEGORIES;
+
 
 export default function PremiumCalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -45,28 +48,33 @@ export default function PremiumCalendarPage() {
 
   const [isCreating, setIsCreating] = useState(false);
   const [recommendations, setRecommendations] = useState<{start: string, end: string, local_label?: string, guest_label?: string}[]>([]);
-  
+
   // Coordination State
   const [coordinationMode, setCoordinationMode] = useState(false);
   const [targetTimezone, setTargetTimezone] = useState("UTC");
 
-  // Calendar Logic
-  const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-  const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-  const startDate = new Date(monthStart);
-  startDate.setDate(startDate.getDate() - monthStart.getDay());
-  const endDate = new Date(monthEnd);
-  endDate.setDate(endDate.getDate() + (6 - monthEnd.getDay()));
+  const { days, startDate, endDate } = useMemo(() => {
+    const monthStartCalc = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const monthEndCalc = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    const startDateCalc = new Date(monthStartCalc);
+    startDateCalc.setDate(startDateCalc.getDate() - monthStartCalc.getDay());
+    const endDateCalc = new Date(monthEndCalc);
+    endDateCalc.setDate(endDateCalc.getDate() + (6 - monthEndCalc.getDay()));
 
-  const days = useMemo(() => {
-    const list = [];
-    let current = new Date(startDate);
-    while (current <= endDate) {
+    const list = [] as Date[];
+    const current = new Date(startDateCalc);
+    while (current <= endDateCalc) {
       list.push(new Date(current));
       current.setDate(current.getDate() + 1);
     }
-    return list;
+
+    return {
+      startDate: startDateCalc,
+      endDate: endDateCalc,
+      days: list,
+    };
   }, [currentDate]);
+
 
   // Fetch events for current month range
   const fetchEventsData = async () => {
@@ -135,7 +143,9 @@ export default function PremiumCalendarPage() {
      if(!confirm("Are you sure? This will also purge AI long-term memory for this event.")) return;
      try {
        const res = await deleteEvent(id);
-       if (res && (res as any).status !== 'error') {
+       type DeleteEventResponse = { status?: string };
+       const typedRes = res as DeleteEventResponse;
+       if (typedRes.status !== 'error') {
          setEvents(prev => prev.filter(e => e.id !== id));
          setEditingEvent(null);
        }
@@ -147,6 +157,8 @@ export default function PremiumCalendarPage() {
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if(!selectedDate) return;
+
+    setIsCreating(true);
 
     const newEventData: Partial<Event> = {
       title: "New AI Synced Meeting",
@@ -162,11 +174,20 @@ export default function PremiumCalendarPage() {
     try {
       const created = await createEvent(newEventData);
       setEvents(prev => [...prev, created]);
-      setIsCreating(false);
     } catch (err) {
       console.error("Create failed:", err);
+    } finally {
+      setIsCreating(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-white">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading your calendar...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen space-y-8 pb-12">
@@ -369,7 +390,7 @@ export default function PremiumCalendarPage() {
                   <CheckCircle2 className="w-5 h-5" /> Vector Recall
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
-                  Modifications are instantly indexed in your AI's long-term memory for situational awareness.
+                  Modifications are instantly indexed in your AI&apos;s long-term memory for situational awareness.
                 </p>
              </div>
            </div>
@@ -539,7 +560,7 @@ export default function PremiumCalendarPage() {
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-2 block">Category</label>
                             <select 
                                value={editingEvent.category}
-                               onChange={(e) => setEditingEvent({...editingEvent, category: e.target.value as any})}
+                               onChange={(e) => setEditingEvent({...editingEvent, category: e.target.value as CalendarCategory})}
                                className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-primary appearance-none"
                             >
                                {Object.keys(CATEGORIES).map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}

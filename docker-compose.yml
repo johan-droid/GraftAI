@@ -41,6 +41,7 @@ services:
       ENV: production
       DATABASE_URL: postgresql+asyncpg://graftai:graftai@postgres:5432/graftai
       REDIS_URL: redis://redis:6379/0
+      FORCE_GROQ: "1"
       # CORS origins must trust the load balancer and frontend
       CORS_ORIGINS: http://localhost:8000,http://localhost:3000
       ENABLED_AUTH_METHODS: "sso,passwordless,mfa"

@@ -64,7 +64,7 @@ def test_password_hash_too_long_raises_value_error():
     try:
         get_password_hash(too_long_password)
     except ValueError:
-        pass # Expected
+        pass  # Expected
     except Exception as e:
         pytest.fail(f"Unexpected exception type: {type(e).__name__}")
 

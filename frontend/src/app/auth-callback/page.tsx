@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api";
@@ -55,7 +57,7 @@ function AuthCallbackInner() {
     };
 
     fetchCallback();
-  }, [code, state, router]);
+  }, [code, state, router, login]);
 
   if (!code || !state) {
     return (

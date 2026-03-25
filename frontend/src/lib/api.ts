@@ -203,7 +203,7 @@ export interface CalendarEvent {
   end_time: string;
   is_remote: boolean;
   status: string;
-  metadata_payload?: any;
+  metadata_payload?: Record<string, unknown>;
   created_at?: string;
   updated_at?: string;
 }
@@ -270,4 +270,10 @@ export async function getAvailableSlots(date: string, duration: number = 60, tar
     url += `&target_timezone=${encodeURIComponent(targetTimezone)}`;
   }
   return apiFetch<{start: string; end: string; local_label?: string; guest_label?: string}[]>(url);
+}
+
+export async function mfaVerify(userId: number, code: string) {
+  return apiFetch<{ status: string }>(`/auth/mfa/verify?token=${encodeURIComponent(code)}`, {
+    method: "POST"
+  });
 }

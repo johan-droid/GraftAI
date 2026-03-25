@@ -9,16 +9,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/proactive", tags=["proactive"])
 
+
 class ProactiveRequest(BaseModel):
     context: Optional[str] = None
+
 
 class ProactiveResponse(BaseModel):
     suggestion: str
 
+
 @router.post("/suggest", response_model=ProactiveResponse)
 async def proactive_suggest(
-    request: ProactiveRequest, 
-    user_id: int = Depends(get_current_user_id)
+    request: ProactiveRequest, user_id: int = Depends(get_current_user_id)
 ):
     logger.info(f"Proactive suggestion requested by user: {user_id}")
     # TODO: Implement proactive AI logic (e.g., suggest optimal times)

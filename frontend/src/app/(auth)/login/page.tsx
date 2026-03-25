@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, ArrowRight, Loader2, KeyRound, Fingerprint, Shield } from "lucide-react";
 
 type AuthTab = "credentials" | "passwordless" | "passkey";
+type OAuthProvider = "google" | "github" | "microsoft" | "apple";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,7 +20,6 @@ export default function LoginPage() {
 
   // Passwordless state
   const [magicEmail, setMagicEmail] = useState("");
-  const [magicCode, setMagicCode] = useState("");
   const [magicSent, setMagicSent] = useState(false);
 
   // Shared state
@@ -32,7 +32,7 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const { data, error: authError } = await authClient.signIn.email({
+      const { error: authError } = await authClient.signIn.email({
         email,
         password,
         callbackURL: "/dashboard",
@@ -51,7 +51,7 @@ export default function LoginPage() {
   }
 
   // ── OAuth SSO ──
-  const handleOAuthLogin = async (provider: any) => {
+  const handleOAuthLogin = async (provider: OAuthProvider) => {
     setLoading(true);
     setError("");
     try {
@@ -71,7 +71,7 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const { data, error: authError } = await authClient.signIn.magicLink({
+      const { error: authError } = await authClient.signIn.magicLink({
         email: magicEmail,
         callbackURL: "/dashboard",
       });
@@ -89,12 +89,12 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const { data, error: authError } = await authClient.signIn.passkey({
+      const { error: authError } = await authClient.signIn.passkey({
         email, // Optionally provide email if known, or let SDK handle it
       });
       if (authError) throw authError;
       router.replace("/dashboard");
-    } catch (err) {
+    } catch {
       setError("Passkey authentication failed or was cancelled");
     } finally {
       setLoading(false);

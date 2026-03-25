@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { authClient } from "@/lib/auth-client";
+import React, { createContext, useContext } from "react";
+import { getSession, signOut } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
 // Define a type for the user matching Neon Auth structure
@@ -9,33 +9,59 @@ type User = {
   id: string;
   email: string;
   name: string;
-  image?: string;
-} | null;
+};
 
-interface AuthContextValue {
-  user: User;
+interface AuthContextType {
+  user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
+  login: (token: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { data: session, isPending: loading } = authClient.useSession();
-  
-  const user = session?.user ? {
-    id: session.user.id,
-    email: session.user.email,
-    name: session.user.name,
-    image: session.user.image,
-  } : null;
+  const [session, setSession] = React.useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
+  React.useEffect(() => {
+    let active = true;
+
+    async function loadSession() {
+      setLoading(true);
+      try {
+        const response = await getSession();
+        if (!active) return;
+        setSession(response?.data?.session ?? null);
+      } catch (err) {
+        console.error("Session load failure", err);
+        if (active) setSession(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    loadSession();
+    const interval = setInterval(loadSession, 60_000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const user = session?.user as User | null;
   const isAuthenticated = !!session;
 
+  const loginFn = async (token: string) => {
+    // Session is handled automatically by the auth client provider.
+    // If needed, we can refresh via getSession in future.
+  };
+
   const logoutFn = async () => {
-    await authClient.signOut();
+    await signOut();
     router.replace("/login");
   };
 
@@ -43,7 +69,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{ 
       user, 
       isAuthenticated, 
-      loading, 
+      loading,
+      login: loginFn,
       logout: logoutFn 
     }}>
       {children}

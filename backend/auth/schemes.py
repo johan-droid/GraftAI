@@ -14,11 +14,15 @@ if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
 
-NEON_AUTH_BASE_URL = os.getenv("NEON_AUTH_BASE_URL", "https://ep-steep-glade-a1b1tcdq.ap-southeast-1.aws.neon.tech/neondb/auth")
+NEON_AUTH_BASE_URL = os.getenv(
+    "NEON_AUTH_BASE_URL",
+    "https://ep-steep-glade-a1b1tcdq.ap-southeast-1.aws.neon.tech/neondb/auth",
+)
 NEON_JWKS_URL = f"{NEON_AUTH_BASE_URL}/.well-known/jwks.json"
 
 # Inferred Origin from NEON_AUTH_BASE_URL
 from urllib.parse import urlparse
+
 _parsed_neon = urlparse(NEON_AUTH_BASE_URL)
 NEON_AUTH_ORIGIN = f"{_parsed_neon.scheme}://{_parsed_neon.netloc}"
 
@@ -27,6 +31,7 @@ AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
 
 # Redis client for token blacklist
 _redis_client = None
+
 
 def _get_redis_client():
     global _redis_client
@@ -122,14 +127,15 @@ async def decode_token(token: str) -> Optional[dict]:
             if NEON_AUTH_ORIGIN in iss:
                 signing_key = await _get_neon_signing_key(token)
                 return jwt.decode(
-                    token, 
-                    key=signing_key, 
-                    algorithms=["EdDSA"], 
+                    token,
+                    key=signing_key,
+                    algorithms=["EdDSA"],
                     issuer=NEON_AUTH_ORIGIN,
-                    audience=NEON_AUTH_ORIGIN
+                    audience=NEON_AUTH_ORIGIN,
                 )
         except JWTError as exc:
             import logging
+
             logging.getLogger(__name__).error(f"Neon Auth JWT validation failed: {exc}")
             return None
 
@@ -139,9 +145,12 @@ async def decode_token(token: str) -> Optional[dict]:
             # ── Auth0 Strategy ──
             if AUTH0_DOMAIN and "auth0.com" in iss:
                 jwk = await _get_auth0_jwk(token)
-                return jwt.decode(token, key=jwk, algorithms=["RS256"], audience=AUTH0_AUDIENCE)
+                return jwt.decode(
+                    token, key=jwk, algorithms=["RS256"], audience=AUTH0_AUDIENCE
+                )
         except JWTError as exc:
             import logging
+
             logging.getLogger(__name__).error(f"External JWT validation failed: {exc}")
             return None
 
@@ -154,6 +163,7 @@ async def decode_token(token: str) -> Optional[dict]:
             return None
 
     return None
+
 
 async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)):
     """
@@ -185,24 +195,24 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     # Session Persistence & Active Tracking
     client = _get_redis_client()
     session_key = f"active_session:{token[-20:]}"
     if not client.exists(session_key):
-         raise HTTPException(
+        raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has expired or was revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     # Update local telemetry (useful for load balancer observability)
     # This tracks which exact container/worker is handling the user in Redis
     backend_id = os.getenv("HOSTNAME", "unknown-worker")
-    client.hset(f"session_telemetry:{token[-20:]}", mapping={
-        "last_seen": str(datetime.now(timezone.utc)),
-        "backend": backend_id
-    })
+    client.hset(
+        f"session_telemetry:{token[-20:]}",
+        mapping={"last_seen": str(datetime.now(timezone.utc)), "backend": backend_id},
+    )
     client.expire(f"session_telemetry:{token[-20:]}", 3600)
 
     return payload
@@ -227,6 +237,7 @@ def get_current_user_id(current_user: dict = Depends(get_current_user)) -> int:
             detail="Invalid user identity format",
         )
 
+
 def is_admin_user(user_id: int = Depends(get_current_user_id)) -> int:
     """
     Dependency that ensures the current user has the 'admin' role.
@@ -235,6 +246,6 @@ def is_admin_user(user_id: int = Depends(get_current_user_id)) -> int:
     if not check_user_role(user_id, "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Administrative privileges required"
+            detail="Administrative privileges required",
         )
     return user_id

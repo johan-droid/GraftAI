@@ -1,6 +1,7 @@
 """
 SSO (OAuth2, OIDC) authentication implementation with Redis-backed state storage.
 """
+
 from datetime import datetime, timedelta, timezone
 import os
 import uuid
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Redis client for state storage (shared across workers)
 _redis_client = None
 
+
 def _get_redis_client():
     global _redis_client
     if _redis_client is None:
@@ -31,10 +33,12 @@ if not SECRET_KEY:
     # Fallback for dev only; production should raise error (already done in routes.py)
     SECRET_KEY = "insecure-dev-fallback"
 
+
 def _sign_state(state: str) -> str:
     """Sign a state string with HMAC-SHA256."""
     key = SECRET_KEY or "insecure-dev-fallback"
     return hmac.new(key.encode(), state.encode(), hashlib.sha256).hexdigest()
+
 
 def _verify_state(signed_state: str) -> str | None:
     """Verify a signed state and return the original state string."""
@@ -46,12 +50,13 @@ def _verify_state(signed_state: str) -> str | None:
         return state
     return None
 
+
 # SSRF protection: only allow these domains for userinfo_url
 ALLOWED_SSO_DOMAINS = [
     "api.github.com",
     "www.googleapis.com",
     "graph.microsoft.com",
-    "appleid.apple.com"
+    "appleid.apple.com",
 ]
 
 
@@ -80,11 +85,13 @@ def _get_oauth_state(state: str) -> dict | None:
     data = json.loads(state_data["data"])
     return data
 
+
 # Multi-provider configuration
 PROVIDERS = {
     "github": {
         "client_id": os.getenv("GITHUB_CLIENT_ID") or os.getenv("OAUTH2_CLIENT_ID"),
-        "client_secret": os.getenv("GITHUB_CLIENT_SECRET") or os.getenv("OAUTH2_CLIENT_SECRET"),
+        "client_secret": os.getenv("GITHUB_CLIENT_SECRET")
+        or os.getenv("OAUTH2_CLIENT_SECRET"),
         "auth_url": "https://github.com/login/oauth/authorize",
         "token_url": "https://github.com/login/oauth/access_token",
         "userinfo_url": "https://api.github.com/user",
@@ -120,13 +127,17 @@ PROVIDERS = {
 # During OAuth2 login the provider should return to the frontend callback endpoint.
 # This matches the existing Next.js `/auth-callback` page flow in frontend/src/app/auth-callback/page.tsx
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
-OAUTH2_REDIRECT_URI = os.getenv("OAUTH2_REDIRECT_URI", f"{APP_BASE_URL}/auth/sso/callback")
+OAUTH2_REDIRECT_URI = os.getenv(
+    "OAUTH2_REDIRECT_URI", f"{APP_BASE_URL}/auth/sso/callback"
+)
 
 
 def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard"):
     config = PROVIDERS.get(provider.lower())
     if not config:
-        raise HTTPException(status_code=400, detail=f"Provider {provider} not supported")
+        raise HTTPException(
+            status_code=400, detail=f"Provider {provider} not supported"
+        )
 
     client_id = config["client_id"]
     client_secret = config["client_secret"]
@@ -136,6 +147,7 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
 
     # Using sync discovery/init; create_authorization_url is local computation
     from authlib.integrations.requests_client import OAuth2Session
+
     session = OAuth2Session(
         client_id=client_id,
         client_secret=client_secret,
@@ -151,19 +163,25 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
     authorization_url, state = session.create_authorization_url(
         config["auth_url"], **extra_params
     )
-    
+
     # Sign the state to prevent tampering (SSRF/CSRF hardening)
     signature = _sign_state(state)
     signed_state = f"{state}:{signature}"
-    
-    _store_oauth_state(state, {
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "redirect_to": redirect_to,
-        "provider": provider.lower(),
-    }, ttl_seconds=300)
+
+    _store_oauth_state(
+        state,
+        {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "redirect_to": redirect_to,
+            "provider": provider.lower(),
+        },
+        ttl_seconds=300,
+    )
 
     return {
-        "authorization_url": authorization_url.replace(f"state={state}", f"state={signed_state}"),
+        "authorization_url": authorization_url.replace(
+            f"state={state}", f"state={signed_state}"
+        ),
         "state": signed_state,
         "expires_in_seconds": 300,
         "redirect_to": redirect_to,
@@ -175,13 +193,17 @@ async def complete_oauth2_flow(code: str, state: str):
     # Verify HMAC signature first
     original_state = _verify_state(state)
     if not original_state:
-        raise HTTPException(status_code=403, detail="OAuth state signature verification failed")
+        raise HTTPException(
+            status_code=403, detail="OAuth state signature verification failed"
+        )
 
     data = _get_oauth_state(original_state)
     if not data:
         raise RuntimeError("Invalid or expired state")
 
-    created_at = datetime.fromisoformat(data.get("created_at", datetime.now(timezone.utc).isoformat()))
+    created_at = datetime.fromisoformat(
+        data.get("created_at", datetime.now(timezone.utc).isoformat())
+    )
     if datetime.now(timezone.utc) - created_at > timedelta(minutes=5):
         raise RuntimeError("OAuth2 state expired")
 
@@ -193,7 +215,7 @@ async def complete_oauth2_flow(code: str, state: str):
     # Reconstruct Async Client
     client_id = config["client_id"]
     client_secret = config["client_secret"]
-    
+
     async with AsyncOAuth2Client(
         client_id=client_id,
         client_secret=client_secret,
@@ -214,10 +236,11 @@ async def complete_oauth2_flow(code: str, state: str):
     if userinfo_url:
         # SSRF Protection: validate userinfo_url against allowlist
         from urllib.parse import urlparse
+
         domain = urlparse(userinfo_url).netloc
         if domain not in ALLOWED_SSO_DOMAINS:
-             logger.error(f"Potential SSRF blocked: {userinfo_url}")
-             raise HTTPException(status_code=400, detail="Disallowed userinfo URL")
+            logger.error(f"Potential SSRF blocked: {userinfo_url}")
+            raise HTTPException(status_code=400, detail="Disallowed userinfo URL")
 
         # Standard OAuth2/OIDC: fetch user info via ASYNC client
         headers = {"Authorization": f"Bearer {token.get('access_token')}"}
@@ -234,6 +257,7 @@ async def complete_oauth2_flow(code: str, state: str):
                 # (token was already validated by Apple during exchange)
                 import base64
                 import json as _json
+
                 parts = id_token.split(".")
                 payload_b64 = parts[1] + "==" if len(parts) > 1 else ""
                 profile = _json.loads(base64.urlsafe_b64decode(payload_b64))
@@ -254,7 +278,9 @@ async def complete_oauth2_flow(code: str, state: str):
         or profile.get("given_name")
     )
     # Microsoft Graph returns mail or userPrincipalName
-    email = profile.get("email") or profile.get("mail") or profile.get("userPrincipalName")
+    email = (
+        profile.get("email") or profile.get("mail") or profile.get("userPrincipalName")
+    )
 
     return {
         "provider": provider_name,
@@ -266,4 +292,3 @@ async def complete_oauth2_flow(code: str, state: str):
         "token": token,
         "redirect_to": redirect_to,
     }
-

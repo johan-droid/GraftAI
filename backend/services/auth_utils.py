@@ -7,11 +7,11 @@ logger = logging.getLogger(__name__)
 
 # Argon2 is the winner of the Password Hashing Competition (PHC) and is recommended by OWASP/NIST.
 ph = PasswordHasher(
-    time_cost=3,      # Number of iterations
-    memory_cost=65536, # 64MB memory usage
-    parallelism=4,     # Number of threads
-    hash_len=32,       # Length of the hash
-    salt_len=16        # Length of the salt
+    time_cost=3,  # Number of iterations
+    memory_cost=65536,  # 64MB memory usage
+    parallelism=4,  # Number of threads
+    hash_len=32,  # Length of the hash
+    salt_len=16,  # Length of the salt
 )
 
 
@@ -52,8 +52,9 @@ def validate_password_complexity(password: str) -> bool:
     # Length check (NIST/OWASP recommendation: 12+)
     if len(password) < 12:
         return False
-    
+
     import re
+
     # Check for lowercase
     if not re.search(r"[a-z]", password):
         return False
@@ -66,5 +67,5 @@ def validate_password_complexity(password: str) -> bool:
     # Check for special characters
     if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
         return False
-        
+
     return True

@@ -1,6 +1,7 @@
 from .base import DBModel
 from typing import Optional
 
+
 class Organization(DBModel):
     id: int
     name: str

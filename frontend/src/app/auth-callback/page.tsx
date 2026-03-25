@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { setToken } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/api";
 
-export default function AuthCallback() {
+function AuthCallbackInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [status, setStatus] = useState("Processing...");
 
-  const code = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("code") : null;
-  const state = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("state") : null;
+  const code = searchParams.get("code");
+  const state = searchParams.get("state");
 
   useEffect(() => {
     if (!code || !state) {
@@ -57,18 +58,34 @@ export default function AuthCallback() {
 
   if (!code || !state) {
     return (
-      <main className="app-shell flex min-h-screen items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900">
-          <p className="text-base text-slate-700 dark:text-slate-200">Missing SSO code/state</p>
-        </div>
-      </main>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">
+        <p className="text-base text-slate-700 dark:text-slate-200">Missing SSO code or state parameter</p>
+      </div>
     );
   }
 
   return (
-    <main className="app-shell flex min-h-screen items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900">
-        <p className="text-base text-slate-700 dark:text-slate-200">{status}</p>
+    <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">
+      <p className="text-base text-slate-700 dark:text-slate-200">{status}</p>
+    </div>
+  );
+}
+
+export default function AuthCallback() {
+  return (
+    <main className="app-shell flex min-h-screen items-center justify-center px-4 py-8 relative overflow-hidden bg-slate-950">
+      {/* Background Ambience */}
+      <div className="hidden md:block absolute top-0 left-0 w-full h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="hidden md:block absolute bottom-0 right-0 w-[400px] h-[400px] bg-fuchsia-500/5 rounded-full blur-[100px] pointer-events-none" />
+      
+      <div className="z-10 relative">
+        <Suspense fallback={
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">
+            <p className="text-base text-slate-700 dark:text-slate-200">Preparing secure connection...</p>
+          </div>
+        }>
+          <AuthCallbackInner />
+        </Suspense>
       </div>
     </main>
   );

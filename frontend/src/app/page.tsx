@@ -1,187 +1,279 @@
 "use client";
 
 import Link from "next/link";
-import { motion, Variants } from "framer-motion";
-import { Calendar, Bot, ChevronRight, ShieldCheck, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence, Variants } from "framer-motion";
+import { 
+  Calendar, 
+  Bot, 
+  ChevronRight, 
+  ShieldCheck, 
+  Sparkles, 
+  Cpu, 
+  Globe, 
+  Layers, 
+  Zap,
+  Lock,
+  ArrowRight
+} from "lucide-react";
+
+const FEATURE_CARDS = [
+  {
+    id: "ai",
+    icon: <Bot className="w-6 h-6" />,
+    title: "Autonomous Copilot",
+    desc: "Advanced LLM orchestration that handles scheduling negotiations flawlessly.",
+    color: "from-violet-600 to-indigo-600",
+    glow: "rgba(124, 58, 237, 0.3)"
+  },
+  {
+    id: "sync",
+    icon: <Zap className="w-6 h-6" />,
+    title: "Instant Vector Sync",
+    desc: "Reactive AI memory that updates as soon as your calendar changes.",
+    color: "from-blue-600 to-cyan-600",
+    glow: "rgba(37, 99, 235, 0.3)"
+  },
+  {
+    id: "auth",
+    icon: <Lock className="w-6 h-6" />,
+    title: "Sovereign Auth",
+    desc: "Passwordless FIDO2 and SSO for enterprise-grade identity protection.",
+    color: "from-emerald-600 to-teal-600",
+    glow: "rgba(5, 150, 105, 0.3)"
+  },
+  {
+    id: "plugins",
+    icon: <Layers className="w-6 h-6" />,
+    title: "Infinite Plugins",
+    desc: "Extend your AI's capabilities with a vast ecosystem of third-party tools.",
+    color: "from-amber-500 to-orange-600",
+    glow: "rgba(245, 158, 11, 0.3)"
+  },
+  {
+    id: "proactive",
+    icon: <Sparkles className="w-6 h-6" />,
+    title: "Proactive Flow",
+    desc: "The assistant that predicts your next meeting slot before you ask.",
+    color: "from-rose-500 to-pink-600",
+    glow: "rgba(244, 63, 94, 0.3)"
+  },
+  {
+    id: "privacy",
+    icon: <ShieldCheck className="w-6 h-6" />,
+    title: "Zero-Knowledge",
+    desc: "Your data stays yours with granular, AI-enforced privacy controls.",
+    color: "from-slate-600 to-slate-800",
+    glow: "rgba(71, 85, 105, 0.3)"
+  }
+];
 
 export default function Home() {
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: { 
       opacity: 1,
-      transition: { staggerChildren: 0.12 }
+      transition: { staggerChildren: 0.1 }
     }
   };
 
   const itemVariants: Variants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+    hidden: { opacity: 0, y: 30 },
+    visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 20, stiffness: 100 } }
   };
 
   return (
-    <div className="app-shell flex flex-col min-h-[100dvh]">
-      <main className="flex-1 flex flex-col items-center px-5 relative overflow-hidden">
-        
-        {/* Background glow — hidden on small screens for performance */}
-        <div className="hidden md:block absolute top-[10%] left-1/4 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] pointer-events-none" />
-        <div className="hidden md:block absolute top-[40%] right-1/4 w-[400px] h-[400px] bg-fuchsia-500/10 rounded-full blur-[100px] pointer-events-none" />
+    <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-primary/30 overflow-x-hidden">
+      
+      {/* ── Background Layering ── */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/20 rounded-full blur-[120px] opacity-50" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-fuchsia-600/10 rounded-full blur-[120px] opacity-30" />
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-50 contrast-150" />
+      </div>
 
-        <motion.div 
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="w-full max-w-6xl z-10 flex flex-col items-center pt-16 md:pt-24 pb-20"
-        >
-          {/* ── Hero Section ── */}
-          <div className="flex flex-col items-center mb-24 md:mb-32">
-            <motion.div variants={itemVariants} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 mb-6 md:mb-8 text-xs md:text-sm font-medium">
-              <Sparkles className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              <span>Next-Gen AI Scheduling</span>
+      <nav className="relative z-50 flex items-center justify-between px-6 py-6 max-w-7xl mx-auto">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center shadow-lg shadow-primary/20">
+            <Cpu className="text-white w-6 h-6" />
+          </div>
+          <span className="text-xl font-bold tracking-tight text-white">GraftAI</span>
+        </div>
+        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
+          <Link href="#features" className="hover:text-white transition-colors">Technology</Link>
+          <Link href="/dashboard/plugins" className="hover:text-white transition-colors">Ecosystem</Link>
+          <Link href="/login" className="px-5 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 hover:bg-slate-700 transition-all text-white">Login</Link>
+        </div>
+        <Link href="/login" className="md:hidden px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold">Start</Link>
+      </nav>
+
+      <main className="relative z-10">
+        {/* ── Hero Section ── */}
+        <section className="pt-20 pb-32 px-6 max-w-7xl mx-auto text-center">
+          <motion.div 
+            initial="hidden" 
+            animate="visible" 
+            variants={containerVariants}
+            className="flex flex-col items-center"
+          >
+            <motion.div variants={itemVariants} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary border border-primary/20 mb-8 text-xs font-bold uppercase tracking-widest">
+              <Sparkles className="w-4 h-4" />
+              Sovereign Scheduling Engine
             </motion.div>
 
-            <motion.h1 variants={itemVariants} className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-center tracking-tight mb-4 md:mb-6 leading-[1.1]">
-              Schedule Smarter <br className="hidden sm:block" />
-              with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-fuchsia-400">GraftAI Copilot</span>
+            <motion.h1 variants={itemVariants} className="text-5xl md:text-8xl font-black text-white leading-[0.9] tracking-tighter mb-8 drop-shadow-2xl">
+              ORCHESTRATE <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-fuchsia-400 to-primary bg-[length:200%_auto] animate-gradient">EVERY MOMENT</span>
             </motion.h1>
 
-            <motion.p variants={itemVariants} className="text-base md:text-xl text-slate-400 max-w-2xl text-center mb-8 md:mb-10 leading-relaxed px-2">
-              The autonomous AI assistant that manages your calendar, syncs with Cal.com, and handles meeting requests perfectly.
+            <motion.p variants={itemVariants} className="text-lg md:text-2xl text-slate-400 max-w-3xl mb-12 leading-relaxed">
+              GraftAI is the world's first autonomous calendar layer that syncs your life with an 
+              intelligent vector loop. No more booking calls. No more double bookings.
             </motion.p>
 
-            <motion.div variants={itemVariants} className="flex flex-col gap-3 w-full max-w-sm sm:max-w-none sm:flex-row sm:items-center sm:gap-4 sm:w-auto">
+            <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
               <Link
                 href="/login"
-                className="w-full sm:w-auto relative group flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 md:px-8 md:py-4 text-sm md:text-base font-semibold text-white transition-all hover:bg-primary/90 hover:shadow-[0_0_30px_rgba(79,70,229,0.4)]"
+                className="group relative px-8 py-5 bg-primary rounded-2xl text-lg font-bold text-white shadow-[0_0_40px_rgba(79,70,229,0.3)] hover:scale-105 transition-all overflow-hidden flex items-center justify-center gap-2"
               >
-                Get Started Free
-                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                Deploy AI Copilot
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link
                 href="/dashboard"
-                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900/50 backdrop-blur px-6 py-3.5 md:px-8 md:py-4 text-sm md:text-base font-medium text-slate-300 transition-all hover:bg-slate-800 hover:text-white"
+                className="px-8 py-5 bg-slate-900 border border-slate-800 rounded-2xl text-lg font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center"
               >
-                Access Dashboard
+                Open Dashboard
               </Link>
             </motion.div>
+          </motion.div>
+        </section>
+
+        {/* ── Hovering Card System ── */}
+        <section id="features" className="py-24 px-6 max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div className="max-w-xl">
+              <h2 className="text-3xl md:text-5xl font-bold text-white mb-4 tracking-tight">The Stack of Sovereignty</h2>
+              <p className="text-slate-400 text-lg">Layered intelligence designed to give you back 40% of your work week.</p>
+            </div>
+            <Link href="/dashboard/plugins" className="flex items-center gap-2 text-primary font-bold hover:underline">
+              Explore Plugin Marketplace <ChevronRight className="w-4 h-4" />
+            </Link>
           </div>
 
-          {/* ── Features Section ── */}
-          <motion.div variants={itemVariants} className="w-full">
-            <div className="text-center mb-12 md:mb-16">
-              <h2 className="text-2xl md:text-4xl font-bold text-white mb-4">Everything you need to automate your day</h2>
-              <p className="text-slate-400 text-sm md:text-base max-w-2xl mx-auto">
-                GraftAI provides a complete suite of tools to manage your time, secure your identity, and extend your capabilities.
-              </p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {FEATURE_CARDS.map((feature) => (
+              <motion.div
+                key={feature.id}
+                onMouseEnter={() => setHoveredCard(feature.id)}
+                onMouseLeave={() => setHoveredCard(null)}
+                whileHover={{ y: -8 }}
+                className="relative group h-full"
+              >
+                {/* Layered Glow Effect */}
+                <div 
+                  className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl z-0"
+                  style={{ backgroundColor: feature.glow }}
+                />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {[
-                {
-                  id: "ai",
-                  icon: <Bot className="w-6 h-6 text-primary" />,
-                  title: "Autonomous AI Copilot",
-                  desc: "Let our advanced LLM orchestration handle complex booking intent, negotiations, and scheduling back-and-forth seamlessly."
-                },
-                {
-                  id: "sync",
-                  icon: <Calendar className="w-6 h-6 text-fuchsia-400" />,
-                  title: "Smart Calendar Sync",
-                  desc: "Deep two-way integration with Cal.com and existing calendar workflows to ensure you're never double-booked."
-                },
-                {
-                  id: "auth",
-                  icon: <ShieldCheck className="w-6 h-6 text-emerald-400" />,
-                  title: "Enterprise-Grade Auth",
-                  desc: "Passwordless magic links, FIDO2/WebAuthn passkeys, and enterprise SSO (Google, GitHub, Microsoft) out of the box."
-                },
-                {
-                  id: "plugins",
-                  icon: <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" /></svg>,
-                  title: "Extensible Plugins",
-                  desc: "Browse and install powerful plugins from the marketplace to connect GraftAI with your favorite external tools and APIs."
-                },
-                {
-                  id: "proactive",
-                  icon: <Sparkles className="w-6 h-6 text-blue-400" />,
-                  title: "Proactive Suggestions",
-                  desc: "The system learns your habits and proactively suggests meeting times, breaks, and context preparation before you even ask."
-                },
-                {
-                  id: "privacy",
-                  icon: <svg className="w-6 h-6 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>,
-                  title: "Granular Privacy Controls",
-                  desc: "You own your data. Manage fine-grained consent settings for AI processing, data tracking, and third-party access directly in settings."
-                }
-              ].map((feature) => (
-                <div key={feature.id} className="bg-slate-900/40 backdrop-blur-sm border border-slate-800 rounded-2xl p-6 flex flex-col gap-4 group hover:bg-slate-800/60 hover:-translate-y-1 transition-all duration-300">
-                  <div className="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center border border-slate-800 group-hover:border-slate-700 transition-colors">
+                <div className="relative z-10 h-full bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 transition-all group-hover:border-slate-700/50 group-hover:bg-slate-900/80 flex flex-col items-start gap-6">
+                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white shadow-lg`}>
                     {feature.icon}
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">{feature.title}</h3>
-                    <p className="text-slate-400 text-sm leading-relaxed">{feature.desc}</p>
+                    <h3 className="text-xl font-bold text-white mb-3 group-hover:text-primary transition-colors">
+                      {feature.title}
+                    </h3>
+                    <p className="text-slate-400 leading-relaxed font-medium">
+                      {feature.desc}
+                    </p>
+                  </div>
+                  
+                  <div className="mt-auto pt-6 w-full flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-xs font-black uppercase text-slate-500">Feature Ready</span>
+                    <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
+                      <ChevronRight className="w-4 h-4 text-white" />
+                    </div>
                   </div>
                 </div>
-              ))}
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── CTA / Layering Demo ── */}
+        <section className="py-24 px-6">
+          <div className="max-w-6xl mx-auto rounded-[3rem] bg-gradient-to-br from-primary/20 via-slate-900 to-fuchsia-900/10 border border-primary/20 p-8 md:p-20 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 rounded-full blur-[80px] -mr-32 -mt-32" />
+            
+            <div className="relative z-10 flex flex-col md:flex-row items-center gap-12">
+              <div className="flex-1 text-center md:text-left">
+                <h2 className="text-4xl md:text-6xl font-black text-white mb-6 leading-none">JOIN THE <br /> AUTONOMY.</h2>
+                <p className="text-slate-400 text-lg mb-8 max-w-md mx-auto md:mx-0 font-medium">
+                  Thousands of high-performer teams use GraftAI to reclaim their focus. Start your sovereign schedule today.
+                </p>
+                <Link href="/login" className="inline-flex items-center gap-2 px-10 py-5 bg-white text-black rounded-2xl font-black hover:bg-slate-200 transition-all uppercase tracking-tighter">
+                  Claim Your Handle <ArrowRight className="w-5 h-5" />
+                </Link>
+              </div>
+              
+              <div className="relative w-full max-w-sm">
+                {/* Floating layering icons */}
+                <motion.div 
+                  animate={{ y: [-10, 10, -10] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                  className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-2xl relative z-20"
+                >
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center"><Bot className="text-primary w-5 h-5"/></div>
+                    <div>
+                      <div className="h-2 w-24 bg-slate-700 rounded-full mb-2" />
+                      <div className="h-2 w-16 bg-slate-800 rounded-full" />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="h-2 w-full bg-slate-800 rounded-full" />
+                    <div className="h-2 w-3/4 bg-slate-800 rounded-full" />
+                  </div>
+                </motion.div>
+                
+                <motion.div 
+                  animate={{ y: [10, -10, 10] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                  className="absolute -top-10 -right-10 bg-fuchsia-600/20 border border-fuchsia-500/30 p-4 rounded-2xl backdrop-blur-md z-30 shadow-fuchsia-500/20 shadow-xl"
+                >
+                  <Globe className="text-white w-6 h-6" />
+                </motion.div>
+
+                <motion.div 
+                   initial={{ opacity: 0.5 }}
+                   className="absolute -bottom-6 -left-6 w-32 h-32 bg-primary/20 rounded-full blur-3xl z-10" 
+                />
+              </div>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </section>
       </main>
 
-      {/* ── Footer ── */}
-      <footer className="border-t border-slate-800 bg-slate-950/50 py-12 px-5 md:px-10">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-12">
-          <div className="md:col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center">
-                <span className="text-white font-bold text-sm leading-none">G</span>
-              </div>
-              <span className="text-white font-bold text-lg">GraftAI</span>
-            </div>
-            <p className="text-slate-500 text-sm leading-relaxed mb-6">
-              The next generation of autonomous scheduling and AI orchestration for modern professionals.
-            </p>
+      <footer className="mt-20 border-t border-slate-900 py-16 px-6">
+        <div className="max-w-7xl mx-auto flex flex-col items-center gap-12 text-center text-slate-500">
+          <div className="flex flex-col items-center gap-2">
+            <Cpu className="w-8 h-8 text-slate-700"/>
+            <span className="font-bold text-white tracking-widest text-sm uppercase">GraftAI Sovereign</span>
           </div>
-          
-          <div>
-            <h4 className="text-white font-medium mb-4">Product</h4>
-            <ul className="space-y-3 text-sm">
-              <li><Link href="#features" className="text-slate-400 hover:text-primary transition-colors">Features</Link></li>
-              <li><Link href="#" className="text-slate-400 hover:text-primary transition-colors">Integrations</Link></li>
-              <li><Link href="/dashboard/plugins" className="text-slate-400 hover:text-primary transition-colors">Plugins</Link></li>
-              <li><Link href="#" className="text-slate-400 hover:text-primary transition-colors">Pricing</Link></li>
-            </ul>
+          <p className="max-w-lg text-sm font-medium leading-relaxed">
+            The next generation of autonomous scheduling and AI orchestration. Built for those who 
+            value time more than anything else. Developed by the Graft Protocol Team.
+          </p>
+          <div className="flex gap-8 text-xs font-black uppercase tracking-widest">
+            <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+            <Link href="/terms" className="hover:text-white transition-colors">Security</Link>
+            <Link href="https://github.com/johan-droid" className="hover:text-white transition-colors">Repo</Link>
           </div>
-          
-          <div>
-            <h4 className="text-white font-medium mb-4">Company</h4>
-            <ul className="space-y-3 text-sm">
-              <li><Link href="#" className="text-slate-400 hover:text-primary transition-colors">About Us</Link></li>
-              <li><Link href="#" className="text-slate-400 hover:text-primary transition-colors">Blog</Link></li>
-              <li><Link href="#" className="text-slate-400 hover:text-primary transition-colors">Careers</Link></li>
-              <li><Link href="#" className="text-slate-400 hover:text-primary transition-colors">Contact</Link></li>
-            </ul>
-          </div>
-          
-          <div>
-            <h4 className="text-white font-medium mb-4">Legal</h4>
-            <ul className="space-y-3 text-sm">
-              <li><Link href="/privacy" className="text-slate-400 hover:text-primary transition-colors">Privacy Policy</Link></li>
-              <li><Link href="/terms" className="text-slate-400 hover:text-primary transition-colors">Terms of Service</Link></li>
-              <li><Link href="/dashboard/settings" className="text-slate-400 hover:text-primary transition-colors">Cookie Preferences</Link></li>
-              <li><Link href="/security" className="text-slate-400 hover:text-primary transition-colors">Security</Link></li>
-            </ul>
-          </div>
-        </div>
-        
-        <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-slate-500 text-sm">© {new Date().getFullYear()} GraftAI Inc. All rights reserved.</p>
-          <div className="flex gap-4">
-            {/* Social SVGs could go here */}
-            <a href="#" className="text-slate-500 hover:text-white transition-colors">Twitter</a>
-            <a href="#" className="text-slate-500 hover:text-white transition-colors">GitHub</a>
-            <a href="#" className="text-slate-500 hover:text-white transition-colors">LinkedIn</a>
-          </div>
+          <p className="text-[10px] font-bold text-slate-800">© 2026 GRAFT AI PROTOCOL. ALL RIGHTS RESERVED.</p>
         </div>
       </footer>
     </div>

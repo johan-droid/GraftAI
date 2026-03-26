@@ -20,19 +20,20 @@ function AuthCallbackInner() {
     const handleSync = async () => {
       try {
         const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || API_BASE_URL;
-        
-        // 1. Try Neon Auth Sync first if we have a session
+        // 1. Try Better Auth Sync first if we have a session
         const { authClient } = await import("@/lib/auth-client");
         const session = await authClient.getSession();
-        
+        console.log("Better Auth Session Context:", session);
         if (session?.data) {
           setStatus("Synchronizing your account...");
           const syncResponse = await fetch(`${backendUrl}/api/v1/auth/sync`, {
             method: "POST",
-            headers: { "Accept": "application/json" },
+            headers: {
+              "Accept": "application/json",
+              "Authorization": `Bearer ${session.data.session.token}`
+            },
             credentials: "include",
           });
-          
           if (syncResponse.ok) {
             router.replace("/dashboard");
             return;
@@ -56,7 +57,6 @@ function AuthCallbackInner() {
             router.replace(data.redirect_to || "/dashboard");
             return;
           }
-          
           setStatus(data.detail || "Authentication failed");
           return;
         }
@@ -72,14 +72,6 @@ function AuthCallbackInner() {
     handleSync();
   }, [code, state, router, login]);
 
-  if (!code || !state) {
-    return (
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">
-        <p className="text-base text-slate-700 dark:text-slate-200">Missing SSO code or state parameter</p>
-      </div>
-    );
-  }
-
   return (
     <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">
       <p className="text-base text-slate-700 dark:text-slate-200">{status}</p>
@@ -93,7 +85,6 @@ export default function AuthCallback() {
       {/* Background Ambience */}
       <div className="hidden md:block absolute top-0 left-0 w-full h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="hidden md:block absolute bottom-0 right-0 w-[400px] h-[400px] bg-fuchsia-500/5 rounded-full blur-[100px] pointer-events-none" />
-      
       <div className="z-10 relative">
         <Suspense fallback={
           <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">

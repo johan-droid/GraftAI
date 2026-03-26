@@ -104,6 +104,25 @@ PROVIDERS = {
         "token_url": "https://oauth2.googleapis.com/token",
         "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
         "scope": "openid profile email",
+        "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
+    },
+    "microsoft": {
+        "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
+        "client_secret": os.getenv("MICROSOFT_CLIENT_SECRET"),
+        "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+        "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        "userinfo_url": "https://graph.microsoft.com/v1.0/me",
+        "scope": "openid profile email User.Read",
+        "redirect_uri": os.getenv("MICROSOFT_REDIRECT_URI"),
+    },
+    "apple": {
+        "client_id": os.getenv("APPLE_CLIENT_ID"),
+        "client_secret": os.getenv("APPLE_CLIENT_SECRET"),
+        "auth_url": "https://appleid.apple.com/auth/authorize",
+        "token_url": "https://appleid.apple.com/auth/token",
+        "userinfo_url": None,  # Apple returns user info in the ID token
+        "scope": "name email",
+        "response_mode": "form_post",  # Apple requires form_post
     },
     "microsoft": {
         "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
@@ -148,11 +167,14 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
     # Using sync discovery/init; create_authorization_url is local computation
     from authlib.integrations.requests_client import OAuth2Session
 
+    # Use provider-specific redirect URI if available, otherwise global default
+    redirect_uri = config.get("redirect_uri") or OAUTH2_REDIRECT_URI
+    
     session = OAuth2Session(
         client_id=client_id,
         client_secret=client_secret,
         scope=config["scope"],
-        redirect_uri=OAUTH2_REDIRECT_URI,
+        redirect_uri=redirect_uri,
     )
 
     # Apple requires response_mode=form_post
@@ -216,11 +238,14 @@ async def complete_oauth2_flow(code: str, state: str):
     client_id = config["client_id"]
     client_secret = config["client_secret"]
 
+    # Use provider-specific redirect URI if available, otherwise global default
+    redirect_uri = config.get("redirect_uri") or OAUTH2_REDIRECT_URI
+
     async with AsyncOAuth2Client(
         client_id=client_id,
         client_secret=client_secret,
         scope=config["scope"],
-        redirect_uri=OAUTH2_REDIRECT_URI,
+        redirect_uri=redirect_uri,
         state=state,
     ) as session:
         token = await session.fetch_token(

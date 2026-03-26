@@ -172,21 +172,38 @@ async def verify_better_auth_session(token: str, db: AsyncSession) -> Optional[d
     from sqlalchemy import select, text
     try:
         # Better Auth session tokens are stored in the 'session' table as 'token'
-        result = await db.execute(text("SELECT user_id FROM session WHERE token = :t AND expires_at > :now"), 
-                                {"t": token, "now": datetime.now(timezone.utc)})
+        # We check the camelCase columns populated by Better Auth
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Verifying token: {token[:10]}...")
+        
+        result = await db.execute(text('SELECT "userId", "expiresAt" FROM public.session WHERE token = :t'), {"t": token})
         row = result.fetchone()
-        if row:
-            user_id = row[0]
-            # Fetch user to get email for payload parity
-            user_res = await db.execute(text("SELECT id, email, name FROM users WHERE id = :uid"), {"uid": user_id})
-            user = user_res.fetchone()
-            if user:
-                return {
-                    "sub": str(user[0]),
-                    "email": user[1],
-                    "name": user[2],
-                    "type": "better-auth"
-                }
+        if not row:
+            print("DEBUG: Session record NOT found in database.")
+            return None
+            
+        user_id, expires_at = row
+        print(f"DEBUG: Found session. UserID: {user_id}, ExpiresAt: {expires_at}")
+        
+        if expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+            print("DEBUG: Session is EXPIRED.")
+            return None
+
+        # Fetch user
+        user_res = await db.execute(text('SELECT id, email, name FROM public.users WHERE id = :uid'), {"uid": user_id})
+        user = user_res.fetchone()
+        if not user:
+            print(f"DEBUG: User {user_id} NOT found in users table.")
+            return None
+            
+        print(f"DEBUG: Session verified for user: {user[1]}")
+        return {
+            "sub": str(user[0]),
+            "email": user[1],
+            "name": user[2],
+            "type": "better-auth"
+        }
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Better Auth session verification failed: {e}")
@@ -202,12 +219,17 @@ async def get_current_user(
     Get current user payload from either Authorization: Bearer <token> or HttpOnly cookie.
     Allows both header and cookie-based auth for maximum flexibility and security.
     """
-    # Prefer cookie if available (higher security)
-    cookie_token = request.cookies.get("graftai_access_token") or request.cookies.get("better-auth.session_token")
-    if cookie_token:
-        token = cookie_token
+    # Prefer Header token if it was provided (more explicit)
+    if not token:
+        cookie_token = request.cookies.get("graftai_access_token") or request.cookies.get("better-auth.session_token")
+        if cookie_token:
+            print(f"DEBUG: Using cookie token: {cookie_token[:10]}...")
+            token = cookie_token
+    else:
+        print(f"DEBUG: Using provided header token: {token[:10]}...")
 
     if not token:
+        print("DEBUG: NO TOKEN FOUND.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session not found or expired",
@@ -274,7 +296,8 @@ def get_current_user_id(current_user: dict = Depends(get_current_user)) -> int:
             detail="User identity (sub) missing from token",
         )
     try:
-        return int(user_id_raw)
+        # We no longer strictly cast to int because IDs are now Strings (Better Auth format)
+        return user_id_raw
     except (ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

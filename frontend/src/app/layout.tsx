@@ -30,7 +30,7 @@ export default function RootLayout({
       suppressHydrationWarning
       data-scroll-behavior="smooth"
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground selection:bg-primary/30">
+      <body className="min-h-full flex flex-col bg-background text-foreground selection:bg-primary/30" suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

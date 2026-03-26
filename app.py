@@ -36,8 +36,18 @@ BACKEND_ROOT = PROJECT_ROOT / "backend"
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-# load env from backend/.env if exists (optional for local dev)
+# load env from project root or backend/.env if exists (optional for local dev)
 from dotenv import load_dotenv
+load_dotenv() # Load from current directory first
+load_dotenv(PROJECT_ROOT / ".env")
 load_dotenv(BACKEND_ROOT / ".env")
 
 from backend.api.main import app  # noqa: E402, F401
+
+if __name__ == "__main__":
+    import uvicorn
+    # Use standard host/port or env vars
+    port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
+    print(f"Starting server on {host}:{port}")
+    uvicorn.run("app:app", host=host, port=port, reload=True, log_level="debug")

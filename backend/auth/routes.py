@@ -358,14 +358,14 @@ async def sync_session(
     email = current_user.get("email")
     
     # Ensure user exists in local UserTable (safety check for external providers)
-    result = await db.execute(select(UserTable).where(UserTable.id == int(user_id)))
+    result = await db.execute(select(UserTable).where(UserTable.id == user_id))
     user = result.scalars().first()
     
     if not user:
         # This shouldn't happen with Better Auth as it writes to the same DB,
         # but kept for robustness against other future providers.
         user = UserTable(
-            id=int(user_id),
+            id=user_id,
             email=email,
             full_name=current_user.get("name", email.split("@")[0]),
             is_active=True

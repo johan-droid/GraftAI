@@ -87,3 +87,4 @@ Ensure `frontend/.env.local` contains:
 - **Route Collisions**: Any legacy `/api/auth/[...path]` routes must be removed to avoid conflicts with `[...auth]`.
 - **SSL Handling**: The `pg.Pool` is configured with `rejectUnauthorized: false` for Neon compatibility.
 - **Next.js Version**: The project is strictly optimized for Next.js 16+ using Turbopack.
+- **Dynamic Routes**: The `[...auth]` route is marked with `force-dynamic` to ensure compatibility with Better Auth handlers during build.

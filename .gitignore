@@ -68,4 +68,7 @@ frontend/.next/
 frontend/out/
 backend/__pycache__/
 *.log
+build_log*.txt
 
+# Vercel
+.vercel/

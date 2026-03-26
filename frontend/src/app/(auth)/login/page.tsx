@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
+import { authClient, signInSocial } from "@/lib/auth-client";
+import { ssoStart } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, ArrowRight, Loader2, KeyRound, Fingerprint, Shield } from "lucide-react";
 
@@ -35,7 +36,7 @@ export default function LoginPage() {
       const { error: authError } = await authClient.signIn.email({
         email,
         password,
-        callbackURL: "/dashboard",
+        callbackURL: "/auth-callback",
       });
 
       if (authError) {
@@ -54,13 +55,21 @@ export default function LoginPage() {
   const handleOAuthLogin = async (provider: OAuthProvider) => {
     setLoading(true);
     setError("");
+
     try {
+      // Use Neon Auth Client for consistency and robustness
       await authClient.signIn.social({
-        provider,
-        callbackURL: "/dashboard",
+        provider: provider as "github" | "google",
+        callbackURL: "/auth-callback", // Redirect directly to dashboard after Neon handles it
       });
-    } catch (err) {
-      setError((err as Error).message || "Failed to initiate SSO");
+      return;
+    } catch (err: any) {
+      const msg = (err?.message || "").toString().toLowerCase();
+      if (msg.includes("400") || msg.includes("bad request") || msg.includes("unauthorized")) {
+        setError("Social login is unavailable right now. Please use password login or try again later.");
+      } else {
+        setError(err?.message || "Failed to initiate social login");
+      }
       setLoading(false);
     }
   };
@@ -73,7 +82,7 @@ export default function LoginPage() {
     try {
       const { error: authError } = await authClient.signIn.magicLink({
         email: magicEmail,
-        callbackURL: "/dashboard",
+        callbackURL: "/auth-callback",
       });
       if (authError) throw authError;
       setMagicSent(true);

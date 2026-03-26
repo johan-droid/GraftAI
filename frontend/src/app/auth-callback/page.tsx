@@ -17,46 +17,59 @@ function AuthCallbackInner() {
   const state = searchParams.get("state");
 
   useEffect(() => {
-    if (!code || !state) {
-      return;
-    }
-
-    const fetchCallback = async () => {
+    const handleSync = async () => {
       try {
         const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || API_BASE_URL;
-        const response = await fetch(
-          `${backendUrl}/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
-          {
-            headers: {
-              "Accept": "application/json",
-            },
-            credentials: "include", // Keep cookies from backend for session
+        
+        // 1. Try Neon Auth Sync first if we have a session
+        const { authClient } = await import("@/lib/auth-client");
+        const session = await authClient.getSession();
+        
+        if (session?.data) {
+          setStatus("Synchronizing your account...");
+          const syncResponse = await fetch(`${backendUrl}/api/v1/auth/sync`, {
+            method: "POST",
+            headers: { "Accept": "application/json" },
+            credentials: "include",
+          });
+          
+          if (syncResponse.ok) {
+            router.replace("/dashboard");
+            return;
           }
-        );
-        const data = await response.json();
+        }
 
-        if (!response.ok) {
-          const errorMsg = data.detail || `Server error (${response.status})`;
-          console.error("SSO Error:", data);
-          setStatus(errorMsg);
+        // 2. Fallback to legacy code/state flow if present
+        if (code && state) {
+          setStatus("Authenticating via legacy flow...");
+          const response = await fetch(
+            `${backendUrl}/api/v1/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
+            {
+              headers: { "Accept": "application/json" },
+              credentials: "include",
+            }
+          );
+          const data = await response.json();
+
+          if (response.ok && data.token?.access_token) {
+            await login(data.token.access_token);
+            router.replace(data.redirect_to || "/dashboard");
+            return;
+          }
+          
+          setStatus(data.detail || "Authentication failed");
           return;
         }
 
-        if (data.token?.access_token) {
-          await login(data.token.access_token);
-          const finalRedirect = data.redirect_to || "/dashboard";
-          router.replace(finalRedirect);
-          return;
-        }
-
-        setStatus("No access token returned from callback");
+        setStatus("No active session found. Redirecting to login...");
+        setTimeout(() => router.replace("/login"), 2000);
       } catch (err) {
-        console.error("Fetch failure:", err);
-        setStatus("Connection error: Ensure NEXT_PUBLIC_API_BASE_URL is set on Vercel.");
+        console.error("Auth callback failure:", err);
+        setStatus("An error occurred during authentication. Please log in again.");
       }
     };
 
-    fetchCallback();
+    handleSync();
   }, [code, state, router, login]);
 
   if (!code || !state) {

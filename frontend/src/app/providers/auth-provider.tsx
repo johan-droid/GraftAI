@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext } from "react";
-import { getSession, signOut } from "@/lib/auth-client";
+import { getSessionSafe, signOut } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
 // Define a type for the user matching Neon Auth structure
@@ -32,9 +32,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function loadSession() {
       setLoading(true);
       try {
-        const response = await getSession();
+        const response = await getSessionSafe();
         if (!active) return;
-        setSession(response?.data?.session ?? null);
+        setSession(response?.data ?? null);
       } catch (err) {
         console.error("Session load failure", err);
         if (active) setSession(null);

@@ -291,15 +291,15 @@ async def sso_callback(
     is_navigation = not fetch_param and not is_json_accept
 
     if is_navigation:
-        # STEP 1: Browser redirect from Google → send to frontend. DO NOT consume state.
-        frontend_base = os.getenv(
-            "FRONTEND_BASE_URL", "https://graft-ai-two.vercel.app"
-        ).rstrip("/")
-        # The frontend will then call back with ?fetch=true
-        return RedirectResponse(
-            f"{frontend_base}/auth-callback?code={code}&state={state}",
-            status_code=302,
-        )
+        # STEP 1: Browser redirect from provider → send to frontend callback page.
+        # This does not consume state, the second (fetch=true) call does.
+        frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+
+        # If no frontend route is present, `auth-callback` will be 404 from the frontend side.
+        # This almost always means the callback URL used in provider settings is wrong.
+        redirect_url = f"{frontend_base}/auth-callback?code={code}&state={state}"
+
+        return RedirectResponse(redirect_url, status_code=302)
 
     # STEP 2: Frontend API call → complete the OAuth flow (consumes the state).
     try:
@@ -343,6 +343,60 @@ async def sso_callback(
         return response
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/sync")
+async def sync_session(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Synchronize a Neon Auth session with the local database and Redis cache.
+    This ensures that users logging in via the frontend SDK are tracked locally.
+    """
+    from backend.auth.schemes import decode_token
+    
+    # Check for token in cookie or header
+    token = request.cookies.get("better-auth.session_token") or request.headers.get("Authorization", "").replace("Bearer ", "")
+    
+    if not token:
+        logger.error("Sync attempted without session token")
+        raise HTTPException(status_code=401, detail="No session token found to sync")
+
+    payload = await decode_token(token)
+    if not payload:
+        logger.error("Sync attempted with invalid token")
+        raise HTTPException(status_code=401, detail="Invalid session token")
+
+    email = payload.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Token missing email claim")
+
+    # Sync user to database
+    result = await db.execute(select(UserTable).where(UserTable.email == email))
+    user = result.scalars().first()
+    if not user:
+        async with db.begin():
+            user = UserTable(
+                email=email,
+                full_name=payload.get("name", email.split("@")[0]),
+                is_active=True
+            )
+            db.add(user)
+        # Re-fetch after creation
+        result = await db.execute(select(UserTable).where(UserTable.email == email))
+        user = result.scalars().first()
+    
+    user_id = str(user.id)
+
+    # Register in Redis to satisfy GraftAI's stateful session requirement
+    client = _get_redis_client()
+    session_key = f"active_session:{token[-20:]}"
+    client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, user_id)
+
+    logger.info(f"Synchronized Neon Auth session for user {user_id}")
+    return {"status": "synchronized", "user_id": user_id}
+
 
 
 @router.post("/passwordless/request")

@@ -36,7 +36,7 @@ export default function RegisterPage() {
         email,
         password,
         name: fullName,
-        callbackURL: "/dashboard",
+        callbackURL: "/auth-callback",
       });
 
       if (authError) {

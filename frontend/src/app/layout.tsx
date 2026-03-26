@@ -28,6 +28,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
       suppressHydrationWarning
+      data-scroll-behavior="smooth"
     >
       <body className="min-h-full flex flex-col bg-background text-foreground selection:bg-primary/30">
         <AuthProvider>{children}</AuthProvider>

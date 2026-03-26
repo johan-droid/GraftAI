@@ -91,22 +91,22 @@ export default function Home() {
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/20 rounded-full blur-[120px] opacity-50" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-fuchsia-600/10 rounded-full blur-[120px] opacity-30" />
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-50 contrast-150" />
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-20 brightness-50 contrast-150" />
       </div>
 
       <nav className="relative z-50 flex items-center justify-between px-6 py-6 max-w-7xl mx-auto">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center shadow-lg shadow-primary/20">
-            <Cpu className="text-white w-6 h-6" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center shadow-md shadow-primary/15">
+            <Cpu className="text-white w-5 h-5" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">GraftAI</span>
+          <span className="text-lg font-semibold tracking-tight text-white">GraftAI</span>
         </div>
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
+        <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
           <Link href="#features" className="hover:text-white transition-colors">Technology</Link>
           <Link href="/dashboard/plugins" className="hover:text-white transition-colors">Ecosystem</Link>
-          <Link href="/login" className="px-5 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 hover:bg-slate-700 transition-all text-white">Login</Link>
+          <Link href="/login" className="px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:bg-slate-700 transition-all text-white text-sm">Login</Link>
         </div>
-        <Link href="/login" className="md:hidden px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold">Start</Link>
+        <Link href="/login" className="md:hidden px-3 py-2 rounded-lg bg-primary text-white text-sm font-semibold">Start</Link>
       </nav>
 
       <main className="relative z-10">
@@ -123,28 +123,28 @@ export default function Home() {
               Sovereign Scheduling Engine
             </motion.div>
 
-            <motion.h1 variants={itemVariants} className="text-5xl md:text-8xl font-black text-white leading-[0.9] tracking-tighter mb-8 drop-shadow-2xl">
+            <motion.h1 variants={itemVariants} className="text-4xl md:text-6xl font-extrabold text-white leading-[1.02] tracking-tight mb-6 drop-shadow-lg">
               ORCHESTRATE <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-fuchsia-400 to-primary bg-[length:200%_auto] animate-gradient">EVERY MOMENT</span>
             </motion.h1>
 
-            <motion.p variants={itemVariants} className="text-lg md:text-2xl text-slate-400 max-w-3xl mb-12 leading-relaxed">
-              GraftAI is the world&apos;s first autonomous calendar layer that syncs your life with an 
-              intelligent vector loop. No more booking calls. No more double bookings.
+            <motion.p variants={itemVariants} className="text-base md:text-lg text-slate-400 max-w-3xl mb-8 leading-relaxed">
+              GraftAI is an autonomous calendar layer that keeps your schedule in sync with
+              intelligent memory and conflict-free orchestration. Fewer meetings, more focus.
             </motion.p>
 
-            <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+            <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
               <Link
                 href="/login"
-                className="group relative px-8 py-5 bg-primary rounded-2xl text-lg font-bold text-white shadow-[0_0_40px_rgba(79,70,229,0.3)] hover:scale-105 transition-all overflow-hidden flex items-center justify-center gap-2"
+                className="group relative px-6 py-3 bg-primary rounded-xl text-sm md:text-base font-semibold text-white shadow-md hover:scale-102 transition-all overflow-hidden flex items-center justify-center gap-2"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/15 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-900" />
                 Deploy AI Copilot
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link
                 href="/dashboard"
-                className="px-8 py-5 bg-slate-900 border border-slate-800 rounded-2xl text-lg font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center"
+                className="px-6 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm md:text-base font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center"
               >
                 Open Dashboard
               </Link>
@@ -170,33 +170,33 @@ export default function Home() {
                 key={feature.id}
                 onMouseEnter={() => setHoveredCard(feature.id)}
                 onMouseLeave={() => setHoveredCard(null)}
-                whileHover={{ y: -8 }}
+                whileHover={{ y: -6 }}
                 className="relative group h-full"
               >
                 {/* Layered Glow Effect */}
                 <div 
-                  className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl z-0"
+                  className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl z-0"
                   style={{ backgroundColor: feature.glow }}
                 />
 
-                <div className="relative z-10 h-full bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 transition-all group-hover:border-slate-700/50 group-hover:bg-slate-900/80 flex flex-col items-start gap-6">
-                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white shadow-lg`}>
+                <div className="relative z-10 h-full bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-2xl p-6 transition-all group-hover:border-slate-700/50 group-hover:bg-slate-900/80 flex flex-col items-start gap-4">
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white shadow-md`}>
                     {feature.icon}
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white mb-3 group-hover:text-primary transition-colors">
+                    <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-primary transition-colors">
                       {feature.title}
                     </h3>
-                    <p className="text-slate-400 leading-relaxed font-medium">
+                    <p className="text-sm text-slate-400 leading-snug">
                       {feature.desc}
                     </p>
                   </div>
                   
-                  <div className="mt-auto pt-6 w-full flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-xs font-black uppercase text-slate-500">Feature Ready</span>
-                    <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
-                      <ChevronRight className="w-4 h-4 text-white" />
-                    </div>
+                  <div className="mt-auto pt-4 w-full flex items-center justify-between opacity-100 transition-opacity">
+                    <span className="text-xs font-bold uppercase text-slate-500">Feature Ready</span>
+                    <Link href={`/features/${feature.id}`} className="text-sm text-primary font-semibold hover:underline flex items-center gap-2">
+                      Learn more <ChevronRight className="w-3 h-3" />
+                    </Link>
                   </div>
                 </div>
               </motion.div>

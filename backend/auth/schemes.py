@@ -171,7 +171,7 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
     Allows both header and cookie-based auth for maximum flexibility and security.
     """
     # Prefer cookie if available (higher security)
-    cookie_token = request.cookies.get("graftai_access_token")
+    cookie_token = request.cookies.get("graftai_access_token") or request.cookies.get("better-auth.session_token")
     if cookie_token:
         token = cookie_token
 

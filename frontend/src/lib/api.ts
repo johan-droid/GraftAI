@@ -16,7 +16,7 @@ if (typeof window !== "undefined") {
   }
 }
 
-import { authClient } from "@/lib/auth-client";
+import { authClient, getSessionSafe } from "@/lib/auth-client";
 
 interface ApiOptions {
   method?: string;
@@ -39,7 +39,7 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
   // ── Neon Auth Integration ──
   // Check for session and add Bearer token if available
   try {
-    const session = await authClient.getSession();
+    const session = await getSessionSafe();
     if (session?.data?.session?.token) {
       headers["Authorization"] = `Bearer ${session.data.session.token}`;
     }
@@ -71,7 +71,7 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
 // Auth: Session Check
 // ──────────────────────────────────────
 export async function refreshSession() {
-  const session = await authClient.getSession();
+  const session = await getSessionSafe();
   if (!session?.data?.session) {
     throw new Error("No session to refresh");
   }
@@ -241,7 +241,7 @@ export async function uploadFile(file: File) {
   
   // Manually inject session token for file uploads since we use raw fetch for FormData
   try {
-    const session = await authClient.getSession();
+    const session = await getSessionSafe();
     if (session?.data?.session?.token) {
       headers["Authorization"] = `Bearer ${session.data.session.token}`;
     }

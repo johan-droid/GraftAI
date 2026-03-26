@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, delete
-from backend.models.tables import EventTable
+from backend.models.tables import EventTable, UserTable
 from .langchain_client import vector_store
+from .notifications import notify_event_created, notify_event_updated, notify_event_deleted
 from langchain_core.documents import Document
 import json
 import pytz
@@ -193,12 +194,41 @@ async def sync_event_to_ai(event: EventTable):
 async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
     """Create a new event and trigger AI feedback pipeline."""
     new_event = EventTable(**event_data)
+
+    # Check for overlapping event in same user timeline before commit
+    conflict_stmt = select(EventTable).where(
+        and_(
+            EventTable.user_id == new_event.user_id,
+            EventTable.start_time < new_event.end_time,
+            EventTable.end_time > new_event.start_time,
+        )
+    )
+    conflict_result = await db.execute(conflict_stmt)
+    if conflict_result.scalars().first():
+        raise ValueError("Event overlaps with existing schedule. Please choose another time.")
+
     db.add(new_event)
     await db.commit()
     await db.refresh(new_event)
 
     # Trigger real-time AI sync
     await sync_event_to_ai(new_event)
+
+    # Notify user about new event
+    target_user = await db.get(UserTable, new_event.user_id)
+    if target_user:
+        await notify_event_created(
+            target_user.email,
+            [],
+            {
+                "id": new_event.id,
+                "user_id": new_event.user_id,
+                "title": new_event.title,
+                "start_time": new_event.start_time,
+                "end_time": new_event.end_time,
+            },
+        )
+
     return new_event
 
 
@@ -222,8 +252,36 @@ async def update_event(
     await db.commit()
     await db.refresh(event)
 
+    # Check for overlaps after update (if schedule changed)
+    conflict_stmt = select(EventTable).where(
+        and_(
+            EventTable.user_id == user_id,
+            EventTable.id != event.id,
+            EventTable.start_time < event.end_time,
+            EventTable.end_time > event.start_time,
+        )
+    )
+    conflict_result = await db.execute(conflict_stmt)
+    if conflict_result.scalars().first():
+        raise ValueError("Updated timing overlaps with another event.")
+
     # Real-time sync to AI orchestrator
     await sync_event_to_ai(event)
+
+    target_user = await db.get(UserTable, user_id)
+    if target_user:
+        await notify_event_updated(
+            target_user.email,
+            [],
+            {
+                "id": event.id,
+                "user_id": event.user_id,
+                "title": event.title,
+                "start_time": event.start_time,
+                "end_time": event.end_time,
+            },
+        )
+
     return event
 
 
@@ -251,4 +309,17 @@ async def delete_event(db: AsyncSession, event_id: int, user_id: int) -> bool:
 
     await db.delete(event)
     await db.commit()
+
+    target_user = await db.get(UserTable, user_id)
+    if target_user:
+        await notify_event_deleted(
+            target_user.email,
+            [],
+            {
+                "id": event_id,
+                "user_id": user_id,
+                "title": event.title,
+            },
+        )
+
     return True

@@ -1,21 +1,48 @@
-'use client';
+import { createAuthClient } from "better-auth/react";
 
-// Try importing everything from the main entry point if submodules fail
-import { createAuthClient } from '@neondatabase/auth';
+export const authClient = createAuthClient({
+    baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+});
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://localhost:8000";
+/**
+ * Compatibility helper for existing code that uses getSessionSafe.
+ * Returns the current session in a format expected by the application.
+ */
+export const getSessionSafe = async () => {
+    try {
+        const session = await authClient.getSession();
+        return session;
+    } catch (err) {
+        console.error("Failed to get session safely", err);
+        return { data: null, error: err };
+    }
+};
 
-// Use the standard client which exposes sign-in/out and session operations
-export const authClient = createAuthClient(API_BASE_URL);
+/**
+ * Compatibility helper for existing code that uses signOut.
+ */
+export const signOut = async () => {
+    return await authClient.signOut();
+};
 
-export const signIn = authClient.signIn;
-export const signOut = authClient.signOut;
-export const getSession = authClient.getSession;
+/**
+ * Compatibility helper for Social Sign In.
+ */
+export const signInSocial = async (provider: "google" | "github") => {
+    return await authClient.signIn.social({
+        provider,
+        callbackURL: "/auth-callback"
+    });
+};
 
-// fallback for hooks for derived providers; we do not rely on useSession from authClient directly
-const authClientWithHooks = authClient as { useSession?: unknown };
-export const useSession = typeof authClientWithHooks.useSession === 'function' ? (authClientWithHooks.useSession as () => unknown) : undefined;
-
+/**
+ * Compatibility helper for Email Sign Up.
+ */
+export const signUp = async (email: string, password: string, name: string) => {
+    return await authClient.signUp.email({
+        email,
+        password,
+        name,
+        callbackURL: "/dashboard"
+    });
+};

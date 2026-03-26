@@ -62,3 +62,10 @@ tmp_*.py
 .terraform/
 .serverless/
 
+# Application Specific
+uploads/
+frontend/.next/
+frontend/out/
+backend/__pycache__/
+*.log
+

@@ -17,7 +17,7 @@ if str(project_root) not in sys.path:
 dotenv_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import redis
@@ -225,6 +225,9 @@ from fastapi import APIRouter
 v1_router = APIRouter(prefix="/api/v1")
 
 v1_router.include_router(auth_router)
+
+# Expose auth routes at both /api/v1/auth and /auth so OAuth providers can use either callback URL
+app.include_router(auth_router)
 v1_router.include_router(users_router)
 v1_router.include_router(uploads_router)
 v1_router.include_router(calendar_router)
@@ -236,6 +239,16 @@ v1_router.include_router(upgrade_router)
 v1_router.include_router(plugin_router)
 
 app.include_router(v1_router)
+
+
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204)
+
+
+@app.get("/.well-known/appspecific/com.chrome.devtools.json")
+def chrome_devtools():
+    return Response(status_code=404)
 
 
 @app.get("/")

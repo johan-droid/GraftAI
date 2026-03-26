@@ -5,14 +5,17 @@ from typing import List, Optional
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
 
+
 class PluginInfo(BaseModel):
     name: str
     description: str
     version: str
     author: Optional[str] = None
 
+
 class PluginListResponse(BaseModel):
     plugins: List[PluginInfo]
+
 
 @router.get("/list", response_model=PluginListResponse)
 async def list_plugins():

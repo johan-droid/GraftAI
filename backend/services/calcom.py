@@ -5,6 +5,7 @@ This module will provide functions to sync with Cal.com open source calendar cor
 
 # TODO: Implement Cal.com API integration for calendar sync
 
+
 def sync_with_cal_com(user_id: int, access_token: str):
     """
     Placeholder for Cal.com calendar sync logic.

@@ -1,6 +1,10 @@
 import os
 import json
+import logging
 from dotenv import load_dotenv
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Ensure .env is loaded before any env access
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -16,16 +20,21 @@ def _get_redis():
 
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
-        print("⚠ REDIS_URL not set — using in-memory cache fallback")
+        logger.warning("⚠ REDIS_URL not set — using in-memory cache fallback")
         return None
 
     try:
         from redis import Redis as RedisPy
-        _redis = RedisPy.from_url(redis_url, decode_responses=True, socket_connect_timeout=5)
+
+        _redis = RedisPy.from_url(
+            redis_url, decode_responses=True, socket_connect_timeout=5
+        )
         _redis.ping()
         return _redis
     except Exception as e:
-        print(f"⚠ Redis connection failed ({e}) — using in-memory cache fallback")
+        logger.warning(
+            f"⚠ Redis connection failed ({type(e).__name__}) — using in-memory cache fallback"
+        )
         _redis = None
         return None
 

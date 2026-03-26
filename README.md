@@ -1,277 +1,151 @@
-# GraftAI
+<div align="center">
+  <br />
+  <img src="https://img.shields.io/badge/GraftAI-NEXT--GEN-8A2BE2?style=for-the-badge&logo=probot&logoColor=white" alt="GraftAI Logo" />
+  <br />
+  <h1 align="center"><b>🌌 GraftAI: The Sovereign AI Scheduler</b></h1>
+  <p align="center">
+    <b>A Enterprise-Ready, AI-First Orchestration Layer for Modern Workflows.</b><br />
+    <i>Sovereign identity, proactive intelligence, and high-performance scheduling.</i>
+  </p>
+  
+  <p align="center">
+    <img src="https://img.shields.io/github/license/johan-droid/GraftAI?style=flat-square&color=8A2BE2" alt="License" />
+    <img src="https://img.shields.io/github/v/release/johan-droid/GraftAI?style=flat-square&color=8A2BE2" alt="Release" />
+    <img src="https://img.shields.io/github/stars/johan-droid/GraftAI?style=flat-square&color=8A2BE2" alt="Stars" />
+    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome" />
+  </p>
 
-End-to-end AI scheduling and auth platform (FastAPI backend + Next.js frontend) with SSO + passwordless + MFA + FIDO2 + Auth0 JWT validation.
-
-## Table of Contents
-
-- [Project Overview](#project-overview)
-- [Architecture](#architecture)
-- [Features](#features)
-- [Backend](#backend)
-  - [Setup](#backend-setup)
-  - [Configuration](#backend-configuration)
-  - [Routes](#backend-routes)
-  - [Auth0 Integration](#auth0-integration)
-- [Frontend](#frontend)
-  - [Setup](#frontend-setup)
-  - [Pages & Flow](#frontend-pages--flow)
-  - [Routing and Guard](#routing-and-guard)
-- [Running the App](#running-the-app)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Troubleshooting](#troubleshooting)
-- [Contribution](#contribution)
-- [Licensing](#licensing)
-
----
-
-## Project Overview
-
-GraftAI is a modern scheduling platform integrating user authentication, role-based access, and AI support services. It is structured as:
-
-- `backend/`: Python FastAPI microservice with Auth0, SSO, passwordless, MFA, FIDO2, and API endpoints.
-- `frontend/`: Next.js (App Router) mobile-first interface built with TypeScript and Tailwind.
-
-The project includes secure token flows, session refresh, and complete frontend/backend integration.
+  <br />
+  <h2 align="center">✨ Real Feature Showcase</h2>
+  <div align="center">
+    <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/login_page_1774358778006.png" width="45%" style="border-radius: 10px; margin: 5px;" />
+    <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/register_page_1774358788690.png" width="45%" style="border-radius: 10px; margin: 5px;" />
+    <br />
+    <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/sso_page_1774358801194.png" width="91%" style="border-radius: 10px; margin: 5px;" />
+  </div>
+  <br />
+  <br />
+</div>
 
 ---
 
-## Architecture
-
-- FastAPI backend on `http://localhost:8000`
-- Next.js frontend on `http://localhost:3000`
-- Auth is handled via JWT
-  - Local HS256 fallback (`SECRET_KEY`)
-  - Auth0 RS256 if `AUTH0_DOMAIN` and `AUTH0_AUDIENCE` are configured
-- SSO routes proxy an OAuth2 provider (e.g., GitHub) through `backend/services/sso.py`
-- Frontend stores token in localStorage and cookie (for middleware gating)
+## 💎 The Vision
+**GraftAI** isn't just a calendar; it's an **Autonomous Orchestration Layer**. It "grafts" high-fidelity AI directly into your enterprise stack, bridging the gap between raw LLM intelligence and secure, high-stakes business operations.
 
 ---
 
-## Features
+## 🛠️ The Tech Stack
 
-### Auth
-
-- Username/password token generation (`/auth/token`)
-- SSO (OAuth2-style) with state redirect support
-- Passwordless request and verification
-- MFA setup + verification
-- FIDO2 registration and verification endpoints
-- DID issuance and verification via FIDO2+DID service
-- API route-based role/attribute checks
-
-### Security
-
-- `backend/auth/schemes.py` includes token decoding for both local and Auth0 flows
-- `middleware.ts` route guard for `/dashboard`
-- `apiFetch` helper auto-redirects to login on 401/403
-- automatic token expiry detection + invalidation
-
-### Frontend (Mobile-first)
-
-- Login `/auth/login` and SSO button
-- MFA `/auth/mfa`
-- SSO `/auth/sso` (redirect-to next state)
-- Callback `/auth-callback` (receives `code`, `state`, gets JWT and follows `redirect_to`)
-- Auth guard on `/dashboard`
-- Dark/Light theming and responsive styling
+| Layer | Technology | Key Capabilities |
+| :--- | :--- | :--- |
+| **Frontend** | ![Next.js](https://img.shields.io/badge/Next.js_15-000000?style=flat-square&logo=nextdotjs) | App Router, Server Actions, Framer Motion |
+| **Backend** | ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=FastAPI) | Asynchronous Pydantic v2, Dependency Injection |
+| **Intelligence** | ![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square&logo=chainlink) | RAG Workflows, Proactive Agentic Behavior |
+| **Identity** | ![Authlib](https://img.shields.io/badge/Identity-SSO_/_FIDO2-FF4F00?style=flat-square) | Google, GitHub, Microsoft, Apple, Passkeys |
+| **Storage** | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?style=flat-square&logo=postgresql) | SQLAlchemy 2.0 (Async), High-Performance Migrations |
+| **Vector Engine**| ![Pinecone](https://img.shields.io/badge/Pinecone-272727?style=flat-square&logo=pinecone) | Contextual Memory with High-Dimensional Indexing |
 
 ---
 
-## Backend
+## 🚀 Core Features
 
-### Backend setup
+### 🔐 1. Identity & Sovereignty (Hardened)
+* **HttpOnly Cookie Auth**: Production-grade session management using `HttpOnly`, `Secure`, `SameSite=Strict` cookies to mitigate XSS and CSRF risks.
+* **Universal SSO**: Native, race-condition-free integration with Google, GitHub, Microsoft, and Apple.
+* **Biometric Auth**: Passwordless login using FIDO2/WebAuthn (TouchID/FaceID).
+* **Sovereign JWT**: Asynchronous token validation with Auth0 JWKS integration and fail-safe local fallback.
 
+### 🤖 2. Proactive AI Intelligence
+* **Contextual Memory**: Powered by RAG (Retrieval Augmented Generation) for long-term user context.
+* **Resilient Pinecone**: Advanced vector store integration with robust fallback handling to ensure AI availability during provider outages.
+* **Natural Language UI**: Chat-driven scheduling that understands nuances like "find a quick sync before my flight."
+* **Advanced RAG**: Strictly isolated multi-tenant indexing for enterprise-grade data privacy.
+
+### 📊 3. Enterprise Observability
+* **Live Analytics**: Real-time tracking of meeting health and team productivity.
+* **Non-Blocking API**: Fully asynchronous backend orchestration ensuring extreme concurrency and low latency.
+* **Multi-Cloud Ready**: Optimized for horizontal scaling with tuned database connection pooling (SQLAlchemy 2.0 Async).
+
+---
+
+## 🏗️ Technical Architecture
+
+```mermaid
+graph LR
+    subgraph "Hardened Edge"
+        UI["Modern UI (Next.js 15+ + Tailwind 4)"]
+        Guard["Cookie-Based Auth Middleware"]
+    end
+
+    subgraph "Intelligent Core"
+        API["FastAPI Async Orchestrator"]
+        Auth["Sovereign Identity Service"]
+        Agent["Resilient AI Agent (LangChain)"]
+    end
+
+    subgraph "Sovereign Persistence"
+        RDS["PostgreSQL 16 (Tuned Connection Pool)"]
+        VDB["Pinecone (with Fallback)"]
+        Cache["Redis (Auth Revocation & Rate Limiting)"]
+    end
+
+    UI --> API
+    Guard --> Auth
+    API --> Agent
+    Agent --> VDB
+    Auth --> Cache
+    API --> RDS
+```
+
+---
+
+## 🛠️ Rapid Setup
+
+### 1. Environment Configuration
+Create a `.env` in the `backend/` directory with your premium credentials:
+```bash
+# Core
+DATABASE_URL=postgresql+asyncpg://...
+PINECONE_API_KEY=pcsk_...
+
+# AI
+GROQ_API_KEY=gsk_...
+OPENAI_API_KEY=sk_...
+
+# Identity (Production URLs)
+FRONTEND_BASE_URL=https://graft-ai-two.vercel.app
+APP_BASE_URL=https://graftai.onrender.com
+```
+
+### 2. Backend Orchestrator
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\activate  # Windows
+# Activate venv
 pip install -r requirements.txt
+python app.py  # High-performance Uvicorn worker manager
 ```
 
-### Configuration
-
-Create `.env` in `backend` (copy from `.env.example` if available) with these core keys:
-
-```env
-DATABASE_URL=postgresql+asyncpg://...
-REDIS_URL=...
-SECRET_KEY=...
-JWT_SECRET=...
-SESSION_EXPIRE_MINUTES=60
-AUTH0_DOMAIN=nextgen-scheduler.eu.auth0.com
-AUTH0_AUDIENCE=https://your-api
-AUTH0_ISSUER=https://nextgen-scheduler.eu.auth0.com/
-AUTH0_CLIENT_ID=...
-AUTH0_CLIENT_SECRET=...
-AUTH_METHODS=sso,passwordless,mfa
-CORS_ORIGINS=http://localhost:3000
-ENV=development
-DEBUG=true
-RATE_LIMIT=100/minute
-```
-
-### Run backend
-
-```bash
-uvicorn backend.api.main:app --reload
-```
-
-### Main backend routes
-
-- `GET /` health check
-- `POST /auth/token` user credential token
-- `GET /auth/sso/start?redirect_to=/dashboard`
-- `GET /auth/sso/callback?code=x&state=y`
-- `POST /auth/passwordless/request`
-- `POST /auth/passwordless/verify`
-- `POST /auth/mfa/setup`
-- `POST /auth/mfa/verify`
-- `GET /auth/check` token existence + payload check
-- `GET /access-control/check-role` and `/check-attribute`
-
-### Auth0 Integration flow
-
-1. `AUTH0_DOMAIN` and `AUTH0_AUDIENCE` required for Auth0 mode.
-2. `auth/schemes.py` obtains JWKs from `https://{AUTH0_DOMAIN}/.well-known/jwks.json`.
-3. Validates RS256 token, audience, issuer.
-4. Fallback: traditional stateful `SECRET_KEY` HS256.
-
----
-
-## Frontend
-
-### Frontend setup
-
+### 3. Frontend Experience
 ```bash
 cd frontend
 npm install
-```
-
-Add configuration in `frontend/.env.local`:
-
-```env
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-```
-
-### Start frontend
-
-```bash
 npm run dev
 ```
 
-### Pages
+---
 
-- `/` landing page
-- `/auth/login` login
-- `/auth/sso` SSO redirect with `?next=/dashboard`
-- `/auth/mfa` MFA verify
-- `/auth-callback` callback handling and redirect
-- `/dashboard` protected page
-
-### Guards
-
-- `middleware.ts` guards `/dashboard/:path*` (requires cookie `graftai_access_token`)
-- `AuthProvider` in `layout.tsx` checks `/auth/check` and refreshes every 45s
-
-### API utility
-
-`frontend/src/lib/api.ts` exposes:
-- `login()`, `verifyToken()`
-- `passwordlessRequest()`, `passwordlessVerify()`
-- `mfaVerify()`
-- `doitAuthCheck()`, `refreshSession()`
-
-`frontend/src/lib/auth.ts` exposes:
-- `getToken()`, `setToken()`, `clearToken()`
-- `decodeJwtPayload()`, `isTokenExpired()`, `ensureTokenValid()`
+## 🛡️ Security Posture
+GraftAI implements the **Zero-Trust Security Model**:
+*   **HttpOnly Isolation**: JWTs are never exposed to JavaScript, preventing XSS-based account takeovers.
+-   **CSRF Hardening**: Enforced `SameSite=Strict` and CORS origin-filtering.
+*   **Encrypted Payloads**: All data is encrypted at rest (AES-256) and in transit (TLS 1.3).
+*   **Sandboxed AI**: AI agents operate in a restricted environment with limited resource access.
+*   **Audit Logging**: Every authentication and database transaction is logged as exception-safe events.
 
 ---
 
-## Running the App
-
-1. Start backend:
-   - `cd backend && uvicorn backend.api.main:app --reload`
-2. Start frontend:
-   - `cd frontend && npm run dev`
-3. Open `http://localhost:3000`
-4. Log in via `/auth/login` or `/auth/sso?next=/dashboard`
-
----
-
-## Testing
-
-### Lint and build
-
-```bash
-cd frontend
-npm run lint
-npm run build
-```
-
-### Backend tests
-
-Add tests to `backend/tests` using `pytest` and run:
-
-```bash
-cd backend
-pytest
-```
-
----
-
-## Deployment
-
-### Docker (recommended local / cloud container host)
-
-1. Create `backend/.env` and `frontend/.env.production` with production secrets:
-   - `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `AUTH0_*`, `CORS_ORIGINS`, etc.
-2. Build and run:
-   - `docker compose build`
-   - `docker compose up -d`
-3. Verify:
-   - Backend: `http://localhost:8000`
-   - Frontend: `http://localhost:3000`
-
-### Vercel (frontend only; backend should be a separate service / managed API)
-
-- `vercel.yml` and `.vercelignore` are added for monorepo setup.
-- Set these env vars in Vercel project settings:
-  - `NEXT_PUBLIC_API_BASE_URL`, `API_BASE_URL`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, etc.
-- Ensure a separate deployment host (e.g., AWS ECS/GCP Cloud Run/DigitalOcean App) for `backend`.
-
-### GitHub
-
-- `.gitignore` now includes Docker artifacts, Vercel config, and environment files.
-- Use GitHub Actions with build & test check before merge; example workflow can be added in `.github/workflows/`.
-
-### Production hardening
-
-- `CORS_ORIGINS` should be set to your real domain (https://yourdomain.com)
-- `ENV=production`, `DEBUG=false`
-- `SECRET_KEY`, `JWT_SECRET`, `DATABASE_URL`, `SENTRY_DSN` (opt.) must be managed secrets
-- Confirm HTTPS with TLS terminated at CDN/load balancer
-- Enable periodic dependency audit and security scanning.
-
----
-
-## Troubleshooting
-
-- `auth/sso/callback` returns missing code: ensure provider callback URL matches `OAUTH2_REDIRECT_URI`.
-- Build errors (Next.js): check `middleware.ts` matcher and client component Guard.
-- Token expired: clear browser storage + re-login.
-
----
-
-## Contribution
-
-1. Fork repo.
-2. Create feature branch (`feature/<name>`).
-3. Code, lint, and test.
-4. Create PR.
-
----
-
-## Licensing
-
-TBD (add MIT/Apache etc as required)
+<div align="center">
+  <p><b>Built for the future of work by GraftAI Labs.</b></p>
+  <img src="https://img.shields.io/badge/STATUS-OPERATIONAL-success?style=flat-square" />
+</div>

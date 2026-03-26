@@ -347,55 +347,34 @@ async def sso_callback(
 
 @router.post("/sync")
 async def sync_session(
-    request: Request,
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Synchronize a Neon Auth session with the local database and Redis cache.
-    This ensures that users logging in via the frontend SDK are tracked locally.
+    Synchronize the authenticated session with the local environment.
+    This route confirms that the session is valid and the user is registered.
     """
-    from backend.auth.schemes import decode_token
+    user_id = current_user.get("sub")
+    email = current_user.get("email")
     
-    # Check for token in cookie or header
-    token = request.cookies.get("better-auth.session_token") or request.headers.get("Authorization", "").replace("Bearer ", "")
-    
-    if not token:
-        logger.error("Sync attempted without session token")
-        raise HTTPException(status_code=401, detail="No session token found to sync")
-
-    payload = await decode_token(token)
-    if not payload:
-        logger.error("Sync attempted with invalid token")
-        raise HTTPException(status_code=401, detail="Invalid session token")
-
-    email = payload.get("email")
-    if not email:
-        raise HTTPException(status_code=400, detail="Token missing email claim")
-
-    # Sync user to database
-    result = await db.execute(select(UserTable).where(UserTable.email == email))
+    # Ensure user exists in local UserTable (safety check for external providers)
+    result = await db.execute(select(UserTable).where(UserTable.id == int(user_id)))
     user = result.scalars().first()
-    if not user:
-        async with db.begin():
-            user = UserTable(
-                email=email,
-                full_name=payload.get("name", email.split("@")[0]),
-                is_active=True
-            )
-            db.add(user)
-        # Re-fetch after creation
-        result = await db.execute(select(UserTable).where(UserTable.email == email))
-        user = result.scalars().first()
     
-    user_id = str(user.id)
+    if not user:
+        # This shouldn't happen with Better Auth as it writes to the same DB,
+        # but kept for robustness against other future providers.
+        user = UserTable(
+            id=int(user_id),
+            email=email,
+            full_name=current_user.get("name", email.split("@")[0]),
+            is_active=True
+        )
+        db.add(user)
+        await db.commit()
 
-    # Register in Redis to satisfy GraftAI's stateful session requirement
-    client = _get_redis_client()
-    session_key = f"active_session:{token[-20:]}"
-    client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, user_id)
-
-    logger.info(f"Synchronized Neon Auth session for user {user_id}")
-    return {"status": "synchronized", "user_id": user_id}
+    logger.info(f"Synchronized session for user {user_id}")
+    return {"status": "synchronized", "user_id": user_id, "email": email}
 
 
 

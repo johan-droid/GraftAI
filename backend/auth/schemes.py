@@ -8,6 +8,8 @@ import httpx
 import redis
 from datetime import datetime, timezone
 from backend.services.access_control import check_user_role
+from sqlalchemy.ext.asyncio import AsyncSession
+from backend.database.session import get_db
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
@@ -165,7 +167,37 @@ async def decode_token(token: str) -> Optional[dict]:
     return None
 
 
-async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)):
+async def verify_better_auth_session(token: str, db: AsyncSession) -> Optional[dict]:
+    """Verify Better Auth opaque session token against the database."""
+    from sqlalchemy import select, text
+    try:
+        # Better Auth session tokens are stored in the 'session' table as 'token'
+        result = await db.execute(text("SELECT user_id FROM session WHERE token = :t AND expires_at > :now"), 
+                                {"t": token, "now": datetime.now(timezone.utc)})
+        row = result.fetchone()
+        if row:
+            user_id = row[0]
+            # Fetch user to get email for payload parity
+            user_res = await db.execute(text("SELECT id, email, name FROM users WHERE id = :uid"), {"uid": user_id})
+            user = user_res.fetchone()
+            if user:
+                return {
+                    "sub": str(user[0]),
+                    "email": user[1],
+                    "name": user[2],
+                    "type": "better-auth"
+                }
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Better Auth session verification failed: {e}")
+    return None
+
+
+async def get_current_user(
+    request: Request, 
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Get current user payload from either Authorization: Bearer <token> or HttpOnly cookie.
     Allows both header and cookie-based auth for maximum flexibility and security.
@@ -182,12 +214,25 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # 1. Try Better Auth Strategy (Opaque Session Token)
+    # Better Auth sessions are typically long strings (not JWTs)
+    if not token.count(".") == 2:
+        payload = await verify_better_auth_session(token, db)
+        if payload:
+            # Register in Redis to satisfy GraftAI telemetry requirements
+            client = _get_redis_client()
+            session_key = f"active_session:{token[-20:]}"
+            client.setex(session_key, 3600, payload["sub"])
+            return payload
+
+    # 2. Try JWT Strategy (Legacy/Sovereign)
     if is_token_blacklisted(token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
+        
     payload = await decode_token(token)
     if not payload:
         raise HTTPException(
@@ -196,7 +241,7 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Session Persistence & Active Tracking
+    # Session Persistence & Active Tracking for JWTs
     client = _get_redis_client()
     session_key = f"active_session:{token[-20:]}"
     if not client.exists(session_key):
@@ -207,7 +252,6 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
         )
 
     # Update local telemetry (useful for load balancer observability)
-    # This tracks which exact container/worker is handling the user in Redis
     backend_id = os.getenv("HOSTNAME", "unknown-worker")
     client.hset(
         f"session_telemetry:{token[-20:]}",

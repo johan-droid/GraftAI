@@ -9,7 +9,7 @@ import redis
 from datetime import datetime, timezone
 from backend.services.access_control import check_user_role
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.database.session import get_db
+from backend.utils.db import get_db
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:

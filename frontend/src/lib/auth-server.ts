@@ -2,12 +2,14 @@ import { betterAuth } from "better-auth";
 import { Pool } from "pg";
 
 export const auth = betterAuth({
+    baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     database: new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: {
             rejectUnauthorized: false
         }
     }),
+    secret: process.env.BETTER_AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-fallback-secret-please-change",
     emailAndPassword: {
         enabled: true
     },
@@ -15,7 +17,6 @@ export const auth = betterAuth({
         google: {
             clientId: process.env.GOOGLE_CLIENT_ID || "",
             clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-            redirectURI: process.env.GOOGLE_REDIRECT_URI || ""
         }
     },
     trustedOrigins: [
@@ -23,9 +24,39 @@ export const auth = betterAuth({
         process.env.NEXT_PUBLIC_APP_URL ||
         "http://localhost:3000"
     ],
-    secret: process.env.BETTER_AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-fallback-secret-please-change",
     user: {
         modelName: "users",
+        fields: {
+            emailVerified: "emailVerified",
+            createdAt: "createdAt",
+            updatedAt: "updatedAt"
+        }
+    },
+    session: {
+        modelName: "session",
+        fields: {
+            userId: "userId",
+            expiresAt: "expiresAt",
+            createdAt: "createdAt",
+            updatedAt: "updatedAt",
+            userAgent: "userAgent",
+            ipAddress: "ipAddress"
+        }
+    },
+    account: {
+        modelName: "account",
+        fields: {
+            userId: "userId",
+            accountId: "accountId",
+            providerId: "providerId",
+            accessToken: "accessToken",
+            refreshToken: "refreshToken",
+            idToken: "idToken",
+            accessTokenExpiresAt: "accessTokenExpiresAt",
+            refreshTokenExpiresAt: "refreshTokenExpiresAt",
+            createdAt: "createdAt",
+            updatedAt: "updatedAt"
+        }
     }
 });
 

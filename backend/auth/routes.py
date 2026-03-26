@@ -10,6 +10,12 @@ import os
 import redis
 import functools
 import logging
+import uuid
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load backend .env for auth settings
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -123,7 +129,7 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
-def _create_jwt_token(sub: str):
+def _create_jwt_token(sub: str, email: Optional[str] = None):
     """Create access and refresh tokens and persist refresh token in Redis."""
     now = datetime.now(timezone.utc)
 
@@ -131,6 +137,7 @@ def _create_jwt_token(sub: str):
     access_expires_at = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_payload = {
         "sub": str(sub),
+        "email": email,
         "exp": int(access_expires_at.timestamp()),
         "iat": int(now.timestamp()),
         "type": "access",
@@ -142,6 +149,7 @@ def _create_jwt_token(sub: str):
     refresh_expires_at = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     refresh_payload = {
         "sub": str(sub),
+        "email": email,
         "exp": int(refresh_expires_at.timestamp()),
         "iat": int(now.timestamp()),
         "type": "refresh",
@@ -170,10 +178,11 @@ def _create_jwt_token(sub: str):
 
 
 def _attach_jwt_cookies(response: Response, token_data: dict):
-    # For SPA frontends on different domains/origins, SameSite=None is required so
-    # browser includes cookies in cross-site requests. Secure is required for None.
+    # For SPA frontends on different domains/origins, SameSite=None is required
+    # so browser includes cookies in cross-site requests from localhost:3000 etc.
+    # In production we keep secure=True; in local dev we use secure=False.
     is_prod = os.getenv("NODE_ENV") == "production"
-    same_site_value = "none" if is_prod else "lax"
+    same_site_value = "none"
     secure_value = is_prod
 
     response.set_cookie(
@@ -215,7 +224,7 @@ async def login(
             detail="Incorrect email or password",
         )
 
-    tokens = _create_jwt_token(str(user.id))
+    tokens = _create_jwt_token(str(user.id), email=user.email)
     response = JSONResponse(
         content={"token": tokens, "user": {"id": user.id, "email": user.email}}
     )
@@ -304,33 +313,58 @@ async def sso_callback(
     # STEP 2: Frontend API call → complete the OAuth flow (consumes the state).
     try:
         payload = await sso.complete_oauth2_flow(code=code, state=state)
+        logger.info(
+            f"SSO callback success for provider={payload.get('provider')} state=[...truncated]"
+        )
+
         profile = payload["profile"]
         email = profile.get("email")
 
-        # Sync user to database with transaction safety
-        if email:
-            async with db.begin():
-                result = await db.execute(
-                    select(UserTable).where(UserTable.email == email)
-                )
-                user = result.scalars().first()
-                if not user:
-                    user = UserTable(
-                        email=email, full_name=profile.get("name"), is_active=True
-                    )
-                    db.add(user)
-                    # Automatically committed
+        if not email:
+            raise HTTPException(status_code=400, detail="Email required from SSO provider")
 
-            # Re-fetch user_id after potential creation (outside or inside block depends on session state)
-            # Since we just used db.begin() (sub-transaction), the session might need a fresh query or refresh.
-            # For simplicity, we query again or just use the user object if it was already in session.
+        # Upsert user in one transaction to avoid session conflicts.
+        async with db.begin():
             result = await db.execute(select(UserTable).where(UserTable.email == email))
-            final_user = result.scalars().first()
-            user_id = str(final_user.id) if final_user else "unknown"
-        else:
+            user = result.scalars().first()
+            if not user:
+                user = UserTable(
+                    id=str(profile.get("id") or uuid.uuid4()),
+                    email=email,
+                    full_name=profile.get("name"),
+                    is_active=True,
+                    timezone=profile.get("timezone", "UTC"),
+                )
+                db.add(user)
+                await db.flush()
+            else:
+                user.full_name = profile.get("name") or user.full_name
+                user.timezone = profile.get("timezone", user.timezone or "UTC")
+
+        user_id = str(user.id if user else profile.get("id", "unknown"))
+
+        # consume state after DB upsert (successful auth session complete)
+        verified_state = sso._verify_state(state)
+        if verified_state:
+            sso._delete_oauth_state(verified_state)
+
+        # We can optionally send a welcome notification email immediately.
+        try:
+            from backend.services.notifications import notify_welcome_email
+
+            await notify_welcome_email(
+                user_email=email,
+                full_name=user.full_name if user else profile.get("name", "User"),
+            )
+        except Exception as e:
+            logger.warning(f"Welcome email send failed for {email}: {e}")
+
+        # Sync user to database with transaction safety
+        # user_id already resolved in upsert code above.
+        if not user_id:
             user_id = str(profile.get("id", "unknown"))
 
-        own_token = _create_jwt_token(user_id)
+        own_token = _create_jwt_token(user_id, email=email)
         response = JSONResponse(
             content={
                 "auth": payload,
@@ -342,6 +376,9 @@ async def sso_callback(
         _attach_jwt_cookies(response, own_token)
         return response
     except Exception as e:
+        logger.error(
+            f"SSO callback failure for signed_state={state}, code={code}, err={e}"
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
@@ -469,18 +506,39 @@ def check_attribute(
 
 
 @router.get("/check")
-def check_auth(current_user=Depends(get_current_user)):
-    # returns user payload if authenticated
-    return {"authenticated": True, "user": current_user}
+def check_auth(request: Request, current_user=Depends(get_current_user)):
+    """Returns authenticated user payload. Supports both Bearer token and cookie auth."""
+    return {
+        "authenticated": True,
+        "user": current_user,
+        "session": {
+            "token": request.cookies.get("graftai_access_token"),
+            "expires_at": current_user.get("exp")
+        }
+    }
 
 
 @router.post("/refresh")
-def refresh_token(request: RefreshTokenRequest):
+@router.post("/auth/refresh")
+def refresh_token(request: Request, payload: Optional[RefreshTokenRequest] = None):
     """Get a new access token using a refresh token."""
     client = _get_redis_client()
 
-    # Check if refresh token exists in Redis
-    user_id = client.get(f"refresh:{request.refresh_token}")
+    refresh_token_value = None
+    # Prefer explicit JSON body, fallback to cookie.
+    if payload and getattr(payload, "refresh_token", None):
+        refresh_token_value = payload.refresh_token
+    else:
+        refresh_token_value = request.cookies.get("graftai_refresh_token")
+
+    if not refresh_token_value:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token missing",
+        )
+
+    # Check if refresh token exists in Redis and not revoked
+    user_id = client.get(f"refresh:{refresh_token_value}")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -489,8 +547,8 @@ def refresh_token(request: RefreshTokenRequest):
 
     # Verify the refresh token JWT
     try:
-        payload = jwt.decode(request.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("type") != "refresh":
+        token_payload = jwt.decode(refresh_token_value, SECRET_KEY, algorithms=[ALGORITHM])
+        if token_payload.get("type") != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type"
             )
@@ -498,6 +556,10 @@ def refresh_token(request: RefreshTokenRequest):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
+
+    # ONE-TIME-USE refresh token semantics (rotate token)
+    client.delete(f"refresh:{refresh_token_value}")
+    client.srem(f"user_tokens:{user_id}", refresh_token_value)
 
     # Generate new token pair
     token_data = _create_jwt_token(user_id)
@@ -507,17 +569,18 @@ def refresh_token(request: RefreshTokenRequest):
 
 
 @router.post("/logout")
-def logout(request: RefreshTokenRequest, current_user=Depends(get_current_user)):
+def logout(request: Request, current_user=Depends(get_current_user)):
     """Revoke refresh token and clear HttpOnly cookies."""
     client = _get_redis_client()
 
-    # Delete refresh token from Redis
-    client.delete(f"refresh:{request.refresh_token}")
+    refresh_token = request.cookies.get("graftai_refresh_token")
+    if refresh_token:
+        client.delete(f"refresh:{refresh_token}")
 
     response = JSONResponse(content={"message": "Successfully logged out"})
     # Clear HttpOnly cookies
     response.delete_cookie(key="graftai_access_token", path="/")
-    response.delete_cookie(key="graftai_refresh_token", path="/auth/refresh")
+    response.delete_cookie(key="graftai_refresh_token", path="/")
 
     return response
 

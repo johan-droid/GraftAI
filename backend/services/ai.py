@@ -62,12 +62,14 @@ def _get_schedule_context(events):
         context += f"- {event.title} at {event.start_time.strftime('%H:%M')} (ID: {event.id})\n"
     return context
 
+from backend.auth.routes import get_rate_limiter
+
 @router.post("/chat", response_model=AIResponse)
 async def ai_chat(
     request: AIRequest,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
-    _rate_limit: bool = Depends(lambda: None), # Dummy for now
+    _rate_limit: bool = Depends(get_rate_limiter(max_requests=10, window_seconds=60)),
 ):
     """
     State-of-the-Art AI Copilot Chat Endpoint.

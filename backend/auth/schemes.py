@@ -7,14 +7,22 @@ import os
 import httpx
 import redis
 from datetime import datetime, timezone
+from pathlib import Path
+from dotenv import load_dotenv
 from backend.services.access_control import check_user_role
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.utils.db import get_db
+
+# Ensure environment variables are loaded from backend/.env first
+project_root = Path(__file__).resolve().parents[1]
+load_dotenv(project_root / ".env")
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
 NEON_AUTH_BASE_URL = os.getenv(
     "NEON_AUTH_BASE_URL",
@@ -156,57 +164,22 @@ async def decode_token(token: str) -> Optional[dict]:
             logging.getLogger(__name__).error(f"External JWT validation failed: {exc}")
             return None
 
-    # Strategy 2: Local Sovereign Session (HS256)
+    # Strategy 3: Local Sovereign Session (HS256)
     if alg == "HS256":
         try:
-            # We explicitly use only the local SECRET_KEY for HS256 to prevent 'alg none' or RS256/HS256 confusion attacks.
-            return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            # PyJWT verifies exp, iat, and nbf by default when present
+            return jwt.decode(
+                token, 
+                SECRET_KEY, 
+                algorithms=["HS256"],
+                options={"verify_exp": True, "verify_iat": True, "require": ["exp"]}
+            )
+        except jwt.ExpiredSignatureError:
+            logger.warning("Token has expired")
+            return None
         except JWTError:
             return None
 
-    return None
-
-
-async def verify_better_auth_session(token: str, db: AsyncSession) -> Optional[dict]:
-    """Verify Better Auth opaque session token against the database."""
-    from sqlalchemy import select, text
-    try:
-        # Better Auth session tokens are stored in the 'session' table as 'token'
-        # We check the camelCase columns populated by Better Auth
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.debug(f"Verifying token: {token[:10]}...")
-        
-        result = await db.execute(text('SELECT "userId", "expiresAt" FROM public.session WHERE token = :t'), {"t": token})
-        row = result.fetchone()
-        if not row:
-            print("DEBUG: Session record NOT found in database.")
-            return None
-            
-        user_id, expires_at = row
-        print(f"DEBUG: Found session. UserID: {user_id}, ExpiresAt: {expires_at}")
-        
-        if expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-            print("DEBUG: Session is EXPIRED.")
-            return None
-
-        # Fetch user
-        user_res = await db.execute(text('SELECT id, email, name FROM public.users WHERE id = :uid'), {"uid": user_id})
-        user = user_res.fetchone()
-        if not user:
-            print(f"DEBUG: User {user_id} NOT found in users table.")
-            return None
-            
-        print(f"DEBUG: Session verified for user: {user[1]}")
-        return {
-            "sub": str(user[0]),
-            "email": user[1],
-            "name": user[2],
-            "type": "better-auth"
-        }
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Better Auth session verification failed: {e}")
     return None
 
 
@@ -216,45 +189,28 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get current user payload from either Authorization: Bearer <token> or HttpOnly cookie.
-    Allows both header and cookie-based auth for maximum flexibility and security.
+    Get current user payload from either Authorization: Bearer <token> or graftai_access_token cookie.
+    Uses only JWT tokens from local HS256 implementation.
     """
-    # Prefer Header token if it was provided (more explicit)
     if not token:
-        cookie_token = request.cookies.get("graftai_access_token") or request.cookies.get("better-auth.session_token")
+        cookie_token = request.cookies.get("graftai_access_token")
         if cookie_token:
-            print(f"DEBUG: Using cookie token: {cookie_token[:10]}...")
             token = cookie_token
-    else:
-        print(f"DEBUG: Using provided header token: {token[:10]}...")
 
     if not token:
-        print("DEBUG: NO TOKEN FOUND.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session not found or expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 1. Try Better Auth Strategy (Opaque Session Token)
-    # Better Auth sessions are typically long strings (not JWTs)
-    if not token.count(".") == 2:
-        payload = await verify_better_auth_session(token, db)
-        if payload:
-            # Register in Redis to satisfy GraftAI telemetry requirements
-            client = _get_redis_client()
-            session_key = f"active_session:{token[-20:]}"
-            client.setex(session_key, 3600, payload["sub"])
-            return payload
-
-    # 2. Try JWT Strategy (Legacy/Sovereign)
     if is_token_blacklisted(token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
+
     payload = await decode_token(token)
     if not payload:
         raise HTTPException(
@@ -266,12 +222,13 @@ async def get_current_user(
     # Session Persistence & Active Tracking for JWTs
     client = _get_redis_client()
     session_key = f"active_session:{token[-20:]}"
-    if not client.exists(session_key):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session has expired or was revoked",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+
+    if client.exists(session_key):
+        client.expire(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    else:
+        # Allowed: token may still be valid at JWT layer after a server/Redis restart.
+        # Recreate the session marker to avoid accidental early logout.
+        client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, payload.get("sub"))
 
     # Update local telemetry (useful for load balancer observability)
     backend_id = os.getenv("HOSTNAME", "unknown-worker")
@@ -296,7 +253,7 @@ def get_current_user_id(current_user: dict = Depends(get_current_user)) -> int:
             detail="User identity (sub) missing from token",
         )
     try:
-        # We no longer strictly cast to int because IDs are now Strings (Better Auth format)
+        # Ensure user_id can be used by access-control checks.
         return user_id_raw
     except (ValueError, TypeError):
         raise HTTPException(

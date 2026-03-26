@@ -1,0 +1,25 @@
+{
+  "name": "GraftAI Scheduler",
+  "short_name": "GraftAI",
+  "description": "AI-first sovereign schedule orchestration.",
+  "lang": "en-US",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#09090b",
+  "background_color": "#020617",
+  "orientation": "portrait",
+  "scope": "/",
+  "categories": ["productivity", "business", "utility"],
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

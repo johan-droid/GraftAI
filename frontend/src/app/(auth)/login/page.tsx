@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { authClient, signInSocial } from "@/lib/auth-client";
-import { ssoStart } from "@/lib/api";
+import { signIn } from "@/lib/auth-client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, ArrowRight, Loader2, KeyRound, Fingerprint, Shield } from "lucide-react";
 
@@ -33,14 +32,10 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const { error: authError } = await authClient.signIn.email({
-        email,
-        password,
-        callbackURL: "/auth-callback",
-      });
+      const { error } = await signIn.email({ email, password });
 
-      if (authError) {
-        throw new Error(authError.message || "Invalid credentials");
+      if (error) {
+        throw new Error(error.message || "Invalid credentials");
       }
 
       router.replace("/dashboard");
@@ -57,18 +52,15 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // Use Neon Auth Client for consistency and robustness
-      await authClient.signIn.social({
-        provider: provider as "github" | "google",
-        callbackURL: "/auth-callback", // Redirect directly to dashboard after Neon handles it
-      });
+      await signIn.social({ provider: provider as "google" | "github" });
       return;
-    } catch (err: any) {
-      const msg = (err?.message || "").toString().toLowerCase();
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage.toLowerCase();
       if (msg.includes("400") || msg.includes("bad request") || msg.includes("unauthorized")) {
         setError("Social login is unavailable right now. Please use password login or try again later.");
       } else {
-        setError(err?.message || "Failed to initiate social login");
+        setError(errorMessage || "Failed to initiate social login");
       }
       setLoading(false);
     }
@@ -80,11 +72,8 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const { error: authError } = await authClient.signIn.magicLink({
-        email: magicEmail,
-        callbackURL: "/auth-callback",
-      });
-      if (authError) throw authError;
+      const { error } = await signIn.magicLink({ email: magicEmail });
+      if (error) throw error;
       setMagicSent(true);
     } catch (err) {
       setError((err as Error).message || "Failed to send magic link");
@@ -98,10 +87,8 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const { error: authError } = await authClient.signIn.passkey({
-        email, // Optionally provide email if known, or let SDK handle it
-      });
-      if (authError) throw authError;
+      const { error } = await signIn.passkey({ email });
+      if (error) throw error;
       router.replace("/dashboard");
     } catch {
       setError("Passkey authentication failed or was cancelled");
@@ -278,7 +265,7 @@ export default function LoginPage() {
                     </div>
                     <div>
                       <h3 className="text-emerald-400 font-medium mb-1">Check your email</h3>
-                      <p className="text-xs text-slate-400">We've sent a magic link to {magicEmail}. Click the link to sign in instantly.</p>
+                      <p className="text-xs text-slate-400">We have sent a magic link to {magicEmail}. Click the link to sign in instantly.</p>
                     </div>
                     <button type="button" onClick={() => setMagicSent(false)} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
                       Use a different email

@@ -1,5 +1,24 @@
-import { auth } from "@/lib/auth-server";
-import { toNextJsHandler } from "better-auth/next-js";
+import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
-export const { GET, POST } = toNextJsHandler(auth);
+async function handleNotImplemented() {
+  return NextResponse.json(
+    { detail: "Better Auth routes are disabled. Use backend /auth APIs directly." },
+    { status: 404 }
+  );
+}
+
+export async function GET() {
+  return handleNotImplemented();
+}
+
+export async function POST() {
+  return handleNotImplemented();
+}
+
+export async function PUT() {
+  return handleNotImplemented();
+}
+
+export async function DELETE() {
+  return handleNotImplemented();
+}

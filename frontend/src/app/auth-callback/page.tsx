@@ -20,27 +20,9 @@ function AuthCallbackInner() {
     const handleSync = async () => {
       try {
         const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || API_BASE_URL;
-        // 1. Try Better Auth Sync first if we have a session
-        const { authClient } = await import("@/lib/auth-client");
-        const session = await authClient.getSession();
-        console.log("Better Auth Session Context:", session);
-        if (session?.data) {
-          setStatus("Synchronizing your account...");
-          const syncResponse = await fetch(`${backendUrl}/api/v1/auth/sync`, {
-            method: "POST",
-            headers: {
-              "Accept": "application/json",
-              "Authorization": `Bearer ${session.data.session.token}`
-            },
-            credentials: "include",
-          });
-          if (syncResponse.ok) {
-            router.replace("/dashboard");
-            return;
-          }
-        }
-
-        // 2. Fallback to legacy code/state flow if present
+        // No Better Auth: just use backend sso callback path.
+      // (frontend now uses FastAPI endpoints directly)
+      // 1. Fallback to legacy code/state flow if present
         if (code && state) {
           setStatus("Authenticating via legacy flow...");
           const response = await fetch(
@@ -55,6 +37,11 @@ function AuthCallbackInner() {
           if (response.ok && data.token?.access_token) {
             await login(data.token.access_token);
             router.replace(data.redirect_to || "/dashboard");
+            return;
+          }
+          if (response.status === 401 || response.status === 403) {
+            setStatus("Authentication expired or not allowed. Please login again.");
+            setTimeout(() => router.replace("/login"), 1000);
             return;
           }
           setStatus(data.detail || "Authentication failed");

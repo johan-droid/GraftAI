@@ -16,7 +16,25 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "GraftAI Scheduler",
   description: "Next-Gen AI SaaS Scheduler with a dark galaxy aesthetic",
+  icons: [
+    { rel: "icon", url: "/icon-192x192.png" },
+    { rel: "apple-touch-icon", url: "/icon-192x192.png" },
+  ],
+  manifest: "/manifest.json",
 };
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1.0,
+  minimumScale: 1.0,
+  maximumScale: 1.0,
+  userScalable: false,
+};
+
+export const themeColor = [
+  { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
+  { media: "(prefers-color-scheme: dark)", color: "#020617" },
+];
 
 export default function RootLayout({
   children,

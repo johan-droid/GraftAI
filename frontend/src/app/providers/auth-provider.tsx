@@ -15,7 +15,8 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (token: string) => Promise<void>;
+  login: (token?: string) => Promise<void>;
+  refresh: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -52,16 +53,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (!session?.user && !loading) {
+      // If there is no session after a successful check cycle, force redirect.
+      router.replace("/login");
+    }
+  }, [session, loading, router]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+    window.addEventListener("load", async () => {
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js");
+        console.log("Service Worker registration successful with scope:", registration.scope);
+      } catch (error) {
+        console.warn("Service Worker registration failed:", error);
+      }
+    });
+
+    return () => {
+      window.removeEventListener("load", () => {});
+    };
+  }, []);
+
   const user = session?.user as User | null;
   const isAuthenticated = !!session;
 
-  const loginFn = async (token: string) => {
-    // Session is handled automatically by the auth client provider.
-    // If needed, we can refresh via getSession in future.
+  const refreshFn = async () => {
+    const sessionResult = await getSessionSafe();
+    if (sessionResult?.data) {
+      setSession(sessionResult.data);
+    } else {
+      setSession(null);
+    }
+    return;
+  };
+
+  const loginFn = async (token?: string) => {
+    if (token && typeof window !== "undefined") {
+      localStorage.setItem("graftai_access_token", token);
+    }
+    await refreshFn();
   };
 
   const logoutFn = async () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("graftai_access_token");
+    }
     await signOut();
+    setSession(null);
     router.replace("/login");
   };
 
@@ -71,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated, 
       loading,
       login: loginFn,
+      refresh: refreshFn,
       logout: logoutFn 
     }}>
       {children}

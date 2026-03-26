@@ -1,0 +1,10 @@
+{
+  "name": "graftai-monorepo",
+  "private": true,
+  "scripts": {
+    "dev-all": "cd frontend && npm run dev-all"
+  },
+  "dependencies": {
+    "googleapis": "^171.4.0"
+  }
+}

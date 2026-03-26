@@ -1,8 +1,11 @@
+const defaultHost = "http://localhost:8000";
+const windowOrigin = (typeof window !== "undefined" && window.location.origin) || "";
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  (typeof window !== "undefined" ? window.location.origin : undefined) ||
-  "http://localhost:8000";
+  (windowOrigin && windowOrigin !== "http://localhost:3000" ? windowOrigin : "") ||
+  defaultHost;
 
 if (typeof window !== "undefined") {
   console.debug("API_BASE_URL set to", API_BASE_URL);
@@ -16,7 +19,7 @@ if (typeof window !== "undefined") {
   }
 }
 
-import { authClient, getSessionSafe } from "@/lib/auth-client";
+import { getSessionSafe } from "@/lib/auth-client";
 
 interface ApiOptions {
   method?: string;
@@ -36,22 +39,14 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
     "Content-Type": "application/json",
   };
 
-  // ── Neon Auth Integration ──
-  // Check for session and add Bearer token if available
-  try {
-    const session = await getSessionSafe();
-    if (session?.data?.session?.token) {
-      headers["Authorization"] = `Bearer ${session.data.session.token}`;
-    }
-  } catch (err) {
-    console.debug("No active session found for apiFetch", err);
-  }
+  // Rely on HttpOnly cookie for auth - credentials: "include" sends cookies automatically
+  // The backend reads 'graftai_access_token' cookie via get_current_user()
 
   const res = await fetch(`${API_BASE_URL}/api/v1${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
-    credentials: "include", // Ensure session cookies are also sent
+    credentials: "include", // HttpOnly cookies are sent automatically
   });
 
   if (!res.ok) {
@@ -237,21 +232,9 @@ export async function uploadFile(file: File) {
   const formData = new FormData();
   formData.append("file", file);
 
-  const headers: Record<string, string> = {};
-  
-  // Manually inject session token for file uploads since we use raw fetch for FormData
-  try {
-    const session = await getSessionSafe();
-    if (session?.data?.session?.token) {
-      headers["Authorization"] = `Bearer ${session.data.session.token}`;
-    }
-  } catch (err) {
-    console.debug("No session for upload", err);
-  }
-
+  // Rely on HttpOnly cookie - no manual token injection needed
   const res = await fetch(`${API_BASE_URL}/api/v1/uploads`, {
     method: "POST",
-    headers,
     body: formData,
     credentials: "include",
   });

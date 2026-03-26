@@ -74,16 +74,21 @@ def _store_oauth_state(state: str, data: dict, ttl_seconds: int = 300):
 
 
 def _get_oauth_state(state: str) -> dict | None:
-    """Retrieve and delete OAuth state from Redis."""
+    """Retrieve OAuth state from Redis (no immediate deletion)."""
     client = _get_redis_client()
     key = f"oauth:state:{state}"
     raw_data = client.get(key)
     if not raw_data:
         return None
-    client.delete(key)
     state_data = json.loads(raw_data)
     data = json.loads(state_data["data"])
     return data
+
+
+def _delete_oauth_state(state: str):
+    """Delete OAuth state from Redis after successful login."""
+    client = _get_redis_client()
+    client.delete(f"oauth:state:{state}")
 
 
 # Multi-provider configuration
@@ -316,4 +321,5 @@ async def complete_oauth2_flow(code: str, state: str):
         },
         "token": token,
         "redirect_to": redirect_to,
+        "oauth_state": original_state,
     }

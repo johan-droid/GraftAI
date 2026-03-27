@@ -24,27 +24,46 @@ function AuthCallbackInner() {
       // (frontend now uses FastAPI endpoints directly)
       // 1. Fallback to legacy code/state flow if present
         if (code && state) {
-          setStatus("Authenticating via legacy flow...");
+          setStatus("Authenticating with OAuth provider...");
+          
+          // First, store the token from URL params to preserve it during the fetch
+          // The backend will set cookies, but we also need to capture the access_token
           const response = await fetch(
             `${backendUrl}/api/v1/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
             {
-              headers: { "Accept": "application/json" },
+              method: "GET",
+              headers: { 
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+              },
               credentials: "include",
             }
           );
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `HTTP ${response.status}`);
+          }
+          
           const data = await response.json();
 
-          if (response.ok && data.token?.access_token) {
+          if (data.token?.access_token) {
+            setStatus("Login successful! Redirecting to dashboard...");
+            // Login will store the token and refresh the session
             await login(data.token.access_token);
+            // Use the redirect_to from backend, default to /dashboard
             router.replace(data.redirect_to || "/dashboard");
             return;
           }
+          
           if (response.status === 401 || response.status === 403) {
             setStatus("Authentication expired or not allowed. Please login again.");
             setTimeout(() => router.replace("/login"), 1000);
             return;
           }
+          
           setStatus(data.detail || "Authentication failed");
+          setTimeout(() => router.replace("/login"), 2000);
           return;
         }
 
@@ -52,7 +71,8 @@ function AuthCallbackInner() {
         setTimeout(() => router.replace("/login"), 2000);
       } catch (err) {
         console.error("Auth callback failure:", err);
-        setStatus("An error occurred during authentication. Please log in again.");
+        setStatus(`Error: ${err instanceof Error ? err.message : "Authentication failed"}`);
+        setTimeout(() => router.replace("/login"), 3000);
       }
     };
 

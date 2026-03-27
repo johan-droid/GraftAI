@@ -6,12 +6,16 @@ from typing import Optional
 import os
 import httpx
 import redis
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 from backend.services.access_control import check_user_role
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.utils.db import get_db
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Ensure environment variables are loaded from backend/.env first
 project_root = Path(__file__).resolve().parents[1]

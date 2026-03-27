@@ -180,10 +180,20 @@ def _create_jwt_token(sub: str, email: Optional[str] = None):
 def _attach_jwt_cookies(response: Response, token_data: dict):
     # For SPA frontends on different domains/origins, SameSite=None is required
     # so browser includes cookies in cross-site requests from localhost:3000 etc.
-    # In production we keep secure=True; in local dev we use secure=False.
+    # IMPORTANT: SameSite=None REQUIRES Secure flag in modern browsers.
+    # In production we use secure=True; in local dev we also use secure=True when using HTTPS.
+    # For HTTP localhost development, we must use SameSite=Lax instead.
     is_prod = os.getenv("NODE_ENV") == "production"
-    same_site_value = "none"
-    secure_value = is_prod
+    is_https = os.getenv("PROTOCOL") == "https" or is_prod
+    
+    # SameSite=None requires Secure flag. For HTTP localhost, use Lax.
+    if is_https:
+        same_site_value = "none"
+        secure_value = True
+    else:
+        # Development over HTTP: use Lax which works without Secure
+        same_site_value = "lax"
+        secure_value = False
 
     response.set_cookie(
         key="graftai_access_token",
@@ -292,6 +302,9 @@ async def sso_callback(
     This endpoint is hit TWICE during OAuth:
     1. By Google (browser navigation) → we redirect to the frontend WITHOUT consuming state.
     2. By the frontend's fetch() call → we consume the state and return JSON with the token.
+    
+    CRITICAL: The state must be retrieved BEFORE completing the OAuth flow,
+    because complete_oauth2_flow may delete the state from Redis.
     """
     fetch_param = request.query_params.get("fetch") == "true"
     accept_header = request.headers.get("accept", "").lower()
@@ -312,6 +325,18 @@ async def sso_callback(
 
     # STEP 2: Frontend API call → complete the OAuth flow (consumes the state).
     try:
+        # IMPORTANT: Verify and retrieve state data BEFORE calling complete_oauth2_flow
+        # This preserves redirect_to and other session data
+        verified_state = sso._verify_state(state)
+        if not verified_state:
+            raise HTTPException(status_code=403, detail="OAuth state signature verification failed")
+        
+        # Get state data before it gets consumed
+        state_data = sso._get_oauth_state(verified_state)
+        if not state_data:
+            raise RuntimeError("Invalid or expired state")
+        
+        # Now complete the OAuth flow (this will fetch tokens and user profile)
         payload = await sso.complete_oauth2_flow(code=code, state=state)
         logger.info(
             f"SSO callback success for provider={payload.get('provider')} state=[...truncated]"
@@ -343,10 +368,8 @@ async def sso_callback(
 
         user_id = str(user.id if user else profile.get("id", "unknown"))
 
-        # consume state after DB upsert (successful auth session complete)
-        verified_state = sso._verify_state(state)
-        if verified_state:
-            sso._delete_oauth_state(verified_state)
+        # Delete state AFTER successful DB upsert and token generation
+        sso._delete_oauth_state(verified_state)
 
         # We can optionally send a welcome notification email immediately.
         try:

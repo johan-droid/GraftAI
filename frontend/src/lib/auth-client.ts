@@ -162,16 +162,34 @@ export const signIn = {
 
   social: async ({ provider }: { provider: "google" | "github" }) => {
     const redirect = `${API_BASE_URL}/auth/sso/start?provider=${provider}&redirect_to=/dashboard`;
-    const result = await fetch(redirect, { method: "GET", credentials: "include" });
-    if (!result.ok) {
-      throw new Error("Social login failed");
+    
+    // For OAuth flow, we need to ensure cookies are properly sent
+    // The backend will set session cookies that need to persist through the OAuth redirect
+    try {
+      const result = await fetch(redirect, { 
+        method: "GET", 
+        credentials: "include",
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+      if (!result.ok) {
+        throw new Error("Social login failed");
+      }
+      const data = await result.json();
+      if (data.authorization_url) {
+        // Store a flag that we're in the middle of OAuth flow
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("oauth_in_progress", "true");
+        }
+        window.location.href = data.authorization_url;
+        return { data, error: null };
+      }
+      return { error: new Error("Invalid social login response") };
+    } catch (error) {
+      console.error("OAuth start failed:", error);
+      throw error;
     }
-    const data = await result.json();
-    if (data.authorization_url) {
-      window.location.href = data.authorization_url;
-      return { data, error: null };
-    }
-    return { error: new Error("Invalid social login response") };
   },
 
   magicLink: async ({ email }: { email: string }) => {

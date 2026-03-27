@@ -21,8 +21,8 @@ function AuthCallbackInner() {
       try {
         const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || API_BASE_URL;
         // No Better Auth: just use backend sso callback path.
-      // (frontend now uses FastAPI endpoints directly)
-      // 1. Fallback to legacy code/state flow if present
+        // (frontend now uses FastAPI endpoints directly)
+        // 1. Fallback to legacy code/state flow if present
         if (code && state) {
           setStatus("Authenticating with OAuth provider...");
           
@@ -65,10 +65,10 @@ function AuthCallbackInner() {
           setStatus(data.detail || "Authentication failed");
           setTimeout(() => router.replace("/login"), 2000);
           return;
+        } else {
+          setStatus("No active session found. Redirecting to login...");
+          setTimeout(() => router.replace("/login"), 2000);
         }
-
-        setStatus("No active session found. Redirecting to login...");
-        setTimeout(() => router.replace("/login"), 2000);
       } catch (err) {
         console.error("Auth callback failure:", err);
         setStatus(`Error: ${err instanceof Error ? err.message : "Authentication failed"}`);

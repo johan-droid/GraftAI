@@ -38,28 +38,38 @@ export const getSessionSafe = async () => {
       headers["Authorization"] = `Bearer ${localToken}`;
     }
 
-    return await fetch(`${API_BASE_URL}/auth/check`, {
-      method: "GET",
-      credentials: "include",
-      headers,
-    });
+    try {
+      return await fetch(`${API_BASE_URL}/auth/check`, {
+        method: "GET",
+        credentials: "include",
+        headers,
+      });
+    } catch (error) {
+      console.error("Session check fetch failed:", error);
+      throw error;
+    }
   };
 
   const refreshSession = async () => {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-    });
-    
-    // Store the new token if refresh was successful
-    if (response.ok) {
-      const refreshData = await response.json().catch(() => null);
-      if (refreshData?.access_token) {
-        setStoredAccessToken(refreshData.access_token);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      
+      // Store the new token if refresh was successful
+      if (response.ok) {
+        const refreshData = await response.json().catch(() => null);
+        if (refreshData?.access_token) {
+          setStoredAccessToken(refreshData.access_token);
+        }
       }
+      
+      return response;
+    } catch (error) {
+      console.error("Session refresh fetch failed:", error);
+      throw error;
     }
-    
-    return response;
   };
 
   try {
@@ -181,6 +191,8 @@ export const signIn = {
         // Store a flag that we're in the middle of OAuth flow
         if (typeof window !== "undefined") {
           sessionStorage.setItem("oauth_in_progress", "true");
+          // Also store the expected redirect path
+          sessionStorage.setItem("oauth_redirect_to", data.redirect_to || "/dashboard");
         }
         window.location.href = data.authorization_url;
         return { data, error: null };

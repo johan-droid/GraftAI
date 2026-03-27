@@ -20,9 +20,7 @@ function AuthCallbackInner() {
     const handleSync = async () => {
       try {
         const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || API_BASE_URL;
-        // No Better Auth: just use backend sso callback path.
-      // (frontend now uses FastAPI endpoints directly)
-      // 1. Fallback to legacy code/state flow if present
+        if (code && state) {
         if (code && state) {
           setStatus("Authenticating with OAuth provider...");
           

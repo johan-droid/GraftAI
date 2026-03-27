@@ -58,10 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Check if we're in the middle of an OAuth flow - don't redirect to login in that case
       const oauthInProgress = typeof window !== "undefined" && sessionStorage.getItem("oauth_in_progress") === "true";
       const isAuthCallback = typeof window !== "undefined" && window.location.pathname.includes("/auth-callback");
+      const isLoginPage = typeof window !== "undefined" && window.location.pathname === "/login";
       
-      // If we're on the auth-callback page or in OAuth flow, don't force redirect to login
+      // If we're on the auth-callback page, login page, or in OAuth flow, don't force redirect to login
       // The callback page will handle the session establishment
-      if (!isAuthCallback && !oauthInProgress) {
+      if (!isAuthCallback && !isLoginPage && !oauthInProgress) {
         router.replace("/login");
       }
     }
@@ -102,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("graftai_access_token", token);
       // Clear OAuth in-progress flag after successful login
       sessionStorage.removeItem("oauth_in_progress");
+      sessionStorage.removeItem("oauth_redirect_to");
     }
     await refreshFn();
   };

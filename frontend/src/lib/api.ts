@@ -1,10 +1,9 @@
-const defaultHost = "http://localhost:8000";
 const windowOrigin = (typeof window !== "undefined" && window.location.origin) || "";
+const defaultHost = windowOrigin ? windowOrigin.replace(/:300\d/, ":8000") : "http://localhost:8000";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  (windowOrigin && windowOrigin !== "http://localhost:3000" ? windowOrigin : "") ||
   defaultHost;
 
 if (typeof window !== "undefined") {
@@ -19,7 +18,7 @@ if (typeof window !== "undefined") {
   }
 }
 
-import { getSessionSafe } from "@/lib/auth-client";
+import { getSessionSafe, getToken } from "@/lib/auth-client";
 
 interface ApiOptions {
   method?: string;
@@ -39,7 +38,12 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
     "Content-Type": "application/json",
   };
 
-  // Rely on HttpOnly cookie for auth - credentials: "include" sends cookies automatically
+  const token = getToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  // Rely on HttpOnly cookie for auth fallback - credentials: "include" sends cookies automatically
   // The backend reads 'graftai_access_token' cookie via get_current_user()
 
   const res = await fetch(`${API_BASE_URL}/api/v1${path}`, {
@@ -51,6 +55,25 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
 
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
+      // Attempt to refresh the session transparently before redirecting
+      const { data, error: refreshError } = await getSessionSafe();
+      if (data && !refreshError) {
+        // Retry the request once with the new token
+        const retryRes = await fetch(`${API_BASE_URL}/api/v1${path}`, {
+          method,
+          headers: {
+            ...headers,
+            "Authorization": `Bearer ${getToken()}`
+          },
+          body: body ? JSON.stringify(body) : undefined,
+          credentials: "include",
+        });
+
+        if (retryRes.ok) {
+          return retryRes.json() as Promise<T>;
+        }
+      }
+
       await resolveUnauthorized();
       throw new Error("Unauthorized");
     }
@@ -85,8 +108,35 @@ export async function didVerify(did: string) {
   return apiFetch<{ status: string }>("/auth/did/verify", {
     method: "POST",
     body: { did },
-  }
-  );
+  });
+}
+
+export async function syncUserTimezone(timezone: string) {
+  return apiFetch<{ status: string; timezone: string }>("/auth/sync-timezone", {
+    method: "POST",
+    body: { timezone },
+  });
+}
+
+export async function syncUserConsent(consents: { 
+  consent_analytics?: boolean; 
+  consent_notifications?: boolean; 
+  consent_ai_training?: boolean 
+}) {
+  return apiFetch<{ status: string }>("/auth/sync-consent", {
+    method: "POST",
+    body: consents,
+  });
+}
+
+// ──────────────────────────────────────
+// Auth: Account Deletion
+// Backend: DELETE /auth/account
+// ──────────────────────────────────────
+export async function deleteAccount() {
+  return apiFetch<{ message: string }>("/auth/account", {
+    method: "DELETE",
+  });
 }
 
 // ──────────────────────────────────────
@@ -120,11 +170,11 @@ export async function checkAttribute(attribute: string, value: string) {
 // Services: Analytics
 // Backend: POST /analytics/summary  (Pydantic body)
 // ──────────────────────────────────────
-export async function getAnalyticsSummary() {
-  return apiFetch<{ summary: string; details?: { meetings: number; hours: number; growth: number } }>("/analytics/summary", {
-    method: "POST",
-    body: { range: "7d" },
-  });
+export async function getAnalyticsSummary(range: string = "7d") {
+  return apiFetch<{ summary: string; details?: { meetings: number; hours: number; growth: number } }>(
+    `/analytics/summary?range=${encodeURIComponent(range)}`, 
+    { method: "GET" }
+  );
 }
 
 // ──────────────────────────────────────

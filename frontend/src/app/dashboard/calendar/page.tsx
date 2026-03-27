@@ -47,7 +47,6 @@ export default function PremiumCalendarPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [isCreating, setIsCreating] = useState(false);
-  const [recommendations, setRecommendations] = useState<{start: string, end: string, local_label?: string, guest_label?: string}[]>([]);
 
   // Coordination State
   const [coordinationMode, setCoordinationMode] = useState(false);
@@ -95,23 +94,6 @@ export default function PremiumCalendarPage() {
     fetchEventsData();
   }, [currentDate]);
 
-  // Fetch AI Recommendations (Available Slots)
-  useEffect(() => {
-    const fetchSlotsData = async () => {
-      try {
-        const dateISO = currentDate.toISOString();
-        const data = await getAvailableSlots(
-          dateISO, 
-          60, 
-          coordinationMode ? targetTimezone : undefined
-        );
-        setRecommendations(data.slice(0, 3)); // show top 3
-      } catch (err) {
-        console.error("Failed to fetch slots:", err);
-      }
-    };
-    fetchSlotsData();
-  }, [currentDate, coordinationMode, targetTimezone]);
 
   const toggleMonth = (dir: "prev" | "next") => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + (dir === "next" ? 1 : -1), 1));
@@ -192,39 +174,36 @@ export default function PremiumCalendarPage() {
   return (
     <div className="min-h-screen space-y-8 pb-12">
       {/* Header with Dashboard Link */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div className="flex flex-col gap-4 mb-4 md:mb-8 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-white mb-2">
-            Sovereign <span className="text-primary text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-400">Calendar</span>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white mb-1 bg-gradient-to-r from-white via-white to-primary/50 bg-clip-text leading-tight">
+            Sovereign <span className="text-primary tracking-tighter lowercase opacity-80">Calendar</span>
           </h1>
-          <p className="text-slate-400 font-medium">AI-Synchronized high-fidelity scheduling engine.</p>
+          <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest">AI-Synced Scheduling Engine</p>
         </div>
-        <div className="flex items-center gap-4">
-           <button className="p-3 bg-slate-900 border border-slate-800 rounded-full hover:bg-slate-800 transition-colors shadow-lg">
-             <Settings className="w-5 h-5 text-slate-400" />
-           </button>
-           <Link href="/dashboard" className="px-8 py-3 bg-primary/10 border border-primary/20 text-primary rounded-full hover:bg-primary/20 transition-all font-bold flex items-center gap-2 shadow-sm">
-             <CalendarCheck2 className="w-5 h-5" /> Dashboard
+        <div className="flex items-center gap-2">
+           <Link href="/dashboard" className="flex-1 md:flex-none px-4 py-2 bg-primary/10 border border-primary/20 text-primary rounded-xl hover:bg-primary/20 transition-all font-bold text-xs md:text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95">
+             <CalendarCheck2 className="w-4 h-4" /> Dashboard
            </Link>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Main Calendar View */}
-        <div className="lg:col-span-8 space-y-6">
-          <div className="bg-slate-950/40 border border-slate-800/60 rounded-[2rem] p-8 backdrop-blur-xl shadow-2xl">
+        <div className="lg:col-span-8 space-y-4 md:space-y-6">
+          <div className="bg-slate-950/40 border border-slate-800/60 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-8 backdrop-blur-xl shadow-2xl relative">
             {/* Calendar Controls */}
-            <div className="flex items-center justify-between mb-10">
-              <h2 className="text-2xl font-bold text-white capitalize">
+            <div className="flex items-center justify-between mb-6 md:mb-10">
+              <h2 className="text-lg md:text-2xl font-black text-white capitalize tracking-tight">
                 {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
               </h2>
-              <div className="flex gap-2 p-1 bg-slate-900/80 rounded-2xl border border-slate-800">
-                <button onClick={() => toggleMonth("prev")} className="p-2 hover:bg-slate-800 rounded-xl transition-colors">
-                   <ChevronLeft className="w-5 h-5 text-white" />
+              <div className="flex gap-1.5 p-1 bg-slate-900/60 rounded-xl border border-slate-800">
+                <button onClick={() => toggleMonth("prev")} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                   <ChevronLeft className="w-4 h-4 text-slate-400" />
                 </button>
-                <div className="w-[1px] bg-slate-800 my-1 mx-1" />
-                <button onClick={() => toggleMonth("next")} className="p-2 hover:bg-slate-800 rounded-xl transition-colors">
-                   <ChevronRight className="w-5 h-5 text-white" />
+                <div className="w-[1px] bg-slate-800 my-1 mx-0.5" />
+                <button onClick={() => toggleMonth("next")} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                   <ChevronRight className="w-4 h-4 text-slate-400" />
                 </button>
               </div>
             </div>
@@ -239,7 +218,7 @@ export default function PremiumCalendarPage() {
             </div>
 
             {/* Grid Layout */}
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-1.5 md:gap-3">
               {days.map((day, idx) => {
                 const dayEvents = getEventsForDay(day);
                 const isSelected = selectedDate?.toDateString() === day.toDateString();
@@ -257,25 +236,25 @@ export default function PremiumCalendarPage() {
                       }
                     }}
                     className={`
-                      relative flex flex-col items-center justify-center aspect-square rounded-[1.5rem] cursor-pointer transition-all border
-                      ${isSelected ? "bg-primary border-primary shadow-[0_0_20px_rgba(138,43,226,0.3)]" : 
+                      relative flex flex-col items-center justify-center aspect-square rounded-xl md:rounded-[1.5rem] cursor-pointer transition-all border
+                      ${isSelected ? "bg-primary border-primary shadow-[0_0_15px_rgba(138,43,226,0.3)]" : 
                         isCurrentMonth ? "bg-slate-900/30 border-slate-800/40 hover:bg-slate-800/50 hover:border-slate-700" : 
-                        "bg-transparent border-transparent opacity-20"}
+                        "bg-transparent border-transparent opacity-10"}
                     `}
                   >
-                    <span className={`text-lg font-bold ${isSelected ? "text-white" : isToday ? "text-primary" : "text-slate-300"}`}>
+                    <span className={`text-base md:text-lg font-black ${isSelected ? "text-white" : isToday ? "text-primary" : "text-slate-400"}`}>
                       {day.getDate()}
                     </span>
                     
                     {/* Event Dots Under Dates */}
-                    <div className="flex gap-1 mt-1 justify-center min-h-[6px]">
+                    <div className="flex gap-1 mt-1 justify-center min-h-[4px]">
                       {dayEvents.slice(0, 3).map(e => (
-                        <div key={e.id} className={`w-1.5 h-1.5 rounded-full ${CATEGORIES[e.category]?.dot || "bg-slate-400"}`} />
+                        <div key={e.id} className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full ${CATEGORIES[e.category]?.dot || "bg-slate-400"}`} />
                       ))}
                     </div>
 
                     {isToday && !isSelected && (
-                       <div className="absolute top-2 right-3 w-1.5 h-1.5 bg-primary rounded-full" />
+                       <div className="absolute top-1.5 right-1.5 w-1 h-1 bg-primary rounded-full shadow-[0_0_5px_rgba(79,70,229,0.8)]" />
                     )}
                   </motion.div>
                 );
@@ -288,84 +267,72 @@ export default function PremiumCalendarPage() {
         <div className="lg:col-span-4 space-y-6">
            <div className="bg-white/40 dark:bg-slate-950/40 border border-slate-200/60 dark:border-slate-800/60 rounded-[2.5rem] p-8 backdrop-blur-xl h-full shadow-2xl">
              
-             {/* Coordination Controls */}
-             <div className="mb-8 p-6 bg-primary/10 border border-primary/20 rounded-[2rem] shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-primary uppercase tracking-widest">Cross-Country</h3>
+             {/* Coordination Controls / Cross-Country Capsule */}
+             <div className="mb-8 p-8 bg-[#0c0e10] border border-[#333537]/20 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50" />
+                
+                <div className="relative flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-black text-[#dbb8ff] uppercase tracking-[0.2em]">Cross-Country</h3>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Multi-Zone Sync</p>
+                  </div>
+                  
                   <button 
                     onClick={() => setCoordinationMode(!coordinationMode)}
                     className={cn(
-                      "w-12 h-6 rounded-full transition-all relative shadow-inner",
-                      coordinationMode ? "bg-primary" : "bg-slate-300 dark:bg-slate-700"
+                      "w-20 h-10 rounded-full transition-all duration-500 relative flex items-center px-1 shadow-[inner_0_2px_4px_rgba(0,0,0,0.4)]",
+                      coordinationMode ? "bg-[#3a4859]" : "bg-[#1e2022]"
                     )}
                   >
-                    <div className={cn(
-                      "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all",
-                      coordinationMode ? "translate-x-6" : "translate-x-0"
-                    )} />
+                    <motion.div 
+                      animate={{ x: coordinationMode ? 40 : 0 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      className={cn(
+                        "w-8 h-8 rounded-full transition-all duration-500 flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.2)]",
+                        coordinationMode ? "bg-white" : "bg-slate-400"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-full h-full rounded-full transition-all duration-500",
+                        coordinationMode ? "bg-white blur-[1px]" : "bg-slate-400"
+                      )} />
+                      {coordinationMode && (
+                        <div className="absolute inset-0 rounded-full bg-white opacity-20 animate-pulse" />
+                      )}
+                    </motion.div>
                   </button>
                 </div>
                 
                 <AnimatePresence>
                   {coordinationMode && (
                     <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-3 overflow-hidden"
+                      initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                      animate={{ opacity: 1, height: "auto", marginTop: 24 }}
+                      exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                      className="space-y-4 overflow-hidden relative"
                     >
-                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Guest Timezone</label>
-                      <select 
-                        value={targetTimezone}
-                        onChange={(e) => setTargetTimezone(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none"
-                      >
-                        <option value="UTC">Universal Coordinated Time (UTC)</option>
-                        <option value="America/New_York">New York (EST/EDT)</option>
-                        <option value="Europe/London">London (GMT/BST)</option>
-                        <option value="Asia/Tokyo">Tokyo (JST)</option>
-                        <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
-                        <option value="Asia/Dubai">Dubai (GST)</option>
-                      </select>
+                      <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-[#333537]/30 to-transparent mb-4" />
+                      <label className="text-[10px] text-slate-500 font-black uppercase tracking-wider block">Target Timezone</label>
+                      <div className="relative">
+                        <select 
+                          value={targetTimezone}
+                          onChange={(e) => setTargetTimezone(e.target.value)}
+                          className="w-full bg-[#121416] border border-[#333537]/40 rounded-2xl px-5 py-4 text-sm font-bold text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer hover:border-primary/30"
+                        >
+                          <option value="UTC">Universal Time (UTC)</option>
+                          <option value="America/New_York">New York (EST/EDT)</option>
+                          <option value="Europe/London">London (GMT/BST)</option>
+                          <option value="Asia/Tokyo">Tokyo (JST)</option>
+                          <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                          <option value="Asia/Dubai">Dubai (GST)</option>
+                        </select>
+                        <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <ChevronRight className="w-4 h-4 text-slate-600 rotate-90" />
+                        </div>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-             </div>
-
-             <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">AI Recommendations</h3>
-             <div className="space-y-4">
-                {recommendations.length > 0 ? recommendations.map((slot, i) => (
-                  <div key={i} className="p-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
-                     <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Plus className="w-4 h-4 text-primary cursor-pointer" />
-                     </div>
-                     <div className="flex items-center gap-2 mb-3">
-                       <Clock className="w-4 h-4 text-primary" />
-                       <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Optimal Overlap</span>
-                     </div>
-                     
-                     <div className="flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Local</span>
-                           <span className="text-xs font-mono text-slate-800 dark:text-slate-100 font-bold">
-                              {slot.local_label || `${new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                           </span>
-                        </div>
-                        {slot.guest_label && (
-                          <div className="flex items-center justify-between pt-2 border-t border-slate-50 dark:border-slate-800">
-                             <span className="text-[10px] text-primary/60 font-bold uppercase tracking-wider">Guest</span>
-                             <span className="text-xs font-mono text-primary font-bold">
-                                {slot.guest_label}
-                             </span>
-                          </div>
-                        )}
-                     </div>
-                  </div>
-                )) : (
-                  <div className="py-8 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-                    <p className="text-sm text-slate-400 font-medium italic">No premium slots available</p>
-                  </div>
-                )}
              </div>
 
              <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800">

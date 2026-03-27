@@ -10,7 +10,7 @@ def self_pinger():
     
     public_url = os.getenv("APP_BASE_URL", "https://graftai.onrender.com").rstrip("/")
     health_url = f"{public_url}/health"
-    local_url = "http://localhost:8000/health"
+    local_url = "http://127.0.0.1:8000/health"
     
     while True:
         try:

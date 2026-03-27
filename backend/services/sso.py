@@ -42,9 +42,9 @@ def _sign_state(state: str) -> str:
 
 def _verify_state(signed_state: str) -> str | None:
     """Verify a signed state and return the original state string."""
-    if ":" not in signed_state:
+    if "." not in signed_state:
         return None
-    state, signature = signed_state.split(":", 1)
+    state, signature = signed_state.split(".", 1)
     expected = _sign_state(state)
     if hmac.compare_digest(expected, signature):
         return state
@@ -110,6 +110,7 @@ PROVIDERS = {
         "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
         "scope": "openid profile email",
         "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
+        "revoke_url": "https://oauth2.googleapis.com/revoke",
     },
     "microsoft": {
         "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
@@ -182,8 +183,9 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
         redirect_uri=redirect_uri,
     )
 
-    # Apple requires response_mode=form_post
     extra_params = {}
+    if config.get("prompt"):
+        extra_params["prompt"] = config["prompt"]
     if config.get("response_mode"):
         extra_params["response_mode"] = config["response_mode"]
 
@@ -193,7 +195,7 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
 
     # Sign the state to prevent tampering (SSRF/CSRF hardening)
     signature = _sign_state(state)
-    signed_state = f"{state}:{signature}"
+    signed_state = f"{state}.{signature}"
 
     _store_oauth_state(
         state,
@@ -227,6 +229,9 @@ async def complete_oauth2_flow(code: str, state: str):
     data = _get_oauth_state(original_state)
     if not data:
         raise RuntimeError("Invalid or expired state")
+    
+    # Enforce one-time use semantics
+    _delete_oauth_state(original_state)
 
     created_at = datetime.fromisoformat(
         data.get("created_at", datetime.now(timezone.utc).isoformat())
@@ -323,3 +328,42 @@ async def complete_oauth2_flow(code: str, state: str):
         "redirect_to": redirect_to,
         "oauth_state": original_state,
     }
+
+
+async def revoke_provider_token(provider: str, token: dict):
+    """
+    Revoke access on the provider's side (Google, GitHub, etc.)
+    This ensures that the next login will require a fresh consent screen.
+    """
+    config = PROVIDERS.get(provider.lower())
+    if not config or not config.get("revoke_url"):
+        logger.info(f"No revocation URL for provider {provider}")
+        return False
+
+    import httpx
+
+    # Google revocation
+    if provider.lower() == "google":
+        revoke_token = token.get("refresh_token") or token.get("access_token")
+        if not revoke_token:
+            return False
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                # Google revocation endpoint
+                resp = await client.post(
+                    config["revoke_url"], params={"token": revoke_token}
+                )
+                if resp.status_code == 200:
+                    logger.info(f"Successfully revoked Google token for {provider}")
+                    return True
+            except Exception as e:
+                logger.error(f"Failed to revoke Google token: {e}")
+                return False
+
+    # GitHub revocation (requires Basic Auth with client_id/secret)
+    # Note: GitHub typically requires revoking the entire grant via API, 
+    # which is more complex as it requires an admin token or a user delete.
+    # For now, we focus on Google as per user request.
+
+    return False

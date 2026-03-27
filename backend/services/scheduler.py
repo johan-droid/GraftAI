@@ -15,8 +15,21 @@ import pytz
 logger = logging.getLogger(__name__)
 
 
+def _generate_meeting_link(platform: str, event_id: int) -> str:
+    """Simulates SaaS-grade meeting link generation."""
+    import uuid
+    room_id = str(uuid.uuid4())[:12].replace("-", "")
+    if platform == "google_meet":
+        return f"https://meet.google.com/{room_id[:3]}-{room_id[3:7]}-{room_id[7:10]}"
+    elif platform == "zoom":
+        return f"https://zoom.us/j/{room_id[:10]}"
+    elif platform == "teams":
+        return f"https://teams.microsoft.com/l/meetup-join/{room_id}"
+    return f"https://graftai.com/meeting/{room_id}"
+
+
 async def get_events_for_range(
-    db: AsyncSession, user_id: int, start: datetime, end: datetime
+    db: AsyncSession, user_id: str, start: datetime, end: datetime
 ) -> List[EventTable]:
     """Fetch all events for a user within a specific time range."""
     stmt = (
@@ -37,7 +50,7 @@ async def get_events_for_range(
 
 async def find_available_slots(
     db: AsyncSession,
-    user_id: int,
+    user_id: str,
     date: datetime,
     duration_minutes: int = 30,
     working_start: int = 9,  # 9 AM
@@ -207,6 +220,10 @@ async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
     if conflict_result.scalars().first():
         raise ValueError("Event overlaps with existing schedule. Please choose another time.")
 
+    # Generate meeting links if applicable
+    if new_event.is_meeting and new_event.meeting_platform and not new_event.meeting_link:
+        new_event.meeting_link = _generate_meeting_link(new_event.meeting_platform, new_event.id)
+
     db.add(new_event)
     await db.commit()
     await db.refresh(new_event)
@@ -233,7 +250,7 @@ async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
 
 
 async def update_event(
-    db: AsyncSession, event_id: int, user_id: int, update_data: dict
+    db: AsyncSession, event_id: int, user_id: str, update_data: dict
 ) -> Optional[EventTable]:
     """Update event and sync changes to LLM service."""
     stmt = select(EventTable).where(
@@ -285,7 +302,7 @@ async def update_event(
     return event
 
 
-async def delete_event(db: AsyncSession, event_id: int, user_id: int) -> bool:
+async def delete_event(db: AsyncSession, event_id: int, user_id: str) -> bool:
     """
     Remove event from DB and purge from AI long-term memory.
     Completes the real-time feedback loop by ensuring 'deleted' reality is synced.

@@ -15,7 +15,10 @@ import {
   X, 
   CheckCircle2,
   CalendarCheck2,
-  Loader2
+  Loader2,
+  Sparkles,
+  Video,
+  User as UserIcon
 } from "lucide-react";
 import { 
   getEvents, 
@@ -29,10 +32,13 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = {
-  meeting: { label: "Meeting", color: "#8A2BE2", dot: "bg-violet-500" },
-  event: { label: "Event", color: "#FFD700", dot: "bg-yellow-500" },
-  birthday: { label: "Birthday", color: "#FF69B4", dot: "bg-pink-500" },
-  task: { label: "Task", color: "#00CED1", dot: "bg-cyan-500" },
+  meeting: { label: "Meeting", color: "#8A2BE2", dot: "bg-violet-500", icon: Video },
+  task: { label: "Task", color: "#00CED1", dot: "bg-cyan-500", icon: CheckCircle2 },
+  birthday: { label: "Birthday", color: "#FF69B4", dot: "bg-pink-500", icon: Sparkles },
+  deep_work: { label: "Deep Work", color: "#6366F1", dot: "bg-indigo-500", icon: Clock },
+  personal: { label: "Personal", color: "#10B981", dot: "bg-emerald-500", icon: UserIcon },
+  out_of_office: { label: "Out of Office", color: "#EF4444", dot: "bg-red-500", icon: X },
+  event: { label: "Generic", color: "#94A3B8", dot: "bg-slate-400", icon: CalendarIcon },
 } as const;
 
 type CalendarCategory = keyof typeof CATEGORIES;
@@ -92,6 +98,7 @@ export default function PremiumCalendarPage() {
 
   useEffect(() => {
     fetchEventsData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate]);
 
 
@@ -530,7 +537,7 @@ export default function PremiumCalendarPage() {
                                onChange={(e) => setEditingEvent({...editingEvent, category: e.target.value as CalendarCategory})}
                                className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-primary appearance-none"
                             >
-                               {Object.keys(CATEGORIES).map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                               {Object.keys(CATEGORIES).map(c => <option key={c} value={c}>{c.replace(/_/g, ' ').toUpperCase()}</option>)}
                             </select>
                          </div>
                       </div>

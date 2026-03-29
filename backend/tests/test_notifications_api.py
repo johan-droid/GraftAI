@@ -5,12 +5,20 @@ from backend.api.main import app
 from backend.auth.routes import _create_jwt_token
 
 
-def test_send_notification_route(monkeypatch):
+from backend.utils.tenant import get_current_org_id, get_current_workspace_id
+
+import pytest
+
+@pytest.mark.asyncio
+async def test_send_notification_route(monkeypatch):
     fake_send = AsyncMock()
     monkeypatch.setattr("backend.api.notifications.send_custom_notification", fake_send)
 
-    token_data = _create_jwt_token("1", email="user@example.com")
+    token_data = await _create_jwt_token("1", email="user@example.com")
     authorization_header = {"Authorization": f"Bearer {token_data['access_token']}"}
+
+    app.dependency_overrides[get_current_org_id] = lambda: 1
+    app.dependency_overrides[get_current_workspace_id] = lambda: 1
 
     client = TestClient(app)
     payload = {

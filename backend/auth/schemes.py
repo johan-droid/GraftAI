@@ -13,13 +13,14 @@ from dotenv import load_dotenv
 from backend.services.access_control import check_user_role
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.utils.db import get_db
+from backend.services.redis_client import get_redis
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
 # Ensure environment variables are loaded from backend/.env first
 project_root = Path(__file__).resolve().parents[1]
-load_dotenv(project_root / ".env")
+load_dotenv(project_root / ".env", override=True)
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
@@ -43,28 +44,26 @@ NEON_AUTH_ORIGIN = f"{_parsed_neon.scheme}://{_parsed_neon.netloc}"
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
 AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
 
-# Redis client for token blacklist
-_redis_client = None
+# Redundant _get_redis_client removed, centralized in backend.services.redis_client
 
 
-def _get_redis_client():
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
-
-
-def blacklist_token(token: str, expires_in: int):
+async def blacklist_token(token: str, expires_in: int):
     """Add token to blacklist with TTL matching token expiry."""
-    client = _get_redis_client()
-    client.setex(f"token:blacklist:{token}", expires_in, "1")
+    try:
+        client = await get_redis()
+        await client.setex(f"token:blacklist:{token}", expires_in, "1")
+    except Exception as e:
+        logger.warning(f"Failed to blacklist token (Redis offline): {e}")
 
 
-def is_token_blacklisted(token: str) -> bool:
+async def is_token_blacklisted(token: str) -> bool:
     """Check if token has been revoked."""
-    client = _get_redis_client()
-    return client.exists(f"token:blacklist:{token}") > 0
+    try:
+        client = await get_redis()
+        return await client.exists(f"token:blacklist:{token}") > 0
+    except Exception as e:
+        logger.warning(f"Failed to check token blacklist (Redis offline, failing open): {e}")
+        return False
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
@@ -208,7 +207,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if is_token_blacklisted(token):
+    if await is_token_blacklisted(token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",
@@ -224,23 +223,26 @@ async def get_current_user(
         )
 
     # Session Persistence & Active Tracking for JWTs
-    client = _get_redis_client()
-    session_key = f"active_session:{token[-20:]}"
+    try:
+        client = await get_redis()
+        session_key = f"active_session:{token[-20:]}"
 
-    if client.exists(session_key):
-        client.expire(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60)
-    else:
-        # Allowed: token may still be valid at JWT layer after a server/Redis restart.
-        # Recreate the session marker to avoid accidental early logout.
-        client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, payload.get("sub"))
+        if await client.exists(session_key):
+            await client.expire(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+        else:
+            # Allowed: token may still be valid at JWT layer after a server/Redis restart.
+            # Recreate the session marker to avoid accidental early logout.
+            await client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, payload.get("sub"))
 
-    # Update local telemetry (useful for load balancer observability)
-    backend_id = os.getenv("HOSTNAME", "unknown-worker")
-    client.hset(
-        f"session_telemetry:{token[-20:]}",
-        mapping={"last_seen": str(datetime.now(timezone.utc)), "backend": backend_id},
-    )
-    client.expire(f"session_telemetry:{token[-20:]}", 3600)
+        # Update local telemetry (useful for load balancer observability)
+        backend_id = os.getenv("HOSTNAME", "unknown-worker")
+        await client.hset(
+            f"session_telemetry:{token[-20:]}",
+            mapping={"last_seen": str(datetime.now(timezone.utc)), "backend": backend_id},
+        )
+        await client.expire(f"session_telemetry:{token[-20:]}", 3600)
+    except Exception as e:
+        logger.warning(f"Redis session tracking failure (failing open): {e}")
 
     return payload
 

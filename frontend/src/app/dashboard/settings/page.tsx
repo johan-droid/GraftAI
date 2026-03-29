@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAuthContext } from "@/app/providers/auth-provider";
-import { syncUserConsent, deleteAccount } from "@/lib/api";
+import { User, Shield, Bell, Eye, Loader2, Check, Video, ExternalLink, RefreshCw } from "lucide-react";
+import { syncUserConsent, deleteAccount, API_BASE_URL, syncCalendars } from "@/lib/api";
 import { motion } from "framer-motion";
-import { User, Shield, Bell, Eye, Loader2, Check } from "lucide-react";
+import { useAuthContext } from "@/app/providers/auth-provider";
 import { cn } from "@/lib/utils";
 
 const CONSENT_TYPES = [
@@ -20,6 +20,9 @@ type SettingsUser = {
   consent_analytics?: boolean;
   consent_notifications?: boolean;
   consent_ai_training?: boolean;
+  zoom_connected?: boolean;
+  google_connected?: boolean;
+  microsoft_connected?: boolean;
 } | null;
 
 export default function SettingsPage() {
@@ -37,6 +40,8 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
 
   // Sync state if user object updates
   useEffect(() => {
@@ -79,6 +84,21 @@ export default function SettingsPage() {
       console.error("Failed to update consent:", err);
     } finally {
       setSaving(null);
+    }
+  };
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    try {
+      await syncCalendars();
+      setSyncSuccess(true);
+      setTimeout(() => setSyncSuccess(false), 3000);
+      await refresh(); // Refresh session flags
+    } catch (err) {
+      console.error("Manual sync failed:", err);
+      alert("Failed to sync calendars. Please check your connections.");
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -182,6 +202,134 @@ export default function SettingsPage() {
               </button>
             </div>
           ))}
+        </div>
+      </motion.div>
+
+      {/* Integrations Section */}
+      <motion.div variants={itemVariants} className="bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-[1.5rem] md:rounded-[2.5rem] p-5 md:p-8 shadow-2xl relative overflow-hidden group">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+        <h2 className="text-sm md:text-lg font-bold text-white mb-4 md:mb-6 flex items-center gap-3 relative z-10">
+          <div className="p-1.5 md:p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/20">
+            <Video className="w-4 h-4 md:w-5 md:h-5" />
+          </div>
+          Connected Ecosystem
+        </h2>
+        
+        {/* Sync Trigger */}
+        {(settingsUser?.google_connected || settingsUser?.microsoft_connected) && (
+          <div className="mb-6 flex items-center justify-between p-4 rounded-2xl bg-primary/5 border border-primary/20">
+            <div>
+              <p className="text-xs font-bold text-white uppercase tracking-wider mb-1">Manual Force Sync</p>
+              <p className="text-[10px] text-slate-500 font-medium">Coordinate all external schedules immediately.</p>
+            </div>
+            <button
+              onClick={handleManualSync}
+              disabled={syncing}
+              className={cn(
+                "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all",
+                syncSuccess 
+                  ? "bg-emerald-500 text-white" 
+                  : "bg-primary text-white hover:bg-primary/80 active:scale-95 disabled:opacity-50"
+              )}
+            >
+              {syncing ? (
+                <> <Loader2 className="w-3.5 h-3.5 animate-spin" /> Syncing... </>
+              ) : syncSuccess ? (
+                <> <Check className="w-3.5 h-3.5" /> Synchronized </>
+              ) : (
+                <> <RefreshCw className="w-3.5 h-3.5" /> Sync Now </>
+              )}
+            </button>
+          </div>
+        )}
+        
+        <div className="space-y-4 relative z-10">
+          {/* Zoom Integration */}
+          <div className="p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] bg-slate-900/40 border border-slate-800 transition-all hover:bg-slate-900/60">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center p-2 shadow-xl shadow-blue-500/10 text-black">
+                   <Video className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-white uppercase tracking-tight">Zoom Video Communications</p>
+                  <p className="text-xs text-slate-500 font-medium">Generate native meeting links directly from GraftAI.</p>
+                </div>
+              </div>
+
+              {settingsUser?.zoom_connected ? (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-bold uppercase tracking-widest">
+                  <Check className="w-3.5 h-3.5" />
+                  Active Connection
+                </div>
+              ) : (
+                <a 
+                  href={`${API_BASE_URL}/auth/zoom/connect`}
+                  className="w-full md:w-auto px-6 h-12 bg-white text-black rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-200 transition-all active:scale-95"
+                >
+                  Link Account <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Google Calendar Integration */}
+          <div className="p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] bg-slate-900/40 border border-slate-800 transition-all hover:bg-slate-900/60">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center p-2 shadow-xl shadow-red-500/10">
+                   <img src="https://www.gstatic.com/images/branding/product/1x/calendar_2020q4_48dp.png" className="w-6 h-6" alt="Google" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-white uppercase tracking-tight">Google Calendar Service</p>
+                  <p className="text-xs text-slate-500 font-medium">Sync availability and prevent external scheduling conflicts.</p>
+                </div>
+              </div>
+
+              {settingsUser?.google_connected ? (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-bold uppercase tracking-widest">
+                  <Check className="w-3.5 h-3.5" />
+                  Sovereign Sync Enabled
+                </div>
+              ) : (
+                <a 
+                  href={`${API_BASE_URL}/api/v1/auth/google/connect`}
+                  className="w-full md:w-auto px-6 h-12 bg-white text-black rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-200 transition-all active:scale-95"
+                >
+                  Link Account <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Microsoft Graph Integration */}
+          <div className="p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] bg-slate-900/40 border border-slate-800 transition-all hover:bg-slate-900/60">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-[#0078d4] flex items-center justify-center p-2 shadow-xl shadow-blue-500/10">
+                   <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Microsoft_logo.svg/2048px-Microsoft_logo.svg.png" className="w-6 h-auto brightness-0 invert" alt="Microsoft" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-white uppercase tracking-tight">Microsoft Graph (Outlook)</p>
+                  <p className="text-xs text-slate-500 font-medium">Connect Outlook/Teams for Enterprise-grade coordination.</p>
+                </div>
+              </div>
+
+              {settingsUser?.microsoft_connected ? (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-bold uppercase tracking-widest">
+                  <Check className="w-3.5 h-3.5" />
+                  Sovereign Sync Enabled
+                </div>
+              ) : (
+                <a 
+                  href={`${API_BASE_URL}/api/v1/auth/microsoft/connect`}
+                  className="w-full md:w-auto px-6 h-12 bg-white text-black rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-200 transition-all active:scale-95"
+                >
+                  Link Account <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+          </div>
         </div>
       </motion.div>
 

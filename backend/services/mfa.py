@@ -3,41 +3,48 @@ MFA and device fingerprinting implementation with Redis-backed storage.
 """
 
 import pyotp
-import json
+import logging
 import os
-from typing import Optional
-import redis
+from .redis_client import redis_service
 
-# Redis client for MFA secrets
-_redis_client = None
+logger = logging.getLogger(__name__)
 
-
-def _get_redis_client():
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
-
-
-def start_mfa_enrollment(user_id: int) -> dict:
+async def start_mfa_enrollment(user_id: int) -> dict:
+    """
+    Generate MFA secret and provisioning URI (Async).
+    """
     secret = pyotp.random_base32()
-    client = _get_redis_client()
-    client.setex(f"mfa:secret:{user_id}", 86400, secret)  # 24h TTL
+    client = redis_service.client
+    
+    try:
+        await client.setex(f"mfa:secret:{user_id}", 86400, secret)  # 24h TTL
+    except Exception as e:
+        logger.error(f"❌ Failed to store MFA secret for user {user_id}: {e}")
+
     otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
         name=f"user{user_id}@graftai", issuer_name="GraftAI"
     )
     return {"user_id": user_id, "secret": secret, "otp_uri": otp_uri}
 
 
-def verify_mfa_token(user_id: int, token: str) -> bool:
-    client = _get_redis_client()
-    secret = client.get(f"mfa:secret:{user_id}")
-    if not secret:
-        return False
+async def verify_mfa_token(user_id: int, token: str) -> bool:
+    """
+    Verify the MFA token against the stored secret (Async).
+    """
+    client = redis_service.client
+    
+    try:
+        secret = await client.get(f"mfa:secret:{user_id}")
+        if not secret:
+            logger.warning(f"⚠ MFA secret not found for user {user_id} (expired or not started)")
+            return False
 
-    totp = pyotp.TOTP(secret)
-    return totp.verify(token, valid_window=1)
+        totp = pyotp.TOTP(secret)
+        # Use a window of 1 to allow for slight clock drift
+        return totp.verify(token, valid_window=1)
+    except Exception as e:
+        logger.error(f"❌ MFA verification error for user {user_id}: {e}")
+        return False
 
 
 def check_device_fingerprint(user_id: int, fingerprint: str) -> bool:

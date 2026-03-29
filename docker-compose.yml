@@ -1,77 +1,36 @@
-version: "3.9"
 services:
-  postgres:
-    image: postgres:15
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: graftai
-      POSTGRES_PASSWORD: graftai
-      POSTGRES_DB: graftai
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-  redis:
-    image: redis:7
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    restart: unless-stopped
-    deploy:
-      replicas: 3
-    depends_on:
-      - postgres
-      - redis
-    expose:
-      - "8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    env_file:
-      - ./backend/.env
-    environment:
-      ENV: production
-      DATABASE_URL: postgresql+asyncpg://graftai:graftai@postgres:5432/graftai
-      REDIS_URL: redis://redis:6379/0
-      FORCE_GROQ: "1"
-      # CORS origins must trust the load balancer and frontend
-      CORS_ORIGINS: http://localhost:8000,http://localhost:3000
-      ENABLED_AUTH_METHODS: "sso,passwordless,mfa"
-
-  # Custom Load Balancer (Nginx)
-  load_balancer:
-    build: 
-      context: ./nginx
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    depends_on:
-      backend:
-         condition: service_healthy
     ports:
-      - "8000:80"
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+    # Backend context is already 'backend/'
+    # app.py is now located at 'backend/app.py'
+    command: python app.py
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    restart: unless-stopped
-    depends_on:
-      - load_balancer
-    # Note: NEXT_PUBLIC_API_BASE_URL is baked in during build in some cases,
-    # but with standalone it can be dynamic if handled.
-    environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    networks:
+      - graft-network
 
-volumes:
-  postgres_data:
+networks:
+  graft-network:
+    driver: bridge

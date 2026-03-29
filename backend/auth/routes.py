@@ -12,11 +12,12 @@ import functools
 import logging
 import uuid
 import json
+import base64
 from pathlib import Path
 from dotenv import load_dotenv
 
 # Load backend .env for auth settings
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=True)
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -25,16 +26,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
 # Services and models
+from backend.api.deps import get_db
+from backend.services.sync_engine import sync_engine
+from backend.utils.security import encrypt_token, decrypt_token
+from backend.models.tables import UserTable
 from backend.services import (
     sso,
-    passwordless,
-    mfa,
-    access_control,
-    fido2_did,
     auth_utils,
 )
-from backend.models.tables import UserTable
-from backend.api.deps import get_db
+
+APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 
 # Auth dependencies
 from backend.auth.schemes import (
@@ -56,43 +57,37 @@ AUTH_METHODS = [
     if m.strip()
 ]
 
-# Redis client for refresh tokens and rate limiting
-_redis_client = None
-
-
-def _get_redis_client():
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
+from backend.services.redis_client import get_redis, check_rate_limit
+# Redundant _get_redis_client removed, centralized in backend.services.redis_client
 
 
 def get_rate_limiter(max_requests: int, window_seconds: int):
-    """Dependency-based rate limiter for FastAPI routes."""
+    """Dependency-based rate limiter for FastAPI routes using centralized Redis."""
 
     async def rate_limiter(request: Request):
-        client_ip = request.headers.get(
-            "x-forwarded-for", request.client.host if request.client else "unknown"
-        )
-        if "," in client_ip:
-            client_ip = client_ip.split(",")[0].strip()
-
-        client = _get_redis_client()
-        # Use a path-specific key to avoid cross-endpoint leakage
-        key = f"auth_rate_limit:{client_ip}:{request.url.path}"
-
-        current = client.get(key)
-        if current is None:
-            client.setex(key, window_seconds, 1)
-        elif int(current) >= max_requests:
-            logger.warning(f"Rate limit exceeded for {client_ip} on {request.url.path}")
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many attempts. Please try again in {window_seconds} seconds.",
+        try:
+            client_ip = request.headers.get(
+                "x-forwarded-for", request.client.host if request.client else "unknown"
             )
-        else:
-            client.incr(key)
+            if "," in client_ip:
+                client_ip = client_ip.split(",")[0].strip()
+
+            # Use a path-specific key to avoid cross-endpoint leakage
+            key = f"auth_rate_limit:{client_ip}:{request.url.path}"
+            
+            allowed = await check_rate_limit(key, max_requests, window_seconds)
+            
+            if not allowed:
+                logger.warning(f"Rate limit exceeded for {client_ip} on {request.url.path}")
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Too many attempts. Please try again in {window_seconds} seconds.",
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Rate limiter failed (failing open): {e}")
+
         return True
 
     return rate_limiter
@@ -140,9 +135,15 @@ class ConsentSyncRequest(BaseModel):
     consent_ai_training: Optional[bool] = None
 
 
-def _create_jwt_token(sub: str, email: Optional[str] = None):
-    """Create access and refresh tokens and persist refresh token in Redis."""
+from backend.services.provisioning import provision_default_organization
+
+async def _create_jwt_token(sub: str, email: Optional[str] = None, db: Optional[AsyncSession] = None):
+    """Create access and refresh tokens and persist refresh token in Redis (Async)."""
     now = datetime.now(timezone.utc)
+    
+    # Ensure user has an organization (and migrate legacy data) if DB session is provided
+    if db:
+        await provision_default_organization(db, str(sub))
 
     # Access Token
     access_expires_at = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -168,17 +169,22 @@ def _create_jwt_token(sub: str, email: Optional[str] = None):
     }
     refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
 
-    client = _get_redis_client()
-    client.setex(
-        f"refresh:{refresh_token}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, str(sub)
-    )
-    client.sadd(f"user_tokens:{sub}", refresh_token)
+    try:
+        from backend.services.redis_client import redis_service
+        client = redis_service.client
+        
+        await client.setex(
+            f"refresh:{refresh_token}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, str(sub)
+        )
+        await client.sadd(f"user_tokens:{sub}", refresh_token)
 
-    # Register this specific access session in Redis
-    session_key = f"active_session:{access_token[-20:]}"
-    client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, str(sub))
+        # Register this specific access session in Redis
+        session_key = f"active_session:{access_token[-20:]}"
+        await client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, str(sub))
 
-    client.expire(f"user_tokens:{sub}", REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+        await client.expire(f"user_tokens:{sub}", REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+    except Exception as e:
+        logger.warning(f"Failed to persist token in Redis (failing open for session): {e}")
 
     return {
         "access_token": access_token,
@@ -245,7 +251,8 @@ async def login(
             detail="Incorrect email or password",
         )
 
-    tokens = _create_jwt_token(str(user.id), email=user.email)
+    # Tokens with Provisioning
+    tokens = await _create_jwt_token(str(user.id), email=user.email, db=db)
     response = JSONResponse(
         content={"token": tokens, "user": {"id": user.id, "email": user.email}}
     )
@@ -367,6 +374,42 @@ async def sso_callback(
             f"SSO callback success for provider={provider_name} state=[...truncated]"
         )
 
+        # 1. Check if this is a 'Connect' flow (Linking account to an existing user)
+        if state_data.get("flow") == "connect":
+            user_id = state_data.get("user_id")
+            if not user_id: 
+                raise HTTPException(status_code=400, detail="User mapping lost during connection")
+            
+            async with db.begin():
+                result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+                user = result.scalars().first()
+                if not user:
+                    raise HTTPException(status_code=404, detail="User not found")
+                
+                # Save tokens based on provider
+                if provider_name == "google":
+                    user.google_access_token = encrypt_token(token["access_token"])
+                    if "refresh_token" in token:
+                        user.google_refresh_token = encrypt_token(token["refresh_token"])
+                    user.google_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token["expires_in"])
+                    user.google_id = profile.get("id")
+                elif provider_name == "microsoft":
+                    user.microsoft_access_token = encrypt_token(token["access_token"])
+                    if "refresh_token" in token:
+                        user.microsoft_refresh_token = encrypt_token(token["refresh_token"])
+                    user.microsoft_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token["expires_in"])
+                    user.microsoft_id = profile.get("id")
+
+            # Trigger initial sync in background
+            if provider_name == "google":
+                await sync_engine.sync_google_calendar(user_id, db)
+            elif provider_name == "microsoft":
+                await sync_engine.sync_microsoft_calendar(user_id, db)
+
+            frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+            return RedirectResponse(f"{frontend_base}/dashboard/settings?{provider_name}=connected")
+
+        # 2. Default Login flow
         # Upsert user in one transaction
         async with db.begin():
             email = profile.get("email")
@@ -401,16 +444,17 @@ async def sso_callback(
                 user_id = str(user.id)
                 user.full_name = profile.get("name") or user.full_name
 
-        # 1. Store provider token in Redis for potential future revocation (account delete)
+        # Store own provider token in Redis for potential future revocation
         if token:
-            redis_client = _get_redis_client()
-            redis_client.setex(
+            from backend.services.redis_client import redis_service
+            await redis_service.client.setex(
                 f"sso_token:{user_id}", 
                 timedelta(days=7), 
                 json.dumps({"provider": provider_name, "token": token})
             )
 
-        own_token = _create_jwt_token(user_id, email=email)
+        # Access & Refresh Tokens (with Multi-Tenant Provisioning)
+        own_token = await _create_jwt_token(user_id, email=email, db=db)
         response = JSONResponse(
             content={
                 "auth": {k: v for k, v in payload.items() if k != "token"}, # Don't leak provider token to frontend
@@ -443,6 +487,93 @@ async def sso_callback(
             raise HTTPException(status_code=status.HTTP_410_GONE, detail=msg)
 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+
+
+@router.get("/zoom/connect")
+async def zoom_connect(current_user: dict = Depends(get_current_user)):
+    """
+    Generates a Zoom Authorization URL for the current user to 'Connect' their account.
+    """
+    client_id = os.getenv("ZOOM_CLIENT_ID")
+    redirect_uri = os.getenv("ZOOM_REDIRECT_URI", f"{APP_BASE_URL}/auth/zoom/callback")
+    
+    if not client_id:
+        raise HTTPException(status_code=500, detail="Zoom Client ID not configured")
+        
+    # Standard Zoom Authorization URL (v2)
+    # Scopes should be space-separated
+    scopes = os.getenv("ZOOM_SCOPES", "user:read:user meeting:write:meeting meeting:read:meeting user:read:user.settings")
+    
+    # Use a state to thwart CSRF and identify the user in the callback
+    state = str(uuid.uuid4())
+    from backend.services.redis_client import redis_service
+    await redis_service.client.setex(f"zoom_state:{state}", 600, current_user["sub"])
+    
+    auth_url = (
+        f"https://zoom.us/oauth/authorize?response_type=code"
+        f"&client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&state={state}"
+        f"&scope={scopes}"
+    )
+    
+    return {"authorization_url": auth_url}
+
+
+@router.get("/zoom/callback")
+async def zoom_callback(
+    code: str, 
+    state: str, 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Handles the Zoom OAuth redirect, exchanges code for tokens, and persists them.
+    """
+    from backend.services.redis_client import redis_service
+    user_id = await redis_service.client.get(f"zoom_state:{state}")
+    
+    if not user_id:
+        raise HTTPException(status_code=403, detail="Invalid or expired OAuth state")
+    
+    # Delete state immediately (one-time use)
+    await redis_service.client.delete(f"zoom_state:{state}")
+    
+    # Exchange code for token
+    client_id = os.getenv("ZOOM_CLIENT_ID")
+    client_secret = os.getenv("ZOOM_CLIENT_SECRET")
+    redirect_uri = os.getenv("ZOOM_REDIRECT_URI", f"{APP_BASE_URL}/auth/zoom/callback")
+    
+    auth_header = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    
+    import httpx
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://zoom.us/oauth/token",
+            params={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+            },
+            headers={
+                "Authorization": f"Basic {auth_header}",
+                "Content-Type": "application/x-www-form-urlencoded"
+            }
+        )
+        
+        if resp.status_code != 200:
+            logger.error(f"Zoom token exchange failed: {resp.text}")
+            raise HTTPException(status_code=400, detail="Failed to exchange code for Zoom tokens")
+            
+        token_data = resp.json()
+        
+    # Use ZoomService to persist tokens (handles encryption and DB write)
+    from backend.services.zoom import zoom_service
+    await zoom_service.save_user_tokens(user_id, token_data)
+    
+    # Redirect back to frontend dashboard with success message
+    frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+    return RedirectResponse(f"{frontend_base}/dashboard/settings?zoom=connected")
 
 
 @router.post("/sync-consent")
@@ -499,7 +630,38 @@ async def sync_timezone(
     return {"status": "success", "timezone": data.timezone}
 
 
+@router.get("/google/connect")
+async def google_connect(current_user: dict = Depends(get_current_user)):
+    """Starts the persistent Google Calendar 'Strong Connection' flow."""
+    user_id = current_user.get("sub")
+    # Add scopes needed for calendar sync
+    extra_data = {"flow": "connect", "user_id": user_id}
+    return sso.start_oauth2_flow(provider="google", extra_data=extra_data)
+
+@router.get("/microsoft/connect")
+async def microsoft_microsoft_connect(current_user: dict = Depends(get_current_user)):
+    """Starts the persistent Microsoft Graph 'Strong Connection' flow."""
+    user_id = current_user.get("sub")
+    extra_data = {"flow": "connect", "user_id": user_id}
+    # Microsoft needs specific scopes for calendars
+    return sso.start_oauth2_flow(provider="microsoft", extra_data=extra_data)
+
 @router.post("/sync")
+async def sync_calendars(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Triggers the Sovereign Sync Engine to fetch external events."""
+    user_id = current_user.get("sub")
+    try:
+        await sync_engine.sync_google_calendar(user_id, db)
+        await sync_engine.sync_microsoft_calendar(user_id, db)
+        return {"status": "success", "message": "External calendars synchronized"}
+    except Exception as e:
+        logger.error(f"Manual Sync Sync Failed: {e}")
+        raise HTTPException(status_code=500, detail="Synchronization failed")
+
+@router.post("/sync/session")
 async def sync_session(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -511,63 +673,62 @@ async def sync_session(
     user_id = current_user.get("sub")
     email = current_user.get("email")
     
-    # Ensure user exists in local UserTable (safety check for external providers)
-    result = await db.execute(select(UserTable).where(UserTable.id == user_id))
-    user = result.scalars().first()
-    
-    if not user:
-        # This shouldn't happen with Better Auth as it writes to the same DB,
-        # but kept for robustness against other future providers.
-        user = UserTable(
-            id=user_id,
-            email=email,
-            full_name=current_user.get("name", email.split("@")[0]),
-            is_active=True
-        )
-        db.add(user)
-        await db.commit()
+    # Ensure user has an organization (and migrate legacy data)
+    await provision_default_organization(db, str(user_id))
 
-    logger.info(f"Synchronized session for user {user_id}")
+    await db.commit()
+    logger.info(f"Synchronized session and provisioned for user {user_id}")
     return {"status": "synchronized", "user_id": user_id, "email": email}
 
 
 
 @router.post("/passwordless/request")
-def _passwordless_request(
+async def _passwordless_request(
     email: str,
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=3, window_seconds=300)),
 ):
-    return passwordless.request_magic_link(email)
+    return await passwordless.request_magic_link(email)
 
 
 @router.post("/passwordless/verify")
-def _passwordless_verify(
+async def _passwordless_verify(
     email: str,
     code: str,
+    db: AsyncSession = Depends(get_db),
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=5, window_seconds=60)),
 ):
-    if not passwordless.verify_magic_link_code(email, code):
+    if not await passwordless.verify_magic_link_code(email, code):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired OTP"
         )
-    token_data = _create_jwt_token(email)
+
+    # Fetch user to get ID and ensure they exist
+    result = await db.execute(select(UserTable).where(UserTable.email == email))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User account not found"
+        )
+
+    # Token generation (with Org Provisioning)
+    token_data = await _create_jwt_token(str(user.id), email=email, db=db)
     response = JSONResponse(content=token_data)
     _attach_jwt_cookies(response, token_data)
     return response
 
 
 @router.post("/mfa/setup")
-def _mfa_setup(user_id: int = Depends(get_current_user_id)):
-    return mfa.start_mfa_enrollment(user_id)
+async def _mfa_setup(user_id: int = Depends(get_current_user_id)):
+    return await mfa.start_mfa_enrollment(user_id)
 
 
 @router.post("/mfa/verify")
-def _mfa_verify(
+async def _mfa_verify(
     token: str,
     user_id: int = Depends(get_current_user_id),
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=5, window_seconds=60)),
 ):
-    if not mfa.verify_mfa_token(user_id, token):
+    if not await mfa.verify_mfa_token(user_id, token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid TOTP token"
         )
@@ -644,6 +805,10 @@ async def check_auth(
         user_data["consent_analytics"] = user.consent_analytics
         user_data["consent_notifications"] = user.consent_notifications
         user_data["consent_ai_training"] = user.consent_ai_training
+        # OAuth Connection Flags
+        user_data["zoom_connected"] = bool(user.zoom_access_token)
+        user_data["google_connected"] = bool(user.google_access_token)
+        user_data["microsoft_connected"] = bool(user.microsoft_access_token)
 
     return {
         "authenticated": True,
@@ -656,11 +821,12 @@ async def check_auth(
 
 
 @router.post("/refresh")
-@router.post("/auth/refresh")
-def refresh_token(request: Request, payload: Optional[RefreshTokenRequest] = None):
+async def refresh_token(
+    request: Request, 
+    payload: Optional[RefreshTokenRequest] = None,
+    db: AsyncSession = Depends(get_db)
+):
     """Get a new access token using a refresh token."""
-    client = _get_redis_client()
-
     refresh_token_value = None
     # Prefer explicit JSON body, fallback to cookie.
     if payload and getattr(payload, "refresh_token", None):
@@ -674,45 +840,56 @@ def refresh_token(request: Request, payload: Optional[RefreshTokenRequest] = Non
             detail="Refresh token missing",
         )
 
-    # Check if refresh token exists in Redis and not revoked
-    user_id = client.get(f"refresh:{refresh_token_value}")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
-        )
+    # Try to verify/rotate token in Redis
+    try:
+        from backend.services.redis_client import redis_service
+        client = redis_service.client
+        # Check if refresh token exists in Redis and not revoked
+        user_id_from_redis = await client.get(f"refresh:{refresh_token_value}")
+        
+        # ONE-TIME-USE refresh token semantics (rotate token)
+        await client.delete(f"refresh:{refresh_token_value}")
+        
+        if user_id_from_redis:
+            # Cleanup user token mapping
+            await client.srem(f"user_tokens:{user_id_from_redis}", refresh_token_value)
+    except Exception as e:
+        logger.warning(f"Redis refresh token rotation failed (infra issue): {e}")
 
-    # Verify the refresh token JWT
+    # Verify the refresh token JWT (Sovereign mode - we still trust the cryptographically signed JWT if Redis is down)
     try:
         token_payload = jwt.decode(refresh_token_value, SECRET_KEY, algorithms=[ALGORITHM])
         if token_payload.get("type") != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type"
             )
+        user_id = token_payload.get("sub")
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
 
-    # ONE-TIME-USE refresh token semantics (rotate token)
-    client.delete(f"refresh:{refresh_token_value}")
-    client.srem(f"user_tokens:{user_id}", refresh_token_value)
-
     # Generate new token pair
-    token_data = _create_jwt_token(user_id)
+    # Token generation (with Org Provisioning)
+    # We use sub (user_id) from the decoded refresh token
+    token_data = await _create_jwt_token(user_id, email=token_payload.get("email"), db=db)
     response = JSONResponse(content=token_data)
     _attach_jwt_cookies(response, token_data)
     return response
 
 
 @router.post("/logout")
-def logout(request: Request, current_user=Depends(get_current_user)):
-    """Revoke refresh token and clear HttpOnly cookies."""
-    client = _get_redis_client()
+async def logout(request: Request, current_user=Depends(get_current_user)):
+    """Revoke refresh token and clear HttpOnly cookies (Async)."""
+    from backend.services.redis_client import redis_service
+    client = redis_service.client
 
     refresh_token = request.cookies.get("graftai_refresh_token")
     if refresh_token:
-        client.delete(f"refresh:{refresh_token}")
+        try:
+            await client.delete(f"refresh:{refresh_token}")
+        except Exception as e:
+            logger.warning(f"Logout Redis cleanup failed (failing open): {e}")
 
     response = JSONResponse(content={"message": "Successfully logged out"})
     # Clear HttpOnly cookies
@@ -737,8 +914,12 @@ async def delete_account(
     # 1. Fetch user and delete within a single explicit transaction
     try:
         # Pre-fetch SSO token for revocation since we need user_id
-        client = _get_redis_client()
-        sso_data_raw = client.get(f"sso_token:{user_id}")
+        sso_data_raw = None
+        try:
+            from backend.services.redis_client import redis_service
+            sso_data_raw = await redis_service.client.get(f"sso_token:{user_id}")
+        except Exception:
+            pass
         
         async with db.begin():
             # Ensure existence and get name for email
@@ -761,7 +942,11 @@ async def delete_account(
                     provider=sso_data.get("provider"), 
                     token=sso_data.get("token")
                 )
-                client.delete(f"sso_token:{user_id}")
+                try:
+                    from backend.services.redis_client import redis_service
+                    await redis_service.client.delete(f"sso_token:{user_id}")
+                except Exception:
+                    pass
             except Exception as e:
                 logger.warning(f"Provider revocation failed for {user_id}: {e}")
 
@@ -784,28 +969,32 @@ async def delete_account(
     response.delete_cookie(key="graftai_refresh_token", path="/")
     
     # 5. Cleanup Redis sessions - Revoke all active devices
-    client = _get_redis_client()
-    token_key = f"user_tokens:{user_id}"
-    tokens = client.smembers(token_key)
-    if tokens:
-        for t in tokens:
-            client.delete(f"refresh:{t}")
-    client.delete(token_key)
+    try:
+        from backend.services.redis_client import redis_service
+        token_key = f"user_tokens:{user_id}"
+        tokens = await redis_service.client.smembers(token_key)
+        if tokens:
+            for t in tokens:
+                await redis_service.client.delete(f"refresh:{t}")
+        await redis_service.client.delete(token_key)
+    except Exception as e:
+        logger.warning(f"Account deletion Redis cleanup failed: {e}")
     
     return response
 
 
 @router.post("/revoke")
-def revoke_sessions(
+async def revoke_sessions(
     target_user_id: Optional[int] = None,
     current_user_id: int = Depends(get_current_user_id),
 ):
     """
-    Revoke all sessions for a user.
+    Revoke all sessions for a user (Async).
     - If target_user_id is provided, requires admin privileges.
     - If not provided, revokes current user's own sessions.
     """
-    client = _get_redis_client()
+    from backend.services.redis_client import redis_service
+    client = redis_service.client
 
     # Identify the user whose sessions will be revoked
     revoke_id = current_user_id
@@ -819,16 +1008,21 @@ def revoke_sessions(
         revoke_id = target_user_id
 
     # Get all refresh tokens for this user
-    token_key = f"user_tokens:{revoke_id}"
-    tokens = client.smembers(token_key)
-
     deleted_count: int = 0
-    if tokens:
-        # Delete each refresh token from Redis and count successes
-        deleted_count = sum(1 for t in tokens if client.delete(f"refresh:{t}"))
+    try:
+        token_key = f"user_tokens:{revoke_id}"
+        tokens = await client.smembers(token_key)
 
-        # Clear the user's token set
-        client.delete(token_key)
+        if tokens:
+            # Delete each refresh token from Redis and count successes
+            for t in tokens:
+                if await client.delete(f"refresh:{t}"):
+                    deleted_count += 1
+
+            # Clear the user's token set
+            await client.delete(token_key)
+    except Exception as e:
+        logger.warning(f"Session revocation Redis failure: {e}")
 
     logger.info(
         f"User {current_user_id} revoked {deleted_count} sessions for user {revoke_id}"

@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 
 # Ensure .env from project root is loaded (backend/.env)
 project_root = Path(__file__).resolve().parents[1]
-load_dotenv(project_root / '.env')
+load_dotenv(project_root / '.env', override=True)
 
 
 def _get_smtp_config() -> dict:

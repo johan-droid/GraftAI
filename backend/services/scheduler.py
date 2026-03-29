@@ -1,6 +1,5 @@
 import logging
 import os
-import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,131 +10,42 @@ from .notifications import notify_event_created, notify_event_updated, notify_ev
 from langchain_core.documents import Document
 import json
 import pytz
-from fastapi import BackgroundTasks
-from .google_calendar import create_google_meet_link, get_google_availability
-from .microsoft_calendar import create_microsoft_teams_link, get_microsoft_availability
-from .zoom import zoom_service
-from .oauth_utils import get_valid_google_token, get_valid_ms_token
-from .context_optimizer import context_optimizer
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
 
-async def _generate_meeting_link(platform: str, event_id: int, event_title: str, start_time: datetime, end_time: datetime, access_token: Optional[str] = None) -> str:
-    """
-    Simulates or generates a real SaaS-grade meeting link.
-    If platform is google_meet and token is available, calls the real API.
-    """
+def _generate_meeting_link(platform: str, event_id: int) -> str:
+    """Simulates SaaS-grade meeting link generation."""
+    import uuid
+    room_id = str(uuid.uuid4())[:12].replace("-", "")
     if platform == "google_meet":
-        # Try to use the real Google Calendar API if an access token is available
-        if access_token:
-            real_link = await create_google_meet_link(
-                event_title, 
-                start_time.isoformat(), 
-                end_time.isoformat(), 
-                access_token
-            )
-            if real_link:
-                return real_link
-
-        # Fallback to simulation if API fails or no token
-        import uuid
-        room_id = str(uuid.uuid4())[:12].replace("-", "")
         return f"https://meet.google.com/{room_id[:3]}-{room_id[3:7]}-{room_id[7:10]}"
-        
     elif platform == "zoom":
-        # Real SaaS-grade Zoom integration
-        user_id = event_id if isinstance(event_id, str) else str(event_id) # Need actual user_id
-        # Wait, the signature should include user_id. Let's update the signature first.
-        meeting = await zoom_service.create_meeting(
-            user_id=user_id,
-            topic=event_title,
-            start_time=start_time.isoformat(),
-            duration=int((end_time - start_time).total_seconds() / 60)
-        )
-        if meeting and "join_url" in meeting:
-            return meeting["join_url"]
-            
-        # Fallback to simulation if Zoom API fails
-        import uuid
-        room_id = str(uuid.uuid4())[:10]
         return f"https://zoom.us/j/{room_id[:10]}"
     elif platform == "teams":
-        # Try to use the real Microsoft Graph API if an access token is available
-        if access_token:
-            real_link = await create_microsoft_teams_link(
-                event_title, 
-                start_time.isoformat(), 
-                end_time.isoformat(), 
-                access_token
-            )
-            if real_link:
-                return real_link
-
-        # Fallback to simulation if API fails or no token
-        import uuid
-        room_id = str(uuid.uuid4())[:12].replace("-", "")
         return f"https://teams.microsoft.com/l/meetup-join/{room_id}"
-        
-    import uuid
-    room_id = str(uuid.uuid4())[:12]
     return f"https://graftai.com/meeting/{room_id}"
 
 
 async def get_events_for_range(
-    db: AsyncSession, user_id: str, start: datetime, end: datetime, org_id: Optional[int] = None, workspace_id: Optional[int] = None
+    db: AsyncSession, user_id: str, start: datetime, end: datetime
 ) -> List[EventTable]:
-    """Fetch all events for a user within a specific time range, scoped by organization/workspace."""
-    filters = [
-        EventTable.user_id == user_id,
-        EventTable.start_time < end,
-        EventTable.end_time > start,
-        EventTable.status != "canceled"
-    ]
-    
-    if org_id:
-        filters.append(EventTable.org_id == org_id)
-    if workspace_id:
-        filters.append(EventTable.workspace_id == workspace_id)
-
+    """Fetch all events for a user within a specific time range."""
     stmt = (
         select(EventTable)
-        .where(and_(*filters))
+        .where(
+            and_(
+                EventTable.user_id == user_id,
+                EventTable.start_time >= start,
+                EventTable.end_time <= end,
+            )
+        )
         .order_by(EventTable.start_time.asc())
     )
 
     result = await db.execute(stmt)
     return result.scalars().all()
-
-
-async def get_optimized_context(
-    db: AsyncSession, 
-    user_id: str, 
-    date: datetime, 
-    org_id: Optional[int] = None, 
-    workspace_id: Optional[int] = None
-) -> str:
-    """
-    Returns a lightning-fast, high-density context string for the AI agent.
-    1. Fetches local events (including synced external entries).
-    2. Compresses them using ContextOptimizer.
-    3. Adds User TZ guidance.
-    """
-    # Define day boundaries
-    day_start = date.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end = date.replace(hour=23, minute=59, second=59, microsecond=999)
-    
-    events = await get_events_for_range(db, user_id, day_start, day_end, org_id=org_id, workspace_id=workspace_id)
-    
-    # Get user's timezone for guidance
-    user = await db.get(UserTable, user_id)
-    user_tz = user.timezone if user else "UTC"
-    
-    compact_text = context_optimizer.compact_schedule(user_id, events, date)
-    guidance = context_optimizer.get_ai_guidance(user_tz)
-    
-    return f"{compact_text}\n{guidance}"
 
 
 async def find_available_slots(
@@ -185,23 +95,29 @@ async def find_available_slots(
             return []
 
     # Ensure naive datetime for DB consistency if needed, but here we work with UTC
-    # 4. Fetch existing events for the day (GROUND TRUTH FROM DB)
+    # 4. Fetch existing events for the day
     existing_events = await get_events_for_range(db, user_id, day_start, day_end)
 
     available_slots = []
     current_time = day_start
 
-    # Pre-filter busy events for tighter loop
-    busy_events = [e for e in existing_events if e.is_busy and e.status != "canceled"]
-
     while current_time + timedelta(minutes=duration_minutes) <= day_end:
         potential_end = current_time + timedelta(minutes=duration_minutes)
 
-        # Check for overlap (LITERAL 0ms check via pre-fetched indexed list)
+        # Check for overlap
         has_overlap = False
-        for event in busy_events:
-            ev_start = event.start_time
-            ev_end = event.end_time
+        for event in existing_events:
+            # Normalize event times to UTC comparison
+            ev_start = (
+                event.start_time.replace(tzinfo=pytz.UTC)
+                if event.start_time.tzinfo is None
+                else event.start_time
+            )
+            ev_end = (
+                event.end_time.replace(tzinfo=pytz.UTC)
+                if event.end_time.tzinfo is None
+                else event.end_time
+            )
 
             if not (potential_end <= ev_start or current_time >= ev_end):
                 has_overlap = True
@@ -227,109 +143,14 @@ async def find_available_slots(
     return available_slots
 
 
-async def check_external_conflicts(
-    db: AsyncSession,
-    user_id: str,
-    start_time: datetime,
-    end_time: datetime,
-    google_token: Optional[str] = None,
-    microsoft_token: Optional[str] = None
-) -> bool:
-    """
-    Checks for conflicts across external providers (Google and Microsoft).
-    Returns True if CLEAR (no conflicts), False if BUSY.
-    """
-    start_iso = start_time.isoformat()
-    end_iso = end_time.isoformat()
-
-    # 1. Resolve Tokens (Check DB if not explicitly provided)
-    # This 'Sovereign Token Fetch' logic creates the strong, persistent connection.
-    if not google_token:
-        google_token = await get_valid_google_token(db, user_id)
-    if not microsoft_token:
-        microsoft_token = await get_valid_ms_token(db, user_id)
-
-    # 2. Check Google if token available
-    if google_token:
-        is_free = await get_google_availability(start_iso, end_iso, google_token)
-        if not is_free:
-            logger.warning(f"Conflict detected on User {user_id}'s Google Calendar.")
-            return False
-
-    # 3. Check Microsoft if token available
-    if microsoft_token:
-        is_free = await get_microsoft_availability(start_iso, end_iso, microsoft_token)
-        if not is_free:
-            logger.warning(f"Conflict detected on User {user_id}'s Microsoft Calendar.")
-            return False
-
-    return True
-
-
-async def _run_sync_and_notify(content_type: str, event_id: int, user_id: str, db: AsyncSession):
-    """
-    Background helper to perform AI sync and User notification without blocking the main request.
-    Wraps entire pipeline in try-except to ensure background failures don't impact the event loop.
-    """
-    try:
-        # 1. Fetch the fresh event state from DB
-        get_stmt = select(EventTable).where(EventTable.id == event_id)
-        result = await db.execute(get_stmt)
-        event = result.scalars().first()
-        
-        if not event:
-            logger.warning(f"Background sync: Event {event_id} no longer exists. Skipping.")
-            return
-
-        # 2. Sync to AI Memory (Semantic Retrieval Index)
-        try:
-            await sync_event_to_ai(event, db=db)
-        except Exception as ai_err:
-            logger.error(f"⚠ AI Memory Sync failed for event {event_id}: {ai_err}")
-
-        # 3. Notify User & Attendees
-        try:
-            target_user = await db.get(UserTable, user_id)
-            if target_user:
-                event_dto = {
-                    "id": event.id,
-                    "user_id": event.user_id,
-                    "title": event.title,
-                    "category": event.category,
-                    "start_time": event.start_time.isoformat() if event.start_time else None,
-                    "end_time": event.end_time.isoformat() if event.end_time else None,
-                    "is_meeting": event.is_meeting,
-                    "meeting_link": event.meeting_link,
-                    "meeting_platform": event.meeting_platform,
-                    "agenda": event.agenda,
-                    "attendees": event.attendees,
-                }
-                
-                if content_type == "created":
-                    await notify_event_created(target_user.email, [], event_dto)
-                elif content_type == "updated":
-                    await notify_event_updated(target_user.email, [], event_dto)
-                elif content_type == "deleted":
-                    await notify_event_deleted(target_user.email, [], event_dto)
-        except Exception as notify_err:
-            logger.error(f"⚠ Notification failed for event {event_id}: {notify_err}")
-
-        logger.info(f"🚀 Background pipeline completed for Event {event_id} ({content_type})")
-    except Exception as e:
-        logger.error(f"❌ Critical error in background pipeline for Event {event_id}: {e}")
-
-
-async def sync_event_to_ai(event: EventTable, db: Optional[AsyncSession] = None):
+async def sync_event_to_ai(event: EventTable):
     """
     Feeds event data to the LLM Vector Store in real-time with semantic JSON formatting.
     This 'Smart Feedback Loop' ensures the AI has a high-fidelity, consistent view
-    of the user's schedule.
-    
-    Optimized: Skips sync if the payload has not changed since the last update.
+    of the user's schedule for intelligent slot discovery and scheduling assistance.
     """
     try:
-        # SaaS Namespace: Use Org ID for multi-tenant isolation in Vector DB
-        namespace = f"org_{event.org_id}" if event.org_id else f"user_{event.user_id}"
+        namespace = f"user_{event.user_id}"
 
         # Calculate semantic duration for LLM reasoning
         duration = (event.end_time - event.start_time).total_seconds() / 60
@@ -351,18 +172,10 @@ async def sync_event_to_ai(event: EventTable, db: Optional[AsyncSession] = None)
                 "current": event.status,
                 "is_confirmed": event.status == "confirmed",
             },
-            "meeting_link": event.meeting_link,
         }
 
-        # Calculate fresh hash for idempotency/optimization
-        payload_str = json.dumps(smart_context_block, sort_keys=True)
-        current_hash = hashlib.sha256(payload_str.encode()).hexdigest()
-
-        if event.last_synced_hash == current_hash:
-            logger.info(f"⏭ AI Sync skipped for event {event.id} (No changes detected)")
-            return
-
         # We store the JSON as the page content for perfect LLM parsing (one-shot reasoning)
+        # We also add a natural language 'summary' line to help with initial embedding relevance
         llm_ready_content = f"SCHEDULE_ENTRY: {event.title} ({event.category})\n{json.dumps(smart_context_block, indent=2)}"
 
         doc = Document(
@@ -373,20 +186,14 @@ async def sync_event_to_ai(event: EventTable, db: Optional[AsyncSession] = None)
                 "category": event.category,
                 "start_time": event.start_time.isoformat(),
                 "user_id": event.user_id,
-                "org_id": event.org_id,
-                "workspace_id": event.workspace_id,
             },
         )
 
-        # Use consistent document ID to implement idempotent 'Upsert' behavior.
+        # Use consistent document ID to implement idempotent 'Upsert' behavior in Pinecone.
+        # This prevents 'stale memory' by overwriting the old version of this event.
         vector_store.add_documents(
             [doc], namespace=namespace, ids=[f"calendar_event_{event.id}"]
         )
-
-        # Update the sync hash in the database
-        event.last_synced_hash = current_hash
-        if db:
-            await db.commit()
 
         logger.info(
             f"✅ AI Feedback Loop triggered: Context synchronized for {event.title} (ID: {event.id})"
@@ -397,122 +204,58 @@ async def sync_event_to_ai(event: EventTable, db: Optional[AsyncSession] = None)
         )
 
 
-def _compact_payload(event_data: dict) -> dict:
-    """
-    Strips redundant or empty fields from the event payload to save disk space on free tiers.
-    """
-    if "metadata_payload" in event_data and event_data["metadata_payload"]:
-        # Remove common empty fields
-        payload = event_data["metadata_payload"]
-        compact = {k: v for k, v in payload.items() if v not in [None, "", [], {}]}
-        event_data["metadata_payload"] = compact
-    
-    if "attendees" in event_data and isinstance(event_data["attendees"], list):
-        # Only keep email and response status to save space
-        compact_attendees = []
-        for a in event_data["attendees"]:
-            if isinstance(a, dict):
-                compact_attendees.append({
-                    "email": a.get("email"),
-                    "status": a.get("responseStatus") or a.get("status")
-                })
-        event_data["attendees"] = compact_attendees
-        
-    return event_data
-
-
-async def create_event(
-    db: AsyncSession, 
-    event_data: dict, 
-    background_tasks: Optional[BackgroundTasks] = None
-) -> EventTable:
-    """Create a new event with optional real-time external conflict checking."""
-    # Compact payload for Free Tier storage efficiency
-    event_data = _compact_payload(event_data)
+async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
+    """Create a new event and trigger AI feedback pipeline."""
     new_event = EventTable(**event_data)
 
-    # 1. Local Conflict Check (Scoped by Organization)
+    # Check for overlapping event in same user timeline before commit
     conflict_stmt = select(EventTable).where(
         and_(
             EventTable.user_id == new_event.user_id,
-            EventTable.org_id == new_event.org_id,
             EventTable.start_time < new_event.end_time,
             EventTable.end_time > new_event.start_time,
         )
     )
     conflict_result = await db.execute(conflict_stmt)
     if conflict_result.scalars().first():
-        raise ValueError("Event overlaps with your existing GraftAI schedule in this organization.")
+        raise ValueError("Event overlaps with existing schedule. Please choose another time.")
 
-    # 2. External Conflict Check (Graph & Google)
-    google_token = event_data.get("google_access_token")
-    microsoft_token = event_data.get("microsoft_access_token")
-    
-    # Run conflict check - it automatically tries to resolve tokens from DB now.
-    is_clear = await check_external_conflicts(
-        db,
-        new_event.user_id, 
-        new_event.start_time, 
-        new_event.end_time,
-        google_token,
-        microsoft_token
-    )
-    if not is_clear:
-        raise ValueError("Event overlaps with an external calendar appointment.")
-
-    # 3. Generate Meeting Links
+    # Generate meeting links if applicable
     if new_event.is_meeting and new_event.meeting_platform and not new_event.meeting_link:
-        new_event.meeting_link = await _generate_meeting_link(
-            new_event.meeting_platform, 
-            new_event.id, 
-            new_event.title,
-            new_event.start_time,
-            new_event.end_time,
-            access_token=google_token or microsoft_token
-        )
+        new_event.meeting_link = _generate_meeting_link(new_event.meeting_platform, new_event.id)
 
     db.add(new_event)
     await db.commit()
     await db.refresh(new_event)
 
-    # 4. Offload to Background Tasks
-    if background_tasks:
-        background_tasks.add_task(_run_sync_and_notify, "created", new_event.id, new_event.user_id, db)
-    else:
-        # Fallback for non-API contexts (e.g. scripts)
-        await _run_sync_and_notify("created", new_event.id, new_event.user_id, db)
+    # Trigger real-time AI sync
+    await sync_event_to_ai(new_event)
+
+    # Notify user about new event
+    target_user = await db.get(UserTable, new_event.user_id)
+    if target_user:
+        await notify_event_created(
+            target_user.email,
+            [],
+            {
+                "id": new_event.id,
+                "user_id": new_event.user_id,
+                "title": new_event.title,
+                "start_time": new_event.start_time,
+                "end_time": new_event.end_time,
+            },
+        )
 
     return new_event
 
 
 async def update_event(
-    db: AsyncSession, 
-    event_id: int, 
-    user_id: str, 
-    update_data: dict,
-    background_tasks: Optional[BackgroundTasks] = None,
-    org_id: Optional[int] = None,
-    workspace_id: Optional[int] = None
+    db: AsyncSession, event_id: int, user_id: str, update_data: dict
 ) -> Optional[EventTable]:
-    """Update event and sync changes to LLM service, scoped by tenant."""
-    # Compact payload for Free Tier storage efficiency
-    update_data = _compact_payload(update_data)
-    
-    filters = [EventTable.id == event_id]
-    
-    # Always enforce tenant isolation - user_id is baseline security
-    if org_id:
-        filters.append(EventTable.org_id == org_id)
-        if workspace_id:
-            filters.append(EventTable.workspace_id == workspace_id)
-        else:
-            # Within org but no workspace specified - check personal/general workspace
-            filters.append(EventTable.user_id == user_id)
-    else:
-        # No org context - only allow user's personal events
-        filters.append(EventTable.user_id == user_id)
-
-    stmt = select(EventTable).where(and_(*filters))
+    """Update event and sync changes to LLM service."""
+    stmt = select(EventTable).where(
+        and_(EventTable.id == event_id, EventTable.user_id == user_id)
+    )
     result = await db.execute(stmt)
     event = result.scalars().first()
 
@@ -522,6 +265,9 @@ async def update_event(
     for key, value in update_data.items():
         if hasattr(event, key):
             setattr(event, key, value)
+
+    await db.commit()
+    await db.refresh(event)
 
     # Check for overlaps after update (if schedule changed)
     conflict_stmt = select(EventTable).where(
@@ -536,65 +282,43 @@ async def update_event(
     if conflict_result.scalars().first():
         raise ValueError("Updated timing overlaps with another event.")
 
-    await db.commit()
-    await db.refresh(event)
+    # Real-time sync to AI orchestrator
+    await sync_event_to_ai(event)
 
-    # Offload to Background Tasks
-    if background_tasks:
-        background_tasks.add_task(_run_sync_and_notify, "updated", event.id, user_id, db)
-    else:
-        await _run_sync_and_notify("updated", event.id, user_id, db)
+    target_user = await db.get(UserTable, user_id)
+    if target_user:
+        await notify_event_updated(
+            target_user.email,
+            [],
+            {
+                "id": event.id,
+                "user_id": event.user_id,
+                "title": event.title,
+                "start_time": event.start_time,
+                "end_time": event.end_time,
+            },
+        )
 
     return event
 
 
-async def delete_event(
-    db: AsyncSession, 
-    event_id: int, 
-    user_id: str,
-    background_tasks: Optional[BackgroundTasks] = None,
-    org_id: Optional[int] = None,
-    workspace_id: Optional[int] = None
-) -> bool:
+async def delete_event(db: AsyncSession, event_id: int, user_id: str) -> bool:
     """
     Remove event from DB and purge from AI long-term memory.
+    Completes the real-time feedback loop by ensuring 'deleted' reality is synced.
     """
-    filters = [EventTable.id == event_id]
-    
-    # Always enforce tenant isolation - user_id is baseline security
-    if org_id:
-        filters.append(EventTable.org_id == org_id)
-        if workspace_id:
-            filters.append(EventTable.workspace_id == workspace_id)
-        else:
-            # Within org but no workspace specified - check personal/general workspace
-            filters.append(EventTable.user_id == user_id)
-    else:
-        # No org context - only allow user's personal events
-        filters.append(EventTable.user_id == user_id)
-
-    stmt = select(EventTable).where(and_(*filters))
+    stmt = select(EventTable).where(
+        and_(EventTable.id == event_id, EventTable.user_id == user_id)
+    )
     result = await db.execute(stmt)
     event = result.scalars().first()
 
     if not event:
         return False
 
-    # Capture event data for the notification before deleting
-    event_dto = {
-        "id": event.id,
-        "user_id": user_id,
-        "title": event.title,
-        "category": event.category,
-    }
-    
-    # We need the user's email for the background task to notify them of the deletion
-    target_user = await db.get(UserTable, user_id)
-    user_email = target_user.email if target_user else None
-
     try:
-        # Purge from Vector Store with Org-based namespace
-        namespace = f"org_{event.org_id}" if event.org_id else f"user_{user_id}"
+        # Purge from Vector Store first (fail-safe)
+        namespace = f"user_{user_id}"
         vector_store.delete(ids=[f"calendar_event_{event_id}"], namespace=namespace)
         logger.info(f"🗑 AI Memory purged for event {event_id}")
     except Exception as e:
@@ -603,10 +327,16 @@ async def delete_event(
     await db.delete(event)
     await db.commit()
 
-    if user_email:
-        if background_tasks:
-            background_tasks.add_task(notify_event_deleted, user_email, [], event_dto)
-        else:
-            await notify_event_deleted(user_email, [], event_dto)
+    target_user = await db.get(UserTable, user_id)
+    if target_user:
+        await notify_event_deleted(
+            target_user.email,
+            [],
+            {
+                "id": event_id,
+                "user_id": user_id,
+                "title": event.title,
+            },
+        )
 
     return True

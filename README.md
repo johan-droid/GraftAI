@@ -1,128 +1,151 @@
 <div align="center">
   <br />
-  <img src="https://img.shields.io/badge/GraftAI-NEXT--GEN-7C3AED?style=for-the-badge&logo=probot&logoColor=white" alt="GraftAI Logo" />
+  <img src="https://img.shields.io/badge/GraftAI-NEXT--GEN-8A2BE2?style=for-the-badge&logo=probot&logoColor=white" alt="GraftAI Logo" />
   <br />
-  <h1 align="center"><b>🌌 GraftAI: The Sovereign Orchestration Layer</b></h1>
+  <h1 align="center"><b>🌌 GraftAI: The Sovereign AI Scheduler</b></h1>
   <p align="center">
-    <b>A High-Fidelity, AI-First Autonomous Engine for Modern Enterprise Workflows.</b><br />
-    <i>Sovereign identity, proactive intelligence, and high-performance cross-continental scheduling.</i>
+    <b>A Enterprise-Ready, AI-First Orchestration Layer for Modern Workflows.</b><br />
+    <i>Sovereign identity, proactive intelligence, and high-performance scheduling.</i>
   </p>
   
   <p align="center">
-    <img src="https://img.shields.io/github/license/johan-droid/GraftAI?style=flat-square&color=7C3AED" alt="License" />
-    <img src="https://img.shields.io/github/v/release/johan-droid/GraftAI?style=flat-square&color=7C3AED" alt="Release" />
-    <img src="https://img.shields.io/github/stars/johan-droid/GraftAI?style=flat-square&color=7C3AED" alt="Stars" />
+    <img src="https://img.shields.io/github/license/johan-droid/GraftAI?style=flat-square&color=8A2BE2" alt="License" />
+    <img src="https://img.shields.io/github/v/release/johan-droid/GraftAI?style=flat-square&color=8A2BE2" alt="Release" />
+    <img src="https://img.shields.io/github/stars/johan-droid/GraftAI?style=flat-square&color=8A2BE2" alt="Stars" />
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome" />
   </p>
 
+  <br />
+  <h2 align="center">✨ Real Feature Showcase</h2>
+  <div align="center">
+    <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/login_page_1774358778006.png" width="45%" style="border-radius: 10px; margin: 5px;" />
+    <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/register_page_1774358788690.png" width="45%" style="border-radius: 10px; margin: 5px;" />
+    <br />
+    <img src="file:///C:/Users/sahoo/.gemini/antigravity/brain/94534ed5-57a6-434f-9007-df466a7dfd19/sso_page_1774358801194.png" width="91%" style="border-radius: 10px; margin: 5px;" />
+  </div>
+  <br />
   <br />
 </div>
 
 ---
 
 ## 💎 The Vision
-**GraftAI** is a premium, autonomous calendar layer that "grafts" high-fidelity AI directly into your executive stack. Designed for high-performance teams, it replaces chaotic coordination with silent, proactive orchestration.
-
-### ✨ SaaS-Grade Features
-- **Proactive AI Agent**: An autonomous LLM engine (Groq/Llama-3.3) that anticipates your scheduling needs.
-- **Strong Calendar Connections**: Persistent, enterprise-grade OAuth for Google and Microsoft ecosystems.
-- **Sovereign AI Memory**: Local-first vector RAG (Pinecone + HuggingFace) for private, zero-latency context recall.
-- **Deep Zoom Integration**: SaaS-grade, user-level token persistence with AES-256 encryption.
-- **The Obsidian Interface**: A high-fidelity, glassmorphic nocturnal UI (Next.js 15) optimized for deep focus.
-- **Autonomous Notifications**: Real-time SMTP and OneSignal push integration for meeting lifecycle events.
+**GraftAI** isn't just a calendar; it's an **Autonomous Orchestration Layer**. It "grafts" high-fidelity AI directly into your enterprise stack, bridging the gap between raw LLM intelligence and secure, high-stakes business operations.
 
 ---
 
-## 🏗️ Premium Architecture
+## 🛠️ The Tech Stack
+
+| Layer | Technology | Key Capabilities |
+| :--- | :--- | :--- |
+| **Frontend** | ![Next.js](https://img.shields.io/badge/Next.js_15-000000?style=flat-square&logo=nextdotjs) | App Router, Server Actions, Framer Motion |
+| **Backend** | ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=FastAPI) | Asynchronous Pydantic v2, Dependency Injection |
+| **Intelligence** | ![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square&logo=chainlink) | RAG Workflows, Proactive Agentic Behavior |
+| **Identity** | ![Authlib](https://img.shields.io/badge/Identity-SSO_/_FIDO2-FF4F00?style=flat-square) | Google, GitHub, Microsoft, Apple, Passkeys |
+| **Storage** | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?style=flat-square&logo=postgresql) | SQLAlchemy 2.0 (Async), High-Performance Migrations |
+| **Vector Engine**| ![Pinecone](https://img.shields.io/badge/Pinecone-272727?style=flat-square&logo=pinecone) | Contextual Memory with High-Dimensional Indexing |
+
+---
+
+## 🚀 Core Features
+
+### 🔐 1. Identity & Sovereignty (Hardened)
+* **HttpOnly Cookie Auth**: Production-grade session management using `HttpOnly`, `Secure`, `SameSite=Strict` cookies to mitigate XSS and CSRF risks.
+* **Universal SSO**: Native, race-condition-free integration with Google, GitHub, Microsoft, and Apple.
+* **Biometric Auth**: Passwordless login using FIDO2/WebAuthn (TouchID/FaceID).
+* **Sovereign JWT**: Asynchronous token validation with Auth0 JWKS integration and fail-safe local fallback.
+
+### 🤖 2. Proactive AI Intelligence
+* **Contextual Memory**: Powered by RAG (Retrieval Augmented Generation) for long-term user context.
+* **Resilient Pinecone**: Advanced vector store integration with robust fallback handling to ensure AI availability during provider outages.
+* **Natural Language UI**: Chat-driven scheduling that understands nuances like "find a quick sync before my flight."
+* **Advanced RAG**: Strictly isolated multi-tenant indexing for enterprise-grade data privacy.
+
+### 📊 3. Enterprise Observability
+* **Live Analytics**: Real-time tracking of meeting health and team productivity.
+* **Non-Blocking API**: Fully asynchronous backend orchestration ensuring extreme concurrency and low latency.
+* **Multi-Cloud Ready**: Optimized for horizontal scaling with tuned database connection pooling (SQLAlchemy 2.0 Async).
+
+---
+
+## 🏗️ Technical Architecture
 
 ```mermaid
-graph TD
-    subgraph "High-Fidelity Edge"
-        UI["Next.js 15 (Nocturnal UI)"]
-        AUTH["Sovereign SSO/MFA"]
+graph LR
+    subgraph "Hardened Edge"
+        UI["Modern UI (Next.js 15+ + Tailwind 4)"]
+        Guard["Cookie-Based Auth Middleware"]
     end
 
-    subgraph "Autonomous Core"
-        API["FastAPI Async Engine"]
-        ZOOM["Zoom SaaS Service"]
-        AGNT["Proactive AI (LangChain / Groq)"]
+    subgraph "Intelligent Core"
+        API["FastAPI Async Orchestrator"]
+        Auth["Sovereign Identity Service"]
+        Agent["Resilient AI Agent (LangChain)"]
     end
 
-    subgraph "Persistence Layer"
-        POSTGRES["PostgreSQL 16 (AES-256 Tokens)"]
-        REDIS["Redis (Rate-Limit & Cache)"]
-        VECTOR["Pinecone (Context Memory)"]
+    subgraph "Sovereign Persistence"
+        RDS["PostgreSQL 16 (Tuned Connection Pool)"]
+        VDB["Pinecone (with Fallback)"]
+        Cache["Redis (Auth Revocation & Rate Limiting)"]
     end
 
-    UI -->|Async Requests| API
-    API -->|Orchestrate| AGNT
-    API -->|Manage| ZOOM
-    API -->|Persist| POSTGRES
-    API -->|Cache| REDIS
-    AGNT -->|Recall| VECTOR
+    UI --> API
+    Guard --> Auth
+    API --> Agent
+    Agent --> VDB
+    Auth --> Cache
+    API --> RDS
 ```
 
 ---
 
-## 🚀 Rapid Deployment
+## 🛠️ Rapid Setup
 
-### 1. Requirements
-- Node.js 20+
-- Python 3.11+
-- Docker & Docker Compose
-- Environment keys (Groq, OpenAI, Pinecone, Zoom)
-
-### 2. Local Setup
+### 1. Environment Configuration
+Create a `.env` in the `backend/` directory with your premium credentials:
 ```bash
-# Clone and enter
-git clone https://github.com/johan-droid/GraftAI.git
-cd GraftAI
+# Core
+DATABASE_URL=postgresql+asyncpg://...
+PINECONE_API_KEY=pcsk_...
 
-# Configure Core
-cp backend/.env.example backend/.env
+# AI
+GROQ_API_KEY=gsk_...
+OPENAI_API_KEY=sk_...
 
-# High-Performance Backend
-cd backend && pip install -r requirements.txt
-python app.py
+# Identity (Production URLs)
+FRONTEND_BASE_URL=https://graft-ai-two.vercel.app
+APP_BASE_URL=https://graftai.onrender.com
+```
 
-# Modern Frontend
-cd ../frontend && npm install
+### 2. Backend Orchestrator
+```bash
+cd backend
+python -m venv .venv
+# Activate venv
+pip install -r requirements.txt
+python app.py  # High-performance Uvicorn worker manager
+```
+
+### 3. Frontend Experience
+```bash
+cd frontend
+npm install
 npm run dev
 ```
-
-### 3. Docker Orchestration
-```bash
-docker-compose up --build
-```
-
----
-
-## ⚙️ Technical Core (Architectural Evolution)
-GraftAI has transitioned to a **Standalone Better Auth** implementation for maximum sovereignty and direct database integration.
-
-### Authentication Strategy
-- **Sovereign Control**: Full session lifecycle management without third-party proxies.
-- **Biometric Integration**: Native support for FIDO2/Passkey via WebAuthn.
-- **Multi-Tenant Identity**: Secure mapping of OAuth accounts (Google, GitHub, Microsoft, Apple) to internal user records.
-
-### Database Architecture
-- **Neon Postgres**: Direct connectivity via `pg.Pool` for sub-millisecond latency.
-- **SQLAlchemy 2.0**: Asynchronous backend persistence with high-performance connection pooling.
-- **Vector Memory**: Pinecone-backed RAG for long-term AI context and recall.
 
 ---
 
 ## 🛡️ Security Posture
-GraftAI implements a **Zero-Trust Security Framework**:
-*   **Encrypted Secrets**: All OAuth and Zoom tokens are encrypted at rest using AES-256 bit Fernet logic.
-*   **HttpOnly Isolation**: JWTs are strictly isolated from client-side script access.
-*   **Granular Privacy**: AI agents operate within isolated multi-tenant contexts to ensure absolute data sovereignty.
+GraftAI implements the **Zero-Trust Security Model**:
+*   **HttpOnly Isolation**: JWTs are never exposed to JavaScript, preventing XSS-based account takeovers.
+-   **CSRF Hardening**: Enforced `SameSite=Strict` and CORS origin-filtering.
+*   **Encrypted Payloads**: All data is encrypted at rest (AES-256) and in transit (TLS 1.3).
+*   **Sandboxed AI**: AI agents operate in a restricted environment with limited resource access.
+*   **Audit Logging**: Every authentication and database transaction is logged as exception-safe events.
 
 ---
 
 <div align="center">
-  <p><b>Built for the future of work by the Graft Research Labs.</b></p>
+  <p><b>Built for the future of work by GraftAI Labs.</b></p>
   <img src="https://img.shields.io/badge/STATUS-OPERATIONAL-success?style=flat-square" />
-</div>
--success?style=flat-square" />
 </div>

@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/app/providers/auth-provider";
-import Footer from "@/components/Footer";
-import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,13 +49,7 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
     >
       <body className="min-h-full flex flex-col bg-background text-foreground selection:bg-primary/30" suppressHydrationWarning>
-        <AuthProvider>
-          <div className="flex-1 flex flex-col">
-            {children}
-          </div>
-          <Footer />
-        </AuthProvider>
-        <ServiceWorkerRegistration />
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

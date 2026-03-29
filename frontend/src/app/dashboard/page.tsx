@@ -28,23 +28,7 @@ export default function Dashboard() {
   const { user, isAuthenticated, loading, refresh } = useAuthContext();
   const dashboardUser = user as DashboardUser;
   const profileName = dashboardUser?.full_name || dashboardUser?.email?.split("@")[0] || "User";
-  interface ActivityEvent {
-    id: string;
-    title: string;
-    start_time: string;
-    category: string;
-    is_upcoming?: boolean;
-  }
-  
-  interface DashboardStats {
-    meetings: number;
-    hours: number;
-    growth: number;
-    next_event?: ActivityEvent;
-    recent_events?: ActivityEvent[];
-  }
-
-  const [stats, setStats] = useState<DashboardStats>({ meetings: 0, hours: 0, growth: 0 });
+  const [stats, setStats] = useState<{ meetings: number; hours: number; growth: number; next_event?: any; recent_events?: any[] }>({ meetings: 0, hours: 0, growth: 0 });
   const [summaryMessage, setSummaryMessage] = useState("");
   const [aiSuggestion, setAiSuggestion] = useState("");
 
@@ -203,7 +187,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {stats.recent_events.map((event) => (
+                    {stats.recent_events.map((event: any) => (
                       <tr key={event.id} className="group">
                         <td>
                           <div className="flex items-center gap-3">

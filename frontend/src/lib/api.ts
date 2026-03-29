@@ -1,30 +1,24 @@
-const getApiBaseUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_BASE_URL) return process.env.NEXT_PUBLIC_API_BASE_URL.replace(/\/$/, "");
-  if (process.env.NEXT_PUBLIC_BACKEND_URL) return process.env.NEXT_PUBLIC_BACKEND_URL.replace(/\/$/, "");
-  
-  const windowOrigin = (typeof window !== "undefined" && window.location.origin) || "";
-  if (windowOrigin) {
-    // If running on port 300x, assume backend is on 8000
-    return windowOrigin.replace(/:300\d/, ":8000");
+const windowOrigin = (typeof window !== "undefined" && window.location.origin) || "";
+const defaultHost = windowOrigin ? windowOrigin.replace(/:300\d/, ":8000") : "http://localhost:8000";
+
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  defaultHost;
+
+if (typeof window !== "undefined") {
+  console.debug("API_BASE_URL set to", API_BASE_URL);
+  if (
+    process.env.NODE_ENV === "production" &&
+    (API_BASE_URL.startsWith("http://localhost") || API_BASE_URL.startsWith("http://127.0.0.1"))
+  ) {
+    console.warn(
+      "Running in production with localhost backend URL. Please set NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_BACKEND_URL to your deployed backend domain."
+    );
   }
-  
-  return "http://localhost:8000";
-};
-
-export const API_BASE_URL = getApiBaseUrl();
-
-if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-  console.debug("[api] API_BASE_URL resolved to:", API_BASE_URL);
 }
 
 import { getSessionSafe, getToken } from "@/lib/auth-client";
-
-/**
- * Multi-Tenancy Helpers: Extract active context from local state.
- * These can be set via an Organization Switcher UI component.
- */
-export const getActiveOrgId = () => typeof window !== "undefined" ? localStorage.getItem("graftai_org_id") : null;
-export const getActiveWorkspaceId = () => typeof window !== "undefined" ? localStorage.getItem("graftai_workspace_id") : null;
 
 interface ApiOptions {
   method?: string;
@@ -49,18 +43,8 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // Multi-Tenant Context Injection
-  const orgId = getActiveOrgId();
-  if (orgId) headers["X-Org-Id"] = orgId;
-  
-  const workspaceId = getActiveWorkspaceId();
-  if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
-
   // Rely on HttpOnly cookie for auth fallback - credentials: "include" sends cookies automatically
   // The backend reads 'graftai_access_token' cookie via get_current_user()
-  if (process.env.NODE_ENV === "development") {
-    console.debug(`[api] 🛰️ Fetching: ${method} ${path}`, { headers, body });
-  }
 
   const res = await fetch(`${API_BASE_URL}/api/v1${path}`, {
     method,
@@ -68,10 +52,6 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
     body: body ? JSON.stringify(body) : undefined,
     credentials: "include", // HttpOnly cookies are sent automatically
   });
-
-  if (process.env.NODE_ENV === "development" && !res.ok) {
-    console.warn(`[api] ❌ Response Error: ${res.status} ${res.statusText} for ${path}`);
-  }
 
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
@@ -99,10 +79,7 @@ async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
     }
 
     const errorData = await res.json().catch(() => ({}));
-    if (process.env.NODE_ENV === "development") {
-      console.error("[api] 🔥 Backend Error Body:", errorData);
-    }
-    throw new Error(errorData.message || errorData.detail || `Request failed with status ${res.status}`);
+    throw new Error(errorData.detail || `Request failed with status ${res.status}`);
   }
 
   return res.json() as Promise<T>;
@@ -149,12 +126,6 @@ export async function syncUserConsent(consents: {
   return apiFetch<{ status: string }>("/auth/sync-consent", {
     method: "POST",
     body: consents,
-  });
-}
-
-export async function syncCalendars() {
-  return apiFetch<{ status: string; message: string }>("/auth/sync", {
-    method: "POST",
   });
 }
 
@@ -206,73 +177,15 @@ export async function getAnalyticsSummary(range: string = "7d") {
   );
 }
 
-/**
- * Deprecated: Use streamAiChat for real-time streaming.
- */
+// ──────────────────────────────────────
+// Services: AI Chat
+// Backend: POST /ai/chat  (Pydantic body)
+// ──────────────────────────────────────
 export async function sendAiChat(prompt: string, context?: string[], timezone?: string) {
   return apiFetch<{ result: string; model_used?: string }>("/ai/chat", {
     method: "POST",
     body: { prompt, context, timezone },
   });
-}
-
-export async function* streamAiChat(prompt: string, timezone: string = "UTC") {
-  const token = getToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  // Multi-Tenant Context Injection (Streaming)
-  const orgId = getActiveOrgId();
-  if (orgId) headers["X-Org-Id"] = orgId;
-  
-  const workspaceId = getActiveWorkspaceId();
-  if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
-
-  const response = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ prompt, timezone }),
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Streaming request failed" }));
-    throw new Error(error.detail || "Streaming request failed");
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const content = line.slice(6).trim();
-        if (content === "[DONE]") return;
-        
-        try {
-          const data = JSON.parse(content);
-          yield data;
-        } catch (e) {
-          console.error("Error parsing stream chunk:", e);
-        }
-      }
-    }
-  }
 }
 
 // ──────────────────────────────────────
@@ -329,7 +242,7 @@ export interface CalendarEvent {
   user_id: number;
   title: string;
   description?: string;
-  category: "meeting" | "event" | "birthday" | "task" | "deep_work" | "personal" | "out_of_office";
+  category: "meeting" | "event" | "birthday" | "task";
   color?: string;
   start_time: string;
   end_time: string;
@@ -390,42 +303,6 @@ export async function getAvailableSlots(date: string, duration: number = 60, tar
     url += `&target_timezone=${encodeURIComponent(targetTimezone)}`;
   }
   return apiFetch<{start: string; end: string; local_label?: string; guest_label?: string}[]>(url);
-}
-
-export interface Organization {
-  id: number;
-  name: string;
-  slug: string;
-  role: string;
-}
-
-export interface Workspace {
-  id: number;
-  name: string;
-  slug: string;
-  org_id: number;
-}
-
-export async function listMyOrganizations() {
-  return apiFetch<Organization[]>("/organizations");
-}
-
-export async function createOrganization(name: string, slug: string) {
-  return apiFetch<Organization>("/organizations", {
-    method: "POST",
-    body: { name, slug },
-  });
-}
-
-export async function listWorkspaces(orgId: number) {
-  return apiFetch<Workspace[]>(`/organizations/${orgId}/workspaces`);
-}
-
-export async function createWorkspace(orgId: number, name: string, slug: string) {
-  return apiFetch<Workspace>(`/organizations/${orgId}/workspaces`, {
-    method: "POST",
-    body: { name, slug },
-  });
 }
 
 export async function mfaVerify(userId: number, code: string) {

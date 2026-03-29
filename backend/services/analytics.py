@@ -7,9 +7,7 @@ from backend.models.tables import EventTable
 from backend.utils.db import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
-from backend.utils.tenant import get_current_org_id, get_current_workspace_id
-from datetime import datetime, timedelta, timezone
-import os
+from datetime import datetime, timedelta
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -32,57 +30,49 @@ async def analytics_summary(
     range: str = "7d",
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
-    org_id: int = Depends(get_current_org_id),
-    workspace_id: Optional[int] = Depends(get_current_workspace_id),
 ):
     """
     High-Fidelity Analytics Engine.
     Aggregates real-time data from the EventTable to provide actionable insights.
     """
+    logger.info(f"Analytics summary requested by user: {user_id}")
+
+    # Calculate time range
+    now = datetime.now()
+    if range == "7d":
+        start_date = now - timedelta(days=7)
+    elif range == "30d":
+        start_date = now - timedelta(days=30)
+    else:
+        start_date = now - timedelta(days=7)
+
     try:
-        logger.info(f"Analytics summary requested by user: {user_id}")
-
-        # Calculate time range
-        now = datetime.now(timezone.utc)
-        delta = timedelta(days=7) # Default
-        if range == "30d":
-            delta = timedelta(days=30)
-        elif range == "90d":
-            delta = timedelta(days=90)
-        
-        start_date = now - delta
-        prev_start = start_date - delta # For growth comparison
-
-        # 1. Total Meetings Count (Scoped)
-        filters = [EventTable.user_id == user_id, EventTable.start_time >= start_date]
-        if org_id:
-            filters.append(EventTable.org_id == org_id)
-        if workspace_id:
-            filters.append(EventTable.workspace_id == workspace_id)
-
-        count_stmt = select(func.count(EventTable.id)).where(and_(*filters))
+        # 1. Total Meetings Count
+        count_stmt = select(func.count(EventTable.id)).where(
+            and_(EventTable.user_id == user_id, EventTable.start_time >= start_date)
+        )
         count_result = await db.execute(count_stmt)
         meetings_count = count_result.scalar() or 0
 
-        # 2. Total Hours Scheduled (Scoped)
-        duration_stmt = select(EventTable.start_time, EventTable.end_time).where(and_(*filters))
+        # 2. Total Hours Scheduled
+        # Using a direct select to sum durations (end_time - start_time)
+        duration_stmt = select(EventTable.start_time, EventTable.end_time).where(
+            and_(EventTable.user_id == user_id, EventTable.start_time >= start_date)
+        )
         duration_result = await db.execute(duration_stmt)
         total_hours = 0.0
-        for start_time_val, end_time_val in duration_result:
-            total_hours += (end_time_val - start_time_val).total_seconds() / 3600
+        for start, end in duration_result:
+            total_hours += (end - start).total_seconds() / 3600
 
-        # 3. Growth Calculation (Comparison with previous period - Scoped)
-        prev_filters = [
-            EventTable.user_id == user_id,
-            EventTable.start_time >= prev_start,
-            EventTable.start_time < start_date
-        ]
-        if org_id:
-            prev_filters.append(EventTable.org_id == org_id)
-        if workspace_id:
-            prev_filters.append(EventTable.workspace_id == workspace_id)
-
-        prev_count_stmt = select(func.count(EventTable.id)).where(and_(*prev_filters))
+        # 3. Growth Calculation (Comparison with previous period)
+        prev_start = start_date - (now - start_date)
+        prev_count_stmt = select(func.count(EventTable.id)).where(
+            and_(
+                EventTable.user_id == user_id,
+                EventTable.start_time >= prev_start,
+                EventTable.start_time < start_date,
+            )
+        )
         prev_count_result = await db.execute(prev_count_stmt)
         prev_meetings = prev_count_result.scalar() or 0
 
@@ -92,15 +82,9 @@ async def analytics_summary(
         elif meetings_count > 0:
             growth = 100  # First week growth
 
-        # 4. Next/Recent Activity List (Scoped)
-        activity_filters = [EventTable.user_id == user_id]
-        if org_id:
-            activity_filters.append(EventTable.org_id == org_id)
-        if workspace_id:
-            activity_filters.append(EventTable.workspace_id == workspace_id)
-
+        # 4. Next/Recent Activity List
         activity_stmt = select(EventTable).where(
-            and_(*activity_filters)
+            EventTable.user_id == user_id
         ).order_by(EventTable.start_time.desc()).limit(5)
         activity_result = await db.execute(activity_stmt)
         activity_list = []

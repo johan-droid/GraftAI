@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 from backend.auth.schemes import get_current_user_id
-from backend.utils.tenant import get_current_org_id, get_current_workspace_id
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -22,29 +21,27 @@ class ProactiveResponse(BaseModel):
 from backend.services import scheduler
 from backend.utils.db import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 @router.post("/suggest", response_model=ProactiveResponse)
 async def proactive_suggest(
     request: ProactiveRequest, 
     user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-    org_id: int = Depends(get_current_org_id),
-    workspace_id: Optional[int] = Depends(get_current_workspace_id),
+    db: AsyncSession = Depends(get_db)
 ):
     logger.info(f"Proactive suggestion requested by user: {user_id}")
     
     try:
         # Fetch events for the next 24 hours
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         tomorrow = now + timedelta(days=1)
-        events = await scheduler.get_events_for_range(db, user_id, now, tomorrow, org_id=org_id, workspace_id=workspace_id)
+        events = await scheduler.get_events_for_range(db, user_id, now, tomorrow)
         
         if not events:
             return ProactiveResponse(suggestion="Your schedule is clear for the next 24 hours. Great time to focus on that big project!")
             
         next_event = events[0]
-        time_until = next_event.start_time - now
+        time_until = next_event.start_time.replace(tzinfo=None) - now.replace(tzinfo=None)
         minutes_until = int(time_until.total_seconds() / 60)
         
         if minutes_until < 30:

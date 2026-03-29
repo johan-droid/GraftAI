@@ -2,210 +2,187 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { signUp } from "@/lib/auth-client";
+import { motion } from "framer-motion";
+import { Mail, Lock, User, ArrowRight, Loader2, Globe, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { signUp, signIn } from "@/lib/auth-client";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Mail, 
-  Lock, 
-  User, 
-  Globe, 
-  ShieldCheck, 
-  ArrowLeft,
-  Cpu,
-  Sparkles,
-  Zap
-} from "lucide-react";
-
-import AuthInput from "../components/AuthInput";
-import AuthButton from "../components/AuthButton";
-import SocialAuthGrid from "../components/SocialAuthGrid";
 
 export default function RegisterPage() {
   const router = useRouter();
-  
-  // State
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [timezone, setTimezone] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     // Automatically capture browser timezone
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      setTimezone(tz || "UTC");
+      setTimezone(tz);
     } catch (e) {
       console.warn("Could not capture timezone", e);
-      setTimezone("UTC");
     }
   }, []);
 
-  async function handleRegister(e: React.FormEvent) {
+  async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError("");
     try {
       const { error } = await signUp(email, password, fullName, timezone);
-      if (error) throw new Error(error.message || "Registration failed");
-      
+
+      if (error) {
+        throw new Error(error.message || "Registration failed");
+      }
+
       setSuccess(true);
-      setTimeout(() => router.push("/login"), 2500);
+      setTimeout(() => {
+        router.push("/login");
+      }, 2000);
     } catch (err) {
-      setError((err as Error).message || "Identity establishment failed. Please check your data.");
+      setError((err as Error).message || "Registration failed");
     } finally {
       setLoading(false);
     }
   }
 
-  const handleOAuth = async (provider: "google" | "github" | "discord" | "microsoft") => {
-    setLoading(true);
-    try {
-      await signIn.social({ provider });
-    } catch (err) {
-      setError("OAuth registration protocol failed.");
-      setLoading(false);
-    }
-  };
-
   return (
-    <main className="min-h-screen bg-[#0A0E27] flex items-center justify-center p-6 relative overflow-hidden">
+    <main className="app-shell flex min-h-screen flex-col items-center justify-center p-4 relative overflow-hidden bg-slate-950">
       
-      {/* Static Background Accents */}
-      <div className="absolute top-0 left-0 w-full h-full -z-10 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#0066FF]/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-[#6366F1]/5 rounded-full blur-[120px]" />
-      </div>
+      {/* Background Ambience */}
+      <div className="hidden md:block absolute top-0 left-0 w-full h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="hidden md:block absolute bottom-0 right-0 w-[400px] h-[400px] bg-fuchsia-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <section className="w-full max-w-[520px] bg-[#1A1D2E]/40 border border-white/5 p-8 md:p-12 rounded-[2.5rem] backdrop-blur-3xl shadow-2xl relative z-10">
-        
-        <div className="flex justify-between items-center mb-10">
-          <Link href="/login" className="group flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-white transition-colors">
-             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-             Back to Terminal
-          </Link>
-          <div className="flex items-center gap-2">
-            <Cpu className="text-[#0066FF] w-4 h-4" />
-             <span className="text-[10px] font-bold tracking-tighter text-white uppercase italic">Binding Protocol</span>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="w-full max-w-[440px] z-10"
+      >
+        {/* Brand Header */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.3)] mb-4">
+            <span className="text-white font-bold text-2xl leading-none">G</span>
           </div>
+          <h1 className="text-2xl font-bold tracking-tight text-white mb-2">Create your account</h1>
+          <p className="text-slate-400 text-sm text-center px-4">Get started with GraftAI — the future of AI scheduling</p>
         </div>
 
-        {!success ? (
-          <>
-            <header className="mb-6 md:mb-10 text-center px-2">
-               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#0066FF]/10 border border-[#0066FF]/20 text-[#0066FF] text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-3 md:mb-4">
-                  <Sparkles className="w-3 md:w-3.5 h-3 md:h-3.5" />
-                  New Identity Portal
-               </div>
-               <h1 className="text-2xl md:text-4xl font-bold text-white tracking-tight mb-2 md:mb-4 italic">
-                  Establish <br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#0066FF] to-cyan-400 uppercase">Your Identity.</span>
-               </h1>
-               <p className="text-slate-500 font-medium text-[11px] md:text-sm">Coordinate your digital workspace with autonomous precision.</p>
-            </header>
-
-            <SocialAuthGrid onSelect={handleOAuth} loading={loading} />
-
-            <div className="relative my-10 text-center">
-              <div className="absolute inset-y-1/2 left-0 right-0 h-[1px] bg-white/5" />
-              <span className="relative z-10 bg-[#16192b] px-6 text-[10px] font-bold uppercase tracking-[0.3em] text-slate-700">Protocol Binding</span>
-            </div>
-
-            <motion.form 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              onSubmit={handleRegister} 
-              className="space-y-6"
+        <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-2xl shadow-xl p-8 relative">
+          
+          {success ? (
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="text-center py-8"
             >
-              <AuthInput 
-                label="Legal Entity Name" 
-                icon={User} 
-                type="text"
-                placeholder="Full Name / Brand"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
+              <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ShieldCheck className="w-8 h-8 text-emerald-500" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Registration Successful!</h2>
+              <p className="text-slate-400 mb-6 text-sm">Redirecting you to login...</p>
+              <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                <motion.div 
+                   initial={{ width: "0%" }}
+                   animate={{ width: "100%" }}
+                   transition={{ duration: 2 }}
+                   className="bg-primary h-full"
+                />
+              </div>
+            </motion.div>
+          ) : (
+            <form className="space-y-4" onSubmit={handleRegister}>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">Full Name</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <input
+                    type="text" required value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-3 border border-slate-700/50 rounded-xl bg-slate-800/30 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
+                    placeholder="John Doe"
+                  />
+                </div>
+              </div>
 
-              <AuthInput 
-                label="Registry Email" 
-                icon={Mail} 
-                type="email"
-                placeholder="name@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              
-              <AuthInput 
-                label="Secure Signature" 
-                icon={Lock} 
-                type="password"
-                id="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                showToggle
-                required
-              />
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">Email Address</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <input
+                    type="email" required value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-3 border border-slate-700/50 rounded-xl bg-slate-800/30 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
+                    placeholder="name@company.com"
+                  />
+                </div>
+              </div>
 
-              {error && (
-                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold flex items-center gap-3">
-                  <Zap className="w-4 h-4 shrink-0" />
-                  {error}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">Password</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <input
+                    type="password" required value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-3 border border-slate-700/50 rounded-xl bg-slate-800/30 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+
+              {timezone && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg border border-slate-700/30">
+                  <Globe className="w-3 h-3 text-slate-500" />
+                  <span className="text-[10px] text-slate-500 font-mono uppercase">Timezone: {timezone}</span>
                 </div>
               )}
 
-              <AuthButton 
-                label="Initiate Identity Protocol" 
-                loading={loading} 
+              <button
                 type="submit"
-              />
-            </motion.form>
-          </>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center py-12"
-          >
-            <div className="w-20 h-20 rounded-full bg-[#0066FF]/10 border border-[#0066FF]/20 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-[#0066FF]/10">
-               <ShieldCheck className="w-10 h-10 text-[#0066FF]" />
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-4 italic uppercase tracking-tight">Registry Confirmed.</h3>
-            <p className="text-slate-500 font-medium mb-10 leading-relaxed text-sm px-4">
-              Identity portal established. Redirecting to terminal authentication in seconds...
-            </p>
-            <div className="px-10">
-               <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: "0%" }}
-                    animate={{ width: "100%" }}
-                    transition={{ duration: 2.5 }}
-                    className="h-full bg-[#0066FF]"
-                  />
-               </div>
-            </div>
-          </motion.div>
-        )}
+                disabled={loading}
+                className="w-full relative group flex justify-center items-center gap-2 py-3.5 px-4 rounded-xl text-sm font-semibold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_20px_rgba(79,70,229,0.2)] overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                {loading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Creating account...</>
+                ) : (
+                  <><span className="relative z-10">Get Started Now</span> <ArrowRight className="w-4 h-4 relative z-10" /></>
+                )}
+              </button>
+            </form>
+          )}
 
-        <footer className="mt-12 text-center text-sm space-y-6">
-          <p className="text-slate-600 font-medium">
-             Part of the Protocol? <Link href="/login" className="text-white hover:text-[#0066FF] transition-colors font-bold ml-1">Terminal Auth</Link>
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              className="mt-4 text-xs text-red-400 bg-red-400/10 border border-red-400/20 p-3 rounded-xl flex items-center gap-2"
+            >
+              <div className="w-1 h-1 rounded-full bg-red-400 shrink-0" />
+              {error}
+            </motion.div>
+          )}
+        </div>
+
+        <div className="mt-8 text-center">
+          <p className="text-sm text-slate-500">
+            Already have an account?{" "}
+            <Link href="/login" className="font-semibold text-primary hover:text-primary/80 transition-colors">
+              Sign in
+            </Link>
           </p>
-          
-          <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
-             <Link href="/terms" className="hover:text-slate-400 transition-colors">Terms</Link>
-             <span className="w-1 h-1 rounded-full bg-white/5" />
-             <Link href="/privacy" className="hover:text-slate-400 transition-colors">Privacy</Link>
-             <span className="w-1 h-1 rounded-full bg-white/5" />
-             <div className="flex items-center gap-1 font-black text-white/40 italic">FIDO2 SECURE</div>
-          </div>
-        </footer>
-      </section>
+        </div>
+      </motion.div>
     </main>
   );
 }

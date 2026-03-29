@@ -9,7 +9,7 @@ client = TestClient(app)
 
 @pytest.mark.asyncio
 async def test_create_and_decode_jwt():
-    token_data = await _create_jwt_token("123")
+    token_data = _create_jwt_token("123")
     assert "access_token" in token_data
     token = token_data["access_token"]
 

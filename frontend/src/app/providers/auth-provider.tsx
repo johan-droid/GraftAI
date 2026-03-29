@@ -26,18 +26,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [session, setSession] = React.useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
   React.useEffect(() => {
     let active = true;
 
     async function loadSession() {
-      // Small optimization: don't set loading back to true if we already have a session being refreshed
-      setLoading((prev) => !session && prev);
+      setLoading(true);
       try {
         const response = await getSessionSafe();
         if (!active) return;
@@ -45,6 +39,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (response?.data) {
           setSession(response.data);
         } else if (response?.error) {
+          // If it's a network error (TypeEror/Aborted), don't clear session or redirect
+          // This prevents background glitches from kicking users out
+          // @ts-ignore - added isNetworkError in auth-client
           if (response.isNetworkError) {
             console.debug("Session check encountered a network glitch, retaining current session.");
             return;
@@ -65,26 +62,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       active = false;
       clearInterval(interval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Separate effect for redirection to ensure router is ready
   React.useEffect(() => {
-    if (!mounted || loading || !!session?.user) return;
-
-    // Check if we're in the middle of an OAuth flow
-    const oauthInProgress = typeof window !== "undefined" && sessionStorage.getItem("oauth_in_progress") === "true";
-    const isAuthCallback = typeof window !== "undefined" && window.location.pathname.includes("/auth-callback");
-    const isPublicRoute = ["/", "/privacy", "/terms", "/login"].includes(window.location.pathname);
-    
-    if (!isAuthCallback && !isPublicRoute && !oauthInProgress) {
-      const timer = setTimeout(() => {
-        console.log("[AuthProvider] Performing safe redirect to /login");
+    if (!session?.user && !loading) {
+      // Check if we're in the middle of an OAuth flow - don't redirect to login in that case
+      const oauthInProgress = typeof window !== "undefined" && sessionStorage.getItem("oauth_in_progress") === "true";
+      const isAuthCallback = typeof window !== "undefined" && window.location.pathname.includes("/auth-callback");
+      
+      // If we're on the auth-callback page or in OAuth flow, don't force redirect to login
+      // The callback page will handle the session establishment
+      if (!isAuthCallback && !oauthInProgress && window.location.pathname !== "/login") {
         router.replace("/login");
-      }, 100); // Small delay to ensure router initialization
-      return () => clearTimeout(timer);
+      }
     }
-  }, [session, loading, router, mounted]);
+  }, [session, loading, router]);
 
   React.useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;

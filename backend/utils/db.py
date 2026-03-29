@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 # Ensure backend/.env is loaded when app is run from project root
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=True)
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 import ssl as _ssl
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
@@ -45,10 +45,9 @@ if DATABASE_URL:
             future=True,
             connect_args=_connect_args,
             pool_pre_ping=True,
-            pool_size=2,  # optimized for 4+ workers to stay within Neon/Supabase free limits
-            max_overflow=3,
-            pool_timeout=45,
-            pool_recycle=1800, # recycles every 30m to prevent stale connection leaks
+            pool_size=3,  # optimized for 4+ workers to stay within Neon limits
+            max_overflow=7,
+            pool_timeout=30,
         )
         AsyncSessionLocal = sessionmaker(
             bind=engine, class_=AsyncSession, expire_on_commit=False

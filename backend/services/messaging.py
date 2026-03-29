@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 CHANNEL_PREFIX = "chat_message_"
 
 
-async def send_message(user_id: int, message: str, metadata: Dict[str, Any] = None):
+def send_message(user_id: int, message: str, metadata: Dict[str, Any] = None):
     payload = {
         "user_id": user_id,
         "message": message,
         "metadata": metadata or {},
     }
-    await publish(f"{CHANNEL_PREFIX}{user_id}", json.dumps(payload))
+    publish(f"{CHANNEL_PREFIX}{user_id}", json.dumps(payload))
     logger.info(f"Published message to user {user_id}")
 
 

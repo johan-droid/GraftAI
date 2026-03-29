@@ -15,12 +15,8 @@ function setStoredAccessToken(token: string | null) {
   if (typeof window === "undefined") return;
   if (token) {
     localStorage.setItem(STORAGE_ACCESS_TOKEN, token);
-    // Sync to cookie for middleware support
-    document.cookie = `${STORAGE_ACCESS_TOKEN}=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
   } else {
     localStorage.removeItem(STORAGE_ACCESS_TOKEN);
-    // Clear cookie
-    document.cookie = `${STORAGE_ACCESS_TOKEN}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
   }
 }
 
@@ -36,17 +32,13 @@ async function parseJsonResponse(response: Response) {
 
 export const getSessionSafe = async () => {
   const checkSession = async () => {
-    const localToken = getStoredAccessToken();
     const headers: Record<string, string> = {};
+    const localToken = getStoredAccessToken();
     if (localToken) {
       headers["Authorization"] = `Bearer ${localToken}`;
     }
 
-    if (process.env.NODE_ENV === "development") {
-      console.debug(`[auth-client] 🛸 checkSession fetching from: ${API_BASE_URL}/api/v1/auth/check`, { headers });
-    }
-
-    return await fetch(`${API_BASE_URL}/api/v1/auth/check`, {
+    return await fetch(`${API_BASE_URL}/auth/check`, {
       method: "GET",
       credentials: "include",
       headers,
@@ -54,7 +46,7 @@ export const getSessionSafe = async () => {
   };
 
   const refreshSession = async () => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
     });
@@ -129,7 +121,7 @@ export const getSessionSafe = async () => {
 };
 
 export const signOut = async () => {
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
     method: "POST",
     credentials: "include",
   });
@@ -148,7 +140,7 @@ export const signIn = {
     body.append("password", password);
     body.append("grant_type", "password");
 
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/token`, {
+    const response = await fetch(`${API_BASE_URL}/auth/token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -171,8 +163,8 @@ export const signIn = {
     return { data: json, error: null };
   },
 
-  social: async ({ provider }: { provider: "google" | "github" | "discord" | "microsoft" }) => {
-    const redirect = `${API_BASE_URL}/api/v1/auth/sso/start?provider=${provider}&redirect_to=/dashboard`;
+  social: async ({ provider }: { provider: "google" | "github" }) => {
+    const redirect = `${API_BASE_URL}/auth/sso/start?provider=${provider}&redirect_to=/dashboard`;
     
     // For OAuth flow, we need to ensure cookies are properly sent
     // The backend will set session cookies that need to persist through the OAuth redirect
@@ -204,7 +196,7 @@ export const signIn = {
   },
 
   magicLink: async ({ email }: { email: string }) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/passwordless/request`, {
+    const response = await fetch(`${API_BASE_URL}/auth/passwordless/request`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
@@ -220,7 +212,7 @@ export const signIn = {
   },
 
   passkey: async ({ email }: { email?: string }) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/fido2/register`, {
+    const response = await fetch(`${API_BASE_URL}/auth/fido2/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: email || "" }),
@@ -237,7 +229,7 @@ export const signIn = {
 };
 
 export const signUp = async (email: string, password: string, name: string, timezone?: string) => {
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, full_name: name, timezone }),

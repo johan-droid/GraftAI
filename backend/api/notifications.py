@@ -5,7 +5,6 @@ from typing import Optional
 
 from backend.auth.schemes import get_current_user_id
 from backend.services.notifications import send_custom_notification
-from backend.utils.tenant import get_current_org_id, get_current_workspace_id
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -21,9 +20,7 @@ class NotificationTestRequest(BaseModel):
 @router.post("/test")
 async def test_notification(
     payload: NotificationTestRequest,
-    user_id: str = Depends(get_current_user_id),
-    org_id: int = Depends(get_current_org_id),
-    workspace_id: Optional[int] = Depends(get_current_workspace_id),
+    user_id: int = Depends(get_current_user_id),
 ):
     if not payload.to_email:
         raise HTTPException(status_code=400, detail="Recipient email is required")

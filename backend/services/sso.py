@@ -62,45 +62,33 @@ ALLOWED_SSO_DOMAINS = [
 
 def _store_oauth_state(state: str, data: dict, ttl_seconds: int = 300):
     """Store OAuth state in Redis with TTL."""
-    try:
-        client = _get_redis_client()
-        # Serialize session object separately - we need to reconstruct it later
-        session = data.pop("session", None)
-        state_data = {
-            "data": json.dumps(data),
-            "session_state": getattr(session, "state", None),
-            "session_scope": getattr(session, "scope", None),
-        }
-        client.setex(f"oauth:state:{state}", ttl_seconds, json.dumps(state_data))
-    except Exception as e:
-        logger.error(f"Failed to store OAuth state in Redis: {e}")
-        # We don't raise here as the flow will fail during _get_oauth_state anyway,
-        # but we prevent the initial redirection from crashing.
+    client = _get_redis_client()
+    # Serialize session object separately - we need to reconstruct it later
+    session = data.pop("session", None)
+    state_data = {
+        "data": json.dumps(data),
+        "session_state": getattr(session, "state", None),
+        "session_scope": getattr(session, "scope", None),
+    }
+    client.setex(f"oauth:state:{state}", ttl_seconds, json.dumps(state_data))
 
 
 def _get_oauth_state(state: str) -> dict | None:
     """Retrieve OAuth state from Redis (no immediate deletion)."""
-    try:
-        client = _get_redis_client()
-        key = f"oauth:state:{state}"
-        raw_data = client.get(key)
-        if not raw_data:
-            return None
-        state_data = json.loads(raw_data)
-        data = json.loads(state_data["data"])
-        return data
-    except Exception as e:
-        logger.error(f"Failed to retrieve OAuth state from Redis: {e}")
+    client = _get_redis_client()
+    key = f"oauth:state:{state}"
+    raw_data = client.get(key)
+    if not raw_data:
         return None
+    state_data = json.loads(raw_data)
+    data = json.loads(state_data["data"])
+    return data
 
 
 def _delete_oauth_state(state: str):
     """Delete OAuth state from Redis after successful login."""
-    try:
-        client = _get_redis_client()
-        client.delete(f"oauth:state:{state}")
-    except Exception:
-        pass
+    client = _get_redis_client()
+    client.delete(f"oauth:state:{state}")
 
 
 # Multi-provider configuration
@@ -142,17 +130,34 @@ PROVIDERS = {
         "scope": "name email",
         "response_mode": "form_post",  # Apple requires form_post
     },
+    "microsoft": {
+        "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
+        "client_secret": os.getenv("MICROSOFT_CLIENT_SECRET"),
+        "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+        "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        "userinfo_url": "https://graph.microsoft.com/v1.0/me",
+        "scope": "openid profile email User.Read",
+    },
+    "apple": {
+        "client_id": os.getenv("APPLE_CLIENT_ID"),
+        "client_secret": os.getenv("APPLE_CLIENT_SECRET"),
+        "auth_url": "https://appleid.apple.com/auth/authorize",
+        "token_url": "https://appleid.apple.com/auth/token",
+        "userinfo_url": None,  # Apple returns user info in the ID token
+        "scope": "name email",
+        "response_mode": "form_post",  # Apple requires form_post
+    },
 }
 
 # During OAuth2 login the provider should return to the frontend callback endpoint.
 # This matches the existing Next.js `/auth-callback` page flow in frontend/src/app/auth-callback/page.tsx
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 OAUTH2_REDIRECT_URI = os.getenv(
-    "OAUTH2_REDIRECT_URI", f"{APP_BASE_URL}/api/v1/auth/sso/callback"
+    "OAUTH2_REDIRECT_URI", f"{APP_BASE_URL}/auth/sso/callback"
 )
 
 
-def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard", extra_data: dict = None):
+def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard"):
     config = PROVIDERS.get(provider.lower())
     if not config:
         raise HTTPException(
@@ -183,11 +188,6 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard",
         extra_params["prompt"] = config["prompt"]
     if config.get("response_mode"):
         extra_params["response_mode"] = config["response_mode"]
-    
-    # Offline access for persistent tokens (Google/Microsoft)
-    if provider.lower() in ["google", "microsoft"]:
-        extra_params["access_type"] = "offline"
-        extra_params["prompt"] = "consent"
 
     authorization_url, state = session.create_authorization_url(
         config["auth_url"], **extra_params
@@ -197,17 +197,13 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard",
     signature = _sign_state(state)
     signed_state = f"{state}.{signature}"
 
-    state_payload = {
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "redirect_to": redirect_to,
-        "provider": provider.lower(),
-    }
-    if extra_data:
-        state_payload.update(extra_data)
-
     _store_oauth_state(
         state,
-        state_payload,
+        {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "redirect_to": redirect_to,
+            "provider": provider.lower(),
+        },
         ttl_seconds=300,
     )
 

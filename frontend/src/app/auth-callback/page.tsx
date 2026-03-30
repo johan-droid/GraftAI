@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api";
 import { useAuthContext } from "@/app/providers/auth-provider";
@@ -16,8 +16,12 @@ function AuthCallbackInner() {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
 
+  const hasFetched = useRef(false);
+  
   useEffect(() => {
     const handleSync = async () => {
+      if (hasFetched.current) return;
+      hasFetched.current = true;
       try {
         const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || API_BASE_URL;
         if (code && state) {
@@ -40,7 +44,20 @@ function AuthCallbackInner() {
           
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `HTTP ${response.status}`);
+            const message = errorData.detail || `HTTP ${response.status}`;
+
+            if (
+              response.status === 410 ||
+              /invalid or expired state/i.test(message) ||
+              /oauth state/i.test(message)
+            ) {
+              setStatus("Session expired during OAuth. Redirecting to login...");
+              sessionStorage.removeItem("oauth_in_progress");
+              setTimeout(() => router.replace("/login"), 1500);
+              return;
+            }
+
+            throw new Error(message);
           }
           
           const data = await response.json();
@@ -63,10 +80,10 @@ function AuthCallbackInner() {
           setStatus(data.detail || "Authentication failed");
           setTimeout(() => router.replace("/login"), 2000);
           return;
+        } else {
+          setStatus("No active session found. Redirecting to login...");
+          setTimeout(() => router.replace("/login"), 2000);
         }
-
-        setStatus("No active session found. Redirecting to login...");
-        setTimeout(() => router.replace("/login"), 2000);
       } catch (err) {
         console.error("Auth callback failure:", err);
         setStatus(`Error: ${err instanceof Error ? err.message : "Authentication failed"}`);

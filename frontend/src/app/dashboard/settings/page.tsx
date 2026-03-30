@@ -1,38 +1,79 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuthContext } from "@/app/providers/auth-provider";
-import { setConsent } from "@/lib/api";
+import { syncUserConsent, deleteAccount } from "@/lib/api";
 import { motion } from "framer-motion";
 import { User, Shield, Bell, Eye, Loader2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const CONSENT_TYPES = [
-  { key: "analytics", label: "Analytics & Usage Data", description: "Help us improve by sharing anonymized usage data", icon: Eye },
-  { key: "notifications", label: "Email Notifications", description: "Receive booking reminders and AI insights via email", icon: Bell },
-  { key: "ai_training", label: "AI Model Training", description: "Allow your interactions to improve our AI models", icon: Shield },
+  { key: "consent_analytics", label: "Analytics & Usage Data", description: "Help us improve by sharing anonymized usage data", icon: Eye },
+  { key: "consent_notifications", label: "Email Notifications", description: "Receive booking reminders and AI insights via email", icon: Bell },
+  { key: "consent_ai_training", label: "AI Model Training", description: "Allow your interactions to improve our AI models", icon: Shield },
 ];
 
-type SettingsUser = { full_name?: string; email?: string; sub?: string } | null;
+type SettingsUser = { 
+  full_name?: string; 
+  email?: string; 
+  sub?: string;
+  consent_analytics?: boolean;
+  consent_notifications?: boolean;
+  consent_ai_training?: boolean;
+} | null;
 
 export default function SettingsPage() {
-  const { user, logout } = useAuthContext();
+  const { user, refresh, logout } = useAuthContext();
   const settingsUser = user as SettingsUser;
+  
+  // Initialize from user object if available, else defaults
   const [consents, setConsents] = useState<Record<string, boolean>>({
-    analytics: true,
-    notifications: true,
-    ai_training: false,
+    consent_analytics: settingsUser?.consent_analytics ?? true,
+    consent_notifications: settingsUser?.consent_notifications ?? true,
+    consent_ai_training: settingsUser?.consent_ai_training ?? false,
   });
+
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Sync state if user object updates
+  useEffect(() => {
+    if (settingsUser) {
+      setConsents({
+        consent_analytics: settingsUser.consent_analytics ?? true,
+        consent_notifications: settingsUser.consent_notifications ?? true,
+        consent_ai_training: settingsUser.consent_ai_training ?? false,
+      });
+    }
+  }, [settingsUser]);
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      window.location.href = "/register";
+    } catch (err) {
+      console.error("Failed to delete account:", err);
+      alert("Failed to delete account. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleToggle = async (key: string) => {
     const newValue = !consents[key];
     setSaving(key);
     try {
-      await setConsent(key, newValue);
+      // Use the new persistent sync API
+      await syncUserConsent({ [key]: newValue });
       setConsents((prev) => ({ ...prev, [key]: newValue }));
       setSaved(key);
+      
+      // Refresh context so other components see the update
+      await refresh();
+      
       setTimeout(() => setSaved(null), 2000);
     } catch (err) {
       console.error("Failed to update consent:", err);
@@ -51,50 +92,55 @@ export default function SettingsPage() {
   };
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-8">
+    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6 md:space-y-8">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight text-white mb-1">Settings</h1>
-        <p className="text-slate-400">Manage your account preferences and privacy</p>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white mb-1 font-outfit">Settings</h1>
+        <p className="text-xs md:text-sm text-slate-400 font-medium">Account preferences and security</p>
       </header>
 
       {/* Profile Section */}
-      <motion.div variants={itemVariants} className="bg-white/40 dark:bg-slate-950/40 backdrop-blur-md border border-slate-200/60 dark:border-slate-800/60 rounded-[2rem] p-8 shadow-xl">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-primary/10 text-primary">
-            <User className="w-5 h-5" />
+      <motion.div variants={itemVariants} className="bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-[1.5rem] md:rounded-[2.5rem] p-5 md:p-8 shadow-2xl relative overflow-hidden group">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+        <h2 className="text-sm md:text-lg font-bold text-white mb-4 md:mb-6 flex items-center gap-3 relative z-10">
+          <div className="p-1.5 md:p-2 rounded-xl bg-primary/20 text-primary border border-primary/20">
+            <User className="w-4 h-4 md:w-5 md:h-5" />
           </div>
-          Profile Information
+          Profile Identity
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800/50 group transition-all hover:border-primary/30">
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] font-bold mb-2">Email Address</p>
-            <p className="text-slate-700 dark:text-slate-200 font-semibold">{settingsUser?.email || settingsUser?.sub || "admin"}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-10">
+          <div className="p-4 md:p-5 rounded-2xl md:rounded-3xl bg-slate-900/40 border border-slate-800 transition-all hover:bg-slate-900/60 group">
+            <p className="text-[9px] md:text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Email Control</p>
+            <p className="text-xs md:text-sm text-slate-200 font-semibold truncate">{settingsUser?.email || settingsUser?.sub || "admin"}</p>
           </div>
-          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800/50 group transition-all hover:border-primary/30">
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] font-bold mb-2">Full Name</p>
-            <p className="text-slate-700 dark:text-slate-200 font-semibold">{settingsUser?.full_name || "Administrator"}</p>
+          <div className="p-4 md:p-5 rounded-2xl md:rounded-3xl bg-slate-900/40 border border-slate-800 transition-all hover:bg-slate-900/60 group">
+            <p className="text-[9px] md:text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Authenticated Name</p>
+            <p className="text-xs md:text-sm text-slate-200 font-semibold">{settingsUser?.full_name || "Sovereign User"}</p>
           </div>
         </div>
       </motion.div>
 
       {/* Consent Management */}
-      <motion.div variants={itemVariants} className="bg-white/40 dark:bg-slate-950/40 backdrop-blur-md border border-slate-200/60 dark:border-slate-800/60 rounded-[2rem] p-8 shadow-xl">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-violet-500/10 text-violet-500">
-            <Shield className="w-5 h-5" />
+      <motion.div variants={itemVariants} className="bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-[1.5rem] md:rounded-[2.5rem] p-5 md:p-8 shadow-2xl relative overflow-hidden group">
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
+        <h2 className="text-sm md:text-lg font-bold text-white mb-4 md:mb-6 flex items-center gap-3 relative z-10">
+          <div className="p-1.5 md:p-2 rounded-xl bg-violet-500/20 text-violet-400 border border-violet-500/20">
+            <Shield className="w-4 h-4 md:w-5 md:h-5" />
           </div>
           Privacy & Consent
         </h2>
-        <div className="space-y-4">
+        <div className="space-y-2 md:space-y-3 relative z-10">
           {CONSENT_TYPES.map((item) => (
-            <div key={item.key} className="flex items-center justify-between p-5 rounded-3xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800/50 transition-all hover:shadow-md">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 text-slate-400 border border-slate-100 dark:border-slate-700 shadow-sm">
-                  <item.icon className="w-5 h-5" />
+            <div 
+                key={item.key} 
+                className="flex items-center justify-between p-4 md:p-5 rounded-[1.2rem] md:rounded-[2rem] bg-slate-900/30 border border-slate-800/60 transition-all hover:bg-slate-900/50 hover:border-slate-700 active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-3 md:gap-5">
+                <div className="p-2.5 md:p-3.5 rounded-xl md:rounded-2xl bg-slate-900 text-slate-400 border border-slate-800 shadow-inner group-hover:text-primary transition-colors">
+                  <item.icon className="w-4 h-4 md:w-5 md:h-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{item.label}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-500 font-medium">{item.description}</p>
+                  <p className="text-xs md:text-sm font-bold text-slate-100 leading-tight">{item.label}</p>
+                  <p className="text-[10px] md:text-xs text-slate-500 font-medium leading-tight opacity-70">{item.description}</p>
                 </div>
               </div>
               
@@ -102,20 +148,37 @@ export default function SettingsPage() {
                 onClick={() => handleToggle(item.key)}
                 disabled={saving === item.key}
                 className={cn(
-                  "relative w-14 h-8 rounded-full transition-all duration-300 shadow-inner group",
-                  consents[item.key] ? "bg-primary shadow-primary/20" : "bg-slate-300 dark:bg-slate-700"
+                  "relative w-12 h-7 md:w-16 md:h-9 rounded-full transition-all duration-500 p-0.5 md:p-1 font-medium overflow-hidden group/btn",
+                  consents[item.key] 
+                    ? "bg-primary shadow-[0_0_20px_rgba(138,43,226,0.3)]" 
+                    : "bg-slate-800 border border-slate-700"
                 )}
               >
-                <div className={cn(
-                  "absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-all duration-300 shadow-lg flex items-center justify-center",
-                  consents[item.key] ? "translate-x-6" : "translate-x-0"
-                )}>
+                {/* Glow Background for Active State */}
+                {consents[item.key] && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000" />
+                )}
+
+                <motion.div 
+                    layout
+                    className={cn(
+                        "w-5 h-5 md:w-7 md:h-7 rounded-full transition-all duration-500 shadow-2xl flex items-center justify-center relative z-10",
+                        consents[item.key] 
+                            ? "ml-5 md:ml-7 bg-white" 
+                            : "ml-0 bg-slate-600"
+                    )}
+                >
                   {saving === item.key ? (
-                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                    <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin text-primary" />
                   ) : saved === item.key ? (
-                    <Check className="w-3 h-3 text-emerald-500" />
-                  ) : null}
-                </div>
+                    <Check className="w-3 h-3 md:w-4 md:h-4 text-emerald-500" />
+                  ) : (
+                    <div className={cn(
+                        "w-1 h-1 md:w-1.5 md:h-1.5 rounded-full transition-all duration-500",
+                        consents[item.key] ? "bg-primary" : "bg-slate-400"
+                    )} />
+                  )}
+                </motion.div>
               </button>
             </div>
           ))}
@@ -123,21 +186,56 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Danger Zone */}
-      <motion.div variants={itemVariants} className="bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 rounded-[2rem] p-8 shadow-sm">
-        <h2 className="text-lg font-bold text-red-600 dark:text-red-400 mb-6 flex items-center gap-3">
+      <motion.div variants={itemVariants} className="bg-red-950/5 border border-red-900/20 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-8 shadow-sm">
+        <h2 className="text-sm md:text-lg font-bold text-red-500 mb-4 md:mb-6 flex items-center gap-3">
            Danger Zone
         </h2>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Sign out of your account</p>
-            <p className="text-xs text-slate-500 dark:text-slate-500 font-medium">You will be redirected to the login page securely.</p>
+        
+        <div className="space-y-4 md:space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs md:text-sm font-bold text-slate-100">Sign out of your account</p>
+              <p className="text-[10px] md:text-xs text-slate-500 font-medium">Safe session termination.</p>
+            </div>
+            <button
+              onClick={logout}
+              className="w-full sm:w-auto px-6 py-2 rounded-xl text-[11px] md:text-sm font-bold text-slate-400 border border-slate-800 hover:bg-slate-900 transition-all"
+            >
+              Sign Out
+            </button>
           </div>
-          <button
-            onClick={logout}
-            className="w-full sm:w-auto px-8 py-3 rounded-full text-sm font-bold text-red-600 border-2 border-red-100 dark:border-red-900/30 hover:bg-red-600 hover:text-white dark:hover:bg-red-900/50 transition-all shadow-sm"
-          >
-            Sign Out
-          </button>
+
+          <div className="pt-4 md:pt-6 border-t border-red-900/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs md:text-sm font-bold text-red-500">Delete Account</p>
+              <p className="text-[10px] md:text-xs text-slate-500 font-medium leading-tight">Permanently purge all data. This is irreversible.</p>
+            </div>
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full sm:w-auto px-6 py-2 rounded-xl text-[11px] md:text-sm font-bold text-red-500 border border-red-900/30 hover:bg-red-950 transition-all shadow-sm"
+              >
+                Delete Account
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  disabled={deleting}
+                  onClick={handleDeleteAccount}
+                  className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-[11px] md:text-sm font-bold bg-red-600 text-white hover:bg-red-700 transition-all"
+                >
+                  {deleting ? "Deleting..." : "Confirm"}
+                </button>
+                <button
+                  disabled={deleting}
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-[11px] md:text-sm font-bold text-slate-400 hover:bg-slate-900 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
     </motion.div>

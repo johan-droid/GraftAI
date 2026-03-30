@@ -26,6 +26,12 @@ class UserTable(Base):
     hashed_password = Column(String(512))
     timezone = Column(String(100), default="UTC")
     tenant_id = Column(Integer, index=True)  # For Row-Level Security (RLS)
+    
+    # Consent Preferences
+    consent_analytics = Column(Boolean, default=True, nullable=False)
+    consent_notifications = Column(Boolean, default=True, nullable=False)
+    consent_ai_training = Column(Boolean, default=False, nullable=False)
+
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
@@ -65,6 +71,14 @@ class EventTable(Base):
 
     is_remote = Column(Boolean, default=True)
     status = Column(String(50), default="confirmed")  # confirmed, pending, canceled
+    is_reminded = Column(Boolean, default=False, nullable=False)
+    
+    # SaaS Meeting Integration
+    is_meeting = Column(Boolean, default=False, nullable=False)
+    meeting_platform = Column(String(50))  # google_meet, zoom, teams
+    meeting_link = Column(String(1024))
+    attendees = Column(JSONB, default=[], nullable=False)
+    agenda = Column(Text)
 
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(

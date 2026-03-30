@@ -101,7 +101,8 @@ export const getSessionSafe = async () => {
 
     return { data, error: null };
   } catch (err) {
-    console.error("Failed to get session safely", err);
+    const isNetworkError = err instanceof TypeError;
+    console.error(`Failed to get session safely (${isNetworkError ? "Network" : "Other"})`, err);
 
     // If network glitch, attempt a refresh then retry once
     try {
@@ -122,8 +123,10 @@ export const getSessionSafe = async () => {
       console.error("Refresh fallback failed", fallbackErr);
     }
 
-    setStoredAccessToken(null);
-    return { data: null, error: err };
+    if (!isNetworkError) {
+        setStoredAccessToken(null);
+    }
+    return { data: null, error: err, isNetworkError };
   }
 };
 

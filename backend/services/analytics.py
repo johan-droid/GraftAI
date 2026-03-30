@@ -25,10 +25,10 @@ class AnalyticsResponse(BaseModel):
     details: Optional[dict] = None
 
 
-@router.post("/summary", response_model=AnalyticsResponse)
+@router.get("/summary", response_model=AnalyticsResponse)
 async def analytics_summary(
-    request: AnalyticsRequest,
-    user_id: int = Depends(get_current_user_id),
+    range: str = "7d",
+    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -39,9 +39,9 @@ async def analytics_summary(
 
     # Calculate time range
     now = datetime.now()
-    if request.range == "7d":
+    if range == "7d":
         start_date = now - timedelta(days=7)
-    elif request.range == "30d":
+    elif range == "30d":
         start_date = now - timedelta(days=30)
     else:
         start_date = now - timedelta(days=7)
@@ -82,7 +82,25 @@ async def analytics_summary(
         elif meetings_count > 0:
             growth = 100  # First week growth
 
-        summary_text = f"You have {meetings_count} meetings scheduled for the last {request.range}. Total value delivered: {total_hours:.1f} hours."
+        # 4. Next/Recent Activity List
+        activity_stmt = select(EventTable).where(
+            EventTable.user_id == user_id
+        ).order_by(EventTable.start_time.desc()).limit(5)
+        activity_result = await db.execute(activity_stmt)
+        activity_list = []
+        for event in activity_result.scalars():
+            activity_list.append({
+                "id": event.id,
+                "title": event.title,
+                "start_time": event.start_time.isoformat(),
+                "category": event.category,
+                "is_upcoming": event.start_time >= now
+            })
+
+        if meetings_count > 0:
+            summary_text = f"You've got {meetings_count} meetings on the books for the last {range}. That's about {total_hours:.1f} hours of focused time coordinated by your AI Copilot."
+        else:
+            summary_text = f"Your calendar is clear! No meetings scheduled in the last {range}. Perfect time for some deep work."
 
         return AnalyticsResponse(
             summary=summary_text,
@@ -90,11 +108,13 @@ async def analytics_summary(
                 "meetings": meetings_count,
                 "hours": round(total_hours, 1),
                 "growth": growth,
+                "recent_events": activity_list,
+                "next_event": activity_list[0] if activity_list and activity_list[0]["is_upcoming"] else None
             },
         )
     except Exception as e:
         logger.error(f"Analytics engine failure: {e}")
         return AnalyticsResponse(
-            summary="Analytics temporarily unavailable due to a processing error.",
-            details={"meetings": 0, "hours": 0, "growth": 0},
+            summary="We're having a bit of trouble crunching your latest numbers, but we'll have them back up shortly.",
+            details={"meetings": 0, "hours": 0, "growth": 0, "next_event": None},
         )

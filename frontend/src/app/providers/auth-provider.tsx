@@ -35,10 +35,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const response = await getSessionSafe();
         if (!active) return;
-        setSession(response?.data ?? null);
+        
+        if (response?.data) {
+          setSession(response.data);
+        } else if (response?.error) {
+          // If it's a network error (TypeEror/Aborted), don't clear session or redirect
+          // This prevents background glitches from kicking users out
+          // @ts-ignore - added isNetworkError in auth-client
+          if (response.isNetworkError) {
+            console.debug("Session check encountered a network glitch, retaining current session.");
+            return;
+          }
+          setSession(null);
+        }
       } catch (err) {
         console.error("Session load failure", err);
-        if (active) setSession(null);
       } finally {
         if (active) setLoading(false);
       }

@@ -11,6 +11,7 @@ import redis
 import functools
 import logging
 import uuid
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -21,7 +22,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 logger = logging.getLogger(__name__)
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 # Services and models
 from backend.services import (
@@ -127,6 +128,16 @@ class UserRegister(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+class TimezoneSyncRequest(BaseModel):
+    timezone: str
+
+
+class ConsentSyncRequest(BaseModel):
+    consent_analytics: Optional[bool] = None
+    consent_notifications: Optional[bool] = None
+    consent_ai_training: Optional[bool] = None
 
 
 def _create_jwt_token(sub: str, email: Optional[str] = None):
@@ -276,7 +287,17 @@ async def register(
                 timezone=user_in.timezone,
             )
             db.add(new_user)
-            # Automatic commit on block exit
+            await db.flush()
+            
+            # Send welcome email for new manual registration
+            try:
+                from backend.services.notifications import notify_welcome_email
+                await notify_welcome_email(
+                    user_email=email,
+                    full_name=user_in.full_name or email.split("@")[0],
+                )
+            except Exception as e:
+                logger.warning(f"Welcome email send failed for {email}: {e}")
     except Exception as e:
         logger.error(f"Registration failed: {type(e).__name__}")
         raise HTTPException(status_code=500, detail="Registration failed")
@@ -338,23 +359,27 @@ async def sso_callback(
         
         # Now complete the OAuth flow (this will fetch tokens and user profile)
         payload = await sso.complete_oauth2_flow(code=code, state=state)
+        profile = payload.get("profile", {})
+        token = payload.get("token")
+        provider_name = payload.get("provider", "google")
+
         logger.info(
-            f"SSO callback success for provider={payload.get('provider')} state=[...truncated]"
+            f"SSO callback success for provider={provider_name} state=[...truncated]"
         )
 
-        profile = payload["profile"]
-        email = profile.get("email")
-
-        if not email:
-            raise HTTPException(status_code=400, detail="Email required from SSO provider")
-
-        # Upsert user in one transaction to avoid session conflicts.
+        # Upsert user in one transaction
         async with db.begin():
+            email = profile.get("email")
+            if not email:
+                raise HTTPException(status_code=400, detail="Email required from SSO provider")
+            
             result = await db.execute(select(UserTable).where(UserTable.email == email))
             user = result.scalars().first()
+            
             if not user:
+                user_id = str(uuid.uuid4())
                 user = UserTable(
-                    id=str(profile.get("id") or uuid.uuid4()),
+                    id=user_id,
                     email=email,
                     full_name=profile.get("name"),
                     is_active=True,
@@ -362,35 +387,33 @@ async def sso_callback(
                 )
                 db.add(user)
                 await db.flush()
+                
+                # Send welcome email ONLY for new users
+                try:
+                    from backend.services.notifications import notify_welcome_email
+                    await notify_welcome_email(
+                        user_email=email,
+                        full_name=user.full_name or profile.get("name", "User"),
+                    )
+                except Exception as e:
+                    logger.warning(f"Welcome email send failed for {email}: {e}")
             else:
+                user_id = str(user.id)
                 user.full_name = profile.get("name") or user.full_name
-                user.timezone = profile.get("timezone", user.timezone or "UTC")
 
-        user_id = str(user.id if user else profile.get("id", "unknown"))
-
-        # Delete state AFTER successful DB upsert and token generation
-        sso._delete_oauth_state(verified_state)
-
-        # We can optionally send a welcome notification email immediately.
-        try:
-            from backend.services.notifications import notify_welcome_email
-
-            await notify_welcome_email(
-                user_email=email,
-                full_name=user.full_name if user else profile.get("name", "User"),
+        # 1. Store provider token in Redis for potential future revocation (account delete)
+        if token:
+            redis_client = _get_redis_client()
+            redis_client.setex(
+                f"sso_token:{user_id}", 
+                timedelta(days=7), 
+                json.dumps({"provider": provider_name, "token": token})
             )
-        except Exception as e:
-            logger.warning(f"Welcome email send failed for {email}: {e}")
-
-        # Sync user to database with transaction safety
-        # user_id already resolved in upsert code above.
-        if not user_id:
-            user_id = str(profile.get("id", "unknown"))
 
         own_token = _create_jwt_token(user_id, email=email)
         response = JSONResponse(
             content={
-                "auth": payload,
+                "auth": {k: v for k, v in payload.items() if k != "token"}, # Don't leak provider token to frontend
                 "token": own_token,
                 "user_id": user_id,
                 "redirect_to": payload.get("redirect_to", "/dashboard"),
@@ -398,11 +421,82 @@ async def sso_callback(
         )
         _attach_jwt_cookies(response, own_token)
         return response
+    except HTTPException as e:
+        logger.error(
+            f"SSO callback failure for signed_state={state}, code={code}, err={e.detail}"
+        )
+        raise e
     except Exception as e:
         logger.error(
             f"SSO callback failure for signed_state={state}, code={code}, err={e}"
         )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+        msg = str(e)
+        if not msg.strip():
+            msg = f"{type(e).__name__} during OAuth flow"
+            
+        if "Invalid or expired state" in msg or "OAuth state" in msg:
+            if is_navigation:
+                frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+                redirect_url = f"{frontend_base}/login?error=oauth_state_expired"
+                return RedirectResponse(redirect_url, status_code=302)
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail=msg)
+
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+
+@router.post("/sync-consent")
+async def sync_consent(
+    data: ConsentSyncRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update the user's privacy and consent preferences.
+    """
+    user_id = current_user.get("sub")
+    
+    async with db.begin():
+        result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+        user = result.scalars().first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if data.consent_analytics is not None:
+            user.consent_analytics = data.consent_analytics
+        if data.consent_notifications is not None:
+            user.consent_notifications = data.consent_notifications
+        if data.consent_ai_training is not None:
+            user.consent_ai_training = data.consent_ai_training
+        
+        # Commit happens automatically
+    
+    logger.info(f"Updated consents for user {user_id}")
+    return {"status": "success"}
+
+
+@router.post("/sync-timezone")
+async def sync_timezone(
+    data: TimezoneSyncRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update the user's preferred timezone.
+    """
+    user_id = current_user.get("sub")
+    
+    async with db.begin():
+        result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+        user = result.scalars().first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user.timezone = data.timezone
+        # Commit happens automatically
+    
+    logger.info(f"Updated timezone to {data.timezone} for user {user_id}")
+    return {"status": "success", "timezone": data.timezone}
 
 
 @router.post("/sync")
@@ -529,11 +623,31 @@ def check_attribute(
 
 
 @router.get("/check")
-def check_auth(request: Request, current_user=Depends(get_current_user)):
+async def check_auth(
+    request: Request, 
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Returns authenticated user payload. Supports both Bearer token and cookie auth."""
+    user_id = current_user.get("sub")
+    
+    # Fetch latest user data from DB to get the most up-to-date name/timezone
+    result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+    user = result.scalars().first()
+    
+    user_data = current_user.copy()
+    if user:
+        user_data["name"] = user.full_name
+        user_data["full_name"] = user.full_name
+        user_data["timezone"] = user.timezone
+        # Consent fields
+        user_data["consent_analytics"] = user.consent_analytics
+        user_data["consent_notifications"] = user.consent_notifications
+        user_data["consent_ai_training"] = user.consent_ai_training
+
     return {
         "authenticated": True,
-        "user": current_user,
+        "user": user_data,
         "session": {
             "token": request.cookies.get("graftai_access_token"),
             "expires_at": current_user.get("exp")
@@ -605,6 +719,79 @@ def logout(request: Request, current_user=Depends(get_current_user)):
     response.delete_cookie(key="graftai_access_token", path="/")
     response.delete_cookie(key="graftai_refresh_token", path="/")
 
+    return response
+
+
+@router.delete("/account")
+async def delete_account(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Permanently delete the user's account and all associated data.
+    """
+    user_id = current_user.get("sub")
+    email = current_user.get("email")
+    full_name = current_user.get("name", "User")
+
+    # 1. Fetch user and delete within a single explicit transaction
+    try:
+        # Pre-fetch SSO token for revocation since we need user_id
+        client = _get_redis_client()
+        sso_data_raw = client.get(f"sso_token:{user_id}")
+        
+        async with db.begin():
+            # Ensure existence and get name for email
+            result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+            user = result.scalars().first()
+            if not user:
+                # We can't raise inside the transaction block without proper rollback, 
+                # but async with db.begin() handles exception rollback implicitly.
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Deletion (DB constraints ON DELETE CASCADE handle events, etc.)
+            await db.execute(delete(UserTable).where(UserTable.id == user_id))
+            # Commit happens automatically on exit
+        
+        # 2. Revoke Provider Token (SaaS-grade disconnection)
+        if sso_data_raw:
+            try:
+                sso_data = json.loads(sso_data_raw)
+                await sso.revoke_provider_token(
+                    provider=sso_data.get("provider"), 
+                    token=sso_data.get("token")
+                )
+                client.delete(f"sso_token:{user_id}")
+            except Exception as e:
+                logger.warning(f"Provider revocation failed for {user_id}: {e}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Account deletion failed for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete account")
+
+    # 3. Send Farewell Email
+    try:
+        from backend.services.notifications import notify_account_deleted_email
+        await notify_account_deleted_email(user_email=email, full_name=user.full_name or full_name)
+    except Exception as e:
+        logger.warning(f"Farewell email failed for {email}: {e}")
+
+    # 4. Clear cookies and return success
+    response = JSONResponse(content={"message": "Account deleted successfully"})
+    response.delete_cookie(key="graftai_access_token", path="/")
+    response.delete_cookie(key="graftai_refresh_token", path="/")
+    
+    # 5. Cleanup Redis sessions - Revoke all active devices
+    client = _get_redis_client()
+    token_key = f"user_tokens:{user_id}"
+    tokens = client.smembers(token_key)
+    if tokens:
+        for t in tokens:
+            client.delete(f"refresh:{t}")
+    client.delete(token_key)
+    
     return response
 
 

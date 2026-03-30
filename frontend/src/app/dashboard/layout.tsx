@@ -32,12 +32,12 @@ export default function DashboardLayout({
       <div className="absolute top-0 right-0 w-full h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 border-r border-slate-800/50 bg-slate-950/40 backdrop-blur-xl z-20">
-        <div className="p-6 flex items-center gap-3 border-b border-slate-800/50">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center shadow-[0_0_15px_rgba(79,70,229,0.5)]">
-            <span className="text-white font-bold text-lg leading-none">G</span>
+      <aside className="hidden lg:flex flex-col w-60 border-r border-slate-800/50 bg-slate-950/40 backdrop-blur-xl z-20">
+        <div className="p-5 flex items-center gap-2.5 border-b border-slate-800/50">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center shadow-[0_0_12px_rgba(79,70,229,0.4)]">
+            <span className="text-white font-bold text-base leading-none">G</span>
           </div>
-          <span className="font-semibold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">GraftAI</span>
+          <span className="font-bold text-base tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">GraftAI</span>
         </div>
 
         <nav className="flex-1 px-4 py-8 space-y-2">
@@ -80,18 +80,18 @@ export default function DashboardLayout({
       <div className="flex-1 flex flex-col min-w-0 z-10">
         
         {/* Mobile Header */}
-        <header className="lg:hidden flex items-center justify-between p-4 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30">
+        <header className="lg:hidden flex items-center justify-between p-3.5 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm leading-none">G</span>
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-fuchsia-600 flex items-center justify-center shadow-[0_0_10px_rgba(79,70,229,0.3)]">
+              <span className="text-white font-bold text-xs leading-none">G</span>
             </div>
-            <span className="font-semibold tracking-tight">GraftAI</span>
+            <span className="font-bold text-sm tracking-tight">GraftAI</span>
           </div>
           <button 
             onClick={() => setMobileMenuOpen(true)}
-            className="p-2 rounded-lg bg-slate-800/50 text-slate-300"
+            className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 active:scale-95 transition-all"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-4 h-4" />
           </button>
         </header>
 
@@ -153,12 +153,12 @@ export default function DashboardLayout({
         </AnimatePresence>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <main className="flex-1 overflow-y-auto p-4 md:p-10 scroll-smooth">
           <motion.div
             key={pathname}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0, scale: 0.995 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
             className="h-full w-full max-w-6xl mx-auto"
           >
             {children}

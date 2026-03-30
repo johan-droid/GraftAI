@@ -2,6 +2,8 @@ import os
 import sys
 import re
 import logging
+import asyncio
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -136,6 +138,63 @@ _rate_limit_str = os.getenv("RATE_LIMIT", "100/minute")
 from contextlib import asynccontextmanager
 
 
+async def reminder_worker(app: FastAPI):
+    """Background task to send 15-minute reminders for upcoming events."""
+    logger.info("🕒 Reminder worker started.")
+    while True:
+        try:
+            from backend.utils.db import AsyncSessionLocal
+            from backend.models.tables import EventTable, UserTable
+            from backend.services.notifications import notify_event_reminder
+            from sqlalchemy import select, and_
+            
+            if AsyncSessionLocal is None:
+                await asyncio.sleep(60)
+                continue
+                
+            now = datetime.now(timezone.utc)
+            window_end = now + timedelta(minutes=16)
+            
+            async with AsyncSessionLocal() as db:
+                stmt = select(EventTable).where(
+                    and_(
+                        EventTable.start_time >= now,
+                        EventTable.start_time <= window_end,
+                        EventTable.is_reminded == False,
+                        EventTable.status == "confirmed"
+                    )
+                )
+                result = await db.execute(stmt)
+                events_to_remind = result.scalars().all()
+                
+                for event in events_to_remind:
+                    event.is_reminded = True
+                    await db.commit()
+                    
+                    user = await db.get(UserTable, event.user_id)
+                    if user:
+                        logger.info(f"Sending 15-min reminder for event {event.id} to user {user.id}")
+                        await notify_event_reminder(
+                            user.email,
+                            [],
+                            {
+                                "id": event.id,
+                                "user_id": event.user_id,
+                                "title": event.title,
+                                "start_time": event.start_time.isoformat(),
+                                "end_time": event.end_time.isoformat(),
+                                "user_name": user.full_name or "User",
+                                "event_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000") + "/dashboard/calendar"
+                            }
+                        )
+        except asyncio.CancelledError:
+            logger.info("Reminder worker cancelled.")
+            break
+        except Exception as e:
+            logger.error(f"Error in reminder worker: {e}")
+            
+        await asyncio.sleep(60)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Startup ---
@@ -169,8 +228,11 @@ async def lifespan(app: FastAPI):
     if domain and audience:
         logger.info(f"✅ Auth0 configuration detected for domain: {domain}")
 
+    reminder_task = asyncio.create_task(reminder_worker(app))
+
     yield
     # --- Shutdown ---
+    reminder_task.cancel()
     # Clean up global connections if needed
 
 
@@ -232,7 +294,7 @@ app.include_router(auth_router)
 v1_router.include_router(users_router)
 v1_router.include_router(uploads_router)
 v1_router.include_router(calendar_router)
-v1_router.include_router(ai_router)
+v1_router.include_router(ai_router, tags=["ai"])
 v1_router.include_router(proactive_router)
 v1_router.include_router(analytics_router)
 v1_router.include_router(consent_router)

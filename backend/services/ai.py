@@ -28,7 +28,7 @@ except ImportError:
     SystemMessage = None
     HumanMessage = None
 
-router = APIRouter()
+router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview")
@@ -67,7 +67,7 @@ from backend.auth.routes import get_rate_limiter
 @router.post("/chat", response_model=AIResponse)
 async def ai_chat(
     request: AIRequest,
-    user_id: int = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=10, window_seconds=60)),
 ):
@@ -77,7 +77,15 @@ async def ai_chat(
     """
     current_time = datetime.now()
     schedule_context = ""
+    user_name = "User"
+    user_email = ""
     try:
+        from backend.models.tables import UserTable
+        user = await db.get(UserTable, user_id)
+        if user:
+            user_name = user.full_name or "User"
+            user_email = user.email
+
         window_start = current_time - timedelta(hours=1)
         window_end = current_time + timedelta(hours=24)
         todays_events = await scheduler.get_events_for_range(
@@ -100,14 +108,20 @@ async def ai_chat(
     DOMAIN KNOWLEDGE:
     Today's Date: {current_time.strftime('%Y-%m-%d %H:%M:%S')}
     User Timezone: {request.timezone}
+    User Name: {user_name}
+    User Email: {user_email}
 
     {schedule_context}
 
     ACTION PROTOCOL:
     Suffix response with exactly ONE if requirement met:
-    ACTION:SCHEDULE_MEETING:{{"title": "...", "start_time": "ISO", "duration_minutes": 30}}
+    ACTION:SCHEDULE_MEETING:{{"title": "...", "start_time": "ISO", "duration_minutes": 30, "is_meeting": true, "platform": "google_meet", "attendees": ["email@ex.com"], "agenda": "..."}}
     ACTION:UPDATE_MEETING:{{"event_id": 1, "new_start_time": "ISO", "new_title": "Optional"}}
     ACTION:DELETE_MEETING:{{"event_id": 1}}
+
+    MEETING PLATFORMS: google_meet, zoom, teams. 
+    If a user wants a meeting but doesn't specify a platform, ASK them.
+    If they don't provide attendees or agenda, ASK for them to make it a professional invite.
     """
 
     user_input = f"User Message: {request.prompt}"
@@ -145,9 +159,13 @@ async def ai_chat(
                 event_data = {
                     "user_id": user_id,
                     "title": data.get("title", "Meeting"),
-                    "start_time": datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")),
-                    "end_time": datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")) + timedelta(minutes=data.get("duration_minutes", 30)),
-                    "status": "confirmed"
+                    "start_time": datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")).replace(tzinfo=None),
+                    "end_time": (datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")) + timedelta(minutes=data.get("duration_minutes", 30))).replace(tzinfo=None),
+                    "status": "confirmed",
+                    "is_meeting": data.get("is_meeting", False),
+                    "meeting_platform": data.get("platform"),
+                    "agenda": data.get("agenda"),
+                    "attendees": [{"email": e} for e in data.get("attendees", [])]
                 }
                 await scheduler.create_event(db, event_data)
                 result_text = re.sub(r"ACTION:SCHEDULE_MEETING:\{.*?\}", "", result_text, flags=re.DOTALL).strip() + "\n(Scheduled)"

@@ -25,7 +25,6 @@ function AuthCallbackInner() {
       try {
         const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || API_BASE_URL;
         if (code && state) {
-        if (code && state) {
           setStatus("Authenticating with OAuth provider...");
           
           // First, store the token from URL params to preserve it during the fetch

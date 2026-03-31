@@ -41,3 +41,5 @@ black
 # Build helpers
 setuptools>=69.0.0
 pyyaml>=6.0.1,<7.0
+stripe>=11.0.0
+razorpay>=1.5.0

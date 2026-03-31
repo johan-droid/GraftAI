@@ -20,7 +20,7 @@ class NotificationTestRequest(BaseModel):
 @router.post("/test")
 async def test_notification(
     payload: NotificationTestRequest,
-    user_id: int = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     if not payload.to_email:
         raise HTTPException(status_code=400, detail="Recipient email is required")

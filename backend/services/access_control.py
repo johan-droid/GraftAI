@@ -32,7 +32,7 @@ def _init_default_roles():
         client.set("attrs:2", json.dumps({"tier": "starter", "region": "us-west"}))
 
 
-def check_user_role(user_id: int, role: str) -> bool:
+def check_user_role(user_id: str, role: str) -> bool:
     _init_default_roles()
     client = _get_redis_client()
     roles_json = client.get(f"roles:{user_id}")
@@ -42,7 +42,7 @@ def check_user_role(user_id: int, role: str) -> bool:
     return role in roles
 
 
-def check_user_attribute(user_id: int, attribute: str, value: Any) -> bool:
+def check_user_attribute(user_id: str, attribute: str, value: Any) -> bool:
     _init_default_roles()
     client = _get_redis_client()
     attrs_json = client.get(f"attrs:{user_id}")

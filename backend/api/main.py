@@ -35,6 +35,7 @@ from backend.services.proactive import router as proactive_router
 from backend.services.upgrade import router as upgrade_router
 from backend.services.plugin_api import router as plugin_router
 from backend.api.notifications import router as notifications_router
+from backend.api.billing import router as billing_router
 from backend.auth.schemes import get_current_user
 
 from backend.utils import db as db_utils
@@ -301,6 +302,7 @@ v1_router.include_router(consent_router)
 v1_router.include_router(upgrade_router)
 v1_router.include_router(plugin_router)
 v1_router.include_router(notifications_router)
+v1_router.include_router(billing_router)
 
 app.include_router(v1_router)
 

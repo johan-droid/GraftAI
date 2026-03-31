@@ -4,7 +4,7 @@ const defaultHost = windowOrigin ? windowOrigin.replace(/:300\d/, ":8000") : "ht
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  defaultHost;
+  "";
 
 if (typeof window !== "undefined") {
   console.debug("API_BASE_URL set to", API_BASE_URL);
@@ -249,6 +249,8 @@ export interface CalendarEvent {
   is_remote: boolean;
   status: string;
   metadata_payload?: Record<string, unknown>;
+  source?: string; // google, microsoft, zoom, local
+  external_id?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -307,6 +309,12 @@ export async function getAvailableSlots(date: string, duration: number = 60, tar
 
 export async function mfaVerify(userId: number, code: string) {
   return apiFetch<{ status: string }>(`/auth/mfa/verify?token=${encodeURIComponent(code)}`, {
+    method: "POST"
+  });
+}
+
+export async function manualSync() {
+  return apiFetch<{ status: string; synced_count: number }>("/calendar/sync", {
     method: "POST"
   });
 }

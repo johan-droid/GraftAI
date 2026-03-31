@@ -1,23 +1,29 @@
-```gitignore
 # Dependencies
 node_modules/
+.pnp
+.pnp.js
 
 # Build outputs
 dist/
 build/
 .next/
 out/
+bin/
+obj/
 
 # Environment variables
 .env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
 *.env.*
 
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
 env/
 venv/
@@ -34,35 +40,38 @@ coverage.xml
 *.log
 .DS_Store
 Thumbs.db
+runtime.txt
+
+# Testing
+/.pytest_cache/
+/.mypy_cache/
+/.hypothesis/
+/coverage/
+/htmlcov/
 
 # Logs
+logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# IDE
+# IDE & OS
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Testing
-coverage/
-htmlcov/
-.pytest_cache/
-.mypy_cache/
-
-# Distribution / packaging
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-```
+# Project Specific
+eslint_report.json
+db_migrate_saas.py
+migration_*.sql

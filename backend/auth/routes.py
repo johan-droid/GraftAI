@@ -34,6 +34,7 @@ from backend.services import (
     auth_utils,
 )
 from backend.models.tables import UserTable
+from backend.models.user_token import UserTokenTable
 from backend.api.deps import get_db
 
 # Auth dependencies
@@ -401,8 +402,41 @@ async def sso_callback(
                 user_id = str(user.id)
                 user.full_name = profile.get("name") or user.full_name
 
-        # 1. Store provider token in Redis for potential future revocation (account delete)
+        # 1. Store provider token in DB for synchronization and revocation
         if token:
+            async with db.begin():
+                # Check if we already have a token for this provider/user combination
+                from sqlalchemy import and_
+                stmt = select(UserTokenTable).where(
+                    and_(
+                        UserTokenTable.user_id == user_id,
+                        UserTokenTable.provider == provider_name
+                    )
+                )
+                result = await db.execute(stmt)
+                existing_token = result.scalars().first()
+
+                token_data = {
+                    "user_id": user_id,
+                    "provider": provider_name,
+                    "access_token": token.get("access_token"),
+                    "refresh_token": token.get("refresh_token"),
+                    "scopes": token.get("scope"),
+                    "is_active": True
+                }
+                if token.get("expires_at"):
+                    token_data["expires_at"] = datetime.fromtimestamp(token["expires_at"], tz=timezone.utc)
+
+                if existing_token:
+                    for key, value in token_data.items():
+                        if value is not None:
+                            setattr(existing_token, key, value)
+                    logger.info(f"🔄 Updated {provider_name} tokens in DB for system user {user_id}")
+                else:
+                    db.add(UserTokenTable(**token_data))
+                    logger.info(f"➕ Saved new {provider_name} tokens in DB for system user {user_id}")
+
+            # Also maintain temporary session in Redis for revocation
             redis_client = _get_redis_client()
             redis_client.setex(
                 f"sso_token:{user_id}", 
@@ -640,6 +674,11 @@ async def check_auth(
         user_data["name"] = user.full_name
         user_data["full_name"] = user.full_name
         user_data["timezone"] = user.timezone
+        # SaaS & Usage fields
+        user_data["tier"] = user.tier
+        user_data["subscription_status"] = user.subscription_status
+        user_data["daily_ai_count"] = user.daily_ai_count
+        user_data["daily_sync_count"] = user.daily_sync_count
         # Consent fields
         user_data["consent_analytics"] = user.consent_analytics
         user_data["consent_notifications"] = user.consent_notifications

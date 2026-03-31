@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Calendar, Settings, Bot, Menu, X, LogOut, Activity, Puzzle } from "lucide-react";
+import { LayoutDashboard, Calendar, Settings, Bot, Menu, X, LogOut, Activity, Puzzle, CreditCard, Crown, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthContext } from "@/app/providers/auth-provider";
 
@@ -13,6 +13,7 @@ const SIDEBAR_LINKS = [
   { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
   { name: "AI Copilot", href: "/dashboard/ai", icon: Bot },
   { name: "Plugins", href: "/dashboard/plugins", icon: Puzzle },
+  { name: "Billing", href: "/dashboard/settings/billing", icon: CreditCard },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -68,7 +69,26 @@ export default function DashboardLayout({
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800/50">
+        <div className="p-4 border-t border-slate-800/50 space-y-4">
+          {/* User Tier Badge */}
+          {useAuthContext().user?.tier && (
+             <div className={`mx-2 p-3 rounded-xl border flex items-center gap-3 ${
+                useAuthContext().user?.tier === 'free' 
+                ? 'bg-slate-900/50 border-slate-800 text-slate-400' 
+                : 'bg-primary/5 border-primary/20 text-primary shadow-[0_0_15px_rgba(79,70,229,0.1)]'
+             }`}>
+                {useAuthContext().user?.tier === 'free' ? <Zap className="w-4 h-4" /> : <Crown className="w-4 h-4" />}
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">
+                    {useAuthContext().user?.tier} Edition
+                  </span>
+                  <span className="text-[8px] font-medium opacity-60 leading-none">
+                    Individual SaaS
+                  </span>
+                </div>
+             </div>
+          )}
+
           <button onClick={logout} className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all">
             <LogOut className="w-5 h-5" />
             <span>Sign out</span>

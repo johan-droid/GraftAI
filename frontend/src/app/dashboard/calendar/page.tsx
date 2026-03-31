@@ -15,7 +15,10 @@ import {
   X, 
   CheckCircle2,
   CalendarCheck2,
-  Loader2
+  Loader2,
+  Globe, 
+  RefreshCw,
+  Mail
 } from "lucide-react";
 import { 
   getEvents, 
@@ -24,6 +27,7 @@ import {
   deleteEvent, 
   getAvailableSlots, 
   CalendarEvent as Event,
+  manualSync,
 } from "@/lib/api";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -47,6 +51,7 @@ export default function PremiumCalendarPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [isCreating, setIsCreating] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Coordination State
   const [coordinationMode, setCoordinationMode] = useState(false);
@@ -162,6 +167,18 @@ export default function PremiumCalendarPage() {
       setIsCreating(false);
     }
   };
+  
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      await manualSync();
+      await fetchEventsData();
+    } catch (err) {
+      console.error("Sync failed:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -182,6 +199,14 @@ export default function PremiumCalendarPage() {
           <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest">AI-Synced Scheduling Engine</p>
         </div>
         <div className="flex items-center gap-2">
+           <button 
+             onClick={handleManualSync}
+             disabled={isSyncing}
+             className="flex-1 md:flex-none px-4 py-2 bg-slate-900 border border-slate-800 text-slate-400 rounded-xl hover:bg-slate-800 hover:text-white transition-all font-bold text-xs md:text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 disabled:opacity-50"
+           >
+             <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} /> 
+             {isSyncing ? "Syncing..." : "Sync Now"}
+           </button>
            <Link href="/dashboard" className="flex-1 md:flex-none px-4 py-2 bg-primary/10 border border-primary/20 text-primary rounded-xl hover:bg-primary/20 transition-all font-bold text-xs md:text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95">
              <CalendarCheck2 className="w-4 h-4" /> Dashboard
            </Link>
@@ -422,6 +447,15 @@ export default function PremiumCalendarPage() {
                                  <Clock className="w-3 h-3" /> 
                                  {new Date(evt.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                </span>
+                               
+                               {/* Source Specific Indicators */}
+                               {evt.source && evt.source !== 'local' && (
+                                 <span className="flex items-center gap-1 text-[10px] text-primary/70 font-black bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 uppercase tracking-tighter">
+                                   {evt.source === 'google' ? <Globe className="w-2.5 h-2.5" /> : <Mail className="w-2.5 h-2.5" />}
+                                   {evt.source}
+                                 </span>
+                               )}
+                               
                                <span className="flex items-center gap-1 text-[10px] text-primary/70 font-bold bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
                                  <CheckCircle2 className="w-3 h-3" /> AI SYNCED
                                </span>

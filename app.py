@@ -1,4 +1,4 @@
-# --- Self-pinger background task ---
+import os
 import threading
 import time
 import httpx
@@ -27,7 +27,6 @@ threading.Thread(target=self_pinger, daemon=True).start()
 Use this in environments where command is uvicorn app:app.
 It also ensures backend package path is available when current wd is not project root.
 """
-import os
 import sys
 from pathlib import Path
 

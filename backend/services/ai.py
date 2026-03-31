@@ -15,6 +15,8 @@ from backend.auth.schemes import get_current_user_id
 from backend.services import scheduler
 from backend.services.cache import get_cache, set_cache
 from backend.services.langchain_client import llm, vector_store
+from backend.services.usage import check_usage_limit, increment_usage
+from backend.services.mailbox import get_recent_emails
 
 # Conditional imports for optional dependencies
 try:
@@ -69,6 +71,7 @@ async def ai_chat(
     request: AIRequest,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    _usage_check: bool = Depends(check_usage_limit("ai_messages")),
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=10, window_seconds=60)),
 ):
     """
@@ -86,14 +89,23 @@ async def ai_chat(
             user_name = user.full_name or "User"
             user_email = user.email
 
-        window_start = current_time - timedelta(hours=1)
         window_end = current_time + timedelta(hours=24)
         todays_events = await scheduler.get_events_for_range(
             db, user_id, window_start, window_end
         )
         schedule_context = _get_schedule_context(todays_events)
+        
+        # Pull recent emails for context-aware extraction
+        recent_emails = await get_recent_emails(db, user_id, limit=3)
+        email_context = "RECENT EMAILS (CONTEXT):\n"
+        if recent_emails:
+            for em in recent_emails:
+                email_context += f"- From: {em['from']}, Subject: {em['subject']}\n  Snippet: {em['snippet']}\n"
+        else:
+            email_context += "No recent emails found.\n"
+        schedule_context += f"\n{email_context}"
     except Exception as e:
-        logger.warning(f"Could not fetch proactive schedule context: {e}")
+        logger.warning(f"Could not fetch proactive context (Schedule/Email): {e}")
 
     system_reasoning = f"""
     IDENTITY: 
@@ -147,6 +159,8 @@ async def ai_chat(
 
     if result_text:
         set_cache(cache_key, result_text, 300)
+        # Increment SaaS usage counter
+        await increment_usage(db, user_id, "ai_messages")
         
         # Action Layer
         schedule_match = re.search(r"ACTION:SCHEDULE_MEETING:(\{.*?\})", result_text, re.DOTALL)
@@ -159,8 +173,8 @@ async def ai_chat(
                 event_data = {
                     "user_id": user_id,
                     "title": data.get("title", "Meeting"),
-                    "start_time": datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")).replace(tzinfo=None),
-                    "end_time": (datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")) + timedelta(minutes=data.get("duration_minutes", 30))).replace(tzinfo=None),
+                    "start_time": datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")),
+                    "end_time": (datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")) + timedelta(minutes=data.get("duration_minutes", 30))),
                     "status": "confirmed",
                     "is_meeting": data.get("is_meeting", False),
                     "meeting_platform": data.get("platform"),

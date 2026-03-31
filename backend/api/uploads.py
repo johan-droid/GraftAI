@@ -30,7 +30,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 @router.post("")
 async def upload_file(
-    file: UploadFile = File(...), user_id: int = Depends(get_current_user_id)
+    file: UploadFile = File(...), user_id: str = Depends(get_current_user_id)
 ):
     """
     Secure file upload endpoint.

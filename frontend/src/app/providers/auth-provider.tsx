@@ -4,11 +4,15 @@ import React, { createContext, useContext } from "react";
 import { getSessionSafe, signOut } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
-// Define a type for the user matching Neon Auth structure
 type User = {
   id: string;
   email: string;
   name: string;
+  tier?: string;
+  subscription_status?: string;
+  razorpay_subscription_id?: string;
+  daily_ai_count?: number;
+  daily_sync_count?: number;
 };
 
 interface AuthContextType {
@@ -41,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else if (response?.error) {
           // If it's a network error (TypeEror/Aborted), don't clear session or redirect
           // This prevents background glitches from kicking users out
-          // @ts-ignore - added isNetworkError in auth-client
+          // @ts-expect-error - added isNetworkError in auth-client
           if (response.isNetworkError) {
             console.debug("Session check encountered a network glitch, retaining current session.");
             return;

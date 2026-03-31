@@ -7,12 +7,20 @@ from sqlalchemy import create_engine
 logger = logging.getLogger(__name__)
 
 from backend.utils.db import DATABASE_URL
-from backend.models.tables import Base
+from backend.models.base import Base
+from backend.models.tables import UserTable, EventTable
+from backend.models.user_token import UserTokenTable
 
 
 def _normalize_sync_url(database_url: str) -> str:
     if database_url.startswith("postgresql+asyncpg://"):
-        return database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+        url = database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+        if "sslmode=" not in url:
+            if "?" in url:
+                url += "&sslmode=require"
+            else:
+                url += "?sslmode=require"
+        return url
     if database_url.startswith("mysql+aiomysql://"):
         return database_url.replace("mysql+aiomysql://", "mysql+pymysql://", 1)
     return database_url

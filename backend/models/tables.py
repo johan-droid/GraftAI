@@ -9,11 +9,15 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
+import enum
+from .base import Base
 
-Base = declarative_base()
-
+class UserTier(str, enum.Enum):
+    FREE = "free"
+    PRO = "pro"
+    ELITE = "elite"
 
 class UserTable(Base):
     __tablename__ = "users"
@@ -24,17 +28,26 @@ class UserTable(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
     hashed_password = Column(String(512))
-    timezone = Column(String(100), default="UTC")
-    tenant_id = Column(Integer, index=True)  # For Row-Level Security (RLS)
+    # SaaS & Billing
+    tier = Column(String(20), default=UserTier.FREE, nullable=False)
+    stripe_customer_id = Column(String(255), index=True)
+    razorpay_customer_id = Column(String(255), index=True)
+    razorpay_subscription_id = Column(String(255), index=True)
+    subscription_status = Column(String(50), default="inactive") # active, trialing, past_due, canceled
     
+    # Daily Usage Tracking
+    daily_ai_count = Column(Integer, default=0, nullable=False)
+    daily_sync_count = Column(Integer, default=0, nullable=False)
+    last_usage_reset = Column(DateTime(timezone=True), server_default=func.now())
+    timezone = Column(String(50), default="UTC", nullable=False)
+
     # Consent Preferences
     consent_analytics = Column(Boolean, default=True, nullable=False)
     consent_notifications = Column(Boolean, default=True, nullable=False)
     consent_ai_training = Column(Boolean, default=False, nullable=False)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
-        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     # Relationships
@@ -54,6 +67,10 @@ class EventTable(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
         String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    
+    __table_args__ = (
+        UniqueConstraint("user_id", "external_id", name="uq_user_external_id"),
     )
 
     title = Column(String(512), nullable=False)
@@ -80,9 +97,14 @@ class EventTable(Base):
     attendees = Column(JSONB, default=[], nullable=False)
     agenda = Column(Text)
 
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    # Smart Sync Engine Fields
+    external_id = Column(String(512), index=True) # ID from Google/Microsoft/Zoom
+    fingerprint = Column(String(256), index=True) # deduplication hash
+    source = Column(String(50), default="local") # google, microsoft, zoom, local
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
-        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     # Relationships

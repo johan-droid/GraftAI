@@ -245,7 +245,7 @@ async def get_current_user(
     return payload
 
 
-def get_current_user_id(current_user: dict = Depends(get_current_user)) -> int:
+def get_current_user_id(current_user: dict = Depends(get_current_user)) -> str:
     """
     Dependency that extracts and validates the user ID from the authenticated user payload.
     Ensures 'sub' exists and is a valid integer to prevent IDOR via body-supplied IDs.

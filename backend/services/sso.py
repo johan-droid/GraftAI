@@ -108,9 +108,11 @@ PROVIDERS = {
         "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
         "token_url": "https://oauth2.googleapis.com/token",
         "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
-        "scope": "openid profile email",
+        # Scopes: login + calendar events (Meet)
+        "scope": "openid profile email https://www.googleapis.com/auth/calendar.events",
         "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
         "revoke_url": "https://oauth2.googleapis.com/revoke",
+        "prompt": "consent",  # Ensures refresh token is provided
     },
     "microsoft": {
         "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
@@ -118,34 +120,26 @@ PROVIDERS = {
         "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
         "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
         "userinfo_url": "https://graph.microsoft.com/v1.0/me",
-        "scope": "openid profile email User.Read",
+        # Scopes: login + Teams + Calendar
+        "scope": "openid profile email User.Read Calendars.ReadWrite OnlineMeetings.ReadWrite",
         "redirect_uri": os.getenv("MICROSOFT_REDIRECT_URI"),
     },
-    "apple": {
-        "client_id": os.getenv("APPLE_CLIENT_ID"),
-        "client_secret": os.getenv("APPLE_CLIENT_SECRET"),
-        "auth_url": "https://appleid.apple.com/auth/authorize",
-        "token_url": "https://appleid.apple.com/auth/token",
-        "userinfo_url": None,  # Apple returns user info in the ID token
-        "scope": "name email",
-        "response_mode": "form_post",  # Apple requires form_post
-    },
-    "microsoft": {
-        "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
-        "client_secret": os.getenv("MICROSOFT_CLIENT_SECRET"),
-        "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-        "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-        "userinfo_url": "https://graph.microsoft.com/v1.0/me",
-        "scope": "openid profile email User.Read",
+    "zoom": {
+        "client_id": os.getenv("ZOOM_CLIENT_ID"),
+        "client_secret": os.getenv("ZOOM_CLIENT_SECRET"),
+        "auth_url": "https://zoom.us/oauth/authorize",
+        "token_url": "https://zoom.us/oauth/token",
+        "userinfo_url": "https://api.zoom.us/v2/users/me",
+        "scope": "meeting:write",
     },
     "apple": {
         "client_id": os.getenv("APPLE_CLIENT_ID"),
         "client_secret": os.getenv("APPLE_CLIENT_SECRET"),
         "auth_url": "https://appleid.apple.com/auth/authorize",
         "token_url": "https://appleid.apple.com/auth/token",
-        "userinfo_url": None,  # Apple returns user info in the ID token
+        "userinfo_url": None,
         "scope": "name email",
-        "response_mode": "form_post",  # Apple requires form_post
+        "response_mode": "form_post",
     },
 }
 
@@ -316,6 +310,10 @@ async def complete_oauth2_flow(code: str, state: str):
     email = (
         profile.get("email") or profile.get("mail") or profile.get("userPrincipalName")
     )
+
+    # --- PHASE 3: RETURN TOKEN DATA ---
+    # Database persistence is now handled by the caller (routes.py) 
+    # to ensure the user record is committed first.
 
     return {
         "provider": provider_name,

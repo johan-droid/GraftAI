@@ -44,7 +44,9 @@ class EventUpdate(BaseModel):
 
 class EventResponse(EventBase):
     id: int
-    user_id: int
+    user_id: str
+    source: Optional[str] = "local"
+    external_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -57,7 +59,7 @@ async def get_events(
     start: datetime,
     end: datetime,
     db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Fetch events for a user within a time range."""
     return await scheduler.get_events_for_range(db, user_id, start, end)
@@ -67,7 +69,7 @@ async def get_events(
 async def create_event(
     event_in: EventCreate,
     db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Create a new event and sync to AI."""
     # Sanitize incoming data to prevent XSS in description/metadata
@@ -86,7 +88,7 @@ async def update_event(
     event_id: int,
     event_in: EventUpdate,
     db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Update event and trigger real-time AI context update."""
     # Sanitize incoming update data
@@ -105,7 +107,7 @@ async def get_available_slots(
     duration: int = 30,
     target_timezone: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Detect available time slots for scheduling (Smart Pipeline)."""
     return await scheduler.find_available_slots(
@@ -117,10 +119,28 @@ async def get_available_slots(
 async def delete_event(
     event_id: int,
     db: AsyncSession = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Delete event and purge from AI memory."""
     success = await scheduler.delete_event(db, event_id, user_id)
     if not success:
         raise HTTPException(status_code=404, detail="Event not found")
     return None
+
+    tokens = result.scalars().all()
+    
+    if not tokens:
+        return {"status": "ok", "message": "No active integrations found", "synced_count": 0}
+        
+    # 2. Trigger sync for each provider
+    for token in tokens:
+        try:
+            if token.provider == "google":
+                await sync_engine.sync_google_events(db, token)
+            elif token.provider == "microsoft":
+                await sync_engine.sync_ms_graph_events(db, token)
+        except Exception as e:
+            logger.error(f"Manual sync failed for {token.provider}: {e}")
+            
+    await db.commit()
+    return {"status": "ok", "message": "Synchronization complete", "synced_count": len(tokens)}

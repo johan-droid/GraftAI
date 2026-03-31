@@ -7,7 +7,7 @@ from backend.models.tables import EventTable
 from backend.utils.db import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -37,8 +37,8 @@ async def analytics_summary(
     """
     logger.info(f"Analytics summary requested by user: {user_id}")
 
-    # Calculate time range
-    now = datetime.now()
+    # Calculate time range using aware UTC datetime
+    now = datetime.now(timezone.utc)
     if range == "7d":
         start_date = now - timedelta(days=7)
     elif range == "30d":

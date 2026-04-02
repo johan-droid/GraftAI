@@ -1,1 +1,6 @@
-from backend.utils.db import get_db
+from backend.utils.db import get_db as _get_db
+
+async def get_db():
+    async for session in _get_db():
+        yield session
+

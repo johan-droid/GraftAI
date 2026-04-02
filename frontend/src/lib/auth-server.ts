@@ -2,8 +2,23 @@ import { betterAuth } from "better-auth";
 import { magicLink, organization, genericOAuth, twoFactor } from "better-auth/plugins";
 import { Pool } from "pg";
 
+function resolveServerAuthUrl(): string {
+    const explicit = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
+    if (explicit) {
+        return explicit.replace(/\/+$/g, "");
+    }
+
+    if (process.env.VERCEL_URL) {
+        return `https://${process.env.VERCEL_URL}`.replace(/\/+$/g, "");
+    }
+
+    return "http://localhost:3000";
+}
+
+const resolvedAuthUrl = resolveServerAuthUrl();
+
 export const auth = betterAuth({
-    baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    baseURL: resolvedAuthUrl,
     database: new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: {
@@ -75,9 +90,7 @@ export const auth = betterAuth({
         })
     ],
     trustedOrigins: [
-        process.env.BETTER_AUTH_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        "http://localhost:3000"
+        resolvedAuthUrl
     ],
     user: {
         modelName: "users",

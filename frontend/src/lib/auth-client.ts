@@ -1,8 +1,22 @@
 import { createAuthClient } from "better-auth/react";
 import { magicLinkClient, organizationClient, genericOAuthClient, twoFactorClient } from "better-auth/client/plugins";
 
+function resolveAuthBaseURL(): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/+$/g, "");
+  }
+
+  // In browsers, prefer same-origin so deployed previews/prod do not fall back to localhost.
+  if (typeof window !== "undefined") {
+    return window.location.origin.replace(/\/+$/g, "");
+  }
+
+  return "http://localhost:3000";
+}
+
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  baseURL: resolveAuthBaseURL(),
   plugins: [
     magicLinkClient(),
     organizationClient(),

@@ -109,6 +109,8 @@ export default function DashboardLayout({
           </div>
           <button 
             onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open menu"
+            title="Open menu"
             className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 active:scale-95 transition-all"
           >
             <Menu className="w-4 h-4" />
@@ -135,7 +137,12 @@ export default function DashboardLayout({
               >
                 <div className="flex items-center justify-between p-4 border-b border-slate-800/50">
                   <span className="font-medium text-slate-200">Menu</span>
-                  <button onClick={() => setMobileMenuOpen(false)} className="p-2 text-slate-400 hover:text-white">
+                  <button
+                    onClick={() => setMobileMenuOpen(false)}
+                    aria-label="Close menu"
+                    title="Close menu"
+                    className="p-2 text-slate-400 hover:text-white"
+                  >
                     <X className="w-5 h-5" />
                   </button>
                 </div>

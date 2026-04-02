@@ -29,6 +29,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = React.useState(true);
 
+  const isLikelyNetworkError = React.useCallback((error: unknown) => {
+    if (!error || typeof error !== "object") return false;
+    const maybeMessage = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+    const msg = maybeMessage.toLowerCase();
+    return msg.includes("network") || msg.includes("failed to fetch") || msg.includes("fetch") || msg.includes("timeout");
+  }, []);
+
+  const isProtectedPath = React.useCallback((pathname: string) => {
+    return pathname.startsWith("/dashboard");
+  }, []);
+
   const redirectToLogin = React.useCallback(() => {
     if (typeof window !== "undefined" && window.location.pathname !== "/login") {
       window.location.replace("/login");
@@ -49,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(response.data);
           setLoading(false);
         } else if (response?.error) {
-          if (response.isNetworkError) {
+          if (isLikelyNetworkError(response.error)) {
             console.debug("Session check encountered a network glitch; retrying without kicking user out.");
             // Keep prior session state (do not set null) and keep loading until next heartbeat.
             return;
@@ -71,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [isLikelyNetworkError]);
 
   React.useEffect(() => {
     if (!session?.user && !loading) {
@@ -79,14 +90,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const oauthInProgress = typeof window !== "undefined" && sessionStorage.getItem("oauth_in_progress") === "true";
       const isAuthCallback = typeof window !== "undefined" && window.location.pathname.includes("/auth-callback");
       const isLoginPage = typeof window !== "undefined" && window.location.pathname === "/login";
+      const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+      const isProtectedRoute = currentPath ? isProtectedPath(currentPath) : false;
       
       // If we're on the auth-callback page, login page, or in OAuth flow, don't force redirect to login
       // The callback page will handle the session establishment
-      if (!isAuthCallback && !isLoginPage && !oauthInProgress) {
+      if (isProtectedRoute && !isAuthCallback && !isLoginPage && !oauthInProgress) {
         redirectToLogin();
       }
     }
-  }, [session, loading, redirectToLogin]);
+  }, [session, loading, redirectToLogin, isProtectedPath]);
 
   React.useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;

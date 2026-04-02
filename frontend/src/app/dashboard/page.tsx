@@ -47,11 +47,7 @@ export default function Dashboard() {
   const [aiSuggestion, setAiSuggestion] = useState("");
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-        window.location.replace("/login");
-      }
-    } else if (isAuthenticated) {
+    if (isAuthenticated) {
       // Fetch real analytics summary
       getAnalyticsSummary().then(data => {
         setSummaryMessage(data.summary);
@@ -72,7 +68,7 @@ export default function Dashboard() {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       syncUserTimezone(tz).catch(() => {});
     }
-  }, [isAuthenticated, loading]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;

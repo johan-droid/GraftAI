@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Callable
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession

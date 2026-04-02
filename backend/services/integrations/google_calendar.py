@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request

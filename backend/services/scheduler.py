@@ -1,9 +1,9 @@
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, delete
+from sqlalchemy import select, and_
 from backend.models.tables import EventTable, UserTable
 from backend.utils.db import unwrap_result
 from .langchain_client import vector_store
@@ -11,7 +11,6 @@ from .notifications import notify_event_created, notify_event_updated, notify_ev
 from langchain_core.documents import Document
 import json
 import pytz
-from sqlalchemy import select, and_
 from backend.models.user_token import UserTokenTable
 from backend.services.integrations.google_calendar import create_google_meet_event, update_google_event, delete_google_event
 from backend.services.integrations.ms_graph import create_teams_meeting, update_ms_event, delete_ms_event

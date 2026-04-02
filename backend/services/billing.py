@@ -1,15 +1,14 @@
 import os
 import logging
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 try:
     import stripe
 except ImportError:
     stripe = None
     logging.getLogger(__name__).warning("Stripe package not installed; billing endpoints degraded.")
-from datetime import datetime
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 

@@ -1,9 +1,8 @@
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 from backend.services import scheduler
-from backend.models.tables import EventTable
 
 
 @pytest.mark.asyncio

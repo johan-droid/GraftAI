@@ -2,7 +2,7 @@
 RBAC/ABAC (roles/attributes) implementation with Redis-backed storage.
 """
 
-from typing import Any, List
+from typing import Any
 import json
 import os
 import redis

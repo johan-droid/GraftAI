@@ -5,7 +5,6 @@ FIDO2 and decentralized identity (DID) support with Redis-backed storage.
 import uuid
 import json
 import os
-from typing import Dict
 import redis
 
 # Redis client for FIDO2 and DID storage

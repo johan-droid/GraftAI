@@ -4,9 +4,9 @@ import json
 import logging
 import hashlib
 import re
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,7 @@ from backend.utils.db import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.services import scheduler
 from backend.services.cache import get_cache, set_cache
-from backend.services.langchain_client import llm, vector_store
+from backend.services.langchain_client import llm
 from backend.services.usage import check_usage_limit, increment_usage
 from backend.services.mailbox import get_recent_emails
 

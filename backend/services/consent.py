@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Optional
 import logging
 from backend.auth.schemes import get_current_user_id
 

@@ -1,4 +1,3 @@
-import os
 import logging
 from pathlib import Path
 from sqlalchemy import create_engine
@@ -8,8 +7,6 @@ logger = logging.getLogger(__name__)
 
 from backend.utils.db import DATABASE_URL
 from backend.models.base import Base
-from backend.models.tables import UserTable, EventTable
-from backend.models.user_token import UserTokenTable
 
 
 def _normalize_sync_url(database_url: str) -> str:

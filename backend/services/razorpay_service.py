@@ -3,10 +3,9 @@ import razorpay
 import logging
 import hmac
 import hashlib
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Dict, Any
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 

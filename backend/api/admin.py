@@ -64,10 +64,11 @@ async def get_system_status(
     try:
         from backend.services.bg_tasks import get_task_pool
         pool = await get_task_pool()
-        # Get queue info
+        # Get queue info, include basic pool status to avoid unused variable under ruff
         stats["worker"] = {
             "status": "online",
-            "queue_name": "arq:queue"
+            "queue_name": "arq:queue",
+            "pool_status": "connected" if pool else "unavailable"
         }
     except Exception as e:
         stats["worker"] = {"status": "offline", "error": str(e)}

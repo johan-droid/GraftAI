@@ -4,7 +4,6 @@ SSO (OAuth2, OIDC) authentication implementation with Redis-backed state storage
 
 from datetime import datetime, timedelta, timezone
 import os
-import uuid
 import json
 from fastapi import HTTPException
 from authlib.integrations.httpx_client import AsyncOAuth2Client

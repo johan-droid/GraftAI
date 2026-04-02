@@ -1,6 +1,6 @@
 """Real-time instant messaging service using Redis pub/sub."""
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from backend.services.redis_client import publish, subscribe
 import json
 import logging

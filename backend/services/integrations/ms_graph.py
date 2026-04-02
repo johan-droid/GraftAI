@@ -3,6 +3,7 @@ import logging
 import httpx
 from typing import Optional
 from msal import ConfidentialClientApplication
+from datetime import datetime
 
 # Initialize logger
 logger = logging.getLogger(__name__)

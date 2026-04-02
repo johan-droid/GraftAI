@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse, JSONResponse, Response
 import secrets
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import jwt
@@ -9,7 +9,6 @@ from jwt import PyJWTError as JWTError
 from datetime import datetime, timedelta, timezone
 import os
 import redis
-import functools
 import logging
 import uuid
 import json
@@ -42,8 +41,6 @@ from backend.api.deps import get_db
 from backend.auth.schemes import (
     get_current_user,
     get_current_user_id,
-    is_admin_user,
-    blacklist_token,
 )
 
 SECRET_KEY = os.getenv("SECRET_KEY")

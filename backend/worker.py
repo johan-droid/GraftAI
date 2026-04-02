@@ -1,7 +1,5 @@
 import os
-import asyncio
 import logging
-from arq import create_pool
 from arq.connections import RedisSettings
 from dotenv import load_dotenv
 

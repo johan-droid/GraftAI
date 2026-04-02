@@ -38,7 +38,6 @@ from backend.services.upgrade import router as upgrade_router
 from backend.services.plugin_api import router as plugin_router
 from backend.api.notifications import router as notifications_router
 from backend.api.billing import router as billing_router
-from backend.auth.schemes import get_current_user
 from backend.utils.db import get_db
 
 from backend.utils import db as db_utils

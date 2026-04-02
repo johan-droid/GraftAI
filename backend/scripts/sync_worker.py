@@ -2,7 +2,6 @@ import asyncio
 import logging
 import time
 import os
-import signal
 import sys
 from pathlib import Path
 
@@ -11,8 +10,6 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT_DIR))
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
 # Setup logging
@@ -23,10 +20,8 @@ logger = logging.getLogger("sync-worker")
 env_path = ROOT_DIR / ".env"
 load_dotenv(env_path)
 
-from backend.models.tables import Base
 from backend.models.user_token import UserTokenTable
 from backend.services.sync_engine import sync_google_events, sync_ms_graph_events
-from backend.utils.db import engine as existing_engine
 
 # Connection logic for Neon (SSL)
 DATABASE_URL = os.getenv("DATABASE_URL")

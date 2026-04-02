@@ -1,12 +1,11 @@
 import hashlib
-import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_
 
-from backend.models.tables import EventTable, UserTable
+from backend.models.tables import EventTable
 from backend.models.user_token import UserTokenTable
 from backend.services.integrations import google_calendar, ms_graph
 

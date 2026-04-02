@@ -1,10 +1,11 @@
 import os
 import uuid
-import shutil
+import logging
 from pathlib import Path
-from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from backend.auth.schemes import get_current_user_id
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 

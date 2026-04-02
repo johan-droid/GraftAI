@@ -10,6 +10,8 @@ jobs:
   # 1. Verification (Backend)
   backend-checks:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     services:
       redis:
         image: redis:6.2-alpine
@@ -44,6 +46,8 @@ jobs:
   # 2. Deployment (Automatic trigger to Render)
   deploy:
     needs: backend-checks
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:

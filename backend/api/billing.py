@@ -1,9 +1,11 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.utils.db import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.services import billing, razorpay_service
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -42,7 +44,7 @@ async def stripe_webhook(
         return await billing.handle_webhook_event(db, payload, sig_header)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal webhook processing error")
 
 @router.post("/razorpay/create-subscription")

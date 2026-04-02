@@ -1,7 +1,6 @@
 import pytest
-from datetime import datetime, timedelta
-from backend.services import ai, scheduler
-from backend.models.tables import EventTable
+from datetime import datetime
+from backend.services import ai
 from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock, patch
 

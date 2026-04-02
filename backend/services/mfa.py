@@ -3,9 +3,7 @@ MFA and device fingerprinting implementation with Redis-backed storage.
 """
 
 import pyotp
-import json
 import os
-from typing import Optional
 import redis
 
 # Redis client for MFA secrets

@@ -8,7 +8,6 @@ logger = logging.getLogger(__name__)
 # Ensure backend/.env is loaded when app is run from project root
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-import ssl as _ssl
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 DATABASE_URL = os.getenv("DATABASE_URL")

@@ -1,6 +1,3 @@
-import asyncio
-import httpx
-from datetime import datetime, timedelta
 
 BASE_URL = "http://localhost:8000/api/v1"
 

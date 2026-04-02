@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ssoStart } from "@/lib/api";
+import { signIn } from "@/lib/auth-client";
 import { motion } from "framer-motion";
 import { ArrowRight, Loader2, Shield } from "lucide-react";
 
@@ -14,11 +14,11 @@ export default function SSOPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await ssoStart(redirectTo);
-      if (data.authorization_url) {
-        window.location.href = data.authorization_url;
-      } else {
-        setError("Unable to start SSO flow");
+      const { error } = await signIn.sso({
+        callbackURL: redirectTo,
+      });
+      if (error) {
+        throw new Error(error.message || "Unable to start SSO flow");
       }
     } catch (err) {
       setError((err as Error).message);

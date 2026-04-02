@@ -1,10 +1,13 @@
 import { createAuthClient } from "better-auth/react";
-import { magicLinkClient } from "better-auth/client/plugins";
+import { magicLinkClient, organizationClient, genericOAuthClient, twoFactorClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
   baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
   plugins: [
-    magicLinkClient()
+    magicLinkClient(),
+    organizationClient(),
+    genericOAuthClient(),
+    twoFactorClient()
   ]
 });
 
@@ -50,7 +53,14 @@ export const signIn = {
     });
   },
 
-  social: async ({ provider }: { provider: "google" | "github" }) => {
+  social: async ({ provider }: { provider: "google" | "github" | "microsoft" | "apple" | "zoom" }) => {
+    if (provider === "zoom") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return await (authClient.signIn as any).genericOAuth({
+        providerId: "zoom",
+        callbackURL: "/dashboard",
+      });
+    }
     return await authClient.signIn.social({
       provider,
       callbackURL: "/dashboard",
@@ -61,6 +71,22 @@ export const signIn = {
     return await authClient.signIn.magicLink({
       email,
       callbackURL: "/dashboard",
+    });
+  },
+
+  zoom: async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await (authClient.signIn as any).genericOAuth({
+      providerId: "zoom",
+      callbackURL: "/dashboard",
+    });
+  },
+
+  sso: async ({ callbackURL }: { callbackURL?: string } = {}) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await (authClient.signIn as any).genericOAuth({
+      providerId: "sso-oidc",
+      callbackURL: callbackURL || "/dashboard",
     });
   },
 

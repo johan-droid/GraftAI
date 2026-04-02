@@ -1,7 +1,9 @@
-# Dependencies
+# JavaScript / Node
 node_modules/
 .pnp
 .pnp.js
+*.tsbuildinfo
+next-env.d.ts
 
 # Build outputs
 dist/
@@ -10,14 +12,19 @@ build/
 out/
 bin/
 obj/
+.vercel/
+.turbo/
 
-# Environment variables
+# Environment variables & secrets
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 *.env.*
+!.env.example
+.python-version
+.node-version
 
 # Python
 __pycache__/
@@ -37,32 +44,28 @@ pip-delete-this-directory.txt
 nosetests.xml
 coverage.xml
 *.cover
-*.log
-.DS_Store
-Thumbs.db
-runtime.txt
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.hypothesis/
 
-# Testing
-/.pytest_cache/
-/.mypy_cache/
-/.hypothesis/
-/coverage/
-/htmlcov/
-
-# Logs
-logs
+# Logs & Temporary Files
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+tmp/
+*.tmp
+build_log*.txt
+lint_output*.txt
 
 # IDE & OS
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 .DS_Store
 .DS_Store?
 ._*
@@ -71,16 +74,10 @@ pnpm-debug.log*
 ehthumbs.db
 Thumbs.db
 
-# Vercel/Render & platform files
-.vercel/
+# Platform files
 .vercelignore
 render.yaml
-Dockerfile
-# Node modules also typically in workspace subfolders
-frontend/node_modules/
-backend/node_modules/
 
 # Project Specific
 eslint_report.json
-db_migrate_saas.py
 migration_*.sql

@@ -40,6 +40,7 @@ jobs:
         working-directory: ./backend
         run: .venv/bin/pytest
         env:
+          PYTHONPATH: ${{ github.workspace }}
           DATABASE_URL: "sqlite+aiosqlite:///:memory:" # Use in-memory mock for tests
           REDIS_URL: redis://localhost:6379/0
 

@@ -21,6 +21,7 @@ httpx
 python-multipart>=0.0.18
 argon2-cffi>=23.1.0
 bcrypt<4.0
+msal>=1.0.0
 
 # Cache
 redis

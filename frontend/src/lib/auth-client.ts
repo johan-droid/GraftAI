@@ -17,6 +17,21 @@ export function getToken(): string | null {
   return getCookie("graftai_access_token");
 }
 
+function authEndpoint(path: string, apiVersionPrefix: boolean = true): string {
+  const cleanedPath = `/${path.replace(/^\/+/, "")}`;
+  let effectivePath = cleanedPath;
+  if (apiVersionPrefix && !cleanedPath.startsWith("/api/v1")) {
+    effectivePath = `/api/v1${cleanedPath}`;
+  }
+
+  // In browser, always use same-origin paths so Next rewrites handle backend routing.
+  if (typeof window !== "undefined") {
+    return effectivePath;
+  }
+
+  return composeEndpoint(path, apiVersionPrefix);
+}
+
 
 
 export const getSessionSafe = async () => {
@@ -26,7 +41,7 @@ export const getSessionSafe = async () => {
 
     for (let i = 0; i < attempts; i++) {
       try {
-        return await fetch(composeEndpoint("/auth/check", false), {
+        return await fetch(authEndpoint("/auth/check", true), {
           method: "GET",
           credentials: "include",
         });
@@ -44,10 +59,9 @@ export const getSessionSafe = async () => {
 
   const refreshSession = async () => {
     const urlsToTry = [
-      composeEndpoint("/auth/refresh", false),
-      composeEndpoint("/auth/refresh", true),
-      composeEndpoint("/auth/auth/refresh", false),
-      composeEndpoint("/auth/auth/refresh", true),
+      authEndpoint("/auth/refresh", true),
+      authEndpoint("/auth/refresh", false),
+      authEndpoint("/auth/auth/refresh", true),
     ];
 
     let lastErr: unknown = null;
@@ -115,12 +129,35 @@ export const signIn = {
     body.append("grant_type", "password");
 
     try {
-      const data = await apiClient.post("/auth/token", body, {
+      const response = await fetch(authEndpoint("/auth/token", true), {
+        method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
           ...getCsrfHeaders(),
         },
+        body: body.toString(),
+        credentials: "include",
       });
+
+      if (!response.ok) {
+        const raw = await response.text().catch(() => "");
+        let message = "Invalid credentials";
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw) as Record<string, unknown>;
+            if (parsed.detail) {
+              message = String(parsed.detail);
+            } else if (parsed.error) {
+              message = String(parsed.error);
+            }
+          } catch {
+            message = raw;
+          }
+        }
+        return { error: new Error(message) };
+      }
+
+      const data = await response.json().catch(() => ({}));
       return { data, error: null };
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Invalid credentials";
@@ -130,10 +167,21 @@ export const signIn = {
 
   social: async ({ provider }: { provider: "google" | "github" }) => {
     try {
-      const data = await apiClient.get<{ authorization_url: string; redirect_to?: string }>(
-        "/auth/sso/start",
-        { params: { provider, redirect_to: "/dashboard" } }
-      );
+      const url = new URL(authEndpoint("/auth/sso/start", true), window.location.origin);
+      url.searchParams.set("provider", provider);
+      url.searchParams.set("redirect_to", "/dashboard");
+
+      const response = await fetch(`${url.pathname}${url.search}`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const raw = await response.text().catch(() => "");
+        throw new Error(raw || `OAuth start failed (${response.status})`);
+      }
+
+      const data = await response.json() as { authorization_url: string; redirect_to?: string };
       
       if (data.authorization_url) {
         if (typeof window !== "undefined") {
@@ -152,7 +200,34 @@ export const signIn = {
 
   magicLink: async ({ email }: { email: string }) => {
     try {
-      const data = await apiClient.post("/auth/passwordless/request", { email });
+      const url = new URL(authEndpoint("/auth/passwordless/request", true), window.location.origin);
+      url.searchParams.set("email", email);
+
+      const response = await fetch(`${url.pathname}${url.search}`, {
+        method: "POST",
+        headers: {
+          ...getCsrfHeaders(),
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const raw = await response.text().catch(() => "");
+        let message = "Passwordless request failed";
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw) as Record<string, unknown>;
+            if (parsed.detail) {
+              message = String(parsed.detail);
+            }
+          } catch {
+            message = raw;
+          }
+        }
+        return { error: new Error(message) };
+      }
+
+      const data = await response.json().catch(() => ({}));
       return { data, error: null };
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Passwordless request failed";
@@ -161,13 +236,8 @@ export const signIn = {
   },
 
   passkey: async ({ email }: { email?: string }) => {
-    try {
-      const data = await apiClient.post("/auth/fido2/register", { user_id: email || "" });
-      return { data, error: null };
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Passkey setup failed";
-      return { error: new Error(msg) };
-    }
+    void email;
+    return { error: new Error("Passkey sign-in is not available on this login flow yet.") };
   },
 };
 

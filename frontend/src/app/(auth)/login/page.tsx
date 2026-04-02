@@ -5,10 +5,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, ArrowRight, Loader2, KeyRound, Fingerprint, Shield } from "lucide-react";
+import { Mail, Lock, ArrowRight, Loader2, KeyRound, Shield } from "lucide-react";
 
-type AuthTab = "credentials" | "passwordless" | "passkey";
-type OAuthProvider = "google" | "github" | "microsoft" | "apple";
+type AuthTab = "credentials" | "passwordless";
+type OAuthProvider = "google" | "github";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,13 +26,20 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ── Credential Login ──
   async function handleCredentialLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      setError("Please enter both email and password.");
+      return;
+    }
+
     setLoading(true);
     setError("");
+
     try {
-      const { error } = await signIn.email({ email, password });
+      const { error } = await signIn.email({ email: normalizedEmail, password });
 
       if (error) {
         throw new Error(error.message || "Invalid credentials");
@@ -46,19 +53,20 @@ export default function LoginPage() {
     }
   }
 
-  // ── OAuth SSO ──
   const handleOAuthLogin = async (provider: OAuthProvider) => {
     setLoading(true);
     setError("");
 
     try {
-      await signIn.social({ provider: provider as "google" | "github" });
+      await signIn.social({ provider });
       return;
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       const msg = errorMessage.toLowerCase();
-      if (msg.includes("400") || msg.includes("bad request") || msg.includes("unauthorized")) {
-        setError("Social login is unavailable right now. Please use password login or try again later.");
+      if (msg.includes("network") || msg.includes("failed to fetch") || msg.includes("cors")) {
+        setError("Unable to reach authentication service. Please try password login.");
+      } else if (msg.includes("400") || msg.includes("bad request") || msg.includes("unauthorized")) {
+        setError("Social login is temporarily unavailable. Use password login or try again.");
       } else {
         setError(errorMessage || "Failed to initiate social login");
       }
@@ -66,13 +74,20 @@ export default function LoginPage() {
     }
   };
 
-  // ── Passwordless Magic Link ──
   async function handleMagicRequest(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    const normalizedEmail = magicEmail.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setError("Please enter your email address.");
+      return;
+    }
+
     setLoading(true);
     setError("");
+
     try {
-      const { error } = await signIn.magicLink({ email: magicEmail });
+      const { error } = await signIn.magicLink({ email: normalizedEmail });
       if (error) throw error;
       setMagicSent(true);
     } catch (err) {
@@ -82,29 +97,13 @@ export default function LoginPage() {
     }
   }
 
-  // ── FIDO2 Passkey ──
-  async function handlePasskeyLogin() {
-    setLoading(true);
-    setError("");
-    try {
-      const { error } = await signIn.passkey({ email });
-      if (error) throw error;
-      router.replace("/dashboard");
-    } catch {
-      setError("Passkey authentication failed or was cancelled");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   const tabs: { key: AuthTab; label: string; icon: React.ReactNode }[] = [
     { key: "credentials", label: "Password", icon: <Lock className="w-4 h-4" /> },
     { key: "passwordless", label: "Magic Link", icon: <Mail className="w-4 h-4" /> },
-    { key: "passkey", label: "Passkey", icon: <Fingerprint className="w-4 h-4" /> },
   ];
 
   return (
-    <main className="app-shell flex min-h-screen flex-col items-center justify-center p-4 relative overflow-hidden">
+    <main className="app-shell page-with-floating-nav flex min-h-screen flex-col items-center justify-start px-4 pb-10 relative overflow-hidden">
 
       {/* Background Ambience */}
       <div className="hidden md:block absolute top-0 right-0 w-full h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
@@ -122,15 +121,15 @@ export default function LoginPage() {
             <span className="text-white font-bold text-2xl leading-none">G</span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white mb-2">Welcome back</h1>
-          <p className="text-slate-400 text-sm text-center">Log in to your GraftAI workspace</p>
+          <p className="text-slate-400 text-sm text-center">Simple and secure login for your GraftAI workspace</p>
         </div>
 
         <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-2xl shadow-xl p-5 md:p-8">
 
-          {/* ── OAuth Provider Grid ── */}
-          <div className="grid grid-cols-2 gap-3 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             <button
               onClick={() => handleOAuthLogin("google")}
+              disabled={loading}
               className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 text-sm font-medium text-slate-200 transition-colors group"
             >
               <svg className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24">
@@ -143,6 +142,7 @@ export default function LoginPage() {
             </button>
             <button
               onClick={() => handleOAuthLogin("github")}
+              disabled={loading}
               className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 text-sm font-medium text-slate-200 transition-colors group"
             >
               <svg className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24">
@@ -150,27 +150,8 @@ export default function LoginPage() {
               </svg>
               GitHub
             </button>
-            <button
-              onClick={() => handleOAuthLogin("microsoft")}
-              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 text-sm font-medium text-slate-200 transition-colors group"
-            >
-              <svg className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" viewBox="0 0 21 21">
-                <path d="M10 0H0v10h10V0z" fill="#F25022"/><path d="M21 0H11v10h10V0z" fill="#7FBA00"/><path d="M10 11H0v10h10V11z" fill="#00A4EF"/><path d="M21 11H11v10h10V11z" fill="#FFB900"/>
-              </svg>
-              Microsoft
-            </button>
-            <button
-              onClick={() => handleOAuthLogin("apple")}
-              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 text-sm font-medium text-slate-200 transition-colors group"
-            >
-              <svg className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-              </svg>
-              Apple
-            </button>
           </div>
 
-          {/* ── Divider ── */}
           <div className="relative mb-5">
             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
             <div className="relative flex justify-center text-xs">
@@ -178,12 +159,12 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* ── Auth Method Tabs ── */}
           <div className="flex rounded-xl bg-slate-800/50 p-1 mb-5 gap-1">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => { setActiveTab(tab.key); setError(""); }}
+                disabled={loading}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
                   activeTab === tab.key
                     ? "bg-primary text-white shadow-sm"
@@ -196,7 +177,6 @@ export default function LoginPage() {
             ))}
           </div>
 
-          {/* ── Tab Content ── */}
           <AnimatePresence mode="wait">
             {activeTab === "credentials" && (
               <motion.form
@@ -244,7 +224,7 @@ export default function LoginPage() {
               >
                 {!magicSent ? (
                   <form className="space-y-3" onSubmit={handleMagicRequest}>
-                    <p className="text-xs text-slate-400 mb-2">We will send a magic link to your email — no password needed.</p>
+                    <p className="text-xs text-slate-400 mb-2">We will send a one-time sign-in link to your email.</p>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Mail className="h-4 w-4 text-slate-500" />
@@ -274,37 +254,8 @@ export default function LoginPage() {
                 )}
               </motion.div>
             )}
-
-            {activeTab === "passkey" && (
-              <motion.div
-                key="passkey"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 10 }}
-                transition={{ duration: 0.2 }}
-                className="text-center py-4"
-              >
-                <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto mb-4">
-                  <Fingerprint className="w-8 h-8 text-primary" />
-                </div>
-                <p className="text-sm text-slate-300 mb-1 font-medium">FIDO2 / WebAuthn</p>
-                <p className="text-xs text-slate-500 mb-5">Use your device biometric or security key to sign in.</p>
-                <button
-                  onClick={handlePasskeyLogin}
-                  disabled={loading}
-                  className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  {loading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Waiting for device...</>
-                  ) : (
-                    <><Fingerprint className="w-4 h-4" /> Authenticate with Passkey</>
-                  )}
-                </button>
-              </motion.div>
-            )}
           </AnimatePresence>
 
-          {/* ── Error Display ── */}
           {error && (
             <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mt-3 text-sm text-red-400 bg-red-400/10 border border-red-400/20 p-3 rounded-xl">
               {error}
@@ -312,14 +263,13 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* ── Footer Links ── */}
         <div className="mt-6 flex flex-col items-center gap-2">
-          <a href="/sso" className="text-xs text-slate-500 hover:text-primary transition-colors flex items-center gap-1">
+          <Link href="/sso" className="text-xs text-slate-500 hover:text-primary transition-colors flex items-center gap-1">
             <Shield className="w-3 h-3" /> Enterprise SSO
-          </a>
-          <a href="/mfa" className="text-xs text-slate-500 hover:text-primary transition-colors flex items-center gap-1">
+          </Link>
+          <Link href="/mfa" className="text-xs text-slate-500 hover:text-primary transition-colors flex items-center gap-1">
             <KeyRound className="w-3 h-3" /> MFA Verification
-          </a>
+          </Link>
           <p className="mt-2 text-sm text-slate-500">
             Do you not have an account? <Link href="/register" className="font-medium text-primary hover:underline">Sign up</Link>
           </p>

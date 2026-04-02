@@ -2,6 +2,7 @@ import os
 import logging
 import threading
 import time
+from typing import Optional
 
 import redis
 
@@ -15,6 +16,8 @@ class InMemoryRedis:
         self._data = {}
         self._expires = {}
         self._sets = {}
+        self._subscribers = {}
+        self._pubsub_lock = threading.Lock()
 
     def _purge_expired(self):
         now = time.time()
@@ -72,6 +75,34 @@ class InMemoryRedis:
         keys = set(self._data.keys()) | set(self._sets.keys())
         return len(keys)
 
+    def publish(self, channel, message):
+        with self._pubsub_lock:
+            subscribers = list(self._subscribers.get(channel, []))
+
+        for subscriber in subscribers:
+            subscriber._enqueue(channel, message)
+
+        return len(subscribers)
+
+    def pubsub(self):
+        return InMemoryPubSub(self)
+
+    def _register_subscriber(self, channel, subscriber):
+        with self._pubsub_lock:
+            listeners = self._subscribers.setdefault(channel, [])
+            if subscriber not in listeners:
+                listeners.append(subscriber)
+
+    def _unregister_subscriber(self, channel, subscriber):
+        with self._pubsub_lock:
+            listeners = self._subscribers.get(channel)
+            if not listeners:
+                return
+            if subscriber in listeners:
+                listeners.remove(subscriber)
+            if not listeners:
+                self._subscribers.pop(channel, None)
+
 
 class InMemoryPipeline:
     def __init__(self, client):
@@ -102,6 +133,51 @@ class InMemoryPipeline:
                 results.append(self._client.expire(key, seconds))
         self._commands.clear()
         return results
+
+
+class InMemoryPubSub:
+    def __init__(self, client):
+        self._client = client
+        self._channels = set()
+        self._messages = []
+        self._messages_lock = threading.Lock()
+
+    def subscribe(self, *channels):
+        for channel in channels:
+            self._channels.add(channel)
+            self._client._register_subscriber(channel, self)
+
+    def unsubscribe(self, *channels):
+        target_channels = channels or tuple(self._channels)
+        for channel in target_channels:
+            if channel in self._channels:
+                self._channels.remove(channel)
+                self._client._unregister_subscriber(channel, self)
+
+    def _enqueue(self, channel, message):
+        with self._messages_lock:
+            self._messages.append({"type": "message", "channel": channel, "data": message})
+
+    def get_message(self, ignore_subscribe_messages=True, timeout: float = 0.0):
+        end_time: Optional[float] = None
+        if timeout and timeout > 0:
+            end_time = time.time() + timeout
+
+        while True:
+            with self._messages_lock:
+                if self._messages:
+                    return self._messages.pop(0)
+
+            if end_time is None:
+                return None
+
+            if time.time() >= end_time:
+                return None
+
+            time.sleep(0.01)
+
+    def close(self):
+        self.unsubscribe()
 
 
 def get_redis():

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Bot, ShieldCheck, Sparkles, Zap, Lock, Globe, Flash, Cloud } from "lucide-react";
+import { Bot, ShieldCheck, Sparkles, Zap, Lock, Globe, Cloud } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ToastLevel = "info" | "success" | "warning" | "error";
@@ -126,7 +126,7 @@ export default function Home() {
           </div>
           <p className="mt-4 text-sm leading-relaxed text-slate-300">Backend cold-start on Render: retries run automatically every 18 seconds, with a toast on transitions for live/sleep messages. If you see sleeping state for 30+, click Re-check backend.</p>
           <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200">
-            <Flash className="h-4 w-4 text-amber-300" /> Wake-up flow active
+            <Zap className="h-4 w-4 text-amber-300" /> Wake-up flow active
           </div>
         </section>
 

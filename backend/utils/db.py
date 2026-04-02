@@ -11,6 +11,9 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    logger.warning("⚠ DATABASE_URL not set — using SQLite in-memory fallback for local/test.")
+    DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 engine = None
 AsyncSessionLocal = None
@@ -22,47 +25,63 @@ if DATABASE_URL:
             async_sessionmaker,
             create_async_engine,
         )
+        from sqlalchemy.pool import NullPool
 
-        # asyncpg does NOT support sslmode or channel_binding as URL query params.
-        # Strip them and pass ssl=True via connect_args instead.
-        _parsed = urlparse(DATABASE_URL)
-        _params = parse_qs(_parsed.query)
-        _needs_ssl = _params.pop("sslmode", [None])[0] in (
-            "require",
-            "verify-ca",
-            "verify-full",
-            "prefer",
-        )
-        _params.pop("channel_binding", None)
-        _clean_query = urlencode({k: v[0] for k, v in _params.items()}, doseq=False)
-        _clean_url = urlunparse(_parsed._replace(query=_clean_query))
+        if DATABASE_URL.startswith("sqlite"):
+            # SQLite + aiosqlite (tests/local dev): simplified connection settings and no pooling
+            engine = create_async_engine(
+                DATABASE_URL,
+                echo=False,
+                future=True,
+                connect_args={"check_same_thread": False},
+                poolclass=NullPool,
+            )
+            AsyncSessionLocal = async_sessionmaker(
+                bind=engine,
+                expire_on_commit=False,
+                class_=AsyncSession,
+            )
+        else:
+            # asyncpg does NOT support sslmode or channel_binding as URL query params.
+            # Strip them and pass ssl=True via connect_args instead.
+            _parsed = urlparse(DATABASE_URL)
+            _params = parse_qs(_parsed.query)
+            _needs_ssl = _params.pop("sslmode", [None])[0] in (
+                "require",
+                "verify-ca",
+                "verify-full",
+                "prefer",
+            )
+            _params.pop("channel_binding", None)
+            _clean_query = urlencode({k: v[0] for k, v in _params.items()}, doseq=False)
+            _clean_url = urlunparse(_parsed._replace(query=_clean_query))
 
-        _connect_args = {
-            "command_timeout": 30, # Increased for complex AI queries
-            "server_settings": {"application_name": "GraftAI-SaaS"}
-        }
-        if _needs_ssl:
-            _connect_args["ssl"] = True
+            _connect_args = {
+                "command_timeout": 30, # Increased for complex AI queries
+                "server_settings": {"application_name": "GraftAI-SaaS"}
+            }
+            if _needs_ssl:
+                _connect_args["ssl"] = True
 
-        pool_size = int(os.getenv("DB_POOL_SIZE", "40"))
-        max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "120"))
+            pool_size = int(os.getenv("DB_POOL_SIZE", "40"))
+            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "120"))
 
-        engine = create_async_engine(
-            _clean_url,
-            echo=False,
-            future=True,
-            connect_args=_connect_args,
-            pool_pre_ping=True,
-            pool_recycle=300,  # Recycle before Neon auto-suspends (5m window)
-            pool_size=pool_size,
-            max_overflow=max_overflow,
-            pool_timeout=30,
-        )
-        AsyncSessionLocal = async_sessionmaker(
-            bind=engine,
-            expire_on_commit=False,
-            class_=AsyncSession,
-        )
+            engine = create_async_engine(
+                _clean_url,
+                echo=False,
+                future=True,
+                connect_args=_connect_args,
+                pool_pre_ping=True,
+                pool_recycle=300,  # Recycle before Neon auto-suspends (5m window)
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_timeout=30,
+            )
+            AsyncSessionLocal = async_sessionmaker(
+                bind=engine,
+                expire_on_commit=False,
+                class_=AsyncSession,
+            )
     except Exception as e:
         logger.error(f"⚠ Database engine creation failed: {type(e).__name__}")
 else:

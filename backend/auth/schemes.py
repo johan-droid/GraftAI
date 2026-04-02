@@ -5,12 +5,12 @@ from jwt import PyJWTError as JWTError
 from typing import Optional
 import os
 import httpx
-import redis
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 from backend.services.access_control import check_user_role
+from backend.services.redis_client import get_redis
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -41,16 +41,8 @@ NEON_AUTH_ORIGIN = f"{_parsed_neon.scheme}://{_parsed_neon.netloc}"
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
 AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
 
-# Redis client for token blacklist
-_redis_client = None
-
-
 def _get_redis_client():
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
+    return get_redis()
 
 
 def blacklist_token(token: str, expires_in: int):

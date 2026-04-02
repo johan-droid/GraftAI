@@ -8,7 +8,6 @@ import jwt
 from jwt import PyJWTError as JWTError
 from datetime import datetime, timedelta, timezone
 import os
-import redis
 import logging
 import uuid
 import json
@@ -21,6 +20,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+from backend.services.redis_client import get_redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
@@ -55,16 +55,8 @@ AUTH_METHODS = [
     if m.strip()
 ]
 
-# Redis client for refresh tokens and rate limiting
-_redis_client = None
-
-
 def _get_redis_client():
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
+    return get_redis()
 
 
 def get_rate_limiter(max_requests: int, window_seconds: int):

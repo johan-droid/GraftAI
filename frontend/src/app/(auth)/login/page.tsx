@@ -103,7 +103,7 @@ export default function LoginPage() {
   ];
 
   return (
-    <main className="app-shell page-with-floating-nav flex min-h-screen flex-col items-center justify-start px-4 pb-10 relative overflow-hidden">
+    <main className="app-shell flex min-h-screen flex-col items-center justify-start px-4 pb-10 relative overflow-hidden pt-12 md:pt-20">
 
       {/* Background Ambience */}
       <div className="hidden md:block absolute top-0 right-0 w-full h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
@@ -126,7 +126,7 @@ export default function LoginPage() {
 
         <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-2xl shadow-xl p-5 md:p-8">
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          <div className="grid grid-cols-2 gap-3 mb-5">
             <button
               onClick={() => handleOAuthLogin("google")}
               disabled={loading}

@@ -15,7 +15,7 @@ export function Navbar() {
   const pathname = usePathname();
   const isDashboard = pathname.startsWith("/dashboard");
 
-  if (isDashboard) return null;
+  if (isDashboard || pathname === "/login" || pathname === "/register") return null;
 
   return (
     <nav className="floating-nav">

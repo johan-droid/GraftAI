@@ -123,7 +123,7 @@ export default function Dashboard() {
       </header>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-6">
         <motion.div variants={itemVariants} className="bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-2xl p-4 md:p-6 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-5">
             <CalendarIcon className="w-12 h-12 md:w-16 md:h-16 text-primary" />

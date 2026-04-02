@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { magicLink } from "better-auth/plugins";
 import { Pool } from "pg";
 
 export const auth = betterAuth({
@@ -19,6 +20,14 @@ export const auth = betterAuth({
             clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
         }
     },
+    plugins: [
+        magicLink({
+            sendMagicLink: async ({ email, url, token }) => {
+                // In a real app, send an email here. For now, log it.
+                console.log(`Magic link for ${email}: ${url} (token: ${token})`);
+            }
+        })
+    ],
     trustedOrigins: [
         process.env.BETTER_AUTH_URL ||
         process.env.NEXT_PUBLIC_APP_URL ||
@@ -62,7 +71,6 @@ export const auth = betterAuth({
 
 const isVercel = process.env.VERCEL === "1";
 if (!process.env.BETTER_AUTH_SECRET && process.env.NODE_ENV === "production") {
-
     console.warn(
         "BETTER_AUTH_SECRET is not set. In Vercel deploys, set BETTER_AUTH_SECRET in Environment Variables (and/or set NEXTAUTH_SECRET as fallback)."
     );

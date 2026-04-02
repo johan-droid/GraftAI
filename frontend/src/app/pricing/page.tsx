@@ -200,7 +200,7 @@ export default function PricingPage() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full" />
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-6 py-24 lg:py-32">
+      <div className="page-with-floating-nav relative z-10 max-w-7xl mx-auto px-6 pb-24 lg:pb-32">
         <div className="text-center mb-20 space-y-4">
           <div className="flex justify-center gap-4 mb-4">
             <button 

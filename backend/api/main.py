@@ -6,6 +6,7 @@ import logging
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # Initialize logger
@@ -22,7 +23,7 @@ load_dotenv(dotenv_path=dotenv_path)
 
 from fastapi import FastAPI, Request, Depends, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 import redis
 
@@ -156,6 +157,32 @@ class CSRFMiddleware:
             return
 
         request = Request(scope)
+
+        # Fail-safe: Better Auth endpoints are expected to be served by frontend Next.js.
+        # If those requests hit backend, redirect them to frontend auth URL when available.
+        auth_path = request.url.path == "/api/auth" or request.url.path.startswith("/api/auth/")
+        if auth_path:
+            frontend_auth_base = (
+                os.getenv("FRONTEND_URL")
+                or os.getenv("BETTER_AUTH_URL")
+                or os.getenv("NEXT_PUBLIC_APP_URL")
+            )
+            if frontend_auth_base:
+                target = frontend_auth_base.rstrip("/")
+                parsed_target = urlparse(target)
+                incoming_host = request.url.netloc
+                target_host = parsed_target.netloc
+
+                # Avoid redirect loops if target and current host are identical.
+                if target_host and target_host != incoming_host:
+                    query = request.url.query
+                    redirect_url = f"{target}{request.url.path}"
+                    if query:
+                        redirect_url = f"{redirect_url}?{query}"
+                    response = RedirectResponse(url=redirect_url, status_code=307)
+                    await response(scope, receive, send)
+                    return
+
         # Allow test mode or explicit bypass to avoid blocking test client checks
         if os.getenv("TESTING") == "1" or os.getenv("DISABLE_CSRF") == "1":
             await self.app(scope, receive, send)
@@ -165,6 +192,12 @@ class CSRFMiddleware:
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
             # Skip check for specific bypasses if needed (e.g., Stripe webhooks which use signatures)
             if request.url.path.startswith("/api/v1/billing/webhook"):
+                await self.app(scope, receive, send)
+                return
+
+            # Better Auth endpoints are served by frontend Next.js route handlers.
+            # If a misrouted request reaches backend, do not block it with CSRF middleware.
+            if request.url.path == "/api/auth" or request.url.path.startswith("/api/auth/"):
                 await self.app(scope, receive, send)
                 return
 

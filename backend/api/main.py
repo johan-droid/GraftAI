@@ -25,6 +25,7 @@ from fastapi import FastAPI, Request, Depends, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 import redis
 
 from backend.auth.routes import router as auth_router
@@ -129,7 +130,13 @@ class RateLimitMiddleware:
             key = f"rate_limit:{identifier}:{request.url.path}"
 
             # Use eval to run the script atomically
-            allowed = client.eval(RATE_LIMIT_LUA, 1, key, self.max_requests, self.window)
+            allowed = client.eval(
+                RATE_LIMIT_LUA,
+                1,
+                key,
+                str(self.max_requests),
+                str(self.window),
+            )
 
             if not allowed:
                 # Rate limit exceeded
@@ -453,7 +460,7 @@ def health():
 async def readiness(db: AsyncSession = Depends(get_db)):
     # 1. Verify database connectivity
     try:
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
     except Exception as e:
         logger.error(f"Readiness DB check failed: {e}")
         raise HTTPException(status_code=503, detail="Database not ready")

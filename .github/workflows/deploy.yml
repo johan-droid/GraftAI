@@ -28,13 +28,15 @@ jobs:
         run: uv python install 3.12
       - name: Install dependencies
         working-directory: ./backend
-        run: uv sync --dev
+        run: |
+          uv venv .venv --python 3.12
+          uv pip install --python .venv/bin/python -r requirements.txt ruff
       - name: Lint with Ruff
         working-directory: ./backend
-        run: uv run ruff check .
+        run: .venv/bin/ruff check .
       - name: Run Tests
         working-directory: ./backend
-        run: uv run pytest
+        run: .venv/bin/pytest
         env:
           DATABASE_URL: "sqlite+aiosqlite:///:memory:" # Use in-memory mock for tests
           REDIS_URL: redis://localhost:6379/0

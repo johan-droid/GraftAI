@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "dev-all": "concurrently \"cd .. && python app.py\" \"next dev --webpack --port 3000\"",
+    "dev-all": "concurrently \"cd .. && .venv\\Scripts\\python.exe app.py\" \"next dev --webpack --port 3000\"",
     "build": "next build --webpack",
     "start": "next start --webpack",
     "lint": "eslint"

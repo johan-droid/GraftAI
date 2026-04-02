@@ -59,30 +59,36 @@ async def upload_file(
         )
 
     # 3. Generate Secure Filename (UUID)
-    extension = Path(file.filename).suffix
-    if not extension or len(extension) > 10:
-        # Fallback if no extension or suspicious extension
-        extension = ".dat"
-
+    from backend.services.storage import storage
+    extension = Path(file.filename).suffix or ".dat"
     secure_filename = f"{uuid.uuid4()}{extension}"
-    user_upload_dir = UPLOAD_DIR / str(user_id)
-    user_upload_dir.mkdir(exist_ok=True)
+    remote_path = f"{user_id}/{secure_filename}"
 
-    file_path = user_upload_dir / secure_filename
-
-    # 4. Save File securely
+    # 4. Save File via Storage Service (Cloud-Streaming)
     try:
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # We need to seek back to 0 just in case it was moved
+        file.file.seek(0)
+        upload_key = await storage.upload_file(
+            file.file, 
+            remote_path, 
+            file.content_type
+        )
+        if not upload_key:
+            raise Exception("Storage service rejected upload")
     except Exception as e:
+        logger.error(f"Upload failed for user {user_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not save file.",
+            detail="Could not save file to storage service.",
         )
+
+    # 5. Generate secure retrieval URL
+    access_url = storage.get_presigned_url(upload_key)
 
     return {
         "filename": secure_filename,
         "content_type": file.content_type,
         "size": file_size,
-        "path": f"/api/v1/uploads/{user_id}/{secure_filename}",
+        "key": upload_key,
+        "url": access_url
     }

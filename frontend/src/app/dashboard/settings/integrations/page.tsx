@@ -59,8 +59,9 @@ export default function IntegrationsPage() {
   }, []);
 
   const handleConnect = (providerId: string) => {
-    const currentPath = window.location.pathname;
-    window.location.href = `/auth/sso/start?provider=${providerId}&redirect_to=${currentPath}`;
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+    const url = `/auth/sso/start?provider=${providerId}&redirect_to=${currentPath}`;
+    window.location.assign(url);
   };
 
   const containerVariants = {
@@ -160,7 +161,7 @@ export default function IntegrationsPage() {
             Security & Data Sovereignty
           </h4>
           <p className="text-xs text-slate-400 leading-relaxed">
-            GraftAI utilizes scoped OAuth 2.0 signatures to interact with your services. Your credentials never leave the provider's secure enclave, and all session tokens are rotated automatically.
+            GraftAI utilizes scoped OAuth 2.0 signatures to interact with your services. Your credentials never leave the provider&apos;s secure enclave, and all session tokens are rotated automatically.
           </p>
         </div>
       </div>

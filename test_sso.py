@@ -2,7 +2,7 @@ import httpx
 import asyncio
 import urllib.parse
 
-async def test():
+async def async_sso_probe():
     # Make a request to the backend with fake code and state
     state = "fake_state"
     code = "fake_code"
@@ -18,4 +18,6 @@ async def test():
     except Exception as e:
         print("Exception:", e)
 
-asyncio.run(test())
+
+if __name__ == "__main__":
+    asyncio.run(async_sso_probe())

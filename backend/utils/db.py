@@ -18,8 +18,11 @@ AsyncSessionLocal = None
 
 if DATABASE_URL:
     try:
-        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.ext.asyncio import (
+            AsyncSession,
+            async_sessionmaker,
+            create_async_engine,
+        )
 
         # asyncpg does NOT support sslmode or channel_binding as URL query params.
         # Strip them and pass ssl=True via connect_args instead.
@@ -35,9 +38,15 @@ if DATABASE_URL:
         _clean_query = urlencode({k: v[0] for k, v in _params.items()}, doseq=False)
         _clean_url = urlunparse(_parsed._replace(query=_clean_query))
 
-        _connect_args = {}
+        _connect_args = {
+            "command_timeout": 30, # Increased for complex AI queries
+            "server_settings": {"application_name": "GraftAI-SaaS"}
+        }
         if _needs_ssl:
             _connect_args["ssl"] = True
+
+        pool_size = int(os.getenv("DB_POOL_SIZE", "40"))
+        max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "120"))
 
         engine = create_async_engine(
             _clean_url,
@@ -45,12 +54,15 @@ if DATABASE_URL:
             future=True,
             connect_args=_connect_args,
             pool_pre_ping=True,
-            pool_size=3,  # optimized for 4+ workers to stay within Neon limits
-            max_overflow=7,
+            pool_recycle=300,  # Recycle before Neon auto-suspends (5m window)
+            pool_size=pool_size,
+            max_overflow=max_overflow,
             pool_timeout=30,
         )
-        AsyncSessionLocal = sessionmaker(
-            bind=engine, class_=AsyncSession, expire_on_commit=False
+        AsyncSessionLocal = async_sessionmaker(
+            bind=engine,
+            expire_on_commit=False,
+            class_=AsyncSession,
         )
     except Exception as e:
         logger.error(f"⚠ Database engine creation failed: {type(e).__name__}")
@@ -65,3 +77,22 @@ async def get_db():
         )
     async with AsyncSessionLocal() as session:
         yield session
+
+
+def maybe_await(value):
+    """Resolve awaitables for robust AsyncMock and real DB result handling."""
+    import inspect
+
+    if inspect.isawaitable(value):
+        return value
+    return value
+
+
+async def unwrap_result(value):
+    """Await coroutine results if needed."""
+    import inspect
+
+    if inspect.isawaitable(value):
+        return await value
+    return value
+

@@ -1,5 +1,44 @@
 "use client";
 
+interface RazorpayInstance {
+  open: () => void;
+  on: (event: string, callback: (response: {
+    razorpay_payment_id: string;
+    razorpay_subscription_id: string;
+    razorpay_signature: string;
+  }) => void) => void;
+}
+
+interface RazorpayOptions {
+  key?: string;
+  subscription_id: string;
+  name: string;
+  description?: string;
+  handler: (response: {
+    razorpay_payment_id: string;
+    razorpay_subscription_id: string;
+    razorpay_signature: string;
+  }) => void;
+  prefill: {
+    name?: string;
+    email?: string;
+    contact?: string;
+  };
+  theme: {
+    color: string;
+  };
+}
+
+interface RazorpayGlobal {
+  new (options: RazorpayOptions): RazorpayInstance;
+}
+
+declare global {
+  interface Window {
+    Razorpay: RazorpayGlobal;
+  }
+}
+
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
@@ -11,8 +50,7 @@ import {
   Cpu, 
   Globe,
   ArrowRight,
-  Loader2,
-  MapPin
+  Loader2
 } from "lucide-react";
 import Script from "next/script";
 
@@ -107,17 +145,30 @@ export default function PricingPage() {
     try {
       if (region === 'IN') {
         // Initialize Razorpay
+        const publicKeyResponse = await fetch("/api/v1/billing/razorpay/public-key");
+        const publicKeyPayload = await publicKeyResponse.json();
+        const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || publicKeyPayload?.key_id;
+
+        if (!razorpayKey) {
+          throw new Error("Razorpay key isn't configured. Please set NEXT_PUBLIC_RAZORPAY_KEY_ID or RAZORPAY_KEY_ID on the server.");
+        }
+
         const res = await fetch("/api/v1/billing/razorpay/create-subscription?tier=" + tierId, { method: "POST" });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(`Razorpay subscription create failed: ${err.detail || res.statusText}`);
+        }
+
         const subscription = await res.json();
         
         const options = {
-          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          key: razorpayKey,
           subscription_id: subscription.id,
           name: "GraftAI",
           description: `${tierId.toUpperCase()} Edition Subscription`,
-          handler: function (response: any) {
+          handler: function (response: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) {
             console.log("RZP Payment Successful:", response);
-            window.location.href = "/dashboard/settings/billing?success=true";
+            window.location.assign("/dashboard/settings/billing?success=true");
           },
           prefill: {
             name: "GraftAI User",
@@ -126,7 +177,6 @@ export default function PricingPage() {
             color: "#4f46e5",
           },
         };
-        // @ts-expect-error
         const rzp = new window.Razorpay(options);
         rzp.open();
       } else {

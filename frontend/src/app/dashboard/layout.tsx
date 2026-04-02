@@ -24,7 +24,7 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { logout } = useAuthContext();
+  const { logout, user } = useAuthContext();
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden relative">
@@ -71,16 +71,16 @@ export default function DashboardLayout({
 
         <div className="p-4 border-t border-slate-800/50 space-y-4">
           {/* User Tier Badge */}
-          {useAuthContext().user?.tier && (
+          {user?.tier && (
              <div className={`mx-2 p-3 rounded-xl border flex items-center gap-3 ${
-                useAuthContext().user?.tier === 'free' 
+                user.tier === 'free' 
                 ? 'bg-slate-900/50 border-slate-800 text-slate-400' 
                 : 'bg-primary/5 border-primary/20 text-primary shadow-[0_0_15px_rgba(79,70,229,0.1)]'
              }`}>
-                {useAuthContext().user?.tier === 'free' ? <Zap className="w-4 h-4" /> : <Crown className="w-4 h-4" />}
+                {user.tier === 'free' ? <Zap className="w-4 h-4" /> : <Crown className="w-4 h-4" />}
                 <div className="flex flex-col">
                   <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">
-                    {useAuthContext().user?.tier} Edition
+                    {user.tier} Edition
                   </span>
                   <span className="text-[8px] font-medium opacity-60 leading-none">
                     Individual SaaS

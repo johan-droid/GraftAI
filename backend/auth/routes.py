@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse, JSONResponse, Response
+import secrets
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -177,9 +178,13 @@ def _create_jwt_token(sub: str, email: Optional[str] = None):
 
     # Register this specific access session in Redis
     session_key = f"active_session:{access_token[-20:]}"
-    client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, str(sub))
-
-    client.expire(f"user_tokens:{sub}", REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+    tokens_key = f"user_tokens:{sub}"
+    
+    pipe = client.pipeline()
+    pipe.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, str(sub))
+    pipe.sadd(tokens_key, refresh_token)
+    pipe.expire(tokens_key, REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+    pipe.execute()
 
     return {
         "access_token": access_token,
@@ -197,7 +202,7 @@ def _attach_jwt_cookies(response: Response, token_data: dict):
     # For HTTP localhost development, we must use SameSite=Lax instead.
     is_prod = os.getenv("NODE_ENV") == "production"
     is_https = os.getenv("PROTOCOL") == "https" or is_prod
-    
+
     # SameSite=None requires Secure flag. For HTTP localhost, use Lax.
     if is_https:
         same_site_value = "none"
@@ -214,6 +219,27 @@ def _attach_jwt_cookies(response: Response, token_data: dict):
         secure=secure_value,
         samesite=same_site_value,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="graftai_refresh_token",
+        value=token_data["refresh_token"],
+        httponly=True,
+        secure=secure_value,
+        samesite=same_site_value,
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/",
+    )
+
+    # Always ensure XSRF token is available for double-submit CSRF checks.
+    xsrf_token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key="xsrf-token",
+        value=xsrf_token,
+        httponly=False,
+        secure=secure_value,
+        samesite=same_site_value,
+        max_age=86400,
         path="/",
     )
     response.set_cookie(
@@ -248,7 +274,10 @@ async def login(
 
     tokens = _create_jwt_token(str(user.id), email=user.email)
     response = JSONResponse(
-        content={"token": tokens, "user": {"id": user.id, "email": user.email}}
+        content={
+            "message": "Login successful",
+            "user": {"id": user.id, "email": user.email}
+        }
     )
     _attach_jwt_cookies(response, tokens)
     return response
@@ -290,15 +319,15 @@ async def register(
             db.add(new_user)
             await db.flush()
             
-            # Send welcome email for new manual registration
+            # Offload welcome email to background worker
             try:
-                from backend.services.notifications import notify_welcome_email
-                await notify_welcome_email(
+                from backend.services.bg_tasks import enqueue_welcome_email
+                await enqueue_welcome_email(
                     user_email=email,
                     full_name=user_in.full_name or email.split("@")[0],
                 )
             except Exception as e:
-                logger.warning(f"Welcome email send failed for {email}: {e}")
+                logger.warning(f"Failed to enqueue welcome email in register: {e}")
     except Exception as e:
         logger.error(f"Registration failed: {type(e).__name__}")
         raise HTTPException(status_code=500, detail="Registration failed")
@@ -389,15 +418,15 @@ async def sso_callback(
                 db.add(user)
                 await db.flush()
                 
-                # Send welcome email ONLY for new users
+                # Offload welcome email to background worker
                 try:
-                    from backend.services.notifications import notify_welcome_email
-                    await notify_welcome_email(
+                    from backend.services.bg_tasks import enqueue_welcome_email
+                    await enqueue_welcome_email(
                         user_email=email,
                         full_name=user.full_name or profile.get("name", "User"),
                     )
                 except Exception as e:
-                    logger.warning(f"Welcome email send failed for {email}: {e}")
+                    logger.warning(f"Failed to enqueue welcome email in SSO callback: {e}")
             else:
                 user_id = str(user.id)
                 user.full_name = profile.get("name") or user.full_name
@@ -444,10 +473,21 @@ async def sso_callback(
                 json.dumps({"provider": provider_name, "token": token})
             )
 
+            # Remember this linked Google account in Redis so future logins can be smoother.
+            # This supporting data does not replace access/refresh token flow,
+            # but helps identify that user/account previously existed.
+            if email:
+                redis_client.setex(
+                    f"sso_remember:{provider_name}:{email.lower()}",
+                    timedelta(days=30),
+                    user_id,
+                )
+
         own_token = _create_jwt_token(user_id, email=email)
         response = JSONResponse(
             content={
-                "auth": {k: v for k, v in payload.items() if k != "token"}, # Don't leak provider token to frontend
+                "message": "SSO authentication successful",
+                "auth": {k: v for k, v in payload.items() if k != "token"},
                 "token": own_token,
                 "user_id": user_id,
                 "redirect_to": payload.get("redirect_to", "/dashboard"),
@@ -684,7 +724,24 @@ async def check_auth(
         user_data["consent_notifications"] = user.consent_notifications
         user_data["consent_ai_training"] = user.consent_ai_training
 
-    return {
+    # Ensure a readable XSRF cookie is present for the double-submit pattern.
+    # The cookie must NOT be HttpOnly so client-side JS can read it and include
+    # it in the `X-XSRF-TOKEN` header for mutating requests.
+    is_prod = os.getenv("NODE_ENV") == "production"
+    is_https = os.getenv("PROTOCOL") == "https" or is_prod
+
+    if is_https:
+        same_site_value = "none"
+        secure_value = True
+    else:
+        same_site_value = "lax"
+        secure_value = False
+
+    xsrf_token = request.cookies.get("xsrf-token")
+    if not xsrf_token:
+        xsrf_token = secrets.token_urlsafe(32)
+
+    content = {
         "authenticated": True,
         "user": user_data,
         "session": {
@@ -692,6 +749,19 @@ async def check_auth(
             "expires_at": current_user.get("exp")
         }
     }
+
+    response = JSONResponse(content=content)
+    response.set_cookie(
+        key="xsrf-token",
+        value=xsrf_token,
+        httponly=False,
+        secure=secure_value,
+        samesite=same_site_value,
+        max_age=86400,
+        path="/",
+    )
+
+    return response
 
 
 @router.post("/refresh")
@@ -737,9 +807,9 @@ def refresh_token(request: Request, payload: Optional[RefreshTokenRequest] = Non
     client.delete(f"refresh:{refresh_token_value}")
     client.srem(f"user_tokens:{user_id}", refresh_token_value)
 
-    # Generate new token pair
+    # Refresh tokens (Token Rotation is enforced)
     token_data = _create_jwt_token(user_id)
-    response = JSONResponse(content=token_data)
+    response = JSONResponse(content={"message": "Token refreshed successfully"})
     _attach_jwt_cookies(response, token_data)
     return response
 

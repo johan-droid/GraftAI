@@ -1,7 +1,12 @@
 import os
-import stripe
 import logging
 from typing import Optional, Dict, Any
+
+try:
+    import stripe
+except ImportError:
+    stripe = None
+    logging.getLogger(__name__).warning("Stripe package not installed; billing endpoints degraded.")
 from datetime import datetime
 
 from fastapi import HTTPException, status
@@ -13,7 +18,8 @@ from backend.models.tables import UserTable, UserTier
 logger = logging.getLogger(__name__)
 
 # Stripe Configuration
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+if stripe is not None:
+    stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 FRONTEND_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
 
@@ -23,6 +29,9 @@ STRIPE_PRICE_ELITE = os.getenv("STRIPE_PRICE_ELITE_ID")
 
 async def create_checkout_session(db: AsyncSession, user_id: str, tier: str) -> str:
     """Create a Stripe Checkout session for a specific tier."""
+    if stripe is None:
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
+
     result = await db.execute(select(UserTable).where(UserTable.id == user_id))
     user = result.scalars().first()
     
@@ -50,6 +59,9 @@ async def create_checkout_session(db: AsyncSession, user_id: str, tier: str) -> 
 
 async def create_portal_session(db: AsyncSession, user_id: str) -> str:
     """Create a Stripe Customer Portal session for subscription management."""
+    if stripe is None:
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
+
     result = await db.execute(select(UserTable).where(UserTable.id == user_id))
     user = result.scalars().first()
     
@@ -67,22 +79,39 @@ async def create_portal_session(db: AsyncSession, user_id: str) -> str:
         raise HTTPException(status_code=500, detail="Failed to create portal session")
 
 async def handle_webhook_event(db: AsyncSession, payload: bytes, sig_header: str):
-    """Handle incoming Stripe webhook events."""
+    """Handle incoming Stripe webhook events with idempotency check."""
+    if stripe is None:
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
+
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
     except Exception as e:
         logger.error(f"Webhook signature verification failed: {sig_header[:10]}... Error: {e}")
         raise ValueError("Invalid signature")
 
+    event_id = event["id"]
+    from backend.models.tables import ProcessedWebhook
+    
+    # 1. Check for duplicate webhook events
+    result = await db.execute(select(ProcessedWebhook).where(ProcessedWebhook.event_id == event_id))
+    if result.scalars().first():
+        logger.warning(f"⏩ Skipping already processed Stripe event: {event_id}")
+        return {"status": "already_processed"}
+
     event_type = event["type"]
     data_object = event["data"]["object"]
 
+    # 2. Process and Record (Atomic within caller or handled by internal begins)
     if event_type == "checkout.session.completed":
         await _handle_checkout_completed(db, data_object)
     elif event_type == "customer.subscription.updated":
         await _handle_subscription_updated(db, data_object)
     elif event_type == "customer.subscription.deleted":
         await _handle_subscription_deleted(db, data_object)
+    
+    # 3. Log as processed
+    db.add(ProcessedWebhook(event_id=event_id, provider="stripe"))
+    await db.commit()
     
     return {"status": "success"}
 

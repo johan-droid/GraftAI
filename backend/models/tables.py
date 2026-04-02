@@ -7,6 +7,8 @@ from sqlalchemy import (
     ForeignKey,
     func,
     Text,
+    UniqueConstraint,
+    Index,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -71,6 +73,7 @@ class EventTable(Base):
     
     __table_args__ = (
         UniqueConstraint("user_id", "external_id", name="uq_user_external_id"),
+        Index("idx_events_user_time_range", "user_id", "start_time", "end_time"),
     )
 
     title = Column(String(512), nullable=False)
@@ -109,3 +112,14 @@ class EventTable(Base):
 
     # Relationships
     user = relationship("UserTable", back_populates="events")
+
+class ProcessedWebhook(Base):
+    """
+    Idempotency table for tracking processed Stripe/Razorpay webhook events.
+    Prevents duplicate processing of retried webhooks.
+    """
+    __tablename__ = "processed_webhooks"
+    
+    event_id = Column(String(255), primary_key=True)
+    provider = Column(String(50), nullable=False) # stripe, razorpay
+    processed_at = Column(DateTime(timezone=True), server_default=func.now())

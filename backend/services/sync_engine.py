@@ -190,3 +190,31 @@ async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
     except Exception as e:
         logger.error(f"Microsoft Sync FAILED for user {user_id}: {e}")
         await db.rollback()
+
+async def sync_user_calendar(db: AsyncSession, user_id: str):
+    """
+    High-level orchestrator to sync ALL active integrations for a user.
+    Designed to be called from a background task worker.
+    """
+    logger.info(f"🔄 Starting full calendar sync orchestration for user {user_id}")
+    
+    # Fetch all active tokens for this user
+    stmt = select(UserTokenTable).where(
+        and_(UserTokenTable.user_id == user_id, UserTokenTable.is_active == True)
+    )
+    result = await db.execute(stmt)
+    tokens = result.scalars().all()
+    
+    if not tokens:
+        logger.warning(f"⚠️ No active integrations found for user {user_id}. Skipping sync.")
+        return
+
+    for token in tokens:
+        if token.provider == "google":
+            await sync_google_events(db, token)
+        elif token.provider == "microsoft":
+            await sync_ms_graph_events(db, token)
+        else:
+            logger.warning(f"❓ Unknown provider '{token.provider}' for token {token.id}")
+
+    logger.info(f"✨ Orchestration completed for user {user_id}")

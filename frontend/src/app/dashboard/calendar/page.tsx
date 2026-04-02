@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ChevronLeft, 
   ChevronRight, 
   Plus, 
-  Settings, 
-  Calendar as CalendarIcon, 
   Clock, 
   MapPin, 
   Trash2, 
@@ -25,7 +23,6 @@ import {
   createEvent, 
   updateEvent, 
   deleteEvent, 
-  getAvailableSlots, 
   CalendarEvent as Event,
   manualSync,
 } from "@/lib/api";
@@ -50,14 +47,14 @@ export default function PremiumCalendarPage() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [isCreating, setIsCreating] = useState(false);
+
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Coordination State
   const [coordinationMode, setCoordinationMode] = useState(false);
   const [targetTimezone, setTargetTimezone] = useState("UTC");
 
-  const { days, startDate, endDate } = useMemo(() => {
+  const { days } = useMemo(() => {
     const monthStartCalc = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const monthEndCalc = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
     const startDateCalc = new Date(monthStartCalc);
@@ -73,19 +70,24 @@ export default function PremiumCalendarPage() {
     }
 
     return {
-      startDate: startDateCalc,
-      endDate: endDateCalc,
       days: list,
     };
   }, [currentDate]);
 
 
   // Fetch events for current month range
-  const fetchEventsData = async () => {
+  const fetchEventsData = useCallback(async () => {
     setLoading(true);
     try {
-      const startISO = startDate.toISOString();
-      const endISO = endDate.toISOString();
+      const monthStartCalc = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const monthEndCalc = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      const startDateCalc = new Date(monthStartCalc);
+      startDateCalc.setDate(startDateCalc.getDate() - monthStartCalc.getDay());
+      const endDateCalc = new Date(monthEndCalc);
+      endDateCalc.setDate(endDateCalc.getDate() + (6 - monthEndCalc.getDay()));
+
+      const startISO = startDateCalc.toISOString();
+      const endISO = endDateCalc.toISOString();
       const data = await getEvents(startISO, endISO);
       setEvents(data);
     } catch (err) {
@@ -93,11 +95,11 @@ export default function PremiumCalendarPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentDate]);
 
   useEffect(() => {
     fetchEventsData();
-  }, [currentDate]);
+  }, [fetchEventsData]);
 
 
   const toggleMonth = (dir: "prev" | "next") => {
@@ -145,8 +147,6 @@ export default function PremiumCalendarPage() {
     e.preventDefault();
     if(!selectedDate) return;
 
-    setIsCreating(true);
-
     const newEventData: Partial<Event> = {
       title: "New AI Synced Meeting",
       description: "Auto-generated and fed into LLM vector memory.",
@@ -163,9 +163,7 @@ export default function PremiumCalendarPage() {
       setEvents(prev => [...prev, created]);
     } catch (err) {
       console.error("Create failed:", err);
-    } finally {
-      setIsCreating(false);
-    }
+    } 
   };
   
   const handleManualSync = async () => {
@@ -223,11 +221,11 @@ export default function PremiumCalendarPage() {
                 {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
               </h2>
               <div className="flex gap-1.5 p-1 bg-slate-900/60 rounded-xl border border-slate-800">
-                <button onClick={() => toggleMonth("prev")} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                <button aria-label="Previous month" onClick={() => toggleMonth("prev")} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
                    <ChevronLeft className="w-4 h-4 text-slate-400" />
                 </button>
                 <div className="w-[1px] bg-slate-800 my-1 mx-0.5" />
-                <button onClick={() => toggleMonth("next")} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                <button aria-label="Next month" onClick={() => toggleMonth("next")} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
                    <ChevronRight className="w-4 h-4 text-slate-400" />
                 </button>
               </div>
@@ -274,7 +272,7 @@ export default function PremiumCalendarPage() {
                     {/* Event Dots Under Dates */}
                     <div className="flex gap-1 mt-1 justify-center min-h-[4px]">
                       {dayEvents.slice(0, 3).map(e => (
-                        <div key={e.id} className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full ${CATEGORIES[e.category]?.dot || "bg-slate-400"}`} />
+                        <div key={e.id} className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full ${CATEGORIES[e.category as CalendarCategory]?.dot || "bg-slate-400"}`} />
                       ))}
                     </div>
 
@@ -337,9 +335,11 @@ export default function PremiumCalendarPage() {
                       className="space-y-4 overflow-hidden relative"
                     >
                       <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-[#333537]/30 to-transparent mb-4" />
-                      <label className="text-[10px] text-slate-500 font-black uppercase tracking-wider block">Target Timezone</label>
+                      <label htmlFor="target-timezone-select" className="text-[10px] text-slate-500 font-black uppercase tracking-wider block">Target Timezone</label>
                       <div className="relative">
                         <select 
+                          id="target-timezone-select"
+                          aria-label="Target timezone"
                           value={targetTimezone}
                           onChange={(e) => setTargetTimezone(e.target.value)}
                           className="w-full bg-[#121416] border border-[#333537]/40 rounded-2xl px-5 py-4 text-sm font-bold text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer hover:border-primary/30"
@@ -416,7 +416,7 @@ export default function PremiumCalendarPage() {
                    </h3>
                    <p className="text-slate-400 font-medium">Daily agenda breakdown</p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
+                <button aria-label="Close calendar modal" onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
                    <X className="w-6 h-6 text-white" />
                 </button>
               </div>
@@ -439,7 +439,7 @@ export default function PremiumCalendarPage() {
                         <div className="flex items-start justify-between gap-4">
                            <div className="space-y-2">
                              <div className="flex items-center gap-2">
-                               <span className={`text-xs font-bold uppercase tracking-widest ${CATEGORIES[evt.category]?.dot.replace("bg-", "text-")}`}>
+                                <span className={`text-xs font-bold uppercase tracking-widest ${CATEGORIES[evt.category]?.dot.replace("bg-", "text-")}`}>    
                                  {evt.category}
                                </span>
                                <span className="w-1 h-1 bg-slate-700 rounded-full" />
@@ -466,6 +466,7 @@ export default function PremiumCalendarPage() {
                            
                            <div className="flex gap-2">
                               <button 
+                                aria-label="Edit event"
                                 onClick={() => setEditingEvent(evt)}
                                 className="p-3 bg-slate-900 border border-slate-800 rounded-xl hover:bg-primary/20 hover:border-primary/40 transition-all"
                               >
@@ -520,15 +521,16 @@ export default function PremiumCalendarPage() {
                       <h3 className="text-2xl font-bold text-white flex items-center gap-3">
                         <Edit3 className="w-6 h-6 text-primary" /> Edit Schedule
                       </h3>
-                      <button type="button" onClick={() => setEditingEvent(null)} className="p-2 hover:bg-slate-800 rounded-full">
+                      <button type="button" aria-label="Close edit event dialog" onClick={() => setEditingEvent(null)} className="p-2 hover:bg-slate-800 rounded-full">
                          <X className="w-6 h-6 text-slate-500" />
                       </button>
                    </div>
 
                    <div className="space-y-4">
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-2 block">Event Title</label>
+                        <label htmlFor="event-title-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-2 block">Event Title</label>
                         <input 
+                          id="event-title-input"
                           type="text" 
                           value={editingEvent.title}
                           onChange={(e) => setEditingEvent({...editingEvent, title: e.target.value})}
@@ -536,8 +538,9 @@ export default function PremiumCalendarPage() {
                         />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-2 block">Description</label>
+                        <label htmlFor="event-description-textarea" className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-2 block">Description</label>
                         <textarea 
+                           id="event-description-textarea"
                            rows={3}
                            value={editingEvent.description}
                            onChange={(e) => setEditingEvent({...editingEvent, description: e.target.value})}
@@ -546,8 +549,9 @@ export default function PremiumCalendarPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                          <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-2 block">Status</label>
+                            <label htmlFor="event-status-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-2 block">Status</label>
                             <select 
+                               id="event-status-select"
                                value={editingEvent.status}
                                onChange={(e) => setEditingEvent({...editingEvent, status: e.target.value})}
                                className="w-full bg-slate-950 border border-slate-800 rounded-full px-8 py-4 text-white focus:outline-none focus:border-primary appearance-none shadow-inner"
@@ -558,8 +562,9 @@ export default function PremiumCalendarPage() {
                             </select>
                          </div>
                          <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-2 block">Category</label>
+                            <label htmlFor="event-category-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-2 block">Category</label>
                             <select 
+                               id="event-category-select"
                                value={editingEvent.category}
                                onChange={(e) => setEditingEvent({...editingEvent, category: e.target.value as CalendarCategory})}
                                className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-primary appearance-none"
@@ -573,6 +578,7 @@ export default function PremiumCalendarPage() {
                    <div className="pt-6 flex gap-3">
                       <button 
                          type="button" 
+                       aria-label="Delete event"
                          onClick={() => handleDeleteEvent(editingEvent.id)}
                          className="px-6 py-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm"
                       >

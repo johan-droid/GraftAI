@@ -55,6 +55,17 @@ async def rzp_create_subscription(
     subscription = await razorpay_service.create_subscription(db, user_id, tier)
     return subscription
 
+
+@router.get("/razorpay/public-key")
+async def rzp_public_key(
+    user_id: str = Depends(get_current_user_id)
+):
+    """Fetch the public Razorpay key ID (safe to expose)."""
+    key_id = razorpay_service.RAZORPAY_KEY_ID
+    if not key_id:
+        raise HTTPException(status_code=500, detail="Razorpay public key is not configured")
+    return {"key_id": key_id}
+
 @router.post("/razorpay/webhook")
 async def rzp_webhook(
     request: Request,

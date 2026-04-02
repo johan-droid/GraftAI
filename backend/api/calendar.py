@@ -127,20 +127,46 @@ async def delete_event(
         raise HTTPException(status_code=404, detail="Event not found")
     return None
 
-    tokens = result.scalars().all()
-    
-    if not tokens:
-        return {"status": "ok", "message": "No active integrations found", "synced_count": 0}
-        
-    # 2. Trigger sync for each provider
-    for token in tokens:
+@router.post("/sync")
+async def trigger_manual_sync(
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Trigger a manual synchronization of all external calendars.
+    Offloaded to background worker for performance.
+    Falls back to inline sync when background queue is unavailable.
+    """
+    from backend.services.sync_engine import sync_user_calendar
+
+    try:
+        from backend.services.bg_tasks import enqueue_calendar_sync
+        await enqueue_calendar_sync(user_id)
+        return {"status": "accepted", "message": "Synchronization task enqueued"}
+    except Exception as enqueue_error:
+        logger.warning(
+            f"Background sync queue unavailable for user {user_id}: {enqueue_error}. Falling back to inline sync."
+        )
+
+        from backend.utils.db import AsyncSessionLocal
+        if AsyncSessionLocal is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Background queue unavailable and database session factory is not configured.",
+            )
+
         try:
-            if token.provider == "google":
-                await sync_engine.sync_google_events(db, token)
-            elif token.provider == "microsoft":
-                await sync_engine.sync_ms_graph_events(db, token)
-        except Exception as e:
-            logger.error(f"Manual sync failed for {token.provider}: {e}")
-            
-    await db.commit()
-    return {"status": "ok", "message": "Synchronization complete", "synced_count": len(tokens)}
+            async with AsyncSessionLocal() as db:
+                await sync_user_calendar(db, user_id)
+            return {
+                "status": "ok",
+                "message": "Background queue unavailable; inline sync performed successfully.",
+            }
+        except Exception as inline_error:
+            logger.error(
+                f"Inline fallback sync failed for user {user_id}: {inline_error}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Could not trigger synchronization: {enqueue_error}. Inline fallback also failed: {inline_error}",
+            )

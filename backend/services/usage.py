@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from backend.utils.db import get_db
+from backend.utils.db import get_db, unwrap_result
 from backend.models.tables import UserTable, UserTier
 from backend.auth.schemes import get_current_user_id
 
@@ -54,7 +54,8 @@ def check_usage_limit(feature: str):
         db: AsyncSession = Depends(get_db)
     ) -> bool:
         result = await db.execute(select(UserTable).where(UserTable.id == user_id))
-        user = result.scalars().first()
+        scalars = await unwrap_result(result.scalars())
+        user = await unwrap_result(scalars.first())
         
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -92,7 +93,8 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str):
     """Increment the daily usage counter for a specific feature."""
     async with db.begin():
         result = await db.execute(select(UserTable).where(UserTable.id == user_id))
-        user = result.scalars().first()
+        scalars = await unwrap_result(result.scalars())
+        user = await unwrap_result(scalars.first())
         if user:
             if feature == "ai_messages":
                 user.daily_ai_count += 1

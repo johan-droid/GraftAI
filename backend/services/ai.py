@@ -45,6 +45,9 @@ class AIResponse(BaseModel):
 
 async def _generate_with_groq(system_prompt: str, user_input: str) -> str:
     """Helper for direct Groq API access if configured."""
+    if AsyncGroq is None:
+        raise RuntimeError("groq package is not installed")
+
     client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
     chat_completion = await client.chat.completions.create(
         messages=[
@@ -53,7 +56,7 @@ async def _generate_with_groq(system_prompt: str, user_input: str) -> str:
         ],
         model="llama-3.3-70b-versatile",
     )
-    return chat_completion.choices[0].message.content
+    return chat_completion.choices[0].message.content or ""
 
 def _get_schedule_context(events):
     header = "Your Real-Time Schedule (GROUND TRUTH):\n"
@@ -89,6 +92,7 @@ async def ai_chat(
             user_name = user.full_name or "User"
             user_email = user.email
 
+        window_start = current_time
         window_end = current_time + timedelta(hours=24)
         todays_events = await scheduler.get_events_for_range(
             db, user_id, window_start, window_end
@@ -107,6 +111,10 @@ async def ai_chat(
     except Exception as e:
         logger.warning(f"Could not fetch proactive context (Schedule/Email): {e}")
 
+    # STABLE CONTEXT for caching: Use hourly precision for 'Today's Date' in system reasoning 
+    # to allow cache hits within the same hour while maintaining scheduling accuracy.
+    stable_now = current_time.replace(minute=0, second=0, microsecond=0)
+
     system_reasoning = f"""
     IDENTITY: 
     You are GraftAI, the world's most advanced AI Scheduling Copilot. 
@@ -118,7 +126,7 @@ async def ai_chat(
     3. If asked about outside topics, politely decline and steer back to the schedule.
 
     DOMAIN KNOWLEDGE:
-    Today's Date: {current_time.strftime('%Y-%m-%d %H:%M:%S')}
+    Today's Date: {stable_now.strftime('%Y-%m-%d %H:00:00')}
     User Timezone: {request.timezone}
     User Name: {user_name}
     User Email: {user_email}
@@ -138,11 +146,14 @@ async def ai_chat(
 
     user_input = f"User Message: {request.prompt}"
     
-    # Simple cache logic
-    cache_key = "ai_cache:" + hashlib.sha256(f"{system_reasoning}|{user_input}".encode()).hexdigest()
+    # Optimized cache logic: Hash system_reasoning (stable per hour) + prompt
+    cache_key_data = f"{user_id}:{system_reasoning}:{request.prompt}"
+    cache_key = "ai_cache:" + hashlib.sha256(cache_key_data.encode()).hexdigest()
+    
     cached = get_cache(cache_key)
     if cached:
-        return AIResponse(result=cached, model_used="cache-hit")
+        logger.info(f"💾 AI Cache Hit for user {user_id}")
+        return AIResponse(result=str(cached), model_used="cache-hit")
 
     # Generate
     try:

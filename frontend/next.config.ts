@@ -9,18 +9,19 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   async rewrites() {
+    const backendBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
     return [
       {
         source: "/api/:path*",
-        destination: "http://127.0.0.1:8000/api/:path*",
+        destination: `${backendBaseUrl}/api/:path*`,
       },
       {
         source: "/auth/:path*",
-        destination: "http://127.0.0.1:8000/auth/:path*",
+        destination: `${backendBaseUrl}/auth/:path*`,
       },
       {
         source: "/health",
-        destination: "http://127.0.0.1:8000/health",
+        destination: `${backendBaseUrl}/health`,
       },
     ];
   },

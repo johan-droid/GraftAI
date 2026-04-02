@@ -82,13 +82,37 @@ def verify_webhook_signature(payload: bytes, signature: str) -> bool:
         return False
 
 async def handle_webhook_event(db: AsyncSession, event_data: Dict[str, Any]):
-    """Handle incoming Razorpay webhook events."""
+    """Handle incoming Razorpay webhook events with idempotency check."""
+    event_id = event_data.get("id")
+    if not event_id:
+        logger.warning("Razorpay webhook missing ID, skipping idempotency check.")
+        return await _process_razorpay_event(db, event_data)
+
+    from backend.models.tables import ProcessedWebhook
+    
+    # 1. Check for duplicate webhook events
+    result = await db.execute(select(ProcessedWebhook).where(ProcessedWebhook.event_id == event_id))
+    if result.scalars().first():
+        logger.warning(f"⏩ Skipping already processed Razorpay event: {event_id}")
+        return {"status": "already_processed"}
+
+    # 2. Process event
+    response = await _process_razorpay_event(db, event_data)
+
+    # 3. Log as processed
+    db.add(ProcessedWebhook(event_id=event_id, provider="razorpay"))
+    await db.commit()
+    
+    return response
+
+async def _process_razorpay_event(db: AsyncSession, event_data: Dict[str, Any]):
+    """Internal helper to route the actual Razorpay event type."""
     event_type = event_data.get("event")
     payload = event_data.get("payload", {})
     
     if event_type == "subscription.activated":
         await _handle_subscription_activated(db, payload.get("subscription", {}).get("entity", {}))
-    elif event_type == "subscription.halted" or event_type == "subscription.cancelled":
+    elif event_type in ("subscription.halted", "subscription.cancelled"):
         await _handle_subscription_cancelled(db, payload.get("subscription", {}).get("entity", {}))
     
     return {"status": "success"}

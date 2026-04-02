@@ -1,0 +1,40 @@
+
+> frontend@0.1.0 lint
+> eslint
+
+
+D:\GraftAI\frontend\src\app\dashboard\calendar\page.tsx
+  50:10  warning  'isCreating' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  50:22  warning  'setIsCreating' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\GraftAI\frontend\src\app\pricing\page.tsx
+  5:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\GraftAI\frontend\src\lib\api-client.ts
+   11:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   16:9   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   18:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   98:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  112:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  112:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  118:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\GraftAI\frontend\src\lib\auth-client.ts
+   20:16  warning  'parseJsonResponse' is defined but never used  @typescript-eslint/no-unused-vars
+  105:21  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  136:21  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  145:21  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  158:19  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+
+D:\GraftAI\frontend\src\lib\auth-server.ts
+  65:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+
+✖ 22 problems (18 errors, 4 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+

@@ -3,18 +3,23 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, Suspense, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
+import { composeEndpoint } from "@/lib/api-client";
 import { useAuthContext } from "@/app/providers/auth-provider";
 
 function AuthCallbackInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuthContext();
   const [status, setStatus] = useState("Processing...");
 
   const code = searchParams.get("code");
   const state = searchParams.get("state");
+
+  const safeReplace = (path: string) => {
+    if (typeof window !== "undefined") {
+      window.location.replace(path);
+    }
+  };
 
   const hasFetched = useRef(false);
   
@@ -23,14 +28,14 @@ function AuthCallbackInner() {
       if (hasFetched.current) return;
       hasFetched.current = true;
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || API_BASE_URL;
         if (code && state) {
           setStatus("Authenticating with OAuth provider...");
           
           // First, store the token from URL params to preserve it during the fetch
           // The backend will set cookies, but we also need to capture the access_token
+          const callbackPath = composeEndpoint("/auth/sso/callback", true);
           const response = await fetch(
-            `${backendUrl}/api/v1/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
+            `${callbackPath}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
             {
               method: "GET",
               headers: { 
@@ -52,7 +57,7 @@ function AuthCallbackInner() {
             ) {
               setStatus("Session expired during OAuth. Redirecting to login...");
               sessionStorage.removeItem("oauth_in_progress");
-              setTimeout(() => router.replace("/login"), 1500);
+              setTimeout(() => safeReplace("/login"), 1500);
               return;
             }
 
@@ -66,32 +71,32 @@ function AuthCallbackInner() {
             // Login will store the token and refresh the session
             await login(data.token.access_token);
             // Use the redirect_to from backend, default to /dashboard
-            router.replace(data.redirect_to || "/dashboard");
+            safeReplace(data.redirect_to || "/dashboard");
             return;
           }
           
           if (response.status === 401 || response.status === 403) {
             setStatus("Authentication expired or not allowed. Please login again.");
-            setTimeout(() => router.replace("/login"), 1000);
+            setTimeout(() => safeReplace("/login"), 1000);
             return;
           }
           
           setStatus(data.detail || "Authentication failed");
-          setTimeout(() => router.replace("/login"), 2000);
+          setTimeout(() => safeReplace("/login"), 2000);
           return;
         } else {
           setStatus("No active session found. Redirecting to login...");
-          setTimeout(() => router.replace("/login"), 2000);
+          setTimeout(() => safeReplace("/login"), 2000);
         }
       } catch (err) {
         console.error("Auth callback failure:", err);
         setStatus(`Error: ${err instanceof Error ? err.message : "Authentication failed"}`);
-        setTimeout(() => router.replace("/login"), 3000);
+        setTimeout(() => safeReplace("/login"), 3000);
       }
     };
 
     handleSync();
-  }, [code, state, router, login]);
+  }, [code, state, login]);
 
   return (
     <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">

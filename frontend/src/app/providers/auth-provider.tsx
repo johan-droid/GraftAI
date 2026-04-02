@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext } from "react";
 import { getSessionSafe, signOut } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
 
 type User = {
   id: string;
@@ -27,35 +26,41 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const [session, setSession] = React.useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = React.useState(true);
+
+  const redirectToLogin = React.useCallback(() => {
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.replace("/login");
+    }
+  }, []);
 
   React.useEffect(() => {
     let active = true;
 
     async function loadSession() {
+      // Keep loading until we get a definitive non-network answer.
       setLoading(true);
       try {
         const response = await getSessionSafe();
         if (!active) return;
-        
+
         if (response?.data) {
           setSession(response.data);
+          setLoading(false);
         } else if (response?.error) {
-          // If it's a network error (TypeEror/Aborted), don't clear session or redirect
-          // This prevents background glitches from kicking users out
-          // @ts-expect-error - added isNetworkError in auth-client
           if (response.isNetworkError) {
-            console.debug("Session check encountered a network glitch, retaining current session.");
+            console.debug("Session check encountered a network glitch; retrying without kicking user out.");
+            // Keep prior session state (do not set null) and keep loading until next heartbeat.
             return;
           }
           setSession(null);
+          setLoading(false);
         }
       } catch (err) {
         console.error("Session load failure", err);
-      } finally {
-        if (active) setLoading(false);
+        // Full fallback: do not log out on transient backend startup failures
+        return;
       }
     }
 
@@ -78,10 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // If we're on the auth-callback page, login page, or in OAuth flow, don't force redirect to login
       // The callback page will handle the session establishment
       if (!isAuthCallback && !isLoginPage && !oauthInProgress) {
-        router.replace("/login");
+        redirectToLogin();
       }
     }
-  }, [session, loading, router]);
+  }, [session, loading, redirectToLogin]);
 
   React.useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
@@ -113,9 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return;
   };
 
-  const loginFn = async (token?: string) => {
-    if (token && typeof window !== "undefined") {
-      localStorage.setItem("graftai_access_token", token);
+  const loginFn = async () => {
+    if (typeof window !== "undefined") {
       // Clear OAuth in-progress flag after successful login
       sessionStorage.removeItem("oauth_in_progress");
       sessionStorage.removeItem("oauth_redirect_to");
@@ -124,12 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logoutFn = async () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("graftai_access_token");
-    }
     await signOut();
     setSession(null);
-    router.replace("/login");
+    redirectToLogin();
   };
 
   return (

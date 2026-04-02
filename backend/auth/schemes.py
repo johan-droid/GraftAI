@@ -11,8 +11,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 from backend.services.access_control import check_user_role
-from sqlalchemy.ext.asyncio import AsyncSession
-from backend.utils.db import get_db
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -57,14 +55,21 @@ def _get_redis_client():
 
 def blacklist_token(token: str, expires_in: int):
     """Add token to blacklist with TTL matching token expiry."""
-    client = _get_redis_client()
-    client.setex(f"token:blacklist:{token}", expires_in, "1")
+    try:
+        client = _get_redis_client()
+        client.setex(f"token:blacklist:{token}", expires_in, "1")
+    except Exception as exc:
+        logger.warning(f"Failed to persist token blacklist entry: {exc}")
 
 
 def is_token_blacklisted(token: str) -> bool:
     """Check if token has been revoked."""
-    client = _get_redis_client()
-    return client.exists(f"token:blacklist:{token}") > 0
+    try:
+        client = _get_redis_client()
+        return client.exists(f"token:blacklist:{token}") > 0
+    except Exception as exc:
+        logger.warning(f"Blacklist check unavailable, defaulting to not blacklisted: {exc}")
+        return False
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
@@ -190,7 +195,6 @@ async def decode_token(token: str) -> Optional[dict]:
 async def get_current_user(
     request: Request, 
     token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db)
 ):
     """
     Get current user payload from either Authorization: Bearer <token> or graftai_access_token cookie.
@@ -223,24 +227,26 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Session Persistence & Active Tracking for JWTs
-    client = _get_redis_client()
-    session_key = f"active_session:{token[-20:]}"
+    # Session persistence and active telemetry are best-effort only.
+    try:
+        client = _get_redis_client()
+        session_key = f"active_session:{token[-20:]}"
+        telemetry_key = f"session_telemetry:{token[-20:]}"
 
-    if client.exists(session_key):
-        client.expire(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60)
-    else:
-        # Allowed: token may still be valid at JWT layer after a server/Redis restart.
-        # Recreate the session marker to avoid accidental early logout.
+        # Atomic extension/refresh
         client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, payload.get("sub"))
 
-    # Update local telemetry (useful for load balancer observability)
-    backend_id = os.getenv("HOSTNAME", "unknown-worker")
-    client.hset(
-        f"session_telemetry:{token[-20:]}",
-        mapping={"last_seen": str(datetime.now(timezone.utc)), "backend": backend_id},
-    )
-    client.expire(f"session_telemetry:{token[-20:]}", 3600)
+        # Atomic update local telemetry (useful for load balancer observability)
+        backend_id = os.getenv("HOSTNAME", "unknown-worker")
+        pipe = client.pipeline()
+        pipe.hset(
+            telemetry_key,
+            mapping={"last_seen": str(datetime.now(timezone.utc)), "backend": backend_id},
+        )
+        pipe.expire(telemetry_key, 3600)
+        pipe.execute()
+    except Exception as exc:
+        logger.warning(f"Session telemetry unavailable, continuing request: {exc}")
 
     return payload
 
@@ -277,3 +283,22 @@ def is_admin_user(user_id: int = Depends(get_current_user_id)) -> int:
             detail="Administrative privileges required",
         )
     return user_id
+
+
+async def get_current_user_id_optional(request: Request) -> Optional[str]:
+    """
+    Internal helper (non-dependency) that attempts to extract a user_id
+    from JWT cookies without raising any exceptions if not found.
+    """
+    token = request.cookies.get("graftai_access_token")
+    if not token:
+        return None
+        
+    if is_token_blacklisted(token):
+        return None
+        
+    payload = await decode_token(token)
+    if not payload:
+        return None
+        
+    return payload.get("sub")

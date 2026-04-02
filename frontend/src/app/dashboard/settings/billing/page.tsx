@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { 
   CreditCard, 
@@ -15,19 +15,10 @@ import {
 } from "lucide-react";
 import { useAuthContext } from "@/app/providers/auth-provider";
 
-// In a real implementation, these would come from the API
-interface UsageStats {
-  tier: string;
-  daily_ai_count: number;
-  daily_sync_count: number;
-  ai_limit: number;
-  sync_limit: number;
-  subscription_status: string;
-}
+// In a real implementation, usage would come from the API
 
 export default function BillingPage() {
-  const { user, refresh } = useAuthContext();
-  const [loading, setLoading] = useState(false);
+  const { user } = useAuthContext();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const stats = user ? {
@@ -60,18 +51,10 @@ export default function BillingPage() {
     }
   };
 
-  const handleUpgrade = (tier: string) => {
-    window.location.href = "/pricing";
+  const handleUpgrade = () => {
+    window.location.assign("/pricing");
   };
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 space-y-4">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-[10px] uppercase tracking-widest font-black text-slate-600">Syncing Ledger</p>
-      </div>
-    );
-  }
 
   const aiProgress = stats ? (stats.daily_ai_count / stats.ai_limit) * 100 : 0;
   const syncProgress = stats ? (stats.daily_sync_count / stats.sync_limit) * 100 : 0;
@@ -121,7 +104,7 @@ export default function BillingPage() {
               
               {stats?.tier === 'free' && (
                 <button 
-                  onClick={() => handleUpgrade('pro')}
+                  onClick={handleUpgrade}
                   className="px-6 py-3 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2"
                 >
                   Upgrade to Pro

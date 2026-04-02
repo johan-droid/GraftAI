@@ -2,7 +2,7 @@
   "name": "graftai-monorepo",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n \"API,SYNC,WEB\" -c \"cyan,magenta,blue\" \"uv run python app.py\" \"uv run python backend/scripts/sync_worker.py\" \"cd frontend && npm run dev\"",
+    "dev": "concurrently -n \"API,SYNC,WEB\" -c \"cyan,magenta,blue\" \".venv\\Scripts\\python.exe app.py\" \".venv\\Scripts\\python.exe backend/scripts/sync_worker.py\" \"cd frontend && npm run dev\"",
     "dev-all": "cd frontend && npm run dev-all"
   },
   "dependencies": {

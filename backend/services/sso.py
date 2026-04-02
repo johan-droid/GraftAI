@@ -112,7 +112,8 @@ PROVIDERS = {
         "scope": "openid profile email https://www.googleapis.com/auth/calendar.events",
         "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
         "revoke_url": "https://oauth2.googleapis.com/revoke",
-        "prompt": "consent",  # Ensures refresh token is provided
+        "access_type": "offline",  # Keep refresh token available in backend
+        "prompt": "select_account",  # Use select_account to avoid forced consent each login
     },
     "microsoft": {
         "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
@@ -178,6 +179,8 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
     )
 
     extra_params = {}
+    if config.get("access_type"):
+        extra_params["access_type"] = config["access_type"]
     if config.get("prompt"):
         extra_params["prompt"] = config["prompt"]
     if config.get("response_mode"):

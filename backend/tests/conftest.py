@@ -8,3 +8,5 @@ if ROOT not in sys.path:
 
 # Ensure deterministic behavior for AI service unit tests using stubbed LLM path
 os.environ.setdefault('FORCE_GROQ', '1')
+os.environ.setdefault('TESTING', '1')
+os.environ.setdefault('DISABLE_CSRF', '1')

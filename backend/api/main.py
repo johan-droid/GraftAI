@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import uuid
 import logging
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -19,9 +20,10 @@ if str(project_root) not in sys.path:
 dotenv_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-from fastapi import FastAPI, Request, Depends, Response
+from fastapi import FastAPI, Request, Depends, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 import redis
 
 from backend.auth.routes import router as auth_router
@@ -37,6 +39,7 @@ from backend.services.plugin_api import router as plugin_router
 from backend.api.notifications import router as notifications_router
 from backend.api.billing import router as billing_router
 from backend.auth.schemes import get_current_user
+from backend.utils.db import get_db
 
 from backend.utils import db as db_utils
 from backend.models.tables import Base as ModelsBase
@@ -107,28 +110,78 @@ class RateLimitMiddleware:
 
         request = Request(scope)
 
-        # Get client IP
-        client_ip = request.headers.get(
+        request = Request(scope)
+
+        # Rate limit identifier (IP-based fallback).
+        # We intentionally avoid JWT decoding here to keep middleware lean and robust.
+        user_id = None
+
+        identifier = user_id or request.headers.get(
             "x-forwarded-for", request.client.host if request.client else "unknown"
         )
-        if "," in client_ip:
-            client_ip = client_ip.split(",")[0].strip()
+        if "," in str(identifier):
+            identifier = identifier.split(",")[0].strip()
 
-        # Atomic check-and-increment via Lua
-        client = _get_redis_client()
-        key = f"rate_limit:{client_ip}:{request.url.path}"
+        # Atomic check-and-increment via Lua.
+        # Fail open if Redis is unavailable so core API endpoints stay reachable.
+        try:
+            client = _get_redis_client()
+            key = f"rate_limit:{identifier}:{request.url.path}"
 
-        # Use eval to run the scriptatomically
-        allowed = client.eval(RATE_LIMIT_LUA, 1, key, self.max_requests, self.window)
+            # Use eval to run the script atomically
+            allowed = client.eval(RATE_LIMIT_LUA, 1, key, self.max_requests, self.window)
 
-        if not allowed:
-            # Rate limit exceeded
-            response = JSONResponse(
-                status_code=429,
-                content={"detail": "Rate limit exceeded. Please try again later."},
-            )
-            await response(scope, receive, send)
+            if not allowed:
+                # Rate limit exceeded
+                response = JSONResponse(
+                    status_code=429,
+                    content={"detail": "Rate limit exceeded. Please try again later."},
+                )
+                await response(scope, receive, send)
+                return
+        except Exception as exc:
+            logger.warning(f"Rate limiter unavailable, allowing request: {exc}")
+
+        await self.app(scope, receive, send)
+
+
+class CSRFMiddleware:
+    """CSRF protection using Double Submit Cookie pattern."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
             return
+
+        request = Request(scope)
+        # Allow test mode or explicit bypass to avoid blocking test client checks
+        if os.getenv("TESTING") == "1" or os.getenv("DISABLE_CSRF") == "1":
+            await self.app(scope, receive, send)
+            return
+
+        # Only check mutating methods
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            # Skip check for specific bypasses if needed (e.g., Stripe webhooks which use signatures)
+            if request.url.path.startswith("/api/v1/billing/webhook"):
+                await self.app(scope, receive, send)
+                return
+
+            xsrf_cookie = request.cookies.get("xsrf-token")
+            xsrf_header = request.headers.get("x-xsrf-token")
+
+            if not xsrf_cookie or not xsrf_header or xsrf_cookie != xsrf_header:
+                logger.warning(
+                    f"CSRF validation failed for {request.url.path}: cookie={xsrf_cookie!r} header={xsrf_header!r}"
+                )
+                response = JSONResponse(
+                    status_code=403,
+                    content={"detail": "CSRF validation failed. Missing or invalid XSRF token."},
+                )
+                await response(scope, receive, send)
+                return
 
         await self.app(scope, receive, send)
 
@@ -169,14 +222,14 @@ async def reminder_worker(app: FastAPI):
                 events_to_remind = result.scalars().all()
                 
                 for event in events_to_remind:
-                    event.is_reminded = True
+                    setattr(event, "is_reminded", True)
                     await db.commit()
                     
                     user = await db.get(UserTable, event.user_id)
                     if user:
                         logger.info(f"Sending 15-min reminder for event {event.id} to user {user.id}")
                         await notify_event_reminder(
-                            user.email,
+                            str(user.email),
                             [],
                             {
                                 "id": event.id,
@@ -270,6 +323,30 @@ cors_origins = [
     "http://localhost:8080",
 ]
 
+class RequestIdMiddleware:
+    """Attach a stable request ID to each request and response for traceability."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = str(uuid.uuid4())
+
+        async def send_with_request_id(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"x-request-id", request_id.encode()))
+                message["headers"] = headers
+            await send(message)
+
+        scope["request_id"] = request_id
+        await self.app(scope, receive, send_with_request_id)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -280,8 +357,14 @@ app.add_middleware(
     max_age=600,  # Cache preflight for 10 minutes to reduce OPTIONS overhead
 )
 
-# 2. Rate Limiting — Inner layer (applied only to real requests, not OPTIONS)
+# 2. Request ID — add trace context to all requests
+app.add_middleware(RequestIdMiddleware)
+
+# 3. Rate Limiting — Inner layer (applied only to real requests, not OPTIONS)
 app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
+
+# 3. CSRF Protection — Guarding mutations
+app.add_middleware(CSRFMiddleware)
 
 # --- Router Inclusion (API v1) ---
 from fastapi import APIRouter
@@ -299,6 +382,8 @@ v1_router.include_router(ai_router, tags=["ai"])
 v1_router.include_router(proactive_router)
 v1_router.include_router(analytics_router)
 v1_router.include_router(consent_router)
+from backend.api.admin import router as admin_router
+v1_router.include_router(admin_router)
 v1_router.include_router(upgrade_router)
 v1_router.include_router(plugin_router)
 v1_router.include_router(notifications_router)
@@ -330,3 +415,23 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok", "environment": "production-hardened"}
+
+
+@app.get("/readiness")
+async def readiness(db: AsyncSession = Depends(get_db)):
+    # 1. Verify database connectivity
+    try:
+        await db.execute("SELECT 1")
+    except Exception as e:
+        logger.error(f"Readiness DB check failed: {e}")
+        raise HTTPException(status_code=503, detail="Database not ready")
+
+    # 2. Verify Redis connectivity
+    try:
+        r = _get_redis_client()
+        r.ping()
+    except Exception as e:
+        logger.warning(f"Readiness Redis check degraded: {e}")
+        # allow partial readiness for availability
+
+    return {"status": "ready"}

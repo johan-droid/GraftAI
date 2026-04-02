@@ -1,89 +1,8 @@
-const windowOrigin = (typeof window !== "undefined" && window.location.origin) || "";
-const defaultHost = windowOrigin ? windowOrigin.replace(/:300\d/, ":8000") : "http://localhost:8000";
+import { apiClient } from "./api-client";
+import { getSessionSafe } from "./auth-client";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "";
-
-if (typeof window !== "undefined") {
-  console.debug("API_BASE_URL set to", API_BASE_URL);
-  if (
-    process.env.NODE_ENV === "production" &&
-    (API_BASE_URL.startsWith("http://localhost") || API_BASE_URL.startsWith("http://127.0.0.1"))
-  ) {
-    console.warn(
-      "Running in production with localhost backend URL. Please set NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_BACKEND_URL to your deployed backend domain."
-    );
-  }
-}
-
-import { getSessionSafe, getToken } from "@/lib/auth-client";
-
-interface ApiOptions {
-  method?: string;
-  body?: Record<string, unknown> | null;
-}
-
-async function resolveUnauthorized() {
-  if (typeof window !== "undefined") {
-    window.location.href = "/login";
-  }
-}
-
-async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}) {
-  const { method = "GET", body } = options;
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  const token = getToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  // Rely on HttpOnly cookie for auth fallback - credentials: "include" sends cookies automatically
-  // The backend reads 'graftai_access_token' cookie via get_current_user()
-
-  const res = await fetch(`${API_BASE_URL}/api/v1${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: "include", // HttpOnly cookies are sent automatically
-  });
-
-  if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
-      // Attempt to refresh the session transparently before redirecting
-      const { data, error: refreshError } = await getSessionSafe();
-      if (data && !refreshError) {
-        // Retry the request once with the new token
-        const retryRes = await fetch(`${API_BASE_URL}/api/v1${path}`, {
-          method,
-          headers: {
-            ...headers,
-            "Authorization": `Bearer ${getToken()}`
-          },
-          body: body ? JSON.stringify(body) : undefined,
-          credentials: "include",
-        });
-
-        if (retryRes.ok) {
-          return retryRes.json() as Promise<T>;
-        }
-      }
-
-      await resolveUnauthorized();
-      throw new Error("Unauthorized");
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Request failed with status ${res.status}`);
-  }
-
-  return res.json() as Promise<T>;
-}
+// Re-exporting API_BASE_URL for backward compatibility if needed
+export { API_BASE_URL } from "./api-client";
 
 // ──────────────────────────────────────
 // Auth: Session Check
@@ -95,27 +14,20 @@ export async function refreshSession() {
   }
   return session.data;
 }
-// Backend: POST /auth/did/verify  (Pydantic body: {user_id, did})
+
+// ──────────────────────────────────────
+// Auth: DID & Identity
 // ──────────────────────────────────────
 export async function didIssue() {
-  return apiFetch<{ did: string }>(
-    "/auth/did/issue",
-    { method: "POST" }
-  );
+  return apiClient.post<{ did: string }>("/auth/did/issue");
 }
 
 export async function didVerify(did: string) {
-  return apiFetch<{ status: string }>("/auth/did/verify", {
-    method: "POST",
-    body: { did },
-  });
+  return apiClient.post<{ status: string }>("/auth/did/verify", { did });
 }
 
 export async function syncUserTimezone(timezone: string) {
-  return apiFetch<{ status: string; timezone: string }>("/auth/sync-timezone", {
-    method: "POST",
-    body: { timezone },
-  });
+  return apiClient.post<{ status: string; timezone: string }>("/auth/sync-timezone", { timezone });
 }
 
 export async function syncUserConsent(consents: { 
@@ -123,119 +35,86 @@ export async function syncUserConsent(consents: {
   consent_notifications?: boolean; 
   consent_ai_training?: boolean 
 }) {
-  return apiFetch<{ status: string }>("/auth/sync-consent", {
-    method: "POST",
-    body: consents,
-  });
+  return apiClient.post<{ status: string }>("/auth/sync-consent", consents);
 }
 
 // ──────────────────────────────────────
 // Auth: Account Deletion
-// Backend: DELETE /auth/account
 // ──────────────────────────────────────
 export async function deleteAccount() {
-  return apiFetch<{ message: string }>("/auth/account", {
-    method: "DELETE",
-  });
+  return apiClient.delete<{ message: string }>("/auth/account");
 }
 
 // ──────────────────────────────────────
 // Auth: SSO Start
-// Backend: GET /auth/sso/start?provider=...&redirect_to=...
 // ──────────────────────────────────────
 export async function ssoStart(provider: string = "github", redirectTo: string = "/dashboard") {
-  return apiFetch<{ authorization_url: string; state: string }>(
-    `/auth/sso/start?provider=${provider}&redirect_to=${encodeURIComponent(redirectTo)}`
+  return apiClient.get<{ authorization_url: string; state: string }>(
+    `/auth/sso/start`, 
+    { params: { provider, redirect_to: redirectTo } }
   );
 }
 
 // ──────────────────────────────────────
 // Auth: Access Control
-// Backend: GET /auth/access-control/check-role?user_id=...&role=...
-// Backend: GET /auth/access-control/check-attribute?user_id=...&attribute=...&value=...
 // ──────────────────────────────────────
 export async function checkRole(role: string) {
-  return apiFetch<{ allowed: boolean }>(
-    "/auth/access-control/check-role?" + new URLSearchParams({ role })
-  );
+  return apiClient.get<{ allowed: boolean }>("/auth/access-control/check-role", { params: { role } });
 }
 
 export async function checkAttribute(attribute: string, value: string) {
-  return apiFetch<{ allowed: boolean }>(
-    "/auth/access-control/check-attribute?" + new URLSearchParams({ attribute, value })
-  );
+  return apiClient.get<{ allowed: boolean }>("/auth/access-control/check-attribute", { 
+    params: { attribute, value } 
+  });
 }
 
 // ──────────────────────────────────────
 // Services: Analytics
-// Backend: POST /analytics/summary  (Pydantic body)
 // ──────────────────────────────────────
 export async function getAnalyticsSummary(range: string = "7d") {
-  return apiFetch<{ summary: string; details?: { meetings: number; hours: number; growth: number } }>(
-    `/analytics/summary?range=${encodeURIComponent(range)}`, 
-    { method: "GET" }
+  return apiClient.get<{ summary: string; details?: { meetings: number; hours: number; growth: number } }>(
+    `/analytics/summary`,
+    { params: { range } }
   );
 }
 
 // ──────────────────────────────────────
 // Services: AI Chat
-// Backend: POST /ai/chat  (Pydantic body)
 // ──────────────────────────────────────
 export async function sendAiChat(prompt: string, context?: string[], timezone?: string) {
-  return apiFetch<{ result: string; model_used?: string }>("/ai/chat", {
-    method: "POST",
-    body: { prompt, context, timezone },
-  });
+  return apiClient.post<{ result: string; model_used?: string }>("/ai/chat", { prompt, context, timezone });
 }
 
 // ──────────────────────────────────────
 // Services: Proactive Suggestions
-// Backend: POST /proactive/suggest  (Pydantic body)
 // ──────────────────────────────────────
 export async function getProactiveSuggestion(context?: string) {
-  return apiFetch<{ suggestion: string }>("/proactive/suggest", {
-    method: "POST",
-    body: { context },
-  });
+  return apiClient.post<{ suggestion: string }>("/proactive/suggest", { context });
 }
 
 // ──────────────────────────────────────
 // Services: Plugins
-// Backend: GET /plugins/list
 // ──────────────────────────────────────
 export async function listPlugins() {
-  return apiFetch<{ plugins: { name: string; description: string; version: string; author?: string }[] }>("/plugins/list");
+  return apiClient.get<{ plugins: { name: string; description: string; version: string; author?: string }[] }>("/plugins/list");
 }
 
 // ──────────────────────────────────────
 // Services: Consent
-// Backend: POST /consent/set  (Pydantic body)
 // ──────────────────────────────────────
 export async function setConsent(consentType: string, granted: boolean) {
-  return apiFetch<{ status: string }>("/consent/set", {
-    method: "POST",
-    body: { consent_type: consentType, granted },
-  });
+  return apiClient.post<{ status: string }>("/consent/set", { consent_type: consentType, granted });
 }
 
 // ──────────────────────────────────────
 // Services: LLM Upgrade
-// Backend: POST /upgrade/llm  (Pydantic body)
 // ──────────────────────────────────────
 export async function upgradeLLM(modelName: string, version?: string) {
-  return apiFetch<{ status: string; details?: string }>("/upgrade/llm", {
-    method: "POST",
-    body: { model_name: modelName, version },
-  });
+  return apiClient.post<{ status: string; details?: string }>("/upgrade/llm", { model_name: modelName, version });
 }
 
 // ──────────────────────────────────────
 // Services: Calendar
-// Backend: GET /calendar/events
-// Backend: POST /calendar/events
-// Backend: PATCH /calendar/events/{id}
-// Backend: DELETE /calendar/events/{id}
-// Backend: GET /calendar/slots
 // ──────────────────────────────────────
 export interface CalendarEvent {
   id: number;
@@ -256,38 +135,40 @@ export interface CalendarEvent {
 }
 
 export async function getEvents(start: string, end: string) {
-  return apiFetch<CalendarEvent[]>(`/calendar/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+  return apiClient.get<CalendarEvent[]>(`/calendar/events`, { params: { start, end } });
 }
 
 export async function createEvent(data: Partial<CalendarEvent>) {
-  return apiFetch<CalendarEvent>("/calendar/events", {
-    method: "POST",
-    body: data as Record<string, unknown>,
-  });
+  return apiClient.post<CalendarEvent>("/calendar/events", data);
 }
 
 export async function updateEvent(id: number, data: Partial<CalendarEvent>) {
-  return apiFetch<CalendarEvent>(`/calendar/events/${id}`, {
-    method: "PATCH",
-    body: data as Record<string, unknown>,
-  });
+  return apiClient.patch<CalendarEvent>(`/calendar/events/${id}`, data);
 }
 
 export async function deleteEvent(id: number) {
-  // Use apiFetch for consistency and token injection
-  return apiFetch<{ status: string }>(`/calendar/events/${id}`, {
-    method: "DELETE",
-  });
+  return apiClient.delete<{ status: string }>(`/calendar/events/${id}`);
 }
 
+// ──────────────────────────────────────
+// Services: Uploads
+// ──────────────────────────────────────
 export async function uploadFile(file: File) {
   const formData = new FormData();
   formData.append("file", file);
 
-  // Rely on HttpOnly cookie - no manual token injection needed
-  const res = await fetch(`${API_BASE_URL}/api/v1/uploads`, {
+  // We bypass apiClient.post for multipart/form-data to let the browser set the boundary
+  const { API_BASE_URL: BASE } = await import("./api-client");
+  const { getToken } = await import("./auth-client");
+
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}/api/v1/uploads`, {
     method: "POST",
     body: formData,
+    headers,
     credentials: "include",
   });
 
@@ -299,22 +180,22 @@ export async function uploadFile(file: File) {
   return res.json() as Promise<{ filename: string; path: string; size: number }>;
 }
 
+// ──────────────────────────────────────
+// Services: Slots & Sync
+// ──────────────────────────────────────
 export async function getAvailableSlots(date: string, duration: number = 60, targetTimezone?: string) {
-  let url = `/calendar/slots?date=${encodeURIComponent(date)}&duration=${duration}`;
-  if (targetTimezone) {
-    url += `&target_timezone=${encodeURIComponent(targetTimezone)}`;
-  }
-  return apiFetch<{start: string; end: string; local_label?: string; guest_label?: string}[]>(url);
+  const params: Record<string, string> = { date, duration: String(duration) };
+  if (targetTimezone) params.target_timezone = targetTimezone;
+  return apiClient.get<{start: string; end: string; local_label?: string; guest_label?: string}[]>(
+    "/calendar/slots", 
+    { params }
+  );
 }
 
 export async function mfaVerify(userId: number, code: string) {
-  return apiFetch<{ status: string }>(`/auth/mfa/verify?token=${encodeURIComponent(code)}`, {
-    method: "POST"
-  });
+  return apiClient.post<{ status: string }>(`/auth/mfa/verify`, null, { params: { token: code } });
 }
 
 export async function manualSync() {
-  return apiFetch<{ status: string; synced_count: number }>("/calendar/sync", {
-    method: "POST"
-  });
+  return apiClient.post<{ status: string; synced_count: number }>("/calendar/sync");
 }

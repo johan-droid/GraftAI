@@ -1,0 +1,27 @@
+
+> frontend@0.1.0 lint
+> eslint
+
+
+D:\GraftAI\frontend\src\app\dashboard\calendar\page.tsx
+  50:10  warning  'isCreating' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\GraftAI\frontend\src\app\dashboard\settings\billing\page.tsx
+   3:20  warning  'useEffect' is defined but never used            @typescript-eslint/no-unused-vars
+  19:11  warning  'UsageStats' is defined but never used           @typescript-eslint/no-unused-vars
+  29:17  warning  'refresh' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  30:19  warning  'setLoading' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  63:26  warning  'tier' is defined but never used                 @typescript-eslint/no-unused-vars
+
+D:\GraftAI\frontend\src\app\pricing\page.tsx
+  5:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\GraftAI\frontend\src\lib\api.ts
+  2:7  warning  'defaultHost' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\GraftAI\frontend\src\lib\auth-server.ts
+  65:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+
+Γ£û 9 problems (1 error, 8 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+

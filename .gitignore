@@ -71,6 +71,15 @@ pnpm-debug.log*
 ehthumbs.db
 Thumbs.db
 
+# Vercel/Render & platform files
+.vercel/
+.vercelignore
+render.yaml
+Dockerfile
+# Node modules also typically in workspace subfolders
+frontend/node_modules/
+backend/node_modules/
+
 # Project Specific
 eslint_report.json
 db_migrate_saas.py

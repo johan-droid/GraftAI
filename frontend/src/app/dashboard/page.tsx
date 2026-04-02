@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/app/providers/auth-provider";
 import { motion } from "framer-motion";
 import { Users, Calendar as CalendarIcon, Activity, ArrowUpRight, TrendingUp, Sparkles, Puzzle } from "lucide-react";
@@ -22,19 +21,36 @@ function getLocalizedGreeting(name: string) {
   return `${greeting} from ${city}, ${name}`;
 }
 
+interface DashboardEvent {
+  id: string;
+  title: string;
+  start_time: string;
+  is_upcoming: boolean;
+  category: string;
+}
+
+interface DashboardStats {
+  meetings: number;
+  hours: number;
+  growth: number;
+  next_event?: DashboardEvent;
+  recent_events?: DashboardEvent[];
+}
+
 export default function Dashboard() {
   type DashboardUser = { full_name?: string; email?: string } | null;
-  const router = useRouter();
   const { user, isAuthenticated, loading, refresh } = useAuthContext();
   const dashboardUser = user as DashboardUser;
   const profileName = dashboardUser?.full_name || dashboardUser?.email?.split("@")[0] || "User";
-  const [stats, setStats] = useState<{ meetings: number; hours: number; growth: number; next_event?: any; recent_events?: any[] }>({ meetings: 0, hours: 0, growth: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ meetings: 0, hours: 0, growth: 0 });
   const [summaryMessage, setSummaryMessage] = useState("");
   const [aiSuggestion, setAiSuggestion] = useState("");
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      router.replace("/login");
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+        window.location.replace("/login");
+      }
     } else if (isAuthenticated) {
       // Fetch real analytics summary
       getAnalyticsSummary().then(data => {
@@ -56,7 +72,7 @@ export default function Dashboard() {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       syncUserTimezone(tz).catch(() => {});
     }
-  }, [isAuthenticated, loading, router]);
+  }, [isAuthenticated, loading]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -187,7 +203,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {stats.recent_events.map((event: any) => (
+                    {stats.recent_events.map((event: DashboardEvent) => (
                       <tr key={event.id} className="group">
                         <td>
                           <div className="flex items-center gap-3">

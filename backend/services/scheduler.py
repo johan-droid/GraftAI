@@ -5,6 +5,7 @@ from typing import List, Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, delete
 from backend.models.tables import EventTable, UserTable
+from backend.utils.db import unwrap_result
 from .langchain_client import vector_store
 from .notifications import notify_event_created, notify_event_updated, notify_event_deleted
 from langchain_core.documents import Document
@@ -111,9 +112,14 @@ async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "
 
 
 async def get_events_for_range(
-    db: AsyncSession, user_id: str, start: datetime, end: datetime
+    db: AsyncSession,
+    user_id: str,
+    start: datetime,
+    end: datetime,
+    skip: int = 0,
+    limit: int = 100
 ) -> List[EventTable]:
-    """Fetch all events for a user within a specific time range."""
+    """Fetch all events for a user within a specific time range with pagination."""
     stmt = (
         select(EventTable)
         .where(
@@ -124,10 +130,13 @@ async def get_events_for_range(
             )
         )
         .order_by(EventTable.start_time.asc())
+        .offset(skip)
+        .limit(limit)
     )
 
     result = await db.execute(stmt)
-    return result.scalars().all()
+    scalars = await unwrap_result(result.scalars())
+    return await unwrap_result(scalars.all())
 
 
 async def find_available_slots(

@@ -62,7 +62,7 @@ export const auth = betterAuth({
 
 const isVercel = process.env.VERCEL === "1";
 if (!process.env.BETTER_AUTH_SECRET && process.env.NODE_ENV === "production") {
-    /* eslint-disable no-console */
+
     console.warn(
         "BETTER_AUTH_SECRET is not set. In Vercel deploys, set BETTER_AUTH_SECRET in Environment Variables (and/or set NEXTAUTH_SECRET as fallback)."
     );
@@ -71,5 +71,4 @@ if (!process.env.BETTER_AUTH_SECRET && process.env.NODE_ENV === "production") {
             "BETTER_AUTH_SECRET is required in production for Better Auth. Set it in environment variables."
         );
     }
-    /* eslint-enable no-console */
 }

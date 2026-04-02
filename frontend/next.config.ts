@@ -11,7 +11,12 @@ const nextConfig: NextConfig = {
   async rewrites() {
     const backendBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
     return {
-      beforeFiles: [],
+      beforeFiles: [
+        {
+          source: "/api/auth/:path*",
+          destination: "/api/auth/:path*",
+        },
+      ],
       afterFiles: [
         {
           source: "/auth/:path*",
@@ -22,8 +27,7 @@ const nextConfig: NextConfig = {
           destination: `${backendBaseUrl}/health`,
         },
       ],
-      // Keep generic /api proxy as fallback so local Next API routes (like /api/auth/[...auth])
-      // are matched first and are not sent to backend.
+      // Keep generic /api proxy as fallback so local backend APIs are proxied.
       fallback: [
         {
           source: "/api/:path*",

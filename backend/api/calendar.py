@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from backend.api.deps import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.services import scheduler
@@ -50,8 +50,7 @@ class EventResponse(EventBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True) # <- new Pydantic v2 style config
 
 
 @router.get("/events", response_model=List[EventResponse])

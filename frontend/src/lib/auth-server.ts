@@ -45,17 +45,43 @@ function sanitizeDatabaseUrl(url?: string): string | undefined {
 
 const sanitizedDbUrl = sanitizeDatabaseUrl(rawDatabaseUrl);
 
+let dbPool: Pool | undefined;
+
+if (sanitizedDbUrl) {
+    try {
+        dbPool = new Pool({
+            connectionString: sanitizedDbUrl,
+            ssl:
+                process.env.NODE_ENV === "production"
+                    ? { rejectUnauthorized: false }
+                    : false,
+            max: 5, // Reduce for serverless and connection caps
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 10000,
+        });
+
+        // Sanity check the connection without blocking startup too long.
+        dbPool
+            .query("SELECT 1")
+            .then(() => {
+                console.log("[DB_TEST_SUCCESS]: Connected to database for Better Auth");
+            })
+            .catch((err) => {
+                console.error("[DB_TEST_ERROR]: Better Auth DB connection failed", err);
+            });
+    } catch (err) {
+        console.error("[DB_POOL_ERROR]: Failed to create database pool", err);
+        dbPool = undefined;
+    }
+} else {
+    console.warn(
+        "[DB_WARNING]: No database URL configured for Better Auth. This will use in-memory adapter and is not suitable for production."
+    );
+}
+
 export const auth = betterAuth({
     baseURL: resolvedAuthUrl,
-    database: sanitizedDbUrl ? new Pool({
-        connectionString: sanitizedDbUrl,
-        ssl: {
-            rejectUnauthorized: false
-        },
-        max: 10, // Optimize for serverless
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
-    }) : undefined,
+    database: dbPool,
     secret: process.env.BETTER_AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-fallback-secret-please-change",
     emailAndPassword: {
         enabled: true

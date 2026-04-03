@@ -19,33 +19,41 @@ const resolvedAuthUrl = resolveServerAuthUrl();
 
 export const auth = betterAuth({
     baseURL: resolvedAuthUrl,
-    database: new Pool({
+    database: process.env.DATABASE_URL ? new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: {
             rejectUnauthorized: false
         }
-    }),
+    }) : undefined,
     secret: process.env.BETTER_AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-fallback-secret-please-change",
     emailAndPassword: {
         enabled: true
     },
     socialProviders: {
-        google: {
-            clientId: process.env.GOOGLE_CLIENT_ID || "",
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-        },
-        github: {
-            clientId: process.env.GITHUB_CLIENT_ID || "",
-            clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-        },
-        microsoft: {
-            clientId: process.env.MICROSOFT_CLIENT_ID || "",
-            clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
-        },
-        apple: {
-            clientId: process.env.APPLE_CLIENT_ID || "",
-            clientSecret: process.env.APPLE_CLIENT_SECRET || "",
-        }
+        ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? {
+            google: {
+                clientId: process.env.GOOGLE_CLIENT_ID,
+                clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            },
+        } : {}),
+        ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET ? {
+            github: {
+                clientId: process.env.GITHUB_CLIENT_ID,
+                clientSecret: process.env.GITHUB_CLIENT_SECRET,
+            },
+        } : {}),
+        ...(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET ? {
+            microsoft: {
+                clientId: process.env.MICROSOFT_CLIENT_ID,
+                clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+            },
+        } : {}),
+        ...(process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET ? {
+            apple: {
+                clientId: process.env.APPLE_CLIENT_ID,
+                clientSecret: process.env.APPLE_CLIENT_SECRET,
+            },
+        } : {}),
     },
     plugins: [
         magicLink({
@@ -59,13 +67,13 @@ export const auth = betterAuth({
         }),
         genericOAuth({
             config: [
-                {
+                ...(process.env.ZOOM_CLIENT_ID && process.env.ZOOM_CLIENT_SECRET ? [{
                     providerId: "zoom",
-                    clientId: process.env.ZOOM_CLIENT_ID || "",
-                    clientSecret: process.env.ZOOM_CLIENT_SECRET || "",
+                    clientId: process.env.ZOOM_CLIENT_ID,
+                    clientSecret: process.env.ZOOM_CLIENT_SECRET,
                     authorizationUrl: "https://zoom.us/oauth/authorize",
                     tokenUrl: "https://zoom.us/oauth/token",
-                    getUserInfo: async (tokens) => {
+                    getUserInfo: async (tokens: any) => {
                         const response = await fetch("https://api.zoom.us/v2/users/me", {
                             headers: {
                                 Authorization: `Bearer ${tokens.accessToken}`,
@@ -79,13 +87,13 @@ export const auth = betterAuth({
                             emailVerified: true // Assume email is verified by Zoom
                         };
                     },
-                },
-                {
+                }] : []),
+                ...(process.env.SSO_OIDC_DISCOVERY_URL && process.env.SSO_OIDC_CLIENT_ID && process.env.SSO_OIDC_CLIENT_SECRET ? [{
                     providerId: "sso-oidc",
-                    discoveryUrl: process.env.SSO_OIDC_DISCOVERY_URL || "",
-                    clientId: process.env.SSO_OIDC_CLIENT_ID || "",
-                    clientSecret: process.env.SSO_OIDC_CLIENT_SECRET || "",
-                }
+                    discoveryUrl: process.env.SSO_OIDC_DISCOVERY_URL,
+                    clientId: process.env.SSO_OIDC_CLIENT_ID,
+                    clientSecret: process.env.SSO_OIDC_CLIENT_SECRET,
+                }] : [])
             ]
         })
     ],

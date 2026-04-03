@@ -33,14 +33,22 @@ export const authClient = createAuthClient({
 export function getToken(): string | null {
   if (typeof document === "undefined") return null;
   const value = `; ${document.cookie}`;
-  const parts = value.split(`; graftai_access_token=`);
+  // Better Auth session token cookie name (default is better-auth.session_token)
+  const parts = value.split(`; better-auth.session_token=`);
   if (parts.length === 2) return parts.pop()?.split(";").shift() || null;
+  
+  // Also check for legacy or prefixed versions just in case
+  const legacyParts = value.split(`; graftai_access_token=`);
+  if (legacyParts.length === 2) return legacyParts.pop()?.split(";").shift() || null;
+  
   return null;
 }
 
 export function getCsrfHeaders(): Record<string, string> {
   if (typeof document === "undefined") return {};
   const value = `; ${document.cookie}`;
+  // Better Auth usually handles CSRF internally, but manual requests may need its XSRF token
+  // if double-submit was configured.
   const parts = value.split(`; xsrf-token=`);
   const token = parts.length === 2 ? parts.pop()?.split(";").shift() || null : null;
   return token ? { "X-XSRF-TOKEN": token } : {};

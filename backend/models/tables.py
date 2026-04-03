@@ -55,6 +55,39 @@ class UserTable(Base):
     events = relationship(
         "EventTable", back_populates="user", cascade="all, delete-orphan"
     )
+    sessions = relationship(
+        "SessionTable", back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class SessionTable(Base):
+    __tablename__ = "session"
+
+    id = Column(String(255), primary_key=True)
+    userId = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    expiresAt = Column(DateTime(timezone=True), nullable=False)
+    userAgent = Column(Text)
+    ipAddress = Column(String(50))
+    createdAt = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship("UserTable", back_populates="sessions")
+
+
+class AccountTable(Base):
+    __tablename__ = "account"
+
+    id = Column(String(255), primary_key=True)
+    userId = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    accountId = Column(String(255), nullable=False)
+    providerId = Column(String(255), nullable=False)
+    accessToken = Column(Text)
+    refreshToken = Column(Text)
+    idToken = Column(Text)
+    accessTokenExpiresAt = Column(DateTime(timezone=True))
+    refreshTokenExpiresAt = Column(DateTime(timezone=True))
+    createdAt = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class EventTable(Base):

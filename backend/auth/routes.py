@@ -734,7 +734,7 @@ async def check_auth(
         "authenticated": True,
         "user": user_data,
         "session": {
-            "token": request.cookies.get("graftai_access_token"),
+            "token": request.cookies.get("better-auth.session_token") or request.cookies.get("graftai_access_token"),
             "expires_at": current_user.get("exp")
         }
     }

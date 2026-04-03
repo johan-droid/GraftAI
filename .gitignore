@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # OS / Editor
 .DS_Store
 Thumbs.db
@@ -51,3 +52,6 @@ build/
 # Local runtime folders
 tmp/
 uploads/
+=======
+Nothing should be ignored in this case, as the only change is adding a TypeScript route file (`frontend/src/app/api/health/route.ts`) which is source code and should be tracked in version control. No build artifacts, dependencies, or temporary files are present in the changes.
+>>>>>>> 071eeeec955b73e018f35491dfa4fea7303741a2

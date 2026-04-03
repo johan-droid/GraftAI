@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import RedirectResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 import secrets
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
@@ -10,7 +10,6 @@ from datetime import datetime, timedelta, timezone
 import os
 import logging
 import uuid
-import json
 from pathlib import Path
 from dotenv import load_dotenv
 

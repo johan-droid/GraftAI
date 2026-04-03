@@ -16,10 +16,10 @@ export default function TermsAndConditionsPage() {
           <p className="inline-flex items-center gap-2 rounded-lg bg-indigo-500/15 px-3 py-1 text-xs font-bold uppercase tracking-wide text-indigo-200">
             <Scale className="h-4 w-4" /> Legal Document
           </p>
-          <h1 className="mt-4 text-3xl font-black sm:text-4xl">Terms and Conditions</h1>
+          <h1 className="mt-4 text-3xl font-black sm:text-4xl">Terms of Service</h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
-            Effective date: April 2, 2026. These Terms govern use of the GraftAI platform developed
-            as a major college project and software engineering demonstration.
+            Effective date: April 4, 2026. These Terms govern your access to and use of GraftAI,
+            a fourth-year major project and software engineering demonstration platform.
           </p>
         </header>
 
@@ -27,47 +27,67 @@ export default function TermsAndConditionsPage() {
           <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
             <h2 className="text-lg font-bold text-white">1. Acceptance of Terms</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-300">
-              By accessing or using GraftAI, you agree to these Terms and all applicable laws. If you do
-              not agree, do not use the application.
+              By creating an account, accessing, or using GraftAI, you agree to these Terms and
+              applicable laws. If you do not agree, you must discontinue use of the platform.
             </p>
           </article>
 
           <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-            <h2 className="text-lg font-bold text-white">2. Permitted Use</h2>
+            <h2 className="text-lg font-bold text-white">2. Eligibility and Academic Scope</h2>
+            <p className="mt-3 text-sm leading-relaxed text-slate-300">
+              GraftAI is built for educational demonstration, academic review, and controlled
+              productivity workflows. Availability, feature set, and integrations may evolve as part
+              of project milestones, evaluations, and supervised deployment exercises.
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <h2 className="text-lg font-bold text-white">3. Permitted and Prohibited Use</h2>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-300">
-              <li>Use the platform for lawful scheduling and productivity workflows.</li>
-              <li>Do not attempt unauthorized access, reverse engineering, or service disruption.</li>
-              <li>Do not upload harmful, illegal, or abusive content through the system.</li>
+              <li>You may use the platform for lawful scheduling, collaboration, and project testing.</li>
+              <li>You must not attempt unauthorized access, abuse APIs, or disrupt service operation.</li>
+              <li>You must not upload unlawful, harmful, or malicious content.</li>
+              <li>You must not perform reverse engineering except where law expressly permits it.</li>
             </ul>
           </article>
 
           <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
             <h2 className="inline-flex items-center gap-2 text-lg font-bold text-white">
-              <ShieldAlert className="h-5 w-5 text-amber-300" /> 3. Accounts and Security
+              <ShieldAlert className="h-5 w-5 text-amber-300" /> 4. Accounts, Security, and Integrations
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-300">
-              Users are responsible for maintaining account credential confidentiality. Suspicious activity
-              should be reported immediately. GraftAI may suspend accounts that violate these Terms.
+              You are responsible for account credentials and any actions taken through your account.
+              If you connect third-party services (such as calendar providers), you grant permission
+              for required scoped access. Suspicious activity must be reported promptly.
             </p>
           </article>
 
           <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
             <h2 className="inline-flex items-center gap-2 text-lg font-bold text-white">
-              <Gavel className="h-5 w-5 text-cyan-300" /> 4. Intellectual Property and Liability
+              <Gavel className="h-5 w-5 text-cyan-300" /> 5. Intellectual Property and License
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-300">
-              Source code, branding, and content remain property of the project authors unless otherwise
-              specified. The service is provided &quot;as is&quot; for educational and demonstration purposes,
-              without warranties of uninterrupted or error-free operation.
+              Unless otherwise specified, source code, design assets, and project branding remain the
+              property of the project authors and contributors. You receive a limited, revocable,
+              non-exclusive right to use the platform for its intended purposes.
             </p>
           </article>
 
           <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-            <h2 className="text-lg font-bold text-white">5. Modifications and Contact</h2>
+            <h2 className="text-lg font-bold text-white">6. Disclaimers and Limitation of Liability</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-300">
-              Terms may be revised as project scope evolves. Continued use after updates indicates
-              acceptance of revised Terms. For project governance questions, contact
-              project.graftai@college.example.
+              The service is provided &quot;as is&quot; and &quot;as available&quot; without warranties of uninterrupted
+              operation, fitness for a specific purpose, or error-free performance. To the extent
+              permitted by law, project authors are not liable for indirect or consequential losses.
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <h2 className="text-lg font-bold text-white">7. Changes to Terms and Contact</h2>
+            <p className="mt-3 text-sm leading-relaxed text-slate-300">
+              These Terms may be updated as project requirements and compliance expectations evolve.
+              Continued use after updates constitutes acceptance of revised Terms. For legal or
+              governance queries, contact project.graftai@college.example.
             </p>
           </article>
         </section>

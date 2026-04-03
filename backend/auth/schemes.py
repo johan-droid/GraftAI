@@ -11,9 +11,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from backend.services.access_control import check_user_role
 from backend.services.redis_client import get_redis
-from backend.utils.db import get_db
-from backend.models.tables import UserTable, SessionTable
-from sqlalchemy import select
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -157,18 +154,12 @@ async def decode_token(token: str) -> Optional[dict]:
 async def get_current_user(
     request: Request, 
     token: str = Depends(oauth2_scheme),
-    db_session: any = Depends(get_db)
 ):
     """
-    Get current user payload from either Authorization: Bearer <token> or better-auth.session_token cookie.
-    First tries to verify as a Better Auth database session, then falls back to legacy JWT.
+    Get current user payload from Authorization bearer token or JWT access cookie.
     """
     if not token:
-        # Check Better Auth default cookie name
-        cookie_token = (
-            request.cookies.get("better-auth.session_token") or 
-            request.cookies.get("graftai_access_token")
-        )
+        cookie_token = request.cookies.get("graftai_access_token")
         if cookie_token:
             token = cookie_token
 
@@ -183,35 +174,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 1. Strategy: Better Auth Database Session (Opaque Token)
-    # Check if this token exists in the 'session' table
-    try:
-        # We need to use raw SQL or the SessionTable model
-        stmt = select(SessionTable).where(SessionTable.id == token)
-        result = await db_session.execute(stmt)
-        auth_session = result.scalars().first()
-        
-        if auth_session:
-            # Check for expiration
-            if auth_session.expiresAt > datetime.now(timezone.utc):
-                # Valid Better Auth session!
-                # Fetch user details
-                stmt_user = select(UserTable).where(UserTable.id == auth_session.userId)
-                res_user = await db_session.execute(stmt_user)
-                user = res_user.scalars().first()
-                
-                if user:
-                    return {
-                        "sub": str(user.id),
-                        "email": user.email,
-                        "name": user.full_name,
-                        "exp": int(auth_session.expiresAt.timestamp()),
-                        "type": "session"
-                    }
-    except Exception as exc:
-        logger.warning(f"Better Auth session verification failed: {exc}")
-
-    # 2. Strategy: Legacy/Sovereign JWT (HS256)
+    # Strategy: Sovereign JWT (HS256)
     if is_token_blacklisted(token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -290,10 +253,7 @@ async def get_current_user_id_optional(request: Request) -> Optional[str]:
     Internal helper (non-dependency) that attempts to extract a user_id
     from JWT cookies without raising any exceptions if not found.
     """
-    token = (
-        request.cookies.get("better-auth.session_token") or 
-        request.cookies.get("graftai_access_token")
-    )
+    token = request.cookies.get("graftai_access_token")
     if not token:
         return None
         

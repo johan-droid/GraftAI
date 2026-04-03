@@ -1,5 +1,5 @@
 -- GraftAI Authentication Database Schema
--- This script creates the required tables for Better Auth session management
+-- Legacy auth schema helpers for session/account compatibility
 
 -- Enable UUID extension if not already enabled
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(createdAt);
 
--- Session table for Better Auth
+-- Session table for legacy compatibility
 CREATE TABLE IF NOT EXISTS session (
     id VARCHAR(255) PRIMARY KEY,
     userId VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -90,7 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_verification_expiresAt ON verification(expiresAt)
 
 -- Add comments for documentation
 COMMENT ON TABLE users IS 'User accounts for authentication';
-COMMENT ON TABLE session IS 'Active user sessions for Better Auth';
+COMMENT ON TABLE session IS 'Active user sessions for legacy compatibility';
 COMMENT ON TABLE account IS 'OAuth provider account links';
 COMMENT ON TABLE verification IS 'Email verification and password reset tokens';
 

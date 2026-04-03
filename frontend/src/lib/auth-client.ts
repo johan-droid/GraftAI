@@ -1,46 +1,41 @@
-import { createAuthClient } from "better-auth/react";
-import { magicLinkClient, organizationClient, genericOAuthClient, twoFactorClient } from "better-auth/client/plugins";
+type AuthError = { message: string };
+type AuthResult<T = unknown> = { data: T | null; error: AuthError | null };
 
-function resolveAuthBaseURL(): string {
-  // In browsers, always prefer same-origin because Better Auth routes live in this Next app.
-  // This avoids accidental calls to backend domains when NEXT_PUBLIC_APP_URL is misconfigured.
+function getApiBaseUrl() {
+  const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (envUrl) {
+    return envUrl.replace(/\/+$/g, "");
+  }
   if (typeof window !== "undefined") {
-    return window.location.origin.replace(/\/+$/g, "");
+    return "";
   }
-
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (configured) {
-    return configured.replace(/\/+$/g, "");
-  }
-
-  return "http://localhost:3000";
+  return "http://localhost:8000";
 }
 
-export const authClient = createAuthClient({
-  baseURL: resolveAuthBaseURL(),
-  plugins: [
-    magicLinkClient(),
-    organizationClient(),
-    genericOAuthClient(),
-    twoFactorClient()
-  ]
-});
+const API_BASE_URL = getApiBaseUrl();
 
-/**
- * Compatibility helpers for existing code using manual fetch logic
- */
+function authEndpoint(path: string): string {
+  const cleanedPath = `/${path.replace(/^\/+/, "")}`;
+  const fullPath = cleanedPath.startsWith("/api/v1") ? cleanedPath : `/api/v1${cleanedPath}`;
+  return API_BASE_URL ? `${API_BASE_URL}${fullPath}` : fullPath;
+}
+
+async function parseError(res: Response): Promise<AuthError> {
+  const raw = await res.text().catch(() => "");
+  if (!raw) return { message: `Request failed with ${res.status}` };
+  try {
+    const data = JSON.parse(raw) as { detail?: string; error?: string; message?: string };
+    return { message: data.detail || data.error || data.message || raw };
+  } catch {
+    return { message: raw };
+  }
+}
 
 export function getToken(): string | null {
   if (typeof document === "undefined") return null;
   const value = `; ${document.cookie}`;
-  // Better Auth session token cookie name (default is better-auth.session_token)
-  const parts = value.split(`; better-auth.session_token=`);
+  const parts = value.split(`; graftai_access_token=`);
   if (parts.length === 2) return parts.pop()?.split(";").shift() || null;
-  
-  // Also check for legacy or prefixed versions just in case
-  const legacyParts = value.split(`; graftai_access_token=`);
-  if (legacyParts.length === 2) return legacyParts.pop()?.split(";").shift() || null;
-  
   return null;
 }
 
@@ -59,82 +54,181 @@ export function getCsrfHeaders(): Record<string, string> {
 
 export const getSessionSafe = async () => {
   try {
-    const session = await authClient.getSession();
-    if (session.error) {
-      console.warn("[AUTH_CLIENT]: Session fetch error:", session.error);
+    const res = await fetch(authEndpoint("/auth/check"), {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      const err = await parseError(res);
+      return { data: null, error: err };
     }
-    return { data: session.data, error: session.error };
+
+    const data = await res.json();
+    if (!data?.authenticated) {
+      return { data: null, error: { message: "Session not authenticated" } };
+    }
+
+    return { data, error: null };
   } catch (err) {
     console.error("[AUTH_CLIENT]: Unexpected session fetch error:", err);
-    return { data: null, error: err };
+    return {
+      data: null,
+      error: { message: err instanceof Error ? err.message : "Failed to fetch session" },
+    };
   }
 };
 
 export const signOut = async () => {
   try {
-    return await authClient.signOut();
+    const res = await fetch(authEndpoint("/auth/logout"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      const error = await parseError(res);
+      return { data: null, error };
+    }
+
+    return { data: await res.json().catch(() => ({ success: true })), error: null };
   } catch (err) {
     console.error("[AUTH_CLIENT]: Sign-out error:", err);
-    throw err;
+    return {
+      data: null,
+      error: { message: err instanceof Error ? err.message : "Logout failed" },
+    };
   }
 };
 
 export const signIn = {
-  email: async ({ email, password }: { email: string; password: string }) => {
-    return await authClient.signIn.email({
-      email,
-      password,
-      callbackURL: "/dashboard",
-    });
-  },
+  email: async ({ email, password }: { email: string; password: string }): Promise<AuthResult> => {
+    try {
+      const body = new URLSearchParams();
+      body.set("username", email);
+      body.set("password", password);
+      body.set("grant_type", "password");
 
-  social: async ({ provider }: { provider: "google" | "github" | "microsoft" | "apple" | "zoom" }) => {
-    if (provider === "zoom") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return await (authClient.signIn as any).genericOAuth({
-        providerId: "zoom",
-        callbackURL: "/dashboard",
+      const res = await fetch(authEndpoint("/auth/token"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body,
+        credentials: "include",
       });
+
+      if (!res.ok) {
+        const error = await parseError(res);
+        return { data: null, error };
+      }
+
+      const data = await res.json().catch(() => ({ success: true }));
+      return { data, error: null };
+    } catch (err) {
+      return {
+        data: null,
+        error: { message: err instanceof Error ? err.message : "Login failed" },
+      };
     }
-    return await authClient.signIn.social({
-      provider,
-      callbackURL: "/dashboard",
-    });
   },
 
-  magicLink: async ({ email }: { email: string }) => {
-    return await authClient.signIn.magicLink({
-      email,
-      callbackURL: "/dashboard",
-    });
+  social: async (): Promise<AuthResult> => {
+    return {
+      data: null,
+      error: { message: "Social sign-in is disabled in simplified auth mode." },
+    };
   },
 
-  zoom: async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return await (authClient.signIn as any).genericOAuth({
-      providerId: "zoom",
-      callbackURL: "/dashboard",
-    });
+  magicLink: async ({ email }: { email: string }): Promise<AuthResult> => {
+    try {
+      const url = new URL(authEndpoint("/auth/passwordless/request"), typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
+      url.searchParams.set("email", email);
+
+      const fetchUrl = API_BASE_URL ? url.toString() : `${url.pathname}${url.search}`;
+      const res = await fetch(fetchUrl, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const error = await parseError(res);
+        return { data: null, error };
+      }
+
+      return { data: await res.json().catch(() => ({ success: true })), error: null };
+    } catch (err) {
+      return {
+        data: null,
+        error: { message: err instanceof Error ? err.message : "Magic link request failed" },
+      };
+    }
   },
 
-  sso: async ({ callbackURL }: { callbackURL?: string } = {}) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return await (authClient.signIn as any).genericOAuth({
-      providerId: "sso-oidc",
-      callbackURL: callbackURL || "/dashboard",
-    });
+  zoom: async (): Promise<AuthResult> => {
+    return {
+      data: null,
+      error: { message: "Zoom OAuth is disabled in simplified auth mode." },
+    };
   },
 
-  passkey: async () => {
-    return { error: new Error("Passkey sign-in is not available on this login flow yet.") };
+  sso: async (): Promise<AuthResult> => {
+    return {
+      data: null,
+      error: { message: "SSO is disabled in simplified auth mode." },
+    };
+  },
+
+  passkey: async (): Promise<AuthResult> => {
+    return {
+      data: null,
+      error: { message: "Passkey sign-in is not available." },
+    };
   },
 };
 
-export const signUp = async (email: string, password: string, name: string) => {
-  return await authClient.signUp.email({
-    email,
-    password,
-    name,
-    callbackURL: "/dashboard",
-  });
+export const signUp = async (
+  email: string,
+  password: string,
+  name: string,
+  timezone?: string
+): Promise<AuthResult> => {
+  try {
+    const res = await fetch(authEndpoint("/auth/register"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        full_name: name,
+        timezone,
+      }),
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const error = await parseError(res);
+      return { data: null, error };
+    }
+
+    return { data: await res.json().catch(() => ({ success: true })), error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: { message: err instanceof Error ? err.message : "Registration failed" },
+    };
+  }
 };

@@ -1,4 +1,4 @@
-import { getToken, getSessionSafe } from "./auth-client";
+import { getToken } from "./auth-client";
 
 function getApiBaseUrl() {
   const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -113,21 +113,35 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
 
     // 4. Handle Unauthorized (Response Interceptor)
     if (response.status === 401 || response.status === 403) {
-      const { data: sessionData, error: refreshError } = await getSessionSafe();
-      
-      if (sessionData && !refreshError) {
-        // Transparently retry once with new credentials
-        const newHeaders = new Headers(headers);
-        newHeaders.set("Authorization", `Bearer ${getToken()}`);
-        
-        const retryResponse = await fetch(url.toString(), {
+      // Attempt a one-time refresh using cookie-based refresh token.
+      const refreshUrl = composeEndpoint("/auth/refresh", true);
+      const refreshResponse = await fetch(refreshUrl, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      }).catch(() => null);
+
+      if (refreshResponse?.ok) {
+        const retryHeaders = new Headers(headers);
+        const refreshedToken = getToken();
+        if (refreshedToken) {
+          retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
+        } else {
+          retryHeaders.delete("Authorization");
+        }
+
+        const retryResponse = await fetch(fetchUrl, {
           ...fetchOptions,
-          headers: newHeaders,
+          headers: retryHeaders,
           body: json ? JSON.stringify(json) : fetchOptions.body,
           credentials: "include",
         });
 
-        if (retryResponse.ok) return retryResponse.json() as Promise<T>;
+        if (retryResponse.ok) {
+          return retryResponse.json() as Promise<T>;
+        }
       }
 
       // If refresh fails, only force login from protected routes.

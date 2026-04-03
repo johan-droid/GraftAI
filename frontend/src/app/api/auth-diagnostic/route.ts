@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 
 export async function GET() {
-    const rawDatabaseUrl =
-        process.env.FRONTEND_DATABASE_URL ||
-        process.env.DATABASE_URL ||
-        process.env.NEXT_PUBLIC_DATABASE_URL;
-    
-    const authSecret = process.env.BETTER_AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-    const betterAuthUrl = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const backendUrl =
+        process.env.NEXT_PUBLIC_API_BASE_URL ||
+        process.env.NEXT_PUBLIC_BACKEND_URL ||
+        "http://localhost:8000";
     
     // Check social providers
     const socialProviders: string[] = [];
@@ -20,18 +17,11 @@ export async function GET() {
     
     const diagnostics = {
         environment: process.env.NODE_ENV || "undefined",
-        hasDatabase: !!rawDatabaseUrl,
-        hasBetterAuthSecret: !!authSecret,
-        betterAuthUrl: betterAuthUrl,
+        authMode: "backend-jwt-cookie",
+        backendUrl: backendUrl,
         nextPublicAppUrl: process.env.NEXT_PUBLIC_APP_URL || "NOT SET",
-        databaseType: rawDatabaseUrl?.includes("postgresql")
-            ? "PostgreSQL"
-            : rawDatabaseUrl
-                ? "Unknown/Invalid"
-                : "Not Configured",
-        dbConnectionStatus: rawDatabaseUrl ? "configured" : "not_configured",
         socialProviders: socialProviders,
-        sessionCookieCandidates: ["better-auth.session_token", "graftai_access_token"],
+        sessionCookieCandidates: ["graftai_access_token", "graftai_refresh_token", "xsrf-token"],
         isProduction: process.env.NODE_ENV === "production",
     };
 

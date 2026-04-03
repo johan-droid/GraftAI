@@ -418,8 +418,7 @@ async def sync_session(
     user = result.scalars().first()
     
     if not user:
-        # This shouldn't happen with Better Auth as it writes to the same DB,
-        # but kept for robustness against other future providers.
+        # Safety fallback: create a local user record when session exists but user row is missing.
         user = UserTable(
             id=user_id,
             email=email,
@@ -573,7 +572,7 @@ async def check_auth(
         "authenticated": True,
         "user": user_data,
         "session": {
-            "token": request.cookies.get("better-auth.session_token") or request.cookies.get("graftai_access_token"),
+            "token": request.cookies.get("graftai_access_token"),
             "expires_at": current_user.get("exp")
         }
     }

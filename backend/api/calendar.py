@@ -50,7 +50,7 @@ class EventResponse(EventBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True) # <- New Pydantic v2 syntax ConfigDict
+    model_config = ConfigDict(from_attributes=True) #  <- New Pydantic v2 syntax ConfigDict
 
 
 @router.get("/events", response_model=List[EventResponse])

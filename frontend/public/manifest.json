@@ -4,6 +4,7 @@
   "description": "AI-first sovereign schedule orchestration.",
   "lang": "en-US",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
   "theme_color": "#09090b",
   "background_color": "#020617",
@@ -20,6 +21,44 @@
       "src": "/icon-512x512.png",
       "type": "image/png",
       "sizes": "512x512"
+    },
+    {
+      "src": "/icon-maskable.png",
+      "type": "image/png",
+      "sizes": "1024x1024",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dash",
+      "description": "View your schedule dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "AI Co-pilot",
+      "short_name": "AI",
+      "description": "Chat with your AI scheduler",
+      "url": "/dashboard/ai",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "GraftAI Dashboard on Desktop"
+    },
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "GraftAI Dashboard on Mobile"
     }
   ]
 }

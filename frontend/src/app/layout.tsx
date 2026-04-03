@@ -17,6 +17,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "GraftAI Scheduler",
   description: "Next-Gen AI SaaS Scheduler with a dark galaxy aesthetic",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "GraftAI",
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: [
     { rel: "icon", url: "/icon-192x192.png" },
     { rel: "apple-touch-icon", url: "/icon-192x192.png" },

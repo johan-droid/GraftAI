@@ -2,7 +2,7 @@ services:
   # 1. GraftAI API (FastAPI)
   - type: web
     name: graftai-api
-    env: docker
+    runtime: docker
     dockerfilePath: backend/Dockerfile
     region: oregon # or your preferred region
     plan: free # or starter for more power
@@ -24,7 +24,7 @@ services:
   # 2. Arq Background Worker
   - type: worker
     name: graftai-worker
-    env: docker
+    runtime: docker
     dockerfilePath: backend/Dockerfile
     # Overriding the default CMD for the worker
     dockerCommand: arq backend.worker.WorkerSettings
@@ -38,12 +38,11 @@ services:
           property: connectionString
       - fromGroup: graftai-secrets
 
-# 3. Redis Instance (Rate Limiting & Tasks)
-databases:
-  - name: graftai-redis
-    type: redis
-    plan: free
+  # 3. Redis Instance (Rate Limiting & Tasks)
+  - type: redis
+    name: graftai-redis
     region: oregon
+    plan: free
     ipAllowList: [] # Redis 6.2+ VPC only by default on Render
 
 # 4. Managed Postgres (Optional if already using Neon, but here for completeness)

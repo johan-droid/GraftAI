@@ -26,9 +26,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Spotlight mouse tracking
-  const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
-
   // Initial fetch for providers
   useEffect(() => {
     fetch("/api/auth/providers")
@@ -52,13 +49,6 @@ export default function LoginPage() {
         setError("Social logins are currently unavailable. Please use email/password.");
       });
   }, []);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setMousePos({ x, y });
-  };
 
   async function handleCredentialLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -190,9 +180,7 @@ export default function LoginPage() {
           <p className="text-slate-500 text-[13px] text-center leading-relaxed">Simple and secure login for your GraftAI workspace</p>
         </div>
 
-        <div 
-          onMouseMove={handleMouseMove}
-          style={{ "--mouse-x": `${mousePos.x}%`, "--mouse-y": `${mousePos.y}%` } as React.CSSProperties}
+        <div
           className="spotlight-card bg-slate-950/40 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-2xl p-6 md:p-7 relative overflow-hidden"
         >
           {/* Subtle Inner Grid Overlay */}

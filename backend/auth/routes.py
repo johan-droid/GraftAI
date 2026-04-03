@@ -33,7 +33,6 @@ from backend.services import (
     auth_utils,
 )
 from backend.models.tables import UserTable
-from backend.models.user_token import UserTokenTable
 from backend.api.deps import get_db
 
 # Auth dependencies

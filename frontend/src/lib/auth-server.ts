@@ -33,7 +33,10 @@ export const auth = betterAuth({
         connectionString: sanitizedDbUrl,
         ssl: {
             rejectUnauthorized: false
-        }
+        },
+        max: 10, // Optimize for serverless
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
     }) : undefined,
     secret: process.env.BETTER_AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-fallback-secret-please-change",
     emailAndPassword: {
@@ -155,5 +158,16 @@ if (!process.env.BETTER_AUTH_SECRET && process.env.NODE_ENV === "production") {
         throw new Error(
             "BETTER_AUTH_SECRET is required in production for Better Auth. Set it in environment variables."
         );
+    }
+}
+
+// Startup Diagnostics
+if (process.env.NODE_ENV === "production") {
+    console.log(`[AUTH_BOOT]: Better Auth URL: ${resolvedAuthUrl}`);
+    if (sanitizedDbUrl) {
+        const masked = sanitizedDbUrl.replace(/:([^@]+)@/, ":****@");
+        console.log(`[AUTH_BOOT]: Database Configured: ${masked}`);
+    } else {
+        console.warn("[AUTH_BOOT]: DATABASE_URL is MISSING");
     }
 }

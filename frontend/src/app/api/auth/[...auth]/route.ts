@@ -18,10 +18,11 @@ export const GET = async (req: Request) => {
             stack: e.stack,
             cause: e.cause
         } : e);
-        // Return a generic error instead of re-throwing to avoid default Next 500
+        // Expose error details temporarily to debug production
         return new Response(JSON.stringify({
             error: "Authentication server error",
-            details: process.env.NODE_ENV === "development" ? String(e) : undefined
+            details: String(e),
+            stack: e instanceof Error ? e.stack?.split("\n").slice(0, 3) : null
         }), { status: 500, headers: { "Content-Type": "application/json" } });
     }
 };
@@ -41,9 +42,11 @@ export const POST = async (req: Request) => {
             stack: e.stack,
             cause: e.cause
         } : e);
+        // Expose error details temporarily to debug production
         return new Response(JSON.stringify({
             error: "Authentication server error",
-            details: process.env.NODE_ENV === "development" ? String(e) : undefined
+            details: String(e),
+            stack: e instanceof Error ? e.stack?.split("\n").slice(0, 3) : null
         }), { status: 500, headers: { "Content-Type": "application/json" } });
     }
 };

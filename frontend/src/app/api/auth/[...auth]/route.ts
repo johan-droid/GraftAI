@@ -9,12 +9,20 @@ export const GET = async (req: Request) => {
     try {
         const res = await handler.GET(req);
         if (res.status >= 400) {
-            console.error(`[AUTH_GET_ERROR] Status: ${res.status}`);
+            console.error(`[AUTH_GET_ERROR] Status: ${res.status} | URL: ${url.pathname}`);
         }
         return res;
     } catch (e) {
-        console.error("[AUTH_GET_CRASH]:", e);
-        throw e;
+        console.error("[AUTH_GET_CRASH]:", e instanceof Error ? {
+            message: e.message,
+            stack: e.stack,
+            cause: e.cause
+        } : e);
+        // Return a generic error instead of re-throwing to avoid default Next 500
+        return new Response(JSON.stringify({
+            error: "Authentication server error",
+            details: process.env.NODE_ENV === "development" ? String(e) : undefined
+        }), { status: 500, headers: { "Content-Type": "application/json" } });
     }
 };
 
@@ -24,11 +32,18 @@ export const POST = async (req: Request) => {
     try {
         const res = await handler.POST(req);
         if (res.status >= 400) {
-            console.error(`[AUTH_POST_ERROR] Status: ${res.status}`);
+            console.error(`[AUTH_POST_ERROR] Status: ${res.status} | URL: ${url.pathname}`);
         }
         return res;
     } catch (e) {
-        console.error("[AUTH_POST_CRASH]:", e);
-        throw e;
+        console.error("[AUTH_POST_CRASH]:", e instanceof Error ? {
+            message: e.message,
+            stack: e.stack,
+            cause: e.cause
+        } : e);
+        return new Response(JSON.stringify({
+            error: "Authentication server error",
+            details: process.env.NODE_ENV === "development" ? String(e) : undefined
+        }), { status: 500, headers: { "Content-Type": "application/json" } });
     }
 };

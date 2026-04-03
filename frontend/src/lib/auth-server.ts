@@ -17,10 +17,20 @@ function resolveServerAuthUrl(): string {
 
 const resolvedAuthUrl = resolveServerAuthUrl();
 
+const rawDatabaseUrl = process.env.FRONTEND_DATABASE_URL || process.env.DATABASE_URL;
+
+function sanitizeDatabaseUrl(url?: string): string | undefined {
+    if (!url) return undefined;
+    // Standardize protocol: Node.js 'pg' driver doesn't support '+asyncpg' or '+pg'
+    return url.replace(/^postgresql\+[^:]+:/, "postgresql:").replace(/^postgres\+[^:]+:/, "postgres:");
+}
+
+const sanitizedDbUrl = sanitizeDatabaseUrl(rawDatabaseUrl);
+
 export const auth = betterAuth({
     baseURL: resolvedAuthUrl,
-    database: process.env.DATABASE_URL ? new Pool({
-        connectionString: process.env.DATABASE_URL,
+    database: sanitizedDbUrl ? new Pool({
+        connectionString: sanitizedDbUrl,
         ssl: {
             rejectUnauthorized: false
         }

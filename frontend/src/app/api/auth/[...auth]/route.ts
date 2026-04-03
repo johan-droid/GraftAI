@@ -22,7 +22,9 @@ export const GET = async (req: Request) => {
         return new Response(JSON.stringify({
             error: "Authentication server error",
             details: String(e),
-            stack: e instanceof Error ? e.stack?.split("\n").slice(0, 3) : null
+            stack: e instanceof Error ? e.stack?.split("\n").slice(0, 3) : null,
+            requestPath: url.pathname,
+            requestQuery: url.search
         }), { status: 500, headers: { "Content-Type": "application/json" } });
     }
 };
@@ -31,6 +33,9 @@ export const POST = async (req: Request) => {
     const url = new URL(req.url);
     console.log(`[AUTH_POST]: ${url.pathname}`);
     try {
+        const bodyText = await req.text().catch(() => "");
+        if (bodyText) console.log(`[AUTH_POST_BODY]: ${bodyText}`);
+
         const res = await handler.POST(req);
         if (res.status >= 400) {
             console.error(`[AUTH_POST_ERROR] Status: ${res.status} | URL: ${url.pathname}`);
@@ -46,7 +51,9 @@ export const POST = async (req: Request) => {
         return new Response(JSON.stringify({
             error: "Authentication server error",
             details: String(e),
-            stack: e instanceof Error ? e.stack?.split("\n").slice(0, 3) : null
+            stack: e instanceof Error ? e.stack?.split("\n").slice(0, 3) : null,
+            requestPath: url.pathname,
+            requestBody: bodyText
         }), { status: 500, headers: { "Content-Type": "application/json" } });
     }
 };

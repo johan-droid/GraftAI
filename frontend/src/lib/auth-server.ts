@@ -3,7 +3,12 @@ import { magicLink, organization, genericOAuth, twoFactor } from "better-auth/pl
 import { Pool } from "pg";
 
 function resolveServerAuthUrl(): string {
-    const explicit = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
+    const explicit =
+        process.env.BETTER_AUTH_URL ||
+        process.env.NEXT_PUBLIC_AUTH_URL ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.APP_URL;
+
     if (explicit) {
         return explicit.replace(/\/+$/g, "");
     }
@@ -12,12 +17,25 @@ function resolveServerAuthUrl(): string {
         return `https://${process.env.VERCEL_URL}`.replace(/\/+$/g, "");
     }
 
+    console.warn(
+        "[AUTH_BOOT] No BETTER_AUTH_URL/NEXT_PUBLIC_AUTH_URL/NEXT_PUBLIC_APP_URL set. Falling back to http://localhost:3000"
+    );
+
     return "http://localhost:3000";
 }
 
 const resolvedAuthUrl = resolveServerAuthUrl();
 
-const rawDatabaseUrl = process.env.FRONTEND_DATABASE_URL || process.env.DATABASE_URL;
+const rawDatabaseUrl =
+    process.env.FRONTEND_DATABASE_URL ||
+    process.env.DATABASE_URL ||
+    process.env.NEXT_PUBLIC_DATABASE_URL;
+
+if (!rawDatabaseUrl && process.env.NODE_ENV === "production") {
+    throw new Error(
+        "FRONTEND_DATABASE_URL or DATABASE_URL is required in production for Better Auth."
+    );
+}
 
 function sanitizeDatabaseUrl(url?: string): string | undefined {
     if (!url) return undefined;
@@ -86,10 +104,10 @@ export const auth = betterAuth({
                     clientSecret: process.env.ZOOM_CLIENT_SECRET,
                     authorizationUrl: "https://zoom.us/oauth/authorize",
                     tokenUrl: "https://zoom.us/oauth/token",
-                    getUserInfo: async (tokens: any) => {
+                    getUserInfo: async (tokens: { accessToken?: string }) => {
                         const response = await fetch("https://api.zoom.us/v2/users/me", {
                             headers: {
-                                Authorization: `Bearer ${tokens.accessToken}`,
+                                Authorization: `Bearer ${tokens.accessToken ?? ""}`,
                             },
                         });
                         const user = await response.json();

@@ -85,21 +85,41 @@ export default function LoginPage() {
       } else if (provider === "zoom") {
         await signIn.zoom();
       } else {
-        await signIn.social({ provider: provider as any });
+        await signIn.social({ provider });
       }
       return;
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      const msg = errorMessage.toLowerCase();
-      
-      // Auto-fallthrough: If social fails, show the credentials tab and an error
-      setActiveTab("credentials");
-      
-      if (msg.includes("network") || msg.includes("failed to fetch") || msg.includes("cors")) {
-        setError("Unable to reach authentication service. Please use your backup login method below.");
-      } else {
-        setError("Login unsuccessful. Please use your email and password as a fallback.");
+      let errorMessage = "Unknown error";
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "string") {
+        errorMessage = err;
+      } else if (err && typeof err === "object" && "message" in err) {
+        const errObj = err as { message?: unknown };
+        if (typeof errObj.message === "string") {
+          errorMessage = errObj.message;
+        } else {
+          errorMessage = JSON.stringify(errObj);
+        }
       }
+
+      const lowerMsg = errorMessage.toLowerCase();
+
+      setActiveTab("credentials");
+
+      if (
+        lowerMsg.includes("network") ||
+        lowerMsg.includes("failed to fetch") ||
+        lowerMsg.includes("cors") ||
+        lowerMsg.includes("500")
+      ) {
+        setError(
+          `Unable to reach authentication service (500). Inspect browser console and backend logs. ${errorMessage}`
+        );
+      } else {
+        setError(`Login unsuccessful. Use email/password or check auth config: ${errorMessage}`);
+      }
+
       setLoading(false);
     }
   };

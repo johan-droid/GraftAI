@@ -57,14 +57,23 @@ export function getCsrfHeaders(): Record<string, string> {
 export const getSessionSafe = async () => {
   try {
     const session = await authClient.getSession();
+    if (session.error) {
+      console.warn("[AUTH_CLIENT]: Session fetch error:", session.error);
+    }
     return { data: session.data, error: session.error };
   } catch (err) {
+    console.error("[AUTH_CLIENT]: Unexpected session fetch error:", err);
     return { data: null, error: err };
   }
 };
 
 export const signOut = async () => {
-  return await authClient.signOut();
+  try {
+    return await authClient.signOut();
+  } catch (err) {
+    console.error("[AUTH_CLIENT]: Sign-out error:", err);
+    throw err;
+  }
 };
 
 export const signIn = {

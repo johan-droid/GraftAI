@@ -32,13 +32,25 @@ export default function LoginPage() {
   // Initial fetch for providers
   useEffect(() => {
     fetch("/api/auth/providers")
-      .then(res => res.json())
-      .then(data => {
-        if (data.providers) setEnabledProviders(data.providers);
-        // Default to sane subset if API fails
-        else setEnabledProviders(["google", "github"]);
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Provider list request failed: ${res.status}`);
+        }
+        return res.json();
       })
-      .catch(() => setEnabledProviders(["google", "github"]));
+      .then((data) => {
+        if (Array.isArray(data.providers) && data.providers.length > 0) {
+          setEnabledProviders(data.providers as OAuthProvider[]);
+        } else {
+          setEnabledProviders([]);
+          console.warn("No social providers available in /api/auth/providers response", data);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch social providers:", err);
+        setEnabledProviders([]);
+        setError("Social logins are currently unavailable. Please use email/password.");
+      });
   }, []);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -76,6 +88,11 @@ export default function LoginPage() {
   }
 
   const handleOAuthLogin = async (provider: OAuthProvider) => {
+    if (!enabledProviders.includes(provider)) {
+      setError(`Social provider '${provider}' is not configured or currently unavailable.`);
+      return;
+    }
+
     setLoading(true);
     setError("");
 

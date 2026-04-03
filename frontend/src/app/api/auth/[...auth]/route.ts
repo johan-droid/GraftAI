@@ -11,7 +11,7 @@ export const GET = async (req: Request) => {
         const res = await handler.GET(req);
 
         if (res.status >= 400) {
-            const errorText = await res.text();
+            const errorText = await res.clone().text();
             console.error(`[AUTH_GET_ERROR] Status: ${res.status}`, errorText);
         }
 
@@ -45,7 +45,7 @@ export const POST = async (req: Request) => {
         const res = await handler.POST(req);
 
         if (res.status >= 400) {
-            const errorText = await res.text();
+            const errorText = await res.clone().text();
             console.error(`[AUTH_POST_ERROR] Status: ${res.status}`, errorText);
         }
 

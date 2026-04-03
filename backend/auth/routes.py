@@ -749,6 +749,8 @@ async def check_auth(
         max_age=86400,
         path="/",
     )
+    # Expose CSRF token in response for SPA clients to read (when CORS expose headers are set)
+    response.headers["x-xsrf-token"] = xsrf_token
 
     return response
 

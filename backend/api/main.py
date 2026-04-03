@@ -209,7 +209,11 @@ class CSRFMiddleware:
                 return
 
             xsrf_cookie = request.cookies.get("xsrf-token")
-            xsrf_header = request.headers.get("x-xsrf-token")
+            xsrf_header = (
+                request.headers.get("x-xsrf-token")
+                or request.headers.get("X-XSRF-TOKEN")
+                or request.headers.get("X-Xsrf-Token")
+            )
 
             if not xsrf_cookie or not xsrf_header or xsrf_cookie != xsrf_header:
                 logger.warning(
@@ -392,7 +396,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["X-Backend-Server", "X-Request-Id"],
+    expose_headers=["X-Backend-Server", "X-Request-Id", "x-xsrf-token", "X-XSRF-TOKEN"],
     max_age=600,  # Cache preflight for 10 minutes to reduce OPTIONS overhead
 )
 

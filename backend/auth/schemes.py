@@ -205,6 +205,10 @@ async def get_current_user(
         if cookie_token:
             token = cookie_token
 
+    # Support accidental `Bearer <token>` passed in as token (for manual header fallback)
+    if token and isinstance(token, str) and token.lower().startswith("bearer "):
+        token = token[7:].strip()
+
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

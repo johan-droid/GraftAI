@@ -46,6 +46,22 @@ def test_auth_check_without_token_returns_401():
     assert response.status_code == 401
 
 
+def test_options_preflight_exposes_xsrf_header():
+    response = client.get(
+        "/api/v1/auth/check",
+        headers={"Origin": "http://localhost:3000"},
+    )
+    # Route is protected and gives 401, but CORS expose header should exist.
+    assert response.status_code == 401
+    expose_headers = response.headers.get("access-control-expose-headers", "")
+    assert "x-xsrf-token" in expose_headers.lower() or "x-xsrf-token" in response.headers
+
+
+def test_refresh_endpoint_without_refresh_token_returns_401():
+    r = client.post("/api/v1/auth/refresh", json={"refresh_token": "invalid"})
+    assert r.status_code == 401
+
+
 def test_password_hash_and_verify_long_password():
     from backend.services.auth_utils import get_password_hash, verify_password
 

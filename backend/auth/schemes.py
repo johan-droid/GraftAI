@@ -2,12 +2,13 @@ from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status, Request
 import jwt
 from jwt import PyJWTError as JWTError
-from typing import Optional
+from typing import Optional, Any
 import os
 import httpx
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 from backend.services.access_control import check_user_role
 from backend.services.redis_client import get_redis
@@ -36,8 +37,6 @@ NEON_AUTH_BASE_URL = os.getenv(
 NEON_JWKS_URL = f"{NEON_AUTH_BASE_URL}/.well-known/jwks.json"
 
 # Inferred Origin from NEON_AUTH_BASE_URL
-from urllib.parse import urlparse
-
 _parsed_neon = urlparse(NEON_AUTH_BASE_URL)
 NEON_AUTH_ORIGIN = f"{_parsed_neon.scheme}://{_parsed_neon.netloc}"
 
@@ -70,7 +69,7 @@ def is_token_blacklisted(token: str) -> bool:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
 
-async def _get_neon_signing_key(token: str) -> any:
+async def _get_neon_signing_key(token: str) -> Any:
     """Fetch Neon Auth JWKS and extract the Ed25519 public key."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
     import base64
@@ -131,7 +130,6 @@ async def decode_token(token: str) -> Optional[dict]:
         alg = header.get("alg")
         # Pre-decode to check issuer without verification (safe for strategy selection)
         unverified_payload = jwt.decode(token, options={"verify_signature": False})
-        iss = unverified_payload.get("iss", "")
     except Exception:
         return None
 
@@ -155,9 +153,9 @@ async def decode_token(token: str) -> Optional[dict]:
 
 
 async def get_current_user(
-    request: Request, 
+    request: Request,
     token: str = Depends(oauth2_scheme),
-    db_session: any = Depends(get_db)
+    db_session: Any = Depends(get_db)
 ):
     """
     Get current user payload from either Authorization: Bearer <token> or better-auth.session_token cookie.
@@ -166,7 +164,7 @@ async def get_current_user(
     if not token:
         # Check Better Auth default cookie name
         cookie_token = (
-            request.cookies.get("better-auth.session_token") or 
+            request.cookies.get("better-auth.session_token") or
             request.cookies.get("graftai_access_token")
         )
         if cookie_token:
@@ -190,7 +188,7 @@ async def get_current_user(
         stmt = select(SessionTable).where(SessionTable.id == token)
         result = await db_session.execute(stmt)
         auth_session = result.scalars().first()
-        
+
         if auth_session:
             # Check for expiration
             if auth_session.expiresAt > datetime.now(timezone.utc):
@@ -199,7 +197,7 @@ async def get_current_user(
                 stmt_user = select(UserTable).where(UserTable.id == auth_session.userId)
                 res_user = await db_session.execute(stmt_user)
                 user = res_user.scalars().first()
-                
+
                 if user:
                     return {
                         "sub": str(user.id),
@@ -264,7 +262,7 @@ def get_current_user_id(current_user: dict = Depends(get_current_user)) -> str:
         )
     try:
         # Ensure user_id can be used by access-control checks.
-        return user_id_raw
+        return str(user_id_raw)
     except (ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -272,12 +270,12 @@ def get_current_user_id(current_user: dict = Depends(get_current_user)) -> str:
         )
 
 
-def is_admin_user(user_id: int = Depends(get_current_user_id)) -> int:
+def is_admin_user(user_id: str = Depends(get_current_user_id)) -> str:
     """
     Dependency that ensures the current user has the 'admin' role.
     Returns the user_id if successful, otherwise raises 403 Forbidden.
     """
-    if not check_user_role(user_id, "admin"):
+    if not check_user_role(str(user_id), "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Administrative privileges required",
@@ -291,17 +289,17 @@ async def get_current_user_id_optional(request: Request) -> Optional[str]:
     from JWT cookies without raising any exceptions if not found.
     """
     token = (
-        request.cookies.get("better-auth.session_token") or 
+        request.cookies.get("better-auth.session_token") or
         request.cookies.get("graftai_access_token")
     )
     if not token:
         return None
-        
+
     if is_token_blacklisted(token):
         return None
-        
+
     payload = await decode_token(token)
     if not payload:
         return None
-        
+
     return payload.get("sub")

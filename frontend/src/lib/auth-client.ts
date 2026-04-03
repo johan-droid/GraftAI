@@ -47,11 +47,14 @@ export function getToken(): string | null {
 export function getCsrfHeaders(): Record<string, string> {
   if (typeof document === "undefined") return {};
   const value = `; ${document.cookie}`;
-  // Better Auth usually handles CSRF internally, but manual requests may need its XSRF token
-  // if double-submit was configured.
   const parts = value.split(`; xsrf-token=`);
   const token = parts.length === 2 ? parts.pop()?.split(";").shift() || null : null;
-  return token ? { "X-XSRF-TOKEN": token } : {};
+  if (!token) return {};
+  // Keep compatibility with both header casings in backend and proxies.
+  return {
+    "X-XSRF-TOKEN": token,
+    "x-xsrf-token": token,
+  };
 }
 
 export const getSessionSafe = async () => {

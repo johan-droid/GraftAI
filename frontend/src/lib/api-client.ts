@@ -91,8 +91,13 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
   }
 
   const xsrf = getCookie("xsrf-token");
-  if (xsrf && !headers.has("X-XSRF-TOKEN")) {
-    headers.set("X-XSRF-TOKEN", xsrf);
+  if (xsrf) {
+    if (!headers.has("X-XSRF-TOKEN")) {
+      headers.set("X-XSRF-TOKEN", xsrf);
+    }
+    if (!headers.has("x-xsrf-token")) {
+      headers.set("x-xsrf-token", xsrf);
+    }
   }
 
   try {

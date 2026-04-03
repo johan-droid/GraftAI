@@ -86,32 +86,79 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true
     },
-    socialProviders: {
-        ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? {
-            google: {
+    socialProviders: (() => {
+        const providerConfig: Record<string, unknown> = {};
+
+        if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+            providerConfig.google = {
                 clientId: process.env.GOOGLE_CLIENT_ID,
                 clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            },
-        } : {}),
-        ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET ? {
-            github: {
+            };
+        }
+
+        if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+            providerConfig.github = {
                 clientId: process.env.GITHUB_CLIENT_ID,
                 clientSecret: process.env.GITHUB_CLIENT_SECRET,
-            },
-        } : {}),
-        ...(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET ? {
-            microsoft: {
+            };
+        }
+
+        if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
+            providerConfig.microsoft = {
                 clientId: process.env.MICROSOFT_CLIENT_ID,
                 clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-            },
-        } : {}),
-        ...(process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET ? {
-            apple: {
+            };
+        }
+
+        if (process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET) {
+            providerConfig.apple = {
                 clientId: process.env.APPLE_CLIENT_ID,
                 clientSecret: process.env.APPLE_CLIENT_SECRET,
-            },
-        } : {}),
-    },
+            };
+        }
+
+        if (process.env.ZOOM_CLIENT_ID && process.env.ZOOM_CLIENT_SECRET) {
+            providerConfig.zoom = {
+                providerId: "zoom",
+                clientId: process.env.ZOOM_CLIENT_ID,
+                clientSecret: process.env.ZOOM_CLIENT_SECRET,
+                authorizationUrl: "https://zoom.us/oauth/authorize",
+                tokenUrl: "https://zoom.us/oauth/token",
+                getUserInfo: async (tokens: { accessToken?: string }) => {
+                    const response = await fetch("https://api.zoom.us/v2/users/me", {
+                        headers: {
+                            Authorization: `Bearer ${tokens.accessToken ?? ""}`,
+                        },
+                    });
+                    const user = await response.json();
+                    return {
+                        id: user.id || user.p_id,
+                        email: user.email,
+                        name: `${user.first_name} ${user.last_name}`,
+                        emailVerified: true,
+                    };
+                },
+            };
+        }
+
+        if (process.env.SSO_OIDC_DISCOVERY_URL && process.env.SSO_OIDC_CLIENT_ID && process.env.SSO_OIDC_CLIENT_SECRET) {
+            providerConfig["sso-oidc"] = {
+                providerId: "sso-oidc",
+                discoveryUrl: process.env.SSO_OIDC_DISCOVERY_URL,
+                clientId: process.env.SSO_OIDC_CLIENT_ID,
+                clientSecret: process.env.SSO_OIDC_CLIENT_SECRET,
+            };
+        }
+
+        const names = Object.keys(providerConfig);
+        if (names.length === 0) {
+            console.warn("[AUTH_BOOT]: No social providers configured; /api/auth/sign-in/social may return 404.");
+        } else {
+            console.log(`[AUTH_BOOT]: Social providers configured: ${names.join(", ")}`);
+        }
+
+        return providerConfig;
+    })(),
     plugins: [
         magicLink({
             sendMagicLink: async ({ email, url, token }) => {

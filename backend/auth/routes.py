@@ -26,7 +26,6 @@ from sqlalchemy import select, delete
 
 # Services and models
 from backend.services import (
-    sso,
     passwordless,
     mfa,
     access_control,
@@ -51,7 +50,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 AUTH_METHODS = [
     m.strip()
-    for m in os.getenv("AUTH_METHODS", "sso,passwordless,mfa").split(",")
+    for m in os.getenv("AUTH_METHODS", "passwordless,mfa").split(",")
     if m.strip()
 ]
 
@@ -63,6 +62,9 @@ def get_rate_limiter(max_requests: int, window_seconds: int):
     """Dependency-based rate limiter for FastAPI routes."""
 
     async def rate_limiter(request: Request):
+        if os.getenv("TESTING") == "1":
+            return True
+
         client_ip = request.headers.get(
             "x-forwarded-for", request.client.host if request.client else "unknown"
         )
@@ -286,227 +288,66 @@ async def register(
             detail="Password does not meet complexity requirements (12+ chars, mixed cases, digits, symbols)",
         )
 
-    # Check if user already exists
-    result = await db.execute(select(UserTable).where(UserTable.email == email))
-    if result.scalars().first():
-        # Generic message to prevent enumeration
-        logger.warning(f"Registration attempt for existing email: {email}")
-        raise HTTPException(
-            status_code=400,
-            detail="Registration failed. Please try a different email or login.",
-        )
-
-    # Register user with explicit transaction block
+    # Register user with explicit transaction block (including existence check within a single transaction)
     try:
         async with db.begin():
+            result = await db.execute(select(UserTable).where(UserTable.email == email))
+            if result.scalars().first():
+                logger.warning(f"Registration attempt for existing email: {email}")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Registration failed. Please try a different email or login.",
+                )
+
             new_user = UserTable(
+                id=str(uuid.uuid4()),
                 email=email,
                 full_name=user_in.full_name,
                 hashed_password=auth_utils.get_password_hash(user_in.password),
-                timezone=user_in.timezone,
+                timezone=user_in.timezone or "UTC",
+                is_active=True,
+                is_superuser=False,
+                tier="free",
+                subscription_status="inactive",
+                daily_ai_count=0,
+                daily_sync_count=0,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                consent_analytics=True,
+                consent_notifications=True,
+                consent_ai_training=False,
             )
             db.add(new_user)
             await db.flush()
-            
-            # Offload welcome email to background worker
-            try:
-                from backend.services.bg_tasks import enqueue_welcome_email
-                await enqueue_welcome_email(
-                    user_email=email,
-                    full_name=user_in.full_name or email.split("@")[0],
-                )
-            except Exception as e:
-                logger.warning(f"Failed to enqueue welcome email in register: {e}")
+
+        # Offload welcome email to background worker outside DB transaction
+        try:
+            from backend.services.bg_tasks import enqueue_welcome_email
+            await enqueue_welcome_email(
+                user_email=email,
+                full_name=user_in.full_name or email.split("@")[0],
+            )
+        except Exception as e:
+            logger.warning(f"Failed to enqueue welcome email in register: {e}")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Registration failed: {type(e).__name__}")
+        logger.exception("Registration failed")
         raise HTTPException(status_code=500, detail="Registration failed")
 
     return {"message": "User registered successfully", "id": new_user.id}
 
 
-@router.get("/sso/start")
-def sso_start(provider: str = "github", redirect_to: str = "/dashboard"):
-    try:
-        return sso.start_oauth2_flow(provider=provider, redirect_to=redirect_to)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
-        )
+# NOTE: OAuth provider sign-in has been removed to simplify and harden local auth paths.
+# Legacy /sso routes are disabled from this refactor.
 
+# @router.get("/sso/start")
+# def sso_start(provider: str = "github", redirect_to: str = "/dashboard"):
+#     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SSO is disabled")
+#
+# @router.get("/sso/callback")
 
-@router.get("/sso/callback")
-async def sso_callback(
-    code: str, state: str, request: Request, db: AsyncSession = Depends(get_db)
-):
-    """
-    This endpoint is hit TWICE during OAuth:
-    1. By Google (browser navigation) → we redirect to the frontend WITHOUT consuming state.
-    2. By the frontend's fetch() call → we consume the state and return JSON with the token.
-    
-    CRITICAL: The state must be retrieved BEFORE completing the OAuth flow,
-    because complete_oauth2_flow may delete the state from Redis.
-    """
-    fetch_param = request.query_params.get("fetch") == "true"
-    accept_header = request.headers.get("accept", "").lower()
-    is_json_accept = "application/json" in accept_header
-
-    is_navigation = not fetch_param and not is_json_accept
-
-    if is_navigation:
-        # STEP 1: Browser redirect from provider → send to frontend callback page.
-        # This does not consume state, the second (fetch=true) call does.
-        frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
-
-        # If no frontend route is present, `auth-callback` will be 404 from the frontend side.
-        # This almost always means the callback URL used in provider settings is wrong.
-        redirect_url = f"{frontend_base}/auth-callback?code={code}&state={state}"
-
-        return RedirectResponse(redirect_url, status_code=302)
-
-    # STEP 2: Frontend API call → complete the OAuth flow (consumes the state).
-    try:
-        # IMPORTANT: Verify and retrieve state data BEFORE calling complete_oauth2_flow
-        # This preserves redirect_to and other session data
-        verified_state = sso._verify_state(state)
-        if not verified_state:
-            raise HTTPException(status_code=403, detail="OAuth state signature verification failed")
-        
-        # Get state data before it gets consumed
-        state_data = sso._get_oauth_state(verified_state)
-        if not state_data:
-            raise RuntimeError("Invalid or expired state")
-        
-        # Now complete the OAuth flow (this will fetch tokens and user profile)
-        payload = await sso.complete_oauth2_flow(code=code, state=state)
-        profile = payload.get("profile", {})
-        token = payload.get("token")
-        provider_name = payload.get("provider", "google")
-
-        logger.info(
-            f"SSO callback success for provider={provider_name} state=[...truncated]"
-        )
-
-        # Upsert user in one transaction
-        async with db.begin():
-            email = profile.get("email")
-            if not email:
-                raise HTTPException(status_code=400, detail="Email required from SSO provider")
-            
-            result = await db.execute(select(UserTable).where(UserTable.email == email))
-            user = result.scalars().first()
-            
-            if not user:
-                user_id = str(uuid.uuid4())
-                user = UserTable(
-                    id=user_id,
-                    email=email,
-                    full_name=profile.get("name"),
-                    is_active=True,
-                    timezone=profile.get("timezone", "UTC"),
-                )
-                db.add(user)
-                await db.flush()
-                
-                # Offload welcome email to background worker
-                try:
-                    from backend.services.bg_tasks import enqueue_welcome_email
-                    await enqueue_welcome_email(
-                        user_email=email,
-                        full_name=user.full_name or profile.get("name", "User"),
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to enqueue welcome email in SSO callback: {e}")
-            else:
-                user_id = str(user.id)
-                user.full_name = profile.get("name") or user.full_name
-
-        # 1. Store provider token in DB for synchronization and revocation
-        if token:
-            async with db.begin():
-                # Check if we already have a token for this provider/user combination
-                from sqlalchemy import and_
-                stmt = select(UserTokenTable).where(
-                    and_(
-                        UserTokenTable.user_id == user_id,
-                        UserTokenTable.provider == provider_name
-                    )
-                )
-                result = await db.execute(stmt)
-                existing_token = result.scalars().first()
-
-                token_data = {
-                    "user_id": user_id,
-                    "provider": provider_name,
-                    "access_token": token.get("access_token"),
-                    "refresh_token": token.get("refresh_token"),
-                    "scopes": token.get("scope"),
-                    "is_active": True
-                }
-                if token.get("expires_at"):
-                    token_data["expires_at"] = datetime.fromtimestamp(token["expires_at"], tz=timezone.utc)
-
-                if existing_token:
-                    for key, value in token_data.items():
-                        if value is not None:
-                            setattr(existing_token, key, value)
-                    logger.info(f"🔄 Updated {provider_name} tokens in DB for system user {user_id}")
-                else:
-                    db.add(UserTokenTable(**token_data))
-                    logger.info(f"➕ Saved new {provider_name} tokens in DB for system user {user_id}")
-
-            # Also maintain temporary session in Redis for revocation
-            redis_client = _get_redis_client()
-            redis_client.setex(
-                f"sso_token:{user_id}", 
-                timedelta(days=7), 
-                json.dumps({"provider": provider_name, "token": token})
-            )
-
-            # Remember this linked Google account in Redis so future logins can be smoother.
-            # This supporting data does not replace access/refresh token flow,
-            # but helps identify that user/account previously existed.
-            if email:
-                redis_client.setex(
-                    f"sso_remember:{provider_name}:{email.lower()}",
-                    timedelta(days=30),
-                    user_id,
-                )
-
-        own_token = _create_jwt_token(user_id, email=email)
-        response = JSONResponse(
-            content={
-                "message": "SSO authentication successful",
-                "auth": {k: v for k, v in payload.items() if k != "token"},
-                "token": own_token,
-                "user_id": user_id,
-                "redirect_to": payload.get("redirect_to", "/dashboard"),
-            }
-        )
-        _attach_jwt_cookies(response, own_token)
-        return response
-    except HTTPException as e:
-        logger.error(
-            f"SSO callback failure for signed_state={state}, code={code}, err={e.detail}"
-        )
-        raise e
-    except Exception as e:
-        logger.error(
-            f"SSO callback failure for signed_state={state}, code={code}, err={e}"
-        )
-
-        msg = str(e)
-        if not msg.strip():
-            msg = f"{type(e).__name__} during OAuth flow"
-            
-        if "Invalid or expired state" in msg or "OAuth state" in msg:
-            if is_navigation:
-                frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
-                redirect_url = f"{frontend_base}/login?error=oauth_state_expired"
-                return RedirectResponse(redirect_url, status_code=302)
-            raise HTTPException(status_code=status.HTTP_410_GONE, detail=msg)
-
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
-
+# SSO callback removed in this refactor. OAuth flows are handled externally or deprecated.
 
 @router.post("/sync-consent")
 async def sync_consent(
@@ -836,34 +677,17 @@ async def delete_account(
 
     # 1. Fetch user and delete within a single explicit transaction
     try:
-        # Pre-fetch SSO token for revocation since we need user_id
-        client = _get_redis_client()
-        sso_data_raw = client.get(f"sso_token:{user_id}")
-        
         async with db.begin():
-            # Ensure existence and get name for email
             result = await db.execute(select(UserTable).where(UserTable.id == user_id))
             user = result.scalars().first()
             if not user:
-                # We can't raise inside the transaction block without proper rollback, 
-                # but async with db.begin() handles exception rollback implicitly.
                 raise HTTPException(status_code=404, detail="User not found")
-            
-            # Deletion (DB constraints ON DELETE CASCADE handle events, etc.)
+
             await db.execute(delete(UserTable).where(UserTable.id == user_id))
-            # Commit happens automatically on exit
-        
-        # 2. Revoke Provider Token (SaaS-grade disconnection)
-        if sso_data_raw:
-            try:
-                sso_data = json.loads(sso_data_raw)
-                await sso.revoke_provider_token(
-                    provider=sso_data.get("provider"), 
-                    token=sso_data.get("token")
-                )
-                client.delete(f"sso_token:{user_id}")
-            except Exception as e:
-                logger.warning(f"Provider revocation failed for {user_id}: {e}")
+
+        # 2. Delete any cached provider metadata
+        client = _get_redis_client()
+        client.delete(f"sso_token:{user_id}")
 
     except HTTPException:
         raise

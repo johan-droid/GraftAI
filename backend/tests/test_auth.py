@@ -1,4 +1,5 @@
 import pytest
+import uuid
 from fastapi.testclient import TestClient
 from backend.api.main import app
 from backend.auth.routes import _create_jwt_token
@@ -19,26 +20,58 @@ async def test_create_and_decode_jwt():
     assert payload.get("sub") == "123"
 
 
-def test_sso_callback_browser_redirects_to_frontend():
-    response = client.get(
-        "/api/v1/auth/sso/callback?code=test_code&state=test_state",
-        headers={"Accept": "*/*"},
-        follow_redirects=False,
+def test_auth_register_and_login_flow():
+    unique_email = f"testuser+{uuid.uuid4().hex[:8]}@example.com"
+
+    # Register new user
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": unique_email, "password": "StrongPassw0rd!", "full_name": "Test User"},
     )
-    assert response.status_code == 302
-    assert "auth-callback" in response.headers["location"]
+    assert response.status_code == 200
+    assert response.json().get("message") == "User registered successfully"
+
+    # Login user
+    response = client.post(
+        "/api/v1/auth/token",
+        data={"username": unique_email, "password": "StrongPassw0rd!"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "Login successful"
+    assert "access_token" in response.cookies or "graftai_access_token" in response.cookies
+
+    # Check authenticated endpoint
+    auth_response = client.get(
+        "/api/v1/auth/check",
+        headers={"Authorization": f"Bearer {data.get('access_token')}"},
+    )
+    assert auth_response.status_code == 200
+    assert auth_response.json().get("authenticated") is True
 
 
-def test_sso_callback_json_invalid_state_returns_400():
-    response = client.get(
-        "/api/v1/auth/sso/callback?code=test_code&state=test_state",
-        headers={"Accept": "application/json"},
-        follow_redirects=False,
+def test_auth_refresh_rotates_token():
+    unique_email = f"testuser2+{uuid.uuid4().hex[:8]}@example.com"
+
+    # Register and login user
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": unique_email, "password": "StrongPassw0rd!", "full_name": "Test User2"},
     )
-    # The error might be a 403 wrapped in a 400, or a direct 400
-    assert response.status_code in [400, 403]
-    detail = response.json().get("detail", "")
-    assert "OAuth state" in detail or "Invalid or expired state" in detail
+    response = client.post(
+        "/api/v1/auth/token",
+        data={"username": unique_email, "password": "StrongPassw0rd!"},
+    )
+    assert response.status_code == 200
+    refresh_token = response.cookies.get("graftai_refresh_token")
+
+    # Refresh token
+    refresh_response = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert refresh_response.status_code == 200
+    assert refresh_response.json().get("message") == "Token refreshed successfully"
 
 
 def test_auth_check_without_token_returns_401():

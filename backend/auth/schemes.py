@@ -135,48 +135,14 @@ async def decode_token(token: str) -> Optional[dict]:
     except Exception:
         return None
 
-    # Strategy 1: Neon Auth (EdDSA)
-    if alg == "EdDSA":
-        try:
-            if NEON_AUTH_ORIGIN in iss:
-                signing_key = await _get_neon_signing_key(token)
-                return jwt.decode(
-                    token,
-                    key=signing_key,
-                    algorithms=["EdDSA"],
-                    issuer=NEON_AUTH_ORIGIN,
-                    audience=NEON_AUTH_ORIGIN,
-                )
-        except JWTError as exc:
-            import logging
-
-            logging.getLogger(__name__).error(f"Neon Auth JWT validation failed: {exc}")
-            return None
-
-    # Strategy 2: External Identity (Auth0 RS256)
-    if alg == "RS256":
-        try:
-            # ── Auth0 Strategy ──
-            if AUTH0_DOMAIN and "auth0.com" in iss:
-                jwk = await _get_auth0_jwk(token)
-                return jwt.decode(
-                    token, key=jwk, algorithms=["RS256"], audience=AUTH0_AUDIENCE
-                )
-        except JWTError as exc:
-            import logging
-
-            logging.getLogger(__name__).error(f"External JWT validation failed: {exc}")
-            return None
-
-    # Strategy 3: Local Sovereign Session (HS256)
+    # Only local sovereign JWT sessions are supported now.
     if alg == "HS256":
         try:
-            # PyJWT verifies exp, iat, and nbf by default when present
             return jwt.decode(
-                token, 
-                SECRET_KEY, 
+                token,
+                SECRET_KEY,
                 algorithms=["HS256"],
-                options={"verify_exp": True, "verify_iat": True, "require": ["exp"]}
+                options={"verify_exp": True, "verify_iat": True, "require": ["exp"]},
             )
         except jwt.ExpiredSignatureError:
             logger.warning("Token has expired")
@@ -184,6 +150,7 @@ async def decode_token(token: str) -> Optional[dict]:
         except JWTError:
             return None
 
+    # All other token algorithms are rejected in this simplified auth architecture.
     return None
 
 

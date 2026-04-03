@@ -319,11 +319,7 @@ async def lifespan(app: FastAPI):
         logger.critical(f"CRITICAL: Password hashing system failure: {e}")
         raise RuntimeError("Password hashing system initialization failed") from e
 
-    # 3. Auth0 Verification
-    domain = os.getenv("AUTH0_DOMAIN")
-    audience = os.getenv("AUTH0_AUDIENCE")
-    if domain and audience:
-        logger.info(f"✅ Auth0 configuration detected for domain: {domain}")
+    # 3. Auth provider auto-check removed. Using local sovereign auth.
 
     reminder_task = asyncio.create_task(reminder_worker(app))
 

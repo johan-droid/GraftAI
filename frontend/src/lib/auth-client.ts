@@ -140,11 +140,28 @@ export const signIn = {
     }
   },
 
-  social: async (): Promise<AuthResult> => {
-    return {
-      data: null,
-      error: { message: "Social sign-in is disabled in simplified auth mode." },
-    };
+  social: async (provider: "google" | "microsoft"): Promise<AuthResult> => {
+    if (typeof window === "undefined") {
+      return { data: null, error: { message: "Client-side only operation" } };
+    }
+
+    try {
+      // Build the absolute URL to the backend's SSO initiation route
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || window.location.origin;
+      const url = new URL("/api/v1/auth/sso/start", baseUrl);
+      url.searchParams.set("provider", provider);
+      url.searchParams.set("redirect_to", "/dashboard");
+
+      // Redirect the entire page to the backend to start the OAuth handshake
+      window.location.assign(url.toString());
+
+      return { data: { redirecting: true }, error: null };
+    } catch (err) {
+      return {
+        data: null,
+        error: { message: err instanceof Error ? err.message : "Failed to initiate social login" },
+      };
+    }
   },
 
   magicLink: async ({ email }: { email: string }): Promise<AuthResult> => {

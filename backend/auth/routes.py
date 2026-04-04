@@ -30,6 +30,7 @@ from backend.services import (
     access_control,
     fido2_did,
     auth_utils,
+    sso,
 )
 from backend.models.tables import UserTable
 from backend.api.deps import get_db
@@ -336,16 +337,101 @@ async def register(
     return {"message": "User registered successfully", "id": new_user.id}
 
 
-# NOTE: OAuth provider sign-in has been removed to simplify and harden local auth paths.
-# Legacy /sso routes are disabled from this refactor.
+@router.get("/sso/start")
+async def sso_start(provider: str = "google", redirect_to: str = "/dashboard"):
+    """
+    Initializes OAuth2 login flow for the given provider.
+    """
+    try:
+        return sso.start_oauth2_flow(provider, redirect_to)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SSO start failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initiate SSO")
 
-# @router.get("/sso/start")
-# def sso_start(provider: str = "github", redirect_to: str = "/dashboard"):
-#     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SSO is disabled")
-#
-# @router.get("/sso/callback")
 
-# SSO callback removed in this refactor. OAuth flows are handled externally or deprecated.
+@router.get("/sso/callback")
+async def sso_callback(
+    code: str, 
+    state: str, 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Handles the OAuth2 provider callback, creates/syncs the user record, 
+    sets HttpOnly cookies, and returns session data for the SPA.
+    """
+    try:
+        # 1. Complete OAuth flow via authlib
+        sso_data = await sso.complete_oauth2_flow(code, state)
+        profile = sso_data.get("profile", {})
+        email = auth_utils.canonical_email(profile.get("email"))
+        name = profile.get("name")
+        
+        if not email:
+            raise HTTPException(
+                status_code=400, 
+                detail="Provider did not return a valid email address. Authentication aborted."
+            )
+            
+        # 2. Check if user already exists in local DB
+        result = await db.execute(select(UserTable).where(UserTable.email == email))
+        user = result.scalars().first()
+        
+        if not user:
+            # 3. Provision new user record for first-time social login
+            user = UserTable(
+                id=str(uuid.uuid4()),
+                email=email,
+                full_name=name or email.split("@")[0],
+                hashed_password=None,  # No password for SSO users
+                timezone="UTC",
+                is_active=True,
+                is_superuser=False,
+                tier="free",
+                subscription_status="inactive",
+                daily_ai_count=0,
+                daily_sync_count=0,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                consent_analytics=True,
+                consent_notifications=True,
+                consent_ai_training=False,
+            )
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+            logger.info(f"Created new SSO user: {email} ({sso_data.get('provider')})")
+        else:
+            logger.info(f"SSO login for existing user: {email}")
+            
+        # 4. Issue local JWT session tokens
+        tokens = _create_jwt_token(str(user.id), email=user.email)
+        
+        # 5. Prepare standard payload for frontend callback handler
+        response_data = {
+            "message": "SSO sign-in successful",
+            "authenticated": True,
+            "user": {
+                "id": user.id, 
+                "email": user.email,
+                "name": user.full_name
+            },
+            "token": tokens, # Contains access_token and refresh_token
+            "redirect_to": sso_data.get("redirect_to", "/dashboard")
+        }
+        
+        response = JSONResponse(content=response_data)
+        _attach_jwt_cookies(response, tokens)
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SSO callback exception: {e}")
+        # Return structured error so frontend can show a user-friendly message
+        raise HTTPException(status_code=500, detail=f"Authentication failed: {str(e)}")
+
 
 @router.post("/sync-consent")
 async def sync_consent(

@@ -52,10 +52,8 @@ def _verify_state(signed_state: str) -> str | None:
 
 # SSRF protection: only allow these domains for userinfo_url
 ALLOWED_SSO_DOMAINS = [
-    "api.github.com",
     "www.googleapis.com",
     "graph.microsoft.com",
-    "appleid.apple.com",
 ]
 
 
@@ -92,15 +90,6 @@ def _delete_oauth_state(state: str):
 
 # Multi-provider configuration
 PROVIDERS = {
-    "github": {
-        "client_id": os.getenv("GITHUB_CLIENT_ID") or os.getenv("OAUTH2_CLIENT_ID"),
-        "client_secret": os.getenv("GITHUB_CLIENT_SECRET")
-        or os.getenv("OAUTH2_CLIENT_SECRET"),
-        "auth_url": "https://github.com/login/oauth/authorize",
-        "token_url": "https://github.com/login/oauth/access_token",
-        "userinfo_url": "https://api.github.com/user",
-        "scope": "read:user user:email",
-    },
     "google": {
         "client_id": os.getenv("GOOGLE_CLIENT_ID"),
         "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
@@ -124,24 +113,8 @@ PROVIDERS = {
         "scope": "openid profile email User.Read Calendars.ReadWrite OnlineMeetings.ReadWrite",
         "redirect_uri": os.getenv("MICROSOFT_REDIRECT_URI"),
     },
-    "zoom": {
-        "client_id": os.getenv("ZOOM_CLIENT_ID"),
-        "client_secret": os.getenv("ZOOM_CLIENT_SECRET"),
-        "auth_url": "https://zoom.us/oauth/authorize",
-        "token_url": "https://zoom.us/oauth/token",
-        "userinfo_url": "https://api.zoom.us/v2/users/me",
-        "scope": "meeting:write",
-    },
-    "apple": {
-        "client_id": os.getenv("APPLE_CLIENT_ID"),
-        "client_secret": os.getenv("APPLE_CLIENT_SECRET"),
-        "auth_url": "https://appleid.apple.com/auth/authorize",
-        "token_url": "https://appleid.apple.com/auth/token",
-        "userinfo_url": None,
-        "scope": "name email",
-        "response_mode": "form_post",
-    },
 }
+
 
 # During OAuth2 login the provider should return to the frontend callback endpoint.
 # This matches the existing Next.js `/auth-callback` page flow in frontend/src/app/auth-callback/page.tsx

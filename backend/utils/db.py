@@ -25,16 +25,23 @@ if DATABASE_URL:
             async_sessionmaker,
             create_async_engine,
         )
-        from sqlalchemy.pool import NullPool
+        from sqlalchemy.pool import NullPool, StaticPool
 
         if DATABASE_URL.startswith("sqlite"):
-            # SQLite + aiosqlite (tests/local dev): simplified connection settings and no pooling
+            # Keep a single connection for in-memory SQLite so metadata survives across sessions.
+            sqlite_engine_kwargs = {
+                "echo": False,
+                "future": True,
+                "connect_args": {"check_same_thread": False},
+            }
+            if DATABASE_URL.endswith(":memory:"):
+                sqlite_engine_kwargs["poolclass"] = StaticPool
+            else:
+                sqlite_engine_kwargs["poolclass"] = NullPool
+
             engine = create_async_engine(
                 DATABASE_URL,
-                echo=False,
-                future=True,
-                connect_args={"check_same_thread": False},
-                poolclass=NullPool,
+                **sqlite_engine_kwargs,
             )
             AsyncSessionLocal = async_sessionmaker(
                 bind=engine,

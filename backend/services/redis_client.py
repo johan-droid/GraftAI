@@ -16,6 +16,7 @@ class InMemoryRedis:
         self._data = {}
         self._expires = {}
         self._sets = {}
+        self._hashes = {}
         self._subscribers = {}
         self._pubsub_lock = threading.Lock()
 
@@ -25,6 +26,7 @@ class InMemoryRedis:
             if self._expires.get(key) is not None and self._expires[key] <= now:
                 self._data.pop(key, None)
                 self._sets.pop(key, None)
+                self._hashes.pop(key, None)
                 self._expires.pop(key, None)
 
     def get(self, key):
@@ -42,13 +44,61 @@ class InMemoryRedis:
 
     def exists(self, key):
         self._purge_expired()
-        return 1 if key in self._data or key in self._sets else 0
+        return 1 if key in self._data or key in self._sets or key in self._hashes else 0
 
     def sadd(self, key, member):
         self._purge_expired()
         if key not in self._sets:
             self._sets[key] = set()
         self._sets[key].add(member)
+
+    def srem(self, key, member):
+        self._purge_expired()
+        members = self._sets.get(key)
+        if not members:
+            return 0
+        if member in members:
+            members.remove(member)
+            if not members:
+                self._sets.pop(key, None)
+            return 1
+        return 0
+
+    def smembers(self, key):
+        self._purge_expired()
+        return set(self._sets.get(key, set()))
+
+    def hset(self, key, mapping=None, **kwargs):
+        self._purge_expired()
+        values = {}
+        if mapping:
+            values.update(mapping)
+        if kwargs:
+            values.update(kwargs)
+        if key not in self._hashes:
+            self._hashes[key] = {}
+        for field, value in values.items():
+            self._hashes[key][str(field)] = str(value)
+        return len(values)
+
+    def delete(self, *keys):
+        self._purge_expired()
+        deleted = 0
+        for key in keys:
+            removed = False
+            if key in self._data:
+                self._data.pop(key, None)
+                removed = True
+            if key in self._sets:
+                self._sets.pop(key, None)
+                removed = True
+            if key in self._hashes:
+                self._hashes.pop(key, None)
+                removed = True
+            self._expires.pop(key, None)
+            if removed:
+                deleted += 1
+        return deleted
 
     def incr(self, key):
         self._purge_expired()
@@ -72,7 +122,7 @@ class InMemoryRedis:
 
     def dbsize(self):
         self._purge_expired()
-        keys = set(self._data.keys()) | set(self._sets.keys())
+        keys = set(self._data.keys()) | set(self._sets.keys()) | set(self._hashes.keys())
         return len(keys)
 
     def publish(self, channel, message):
@@ -118,6 +168,15 @@ class InMemoryPipeline:
     def expire(self, key, seconds):
         self._commands.append(("expire", key, seconds))
 
+    def hset(self, key, mapping=None, **kwargs):
+        self._commands.append(("hset", key, mapping, kwargs))
+
+    def srem(self, key, value):
+        self._commands.append(("srem", key, value))
+
+    def delete(self, key):
+        self._commands.append(("delete", key))
+
     def execute(self):
         results = []
         for cmd in self._commands:
@@ -131,6 +190,15 @@ class InMemoryPipeline:
             elif op == "expire":
                 _, key, seconds = cmd
                 results.append(self._client.expire(key, seconds))
+            elif op == "hset":
+                _, key, mapping, kwargs = cmd
+                results.append(self._client.hset(key, mapping=mapping, **kwargs))
+            elif op == "srem":
+                _, key, value = cmd
+                results.append(self._client.srem(key, value))
+            elif op == "delete":
+                _, key = cmd
+                results.append(self._client.delete(key))
         self._commands.clear()
         return results
 

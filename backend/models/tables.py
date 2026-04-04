@@ -4,6 +4,7 @@ from sqlalchemy import (
     String,
     Boolean,
     DateTime,
+    JSON,
     ForeignKey,
     func,
     Text,
@@ -119,7 +120,7 @@ class EventTable(Base):
     end_time = Column(DateTime(timezone=True), nullable=False, index=True)
 
     # Advanced metadata for AI integration (e.g. priority, required participants, location)
-    metadata_payload = Column(JSONB, default={}, nullable=False)
+    metadata_payload = Column(JSONB().with_variant(JSON, "sqlite"), default={}, nullable=False)
 
     is_remote = Column(Boolean, default=True)
     status = Column(String(50), default="confirmed")  # confirmed, pending, canceled
@@ -129,7 +130,7 @@ class EventTable(Base):
     is_meeting = Column(Boolean, default=False, nullable=False)
     meeting_platform = Column(String(50))  # google_meet, zoom, teams
     meeting_link = Column(String(1024))
-    attendees = Column(JSONB, default=[], nullable=False)
+    attendees = Column(JSONB().with_variant(JSON, "sqlite"), default=[], nullable=False)
     agenda = Column(Text)
 
     # Smart Sync Engine Fields

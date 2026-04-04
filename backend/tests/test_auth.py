@@ -5,7 +5,11 @@ from backend.api.main import app
 from backend.auth.routes import _create_jwt_token
 from backend.auth.schemes import decode_token
 
-client = TestClient(app)
+
+@pytest.fixture
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.mark.asyncio
@@ -20,7 +24,7 @@ async def test_create_and_decode_jwt():
     assert payload.get("sub") == "123"
 
 
-def test_auth_register_and_login_flow():
+def test_auth_register_and_login_flow(client):
     unique_email = f"testuser+{uuid.uuid4().hex[:8]}@example.com"
 
     # Register new user
@@ -42,15 +46,21 @@ def test_auth_register_and_login_flow():
     assert "access_token" in response.cookies or "graftai_access_token" in response.cookies
 
     # Check authenticated endpoint
+    access_token = data.get("access_token")
+    headers = (
+        {"Authorization": f"Bearer {access_token}"}
+        if access_token
+        else {}
+    )
     auth_response = client.get(
         "/api/v1/auth/check",
-        headers={"Authorization": f"Bearer {data.get('access_token')}"},
+        headers=headers,
     )
     assert auth_response.status_code == 200
     assert auth_response.json().get("authenticated") is True
 
 
-def test_auth_refresh_rotates_token():
+def test_auth_refresh_rotates_token(client):
     unique_email = f"testuser2+{uuid.uuid4().hex[:8]}@example.com"
 
     # Register and login user
@@ -74,12 +84,12 @@ def test_auth_refresh_rotates_token():
     assert refresh_response.json().get("message") == "Token refreshed successfully"
 
 
-def test_auth_check_without_token_returns_401():
+def test_auth_check_without_token_returns_401(client):
     response = client.get("/api/v1/auth/check")
     assert response.status_code == 401
 
 
-def test_options_preflight_exposes_xsrf_header():
+def test_options_preflight_exposes_xsrf_header(client):
     response = client.get(
         "/api/v1/auth/check",
         headers={"Origin": "http://localhost:3000"},
@@ -90,7 +100,7 @@ def test_options_preflight_exposes_xsrf_header():
     assert "x-xsrf-token" in expose_headers.lower() or "x-xsrf-token" in response.headers
 
 
-def test_refresh_endpoint_without_refresh_token_returns_401():
+def test_refresh_endpoint_without_refresh_token_returns_401(client):
     r = client.post("/api/v1/auth/refresh", json={"refresh_token": "invalid"})
     assert r.status_code == 401
 

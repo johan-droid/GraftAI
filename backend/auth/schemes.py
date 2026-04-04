@@ -211,27 +211,52 @@ async def verify_better_auth_session(token: str, db: AsyncSession) -> Optional[d
 
 async def get_current_user(
     request: Request,
-    token: str = Depends(oauth2_scheme),
+    token: Optional[str] = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Get current user payload from Authorization bearer token, cookie-based JWT, or Better Auth session cookie.
-    Robustly handles both HS256 JWTs and Better Auth opaque tokens.
+    ROBUSTNESS: Manually inspects headers and cookies to ensure proxies don't strip credentials.
     """
-    # 1. Resolve Token source (Bearer header or Cookies)
+    # 1. Resolve Token source (Bearer header, Case-insensitive Authorization, X-Authorization, or Cookies)
     if not token:
-        token = (
-            request.cookies.get("graftai_access_token")
-            or request.cookies.get("better-auth.session_token")
-        )
-        if token:
-            logger.info(f"[AUTH_DEBUG]: Using token from cookie: {token[:10]}...")
+        # Standard header (case-insensitive via FastAPI request object)
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        if auth_header and auth_header.lower().startswith("bearer "):
+            token = auth_header[7:].strip()
+            logger.info(f"[AUTH_DEBUG]: Found token in Authorization header: {token[:10]}...")
+        
+        # Custom header (for some proxies)
+        if not token:
+            x_auth = request.headers.get("X-Authorization") or request.headers.get("x-authorization")
+            if x_auth:
+                token = x_auth[7:].strip() if x_auth.lower().startswith("bearer ") else x_auth.strip()
+                logger.info(f"[AUTH_DEBUG]: Found token in X-Authorization header: {token[:10]}...")
 
-    if token and isinstance(token, str) and token.lower().startswith("bearer "):
-        token = token[7:].strip()
+        # Cookie fallback
+        if not token:
+            token = (
+                request.cookies.get("graftai_access_token")
+                or request.cookies.get("better-auth.session_token")
+            )
+            if token:
+                logger.info(f"[AUTH_DEBUG]: Found token in cookie: {token[:10]}...")
+
+    # Cleanup token (Handle quotes if added by some middleware)
+    if token and isinstance(token, str):
+        token = token.strip().strip('"').strip("'")
+        if token.lower().startswith("bearer "):
+            token = token[7:].strip()
 
     if not token:
-        logger.info("[AUTH_DEBUG]: Authentication failed: No token provided in header or cookies.")
+        # DIAGNOSTIC DUMP: Help identify if Vercel/Render proxy is stripping headers/cookies
+        header_keys = list(request.headers.keys())
+        cookie_keys = list(request.cookies.keys())
+        logger.warning(f"[AUTH_DIAGNOSTIC]: Authentication failed. No token found.")
+        logger.warning(f"[AUTH_DIAGNOSTIC]: Available Headers: {header_keys}")
+        logger.warning(f"[AUTH_DIAGNOSTIC]: Available Cookies: {cookie_keys}")
+        logger.warning(f"[AUTH_DIAGNOSTIC]: Origin: {request.headers.get('origin')}, Host: {request.headers.get('host')}")
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session not found or expired",
@@ -280,11 +305,17 @@ async def get_current_user(
         if not client.exists(session_key):
             # This is a critical point for SSO handoff debugging
             logger.warning(f"[AUTH_DEBUG]: Session missing from Redis (Key: {session_key}) for sub={payload.get('sub')}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session has expired or was revoked",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            # AUTO-RECOVERY attempt: If the token is valid but missing from Redis, re-add it (SSO race condition handler)
+            try:
+                client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, str(payload.get("sub")))
+                logger.info(f"[AUTH_DEBUG]: Auto-recovered session for sub={payload.get('sub')} in Redis")
+            except Exception as e:
+                logger.error(f"[AUTH_DEBUG]: Auto-recovery failed: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session has expired or was revoked",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
         # Happy path - Update Telemetry
         try:
@@ -300,7 +331,7 @@ async def get_current_user(
 
         return payload
 
-    # If we made it here without returning, the token is invalid
+    # Final fallback
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Unauthorized: Authentication strategy failure",

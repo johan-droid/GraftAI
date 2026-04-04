@@ -230,21 +230,17 @@ def _attach_jwt_cookies(response: Response, token_data: dict, request: Optional[
     is_prod = env_name == "production"
 
     is_https = _is_secure_request(request) or os.getenv("PROTOCOL") == "https" or is_prod
-    origin = request.headers.get("origin", "") if request else ""
-    is_localhost = (
-        "localhost" in origin
-        or "127.0.0.1" in origin
-        or request.url.hostname in ("localhost", "127.0.0.1", "::1")
-        if request
-        else False
-    )
-
-    if is_https and not (is_localhost and not is_prod):
+    
+    # FORCE SameSite=None for cross-domain SSO handoffs in all SECURE environments.
+    # Browsers (Chrome/Safari) reject SameSite=Lax in cross-site redirects.
+    if is_https:
         same_site_value = "none"
         secure_value = True
+        logger.info("[AUTH_DEBUG]: Using SameSite=None; Secure for cross-domain compatibility.")
     else:
         same_site_value = "lax"
         secure_value = False
+        logger.warning("[AUTH_DEBUG]: Using SameSite=Lax (Insecure environment). Cross-domain SSO may fail.")
 
     response.set_cookie(
         key="graftai_access_token",

@@ -39,20 +39,43 @@ const SESSION_CACHE_TTL_MS = 30_000;
 
 export function getToken(): string | null {
   if (typeof document === "undefined") return null;
+  
+  // 1. Try Cookies
   const value = `; ${document.cookie}`;
   const parts = value.split(`; graftai_access_token=`);
-  const token = parts.length === 2 ? parts.pop()?.split(";").shift() || null : null;
-  if (token) return token;
-
-  try {
-    if (typeof window !== "undefined" && window.sessionStorage) {
-      return window.sessionStorage.getItem("graftai_access_token");
-    }
-  } catch {
-    // Ignore storage access issues.
+  let token = parts.length === 2 ? parts.pop()?.split(";").shift() || null : null;
+  
+  // 2. Try SessionStorage
+  if (!token) {
+    try {
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        token = window.sessionStorage.getItem("graftai_access_token");
+      }
+    } catch (e) { /* ignore */ }
   }
 
-  return null;
+  // 3. Try LocalStorage (Persistence Fallback)
+  if (!token) {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        token = window.localStorage.getItem("graftai_access_token");
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // ROBUSTNESS: If we found a token in any source, sync it to others for redundancy
+  if (token && typeof window !== "undefined") {
+    try {
+      if (window.sessionStorage && !window.sessionStorage.getItem("graftai_access_token")) {
+        window.sessionStorage.setItem("graftai_access_token", token);
+      }
+      if (window.localStorage && !window.localStorage.getItem("graftai_access_token")) {
+        window.localStorage.setItem("graftai_access_token", token);
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  return token;
 }
 
 export async function getAuthToken(): Promise<string | null> {
@@ -62,11 +85,15 @@ export async function getAuthToken(): Promise<string | null> {
   }
 
   try {
+    const token = getToken();
+    if (token) return token;
+    
+    // Last resort: fetch from server
     const session = await getSessionSafe();
-    const token = session?.data?.session?.token ?? null;
-    _cachedToken = token;
+    const serverToken = session?.data?.session?.token ?? null;
+    _cachedToken = serverToken;
     _cacheExpiry = now + SESSION_CACHE_TTL_MS;
-    return token;
+    return serverToken;
   } catch {
     return null;
   }
@@ -75,6 +102,14 @@ export async function getAuthToken(): Promise<string | null> {
 export function invalidateSessionCache(): void {
   _cachedToken = null;
   _cacheExpiry = 0;
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.removeItem("graftai_access_token");
+      localStorage.removeItem("graftai_access_token");
+      // Expire cookie
+      document.cookie = "graftai_access_token=; path=/; max-age=0;";
+    } catch (e) { /* ignore */ }
+  }
 }
 
 export function getCsrfHeaders(): Record<string, string> {
@@ -83,7 +118,6 @@ export function getCsrfHeaders(): Record<string, string> {
   const parts = value.split(`; xsrf-token=`);
   const token = parts.length === 2 ? parts.pop()?.split(";").shift() || null : null;
   if (!token) return {};
-  // Keep compatibility with both header casings in backend and proxies.
   return {
     "X-XSRF-TOKEN": token,
     "x-xsrf-token": token,
@@ -98,7 +132,10 @@ export const getSessionSafe = async () => {
 
     const token = getToken();
     if (token) {
+      // Standard header
       headers.Authorization = `Bearer ${token}`;
+      // Backup header (Some proxies strip Authorization but leave custom ones)
+      headers["X-Authorization"] = `Bearer ${token}`;
     }
 
     const res = await fetch(authEndpoint("/auth/check"), {
@@ -108,6 +145,10 @@ export const getSessionSafe = async () => {
     });
 
     if (!res.ok) {
+      if (res.status === 401) {
+         console.warn("[AUTH_CLIENT]: 401 Unauthorized from backend. Clearing local session state.");
+         invalidateSessionCache();
+      }
       const err = await parseError(res);
       return { data: null, error: err };
     }

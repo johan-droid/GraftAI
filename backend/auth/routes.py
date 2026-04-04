@@ -11,6 +11,7 @@ import os
 import logging
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # Load backend .env for auth settings

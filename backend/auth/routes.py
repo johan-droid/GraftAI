@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, RedirectResponse
 import secrets
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
@@ -418,19 +418,22 @@ async def sso_callback(
         tokens = _create_jwt_token(str(user.id), email=user.email)
         
         # 5. Prepare standard payload for frontend callback handler
-        response_data = {
-            "message": "SSO sign-in successful",
-            "authenticated": True,
-            "user": {
-                "id": user.id, 
-                "email": user.email,
-                "name": user.full_name
-            },
-            "token": tokens, # Contains access_token and refresh_token
-            "redirect_to": sso_data.get("redirect_to", "/dashboard")
-        }
+        # Instead of returning JSON, redirect the browser to the dashboard.
+        # This resolves the issue where users see a raw JSON response.
+        target_path = sso_data.get("redirect_to") or "/dashboard"
         
-        response = JSONResponse(content=response_data)
+        # Absolute URL construction for browser redirection
+        frontend_base = (
+            os.getenv("FRONTEND_BASE_URL") 
+            or os.getenv("FRONTEND_URL") 
+            or "http://localhost:3000"
+        ).rstrip("/")
+        
+        target_url = f"{frontend_base}{target_path if target_path.startswith('/') else '/' + target_path}"
+        
+        logger.info(f"SSO success. Redirecting user to: {target_url}")
+        
+        response = RedirectResponse(url=target_url, status_code=303)
         _attach_jwt_cookies(response, tokens)
         return response
         

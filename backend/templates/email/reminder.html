@@ -1,24 +1,28 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="card">
-    <div class="badge badge-warning">Starting Soon</div>
+    <div class="badge badge-warning">Proactive Alert</div>
     <h1>Reminder: {{ event_title }}</h1>
-    <p>This is a quick notification from your AI Copilot. Your event <strong>{{ event_title }}</strong> starts at {{ start_time }}.</p>
+    <p>Your AI Copilot has detected an upcoming event starting in <strong>exactly 15 minutes</strong>. Your mission preparedness is our priority.</p>
     
-    <div style="background-color: rgba(30, 41, 59, 1); border-radius: 16px; padding: 24px; margin: 32px 0; border-left: 4px solid #facc15;">
-        <div style="font-size: 14px; font-weight: 600; color: #ffffff;">Time: {{ start_time }} - {{ end_time }}</div>
+    <div style="background-color: rgba(99, 102, 241, 0.05); border-radius: 24px; padding: 32px; margin: 32px 0; border: 1px solid rgba(99, 102, 241, 0.2);">
+        <div style="font-size: 13px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 8px;">Event Timing</div>
+        <div style="font-size: 20px; font-weight: 800; color: #ffffff; margin-bottom: 24px;">{{ start_time }} - {{ end_time }}</div>
+        
         {% if is_meeting %}
-        <div style="font-size: 14px; font-weight: 600; color: #ffffff;">Platform: {{ meeting_platform }}</div>
+        <div style="font-size: 13px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 8px;">Platform</div>
+        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 24px;">{{ meeting_platform }}</div>
+        
         {% if meeting_link %}
-        <div style="margin-top: 24px; text-align: center;">
-            <a href="{{ meeting_link }}" class="button" style="background-color: #facc15; color: #020617; box-shadow: 0 10px 15px -3px rgba(234, 179, 8, 0.3);">Join Immediately</a>
+        <div style="text-align: center;">
+            <a href="{{ meeting_link }}" class="button" style="background-color: #facc15; color: #030712 !important; box-shadow: 0 0 30px rgba(234, 179, 8, 0.4);">Join Mission Now</a>
         </div>
         {% endif %}
         {% endif %}
     </div>
     
     <div style="text-align: center;">
-        <a href="{{ frontend_url }}/dashboard/calendar" style="color: #6366f1; font-weight: 600; text-decoration: none; font-size: 13px;">View Complete Schedule &rarr;</a>
+        <a href="{{ frontend_url }}/dashboard/calendar" style="color: #6366f1; font-weight: 700; text-decoration: none; font-size: 13px; letter-spacing: 0.05em;">VIEW COMPLETE SCHEDULE &rarr;</a>
     </div>
 </div>
 {% endblock %}

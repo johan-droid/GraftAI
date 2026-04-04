@@ -19,22 +19,23 @@ from backend.services.sync_engine import sync_user_calendar
 
 async def task_process_event_reminders(ctx):
     """
-    Periodic task to check for upcoming events and send reminders.
-    Runs every minute but only processes events starting in the next 15-20 mins.
+    Periodic task to check for upcoming events and send reminders with 'Pinpoint Accuracy'.
+    Matches events starting exactly ~15 minutes (14-16 min window) from now.
     """
-    logger.info("[WORKER] 🔔 Checking for upcoming event reminders...")
+    logger.info("[WORKER] 🔔 Scanning for events starting in exactly 15 minutes...")
     async with ctx['db_session_factory']() as db:
         now = datetime.now(timezone.utc)
-        reminder_window = now + timedelta(minutes=20)
+        min_threshold = now + timedelta(minutes=14)
+        max_threshold = now + timedelta(minutes=16)
         
-        # Query events starting soon that haven't been reminded yet
+        # Query events starting exactly in the 15-min pocket
         stmt = (
-            select(EventTable, UserTable.email, UserTable.full_name)
+            select(EventTable, UserTable.email, UserTable.full_name, UserTable.id)
             .join(UserTable, EventTable.user_id == UserTable.id)
             .where(
                 and_(
-                    EventTable.start_time <= reminder_window,
-                    EventTable.start_time > now,
+                    EventTable.start_time >= min_threshold,
+                    EventTable.start_time <= max_threshold,
                     EventTable.is_reminded == False,
                     EventTable.status == "confirmed"
                 )

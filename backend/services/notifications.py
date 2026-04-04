@@ -12,17 +12,26 @@ def _build_event_templates(notification_type: str, event_data: dict) -> tuple[st
     # Meeting details
     is_meeting = event_data.get("is_meeting", False)
     meeting_link = event_data.get("meeting_link")
-    meeting_platform = event_data.get("meeting_platform", "").replace("_", " ").title()
+    
+    # Auto-detect platform from link
+    meeting_platform = event_data.get("meeting_platform", "")
+    if meeting_link and not meeting_platform:
+        link_low = meeting_link.lower()
+        if "zoom.us" in link_low: meeting_platform = "Zoom"
+        elif "meet.google.com" in link_low: meeting_platform = "Google Meet"
+        elif "teams.microsoft.com" in link_low: meeting_platform = "Microsoft Teams"
+    
+    platform_label = (meeting_platform or "Digital Hub").replace("_", " ").title()
 
     template_context = {
         "full_name": user_name,
         "event_title": title,
         "start_time": start_time,
         "end_time": end_time,
-        "is_meeting": is_meeting,
-        "meeting_platform": meeting_platform,
+        "is_meeting": is_meeting or bool(meeting_link),
+        "meeting_platform": platform_label,
         "meeting_link": meeting_link,
-        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "https://graftai.tech").rstrip("/")
     }
 
     if notification_type == "created":

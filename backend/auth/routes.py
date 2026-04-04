@@ -196,6 +196,8 @@ def _create_jwt_token(sub: str, email: Optional[str] = None):
     session_key = f"active_session:{cache_key}"
     tokens_key = f"user_tokens:{sub}"
     
+    logger.info(f"[AUTH_DEBUG]: Persisting session in Redis for sub={sub}. Key: {session_key}")
+    
     pipe = client.pipeline()
     pipe.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, str(sub))
     pipe.sadd(tokens_key, refresh_token)

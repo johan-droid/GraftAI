@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Optional, Any, List
 from backend.services.email import send_email, render_template
 
 logger = logging.getLogger(__name__)

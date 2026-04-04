@@ -471,7 +471,8 @@ async def startup_event():
     import threading
     import os
     logger.info(f"Startup Info: CWD={os.getcwd()}, PYTHONPATH={os.getenv('PYTHONPATH')}")
-    threading.Thread(target=self_pinger, daemon=True).start()
+    # We use a daemon thread so it doesn't block the actual server exit
+    threading.Thread(target=self_pinger_daemon, daemon=True).start()
 
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")
@@ -520,3 +521,33 @@ async def readiness(db: AsyncSession = Depends(get_db)):
         # allow partial readiness for availability
 
     return {"status": "ready"}
+
+
+def self_pinger_daemon():
+    """
+    Self-pinger to prevent Render free-tier sleep and maintain observability.
+    Uses httpx for efficient, non-blocking pings.
+    """
+    import httpx
+    import time
+
+    base_url = os.getenv("APP_BASE_URL") or os.getenv("BETTER_AUTH_URL")
+    if not base_url:
+        logger.info("[PINGER] ℹ️ APP_BASE_URL not set. Skipping self-pulse.")
+        return
+
+    logger.info(f"[PINGER] 🚀 Self-pulse monitoring active for {base_url}")
+    
+    # 5 minute sleep interval (Render check-in)
+    while True:
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.get(f"{base_url.rstrip('/')}/health")
+                if resp.status_code == 200:
+                    logger.debug("[PINGER] ✅ Self-pulse heartbeat 200 OK.")
+                else:
+                    logger.warning(f"[PINGER] ⚠️ Unexpected status code: {resp.status_code}")
+        except Exception as exc:
+            logger.warning(f"[PINGER] ⏳ Pulse heartbeat delayed: {exc}")
+        
+        time.sleep(300)

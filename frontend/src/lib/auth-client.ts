@@ -52,6 +52,20 @@ export function getCsrfHeaders(): Record<string, string> {
   };
 }
 
+async function ensureCsrfToken(): Promise<void> {
+  if (typeof document === "undefined") return;
+  const csrfHeaders = getCsrfHeaders();
+  if (Object.keys(csrfHeaders).length > 0) return;
+
+  await fetch(authEndpoint("/auth/csrf"), {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+}
+
 export const getSessionSafe = async () => {
   try {
     const res = await fetch(authEndpoint("/auth/check"), {
@@ -84,11 +98,13 @@ export const getSessionSafe = async () => {
 
 export const signOut = async () => {
   try {
+    await ensureCsrfToken();
     const res = await fetch(authEndpoint("/auth/logout"), {
       method: "POST",
       credentials: "include",
       headers: {
         Accept: "application/json",
+        ...getCsrfHeaders(),
       },
     });
 
@@ -115,9 +131,11 @@ export const signIn = {
       body.set("password", password);
       body.set("grant_type", "password");
 
+      await ensureCsrfToken();
       const res = await fetch(authEndpoint("/auth/token"), {
         method: "POST",
         headers: {
+          ...getCsrfHeaders(),
           "Content-Type": "application/x-www-form-urlencoded",
           Accept: "application/json",
         },
@@ -149,6 +167,7 @@ export const signIn = {
 
   magicLink: async ({ email }: { email: string }): Promise<AuthResult> => {
     try {
+      await ensureCsrfToken();
       const url = new URL(authEndpoint("/auth/passwordless/request"), typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
       url.searchParams.set("email", email);
 
@@ -158,6 +177,7 @@ export const signIn = {
         credentials: "include",
         headers: {
           Accept: "application/json",
+          ...getCsrfHeaders(),
         },
       });
 
@@ -204,11 +224,13 @@ export const signUp = async (
   timezone?: string
 ): Promise<AuthResult> => {
   try {
+    await ensureCsrfToken();
     const res = await fetch(authEndpoint("/auth/register"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
+        ...getCsrfHeaders(),
       },
       body: JSON.stringify({
         email,

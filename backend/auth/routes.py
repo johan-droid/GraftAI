@@ -593,6 +593,37 @@ async def check_auth(
     return response
 
 
+@router.get("/csrf")
+async def get_csrf(request: Request):
+    """Issue an XSRF token cookie for unauthenticated clients."""
+    is_prod = os.getenv("NODE_ENV") == "production"
+    is_https = os.getenv("PROTOCOL") == "https" or is_prod
+
+    if is_https:
+        same_site_value = "none"
+        secure_value = True
+    else:
+        same_site_value = "lax"
+        secure_value = False
+
+    xsrf_token = request.cookies.get("xsrf-token")
+    if not xsrf_token:
+        xsrf_token = secrets.token_urlsafe(32)
+
+    response = JSONResponse(content={"xsrf_token": xsrf_token})
+    response.set_cookie(
+        key="xsrf-token",
+        value=xsrf_token,
+        httponly=False,
+        secure=secure_value,
+        samesite=same_site_value,
+        max_age=86400,
+        path="/",
+    )
+    response.headers["x-xsrf-token"] = xsrf_token
+    return response
+
+
 @router.post("/refresh")
 @router.post("/auth/refresh")
 def refresh_token(request: Request, payload: Optional[RefreshTokenRequest] = None):

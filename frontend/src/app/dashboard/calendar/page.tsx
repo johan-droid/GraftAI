@@ -187,15 +187,7 @@ export default function PremiumCalendarPage() {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2 mb-2">
-            <div className="px-2 py-0.5 rounded-md bg-primary/20 border border-primary/30 text-primary text-[10px] font-black uppercase tracking-tighter">
-              BETA v2.4
-            </div>
-            {lastSynced && (
-              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                Synced {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            )}
+            {/* beta status removed */}
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter leading-none">
             Sovereign <span className="bg-gradient-to-r from-primary to-fuchsia-500 bg-clip-text text-transparent">Calendar</span>

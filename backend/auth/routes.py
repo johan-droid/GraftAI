@@ -429,6 +429,7 @@ async def sso_callback(
         # Absolute URL construction for browser redirection
         frontend_base = (
             os.getenv("FRONTEND_BASE_URL") 
+            or os.getenv("NEXT_PUBLIC_APP_URL")
             or os.getenv("FRONTEND_URL") 
             or "http://localhost:3000"
         ).rstrip("/")
@@ -442,15 +443,19 @@ async def sso_callback(
         backend_host = request.url.hostname
         frontend_host = urlparse(target_url).hostname
         
+        # LOG FOR DIAGNOSTICS: Using WARNING to ensure it's not swallowed by level filters
+        logger.warning(f"[AUTH_DIAGNOSTIC]: Backend host: {backend_host}, Frontend host: {frontend_host}, Env: {os.getenv('ENV')}")
+        
         is_cross_domain = frontend_host and backend_host and frontend_host != backend_host
+        is_render_suffix = ".onrender.com" in str(backend_host)
         
-        # Also check if we are on a .render.com domain which is on the Public Suffix List
-        is_pub_suffix = backend_host.endswith(".onrender.com") if backend_host else False
+        # Force bridge in production cloud environments if hosts mismatch
+        should_use_bridge = is_cross_domain or is_render_suffix
         
-        if is_cross_domain or is_pub_suffix:
+        if should_use_bridge:
             # Token Bridge: Pass tokens via URL to a special frontend callback page
             # This allows the frontend to set its own FIRST-PARTY cookies.
-            logger.info(f"Cross-domain detected ({frontend_host} vs {backend_host}). Using Token Bridge.")
+            logger.warning(f"[AUTH_DIAGNOSTIC]: Using Token Bridge for callback handoff. Target: {target_url}")
             
             # The bridge callback URL
             callback_base = target_url.rstrip("/")
@@ -464,6 +469,7 @@ async def sso_callback(
             return RedirectResponse(url=final_target, status_code=303)
 
         # Standard Same-Site flow: Set HttpOnly cookies directly
+        logger.warning(f"[AUTH_DIAGNOSTIC]: Using standard HttpOnly cookie flow. Target: {target_url}")
         response = RedirectResponse(url=target_url, status_code=303)
         _attach_jwt_cookies(response, tokens, request)
         return response

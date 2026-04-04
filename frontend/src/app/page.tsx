@@ -2,187 +2,199 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Bot, ShieldCheck, Sparkles, Zap, Lock, Globe, Cloud, FileText, Scale, Mail, GraduationCap } from "lucide-react";
+import { Bot, ShieldCheck, Sparkles, Zap, Lock, Globe, Cloud, FileText, Scale, Mail, GraduationCap, ArrowRight, BrainCircuit, Fingerprint, Database } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 
-type ToastLevel = "info" | "success" | "warning" | "error";
-type ToastItem = { id: string; message: string; level: ToastLevel };
-
-type BackendStatus = "unknown" | "waking" | "live" | "sleeping";
-
-
-const features = [
-  { icon: <Zap className="w-6 h-6" />, title: "Instant sync", description: "Auto-update events across every calendar provider in milliseconds." },
-  { icon: <Bot className="w-6 h-6" />, title: "AI strategy", description: "Predict conflicts and suggest reschedules before they happen." },
-  { icon: <ShieldCheck className="w-6 h-6" />, title: "Security first", description: "Cloud-strong identity with optional FIDO2 and SSO." },
-  { icon: <Globe className="w-6 h-6" />, title: "Global federated", description: "Multi-region architecture with zero single-point lock-in." },
-  { icon: <Lock className="w-6 h-6" />, title: "Privacy guard", description: "Opaque data control and self-hosted workspace isolation." },
-  { icon: <Sparkles className="w-6 h-6" />, title: "Workflow automation", description: "Trigger custom rules for meetings, follow-ups, and reminders." },
+const STRATEGY_STEPS = [
+  { 
+    title: "Data Sovereignty", 
+    description: "Your schedule is encrypted and federated. No single point of failure. You own your time vectors.",
+    icon: ShieldCheck,
+    color: "text-indigo-400"
+  },
+  { 
+    title: "AI Synthesis", 
+    description: "Our neural engine parses your workflows to find optimal execution paths across all timezones.",
+    icon: BrainCircuit,
+    color: "text-purple-400"
+  },
+  { 
+    title: "Autonomous Execution", 
+    description: "Meetings book themselves. Conflicts resolve in the background. You just show up.", 
+    icon: Zap,
+    color: "text-amber-400"
+  }
 ];
 
-function statusTag(status: BackendStatus) {
-  const map: Record<BackendStatus, { label: string; className: string }> = {
-    unknown: { label: "Unknown", className: "bg-slate-500/20 text-slate-100" },
-    waking: { label: "Waking...", className: "bg-amber-500/20 text-amber-200" },
-    live: { label: "Backend live ✅", className: "bg-emerald-500/20 text-emerald-200" },
-    sleeping: { label: "Backend sleeping 😴", className: "bg-violet-500/20 text-violet-200" },
-  };
-  return map[status];
-}
-
-function getToastStyle(level: ToastLevel) {
-  switch (level) {
-    case "success": return "bg-emerald-500/90 text-white";
-    case "error": return "bg-rose-500/90 text-white";
-    case "warning": return "bg-amber-500/90 text-slate-900";
-    default: return "bg-slate-800/90 text-white";
-  }
-}
+const features = [
+  { icon: <Fingerprint className="w-6 h-6" />, title: "Federated Identity", description: "Zero-trust authentication with SSO and Biometric support." },
+  { icon: <Database className="w-6 h-6" />, title: "Vector Memory", description: "Your AI remembers your preferences without leaking your data." },
+  { icon: <Globe className="w-6 h-6" />, title: "Global Sync", description: "Atomic updates across Google, Outlook, and private nodes." },
+];
 
 export default function Home() {
-  const [backendStatus, setBackendStatus] = useState<BackendStatus>("unknown");
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [pending, setPending] = useState(false);
-
-  const status = statusTag(backendStatus);
-
-  const addToast = (message: string, level: ToastLevel = "info") => {
-    const id = crypto.randomUUID();
-    setToasts((prev) => [{ id, message, level }, ...prev].slice(0, 3));
-    window.setTimeout(() => setToasts((prev) => prev.filter((item) => item.id !== id)), 4200);
-  };
+  const [backendStatus, setBackendStatus] = useState<"unknown" | "live" | "sleeping">("unknown");
 
   const checkBackend = useCallback(async () => {
-    setPending(true);
-    if (backendStatus !== "live") {
-      setBackendStatus("waking");
-      addToast("⏳ Backend waking up, this may take a few seconds.", "info");
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
       const resp = await fetch(`${baseUrl}/health`.replace(/\/+/g, '/').replace(':/', '://'), { cache: "no-store" });
-      if (!resp.ok) throw new Error(`Status ${resp.status}`);
-      const data = await resp.json();
-      if (backendStatus === "sleeping" || backendStatus === "waking" || backendStatus === "unknown") {
-        addToast(`✅ Backend is live: ${data.status}. You can proceed.`, "success");
-      }
-      setBackendStatus("live");
+      if (resp.ok) setBackendStatus("live");
+      else setBackendStatus("sleeping");
     } catch {
-      if (backendStatus !== "sleeping") {
-        addToast("💤 Backend is still sleeping. Will retry automatically.", "warning");
-      }
       setBackendStatus("sleeping");
-    } finally {
-      setPending(false);
     }
-  }, [backendStatus]);
+  }, []);
 
   useEffect(() => {
     checkBackend();
-    const timer = setInterval(checkBackend, 18000);
+    const timer = setInterval(checkBackend, 30000);
     return () => clearInterval(timer);
   }, [checkBackend]);
 
-  const activeFeatureCards = useMemo(() => features, []);
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
-        {toasts.map((toast) => (
-          <motion.div key={toast.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className={`${getToastStyle(toast.level)} rounded-xl px-4 py-2 shadow-lg border border-white/10 max-w-[280px]`}>{toast.message}</motion.div>
-        ))}
+    <div className="min-h-screen bg-[#020617] text-slate-100 selection:bg-primary/30 selection:text-white">
+      {/* Dynamic Background */}
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] right-[-10%] w-[70%] h-[70%] bg-indigo-600/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] bg-fuchsia-600/10 rounded-full blur-[140px]" />
       </div>
 
-      <main className="page-with-floating-nav mx-auto w-full max-w-6xl px-5 pb-16 sm:px-6 md:px-8">
-        <header className="text-center mb-12">
-          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-300">
-            <Cloud className="w-4 h-4" /> Backend status: {status.label}
-          </p>
-          <h1 className="mt-4 text-3xl font-black sm:text-5xl md:text-6xl">GraftAI · Minimal Ops Calendar Intelligence</h1>
-          <p className="mt-3 text-slate-300 max-w-xl mx-auto text-base sm:text-lg">A clean, mobile-first landing experience with fast feature highlights and real backend readiness feedback from Render cold starts.</p>
-
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link href="/login" className="rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-6 py-3 text-sm font-bold text-white transition hover:brightness-110">Start building</Link>
-            <button onClick={checkBackend} className="rounded-xl border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800">Re-check backend</button>
+      <main className="relative z-10 max-w-7xl mx-auto px-6 pt-24 pb-32 sm:pt-32 lg:px-8">
+        {/* Status Pill */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex justify-center mb-10"
+        >
+          <div className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-slate-900/50 border border-white/5 backdrop-blur-xl">
+             <span className="relative flex h-2 w-2">
+                <span className={cn(
+                  "absolute inline-flex h-full w-full rounded-full opacity-75",
+                  backendStatus === "live" ? "animate-ping bg-emerald-500" : "bg-slate-500"
+                )}></span>
+                <span className={cn(
+                  "relative inline-flex rounded-full h-2 w-2",
+                  backendStatus === "live" ? "bg-emerald-500" : "bg-slate-600"
+                )}></span>
+             </span>
+             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+               {backendStatus === "live" ? "Systems Nominal" : "Connecting to Node..."}
+             </span>
           </div>
-        </header>
+        </motion.div>
 
-        <section id="features" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {activeFeatureCards.map((feature) => (
-            <motion.article key={feature.title} whileHover={{ y: -4, scale: 1.01 }} transition={{ type: "spring", stiffness: 160 }} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 backdrop-blur-sm shadow-lg">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-800 text-cyan-300">{feature.icon}</div>
-              <h3 className="mt-4 text-lg font-black text-white">{feature.title}</h3>
-              <p className="mt-2 text-sm text-slate-300">{feature.description}</p>
-            </motion.article>
-          ))}
+        {/* Hero Section */}
+        <div className="text-center max-w-4xl mx-auto">
+          <motion.h1 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-5xl md:text-7xl font-black tracking-tight text-white mb-8 bg-gradient-to-b from-white via-white to-slate-500 bg-clip-text text-transparent leading-tight"
+          >
+            Autonomous Scheduling for <span className="text-primary tracking-tighter">Sovereign Focus</span>
+          </motion.h1>
+          
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="text-lg md:text-xl text-slate-400 mb-12 max-w-2xl mx-auto leading-relaxed"
+          >
+            GraftAI is a federated intelligence layer that handles your scheduling logistics automatically. Secure, private, and powered by vector memory.
+          </motion.p>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4"
+          >
+            <Link href="/login" className="w-full sm:w-auto px-8 py-4 bg-primary text-white rounded-2xl font-bold text-base shadow-[0_10px_30px_rgba(79,70,229,0.4)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2">
+              Begin Decoupling <ArrowRight className="w-5 h-5" />
+            </Link>
+            <Link href="/#features" className="w-full sm:w-auto px-8 py-4 bg-slate-900 border border-slate-800 text-white rounded-2xl font-bold text-base hover:bg-slate-800 transition-all">
+              Security Protocol
+            </Link>
+          </motion.div>
+        </div>
+
+        {/* Strategy Grid */}
+        <section className="mt-32">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {STRATEGY_STEPS.map((step, i) => (
+              <motion.div 
+                key={step.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="p-8 rounded-[2rem] bg-slate-950/40 border border-slate-800/60 backdrop-blur-md relative overflow-hidden group hover:border-primary/50 transition-all"
+              >
+                <div className={cn("mb-6 p-3 rounded-2xl bg-slate-900 inline-block", step.color)}>
+                  <step.icon className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-4">{step.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{step.description}</p>
+              </motion.div>
+            ))}
+          </div>
         </section>
 
-        <section className="mt-12 rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <span className="inline-flex items-center gap-2 rounded-lg bg-slate-800/70 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-200">Health</span>
-            <span className="text-sm text-slate-300">Last check: {pending ? "Checking..." : backendStatus === "live" ? "Live" : backendStatus === "sleeping" ? "Sleeping" : "Unknown"}</span>
-          </div>
-          <p className="mt-4 text-sm leading-relaxed text-slate-300">Backend cold-start on Render: retries run automatically every 18 seconds, with a toast on transitions for live/sleep messages. If you see sleeping state for 30+, click Re-check backend.</p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200">
-            <Zap className="h-4 w-4 text-amber-300" /> Wake-up flow active
+        {/* Mini Features */}
+        <section id="features" className="mt-20 py-20 border-t border-white/5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            {features.map((f, i) => (
+              <div key={i} className="flex gap-4">
+                 <div className="text-primary shrink-0 mt-1">{f.icon}</div>
+                 <div>
+                    <h4 className="font-bold text-white mb-1">{f.title}</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">{f.description}</p>
+                 </div>
+              </div>
+            ))}
           </div>
         </section>
 
-        <footer className="mt-14 rounded-2xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 to-slate-950 p-6 sm:p-8">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
-            <div className="md:col-span-2">
-              <h2 className="text-lg font-black text-white">GraftAI Academic Project Footer</h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-300">
-                GraftAI is built as a major college project focused on practical SaaS engineering:
-                calendar intelligence, secure authentication, backend reliability, and transparent data handling.
-                This footer documents core governance, policy links, and project ownership details for review panels.
+        {/* Professional Footer */}
+        <footer className="mt-32 pt-16 border-t border-white/5">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
+            <div className="md:col-span-2 space-y-6">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white">G</div>
+                <span className="font-black text-xl tracking-tighter">GraftAI</span>
+              </div>
+              <p className="text-sm text-slate-500 max-w-sm leading-relaxed">
+                Academic research project in Major SaaS Engineering. Focused on secure data federation and autonomous scheduling intelligence.
               </p>
-              <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-indigo-200">
-                <GraduationCap className="h-4 w-4" /> Major Project Documentation Ready
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-indigo-500/5 border border-indigo-500/10 text-[10px] font-black uppercase tracking-widest text-indigo-400">
+                <GraduationCap className="w-4 h-4" /> Major Portfolio Ready
               </div>
             </div>
-
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Quick links</h3>
-              <ul className="mt-3 space-y-2 text-sm text-slate-300">
-                <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
-                <li><Link href="/#features" className="hover:text-white transition-colors">Features</Link></li>
-                <li><Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
-                <li><Link href="/login" className="hover:text-white transition-colors">Sign in</Link></li>
+            
+            <div className="space-y-4">
+              <h5 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Node Links</h5>
+              <ul className="space-y-2 text-sm text-slate-500">
+                <li><Link href="/login" className="hover:text-white transition-colors">Authentication</Link></li>
+                <li><Link href="/privacy-policy" className="hover:text-white transition-colors">Privacy Lexicon</Link></li>
+                <li><Link href="/terms-of-service" className="hover:text-white transition-colors">Operational Terms</Link></li>
               </ul>
             </div>
 
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Legal & contact</h3>
-              <ul className="mt-3 space-y-3 text-sm text-slate-300">
-                <li>
-                  <Link href="/privacy-policy" className="inline-flex items-center gap-2 hover:text-white transition-colors">
-                    <FileText className="h-4 w-4 text-cyan-300" /> Privacy Policy
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/terms-of-service" className="inline-flex items-center gap-2 hover:text-white transition-colors">
-                    <Scale className="h-4 w-4 text-cyan-300" /> Terms of Service
-                  </Link>
-                </li>
-                <li className="inline-flex items-center gap-2 text-slate-400">
-                  <Mail className="h-4 w-4 text-cyan-300" /> project.graftai@college.example
-                </li>
+            <div className="space-y-4">
+              <h5 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Transmission</h5>
+              <ul className="space-y-2 text-sm text-slate-500">
+                <li className="flex items-center gap-2"><Mail className="w-4 h-4" /> project@graftai.tech</li>
+                <li className="flex items-center gap-2"><Globe className="w-4 h-4" /> v1.0.1 Stable</li>
               </ul>
             </div>
           </div>
-
-          <div className="mt-8 border-t border-slate-800 pt-4 text-xs text-slate-400 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p>© {new Date().getFullYear()} GraftAI. Built for academic evaluation and production-style demonstration.</p>
-            <p>Last policy update: April 2026</p>
+          <div className="mt-20 text-[10px] font-medium text-slate-600 flex justify-between uppercase tracking-widest">
+            <span>© {new Date().getFullYear()} GRAFTAI LABS</span>
+            <span>BUILT FOR EVALUATION</span>
           </div>
         </footer>
-
       </main>
     </div>
   );
 }
-

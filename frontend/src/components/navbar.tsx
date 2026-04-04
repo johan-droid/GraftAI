@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Cpu, Calendar, Bot, LogIn, Command } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useAuthContext } from "@/app/providers/auth-provider";
 import PulsePing from "./ui/pulse-ping";
 import { useNotificationContext } from "@/providers/notification-provider";
 
@@ -16,8 +17,14 @@ const NAV_ITEMS = [
 
 export function Navbar() {
   const pathname = usePathname();
+  const { user, isAuthenticated } = useAuthContext();
   const { activePing } = useNotificationContext();
   const isAuthPage = pathname === "/login" || pathname === "/register" || pathname === "/auth-callback";
+
+  const visibleNavItems = NAV_ITEMS.filter(item => {
+    if (item.href === "/dashboard") return isAuthenticated;
+    return true;
+  });
 
   if (isAuthPage) return null;
 
@@ -38,7 +45,7 @@ export function Navbar() {
       <div className="flex items-center gap-1 sm:gap-6 px-2">
         <PulsePing status={activePing} className="mr-1 sm:mr-0" />
         
-        {NAV_ITEMS.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link

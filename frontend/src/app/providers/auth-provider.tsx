@@ -85,17 +85,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [isLikelyNetworkError]);
 
   React.useEffect(() => {
-    if (!session?.user && !loading) {
-      // Check if we're in the middle of an OAuth flow - don't redirect to login in that case
+    // If not loading and no session user, check for redirection
+    if (!loading && !session?.user) {
       const oauthInProgress = typeof window !== "undefined" && sessionStorage.getItem("oauth_in_progress") === "true";
-      const isAuthCallback = typeof window !== "undefined" && window.location.pathname.includes("/auth-callback");
-      const isLoginPage = typeof window !== "undefined" && window.location.pathname === "/login";
       const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
-      const isProtectedRoute = currentPath ? isProtectedPath(currentPath) : false;
       
-      // If we're on the auth-callback page, login page, or in OAuth flow, don't force redirect to login
-      // The callback page will handle the session establishment
-      if (isProtectedRoute && !isAuthCallback && !isLoginPage && !oauthInProgress) {
+      // If we're on a protected route and not in an auth flow/login page
+      if (isProtectedPath(currentPath) && !oauthInProgress && currentPath !== "/login" && !currentPath.includes("/auth-callback")) {
+        console.debug("[AUTH]: Unauthenticated access to protected route, redirecting...");
         redirectToLogin();
       }
     }

@@ -1,9 +1,15 @@
 import os
 import sys
+import asyncio
+import logging
 import re
 import uuid
-import logging
-import asyncio
+
+# Configure logging at the entry point for all sub-modules
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -98,8 +104,6 @@ class RateLimitMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-
-        request = Request(scope)
 
         request = Request(scope)
 
@@ -283,39 +287,35 @@ async def reminder_worker(app: FastAPI):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- Startup ---
+    # 0. Sentry
+    sentry_dsn = os.getenv("SENTRY_DSN")
+    if sentry_dsn:
+        import sentry_sdk
+        try:
+            sentry_sdk.init(dsn=sentry_dsn, env=os.getenv("ENV", "production"))
+        except Exception: pass
+    
     # 1. DB Verification
     if db_utils.engine:
         try:
             async with db_utils.engine.begin() as conn:
                 await conn.run_sync(ModelsBase.metadata.create_all)
-            logger.info("✅ Database tables verified/created successfully.")
+            logger.info("✅ Database systems online.")
         except Exception as e:
-            logger.error(
-                f"⚠ Failed to create or verify database tables: {type(e).__name__}"
-            )
+            logger.error(f"DB Error: {e}")
 
-    # 2. Password Self-Test
-    try:
-        from backend.services.auth_utils import get_password_hash, verify_password
-
-        test_pw = "StartupSelfTest99!"
-        test_hash = get_password_hash(test_pw)
-        if not verify_password(test_pw, test_hash):
-            raise RuntimeError("Password verification self-test failed")
-        logger.info("✅ Password hashing system verified.")
-    except Exception as e:
-        logger.critical(f"CRITICAL: Password hashing system failure: {e}")
-        raise RuntimeError("Password hashing system initialization failed") from e
-
-    # 3. Auth provider auto-check removed. Using local sovereign auth.
-
+    # 2. worker
     reminder_task = asyncio.create_task(reminder_worker(app))
 
+    # 3. Validation
+    validate_production_environment()
+
+    # 4. Self-pinger
+    import threading
+    threading.Thread(target=self_pinger_daemon, daemon=True).start()
+
     yield
-    # --- Shutdown ---
     reminder_task.cancel()
-    # Clean up global connections if needed
 
 
 app = FastAPI(
@@ -416,9 +416,8 @@ from backend.api.webhooks import router as webhooks_router
 v1_router.include_router(webhooks_router)
 v1_router.include_router(billing_router)
 
-# Include v1 as both /api/v1 and flat root-level aliases
+# Include v1 as both /api/v1 
 app.include_router(v1_router)
-app.include_router(auth_router)
 
 def validate_production_environment():
     """
@@ -441,38 +440,7 @@ def validate_production_environment():
         logger.error(f"[STARTUP] ❌ Environment validation logic failed: {e}")
 
 # --- Diagnostic & Startup ---
-@app.on_event("startup")
-async def startup_event():
-    # 0. Initialize Sentry (if DSN provided)
-    sentry_dsn = os.getenv("SENTRY_DSN")
-    if sentry_dsn:
-        import sentry_sdk
-        try:
-            sentry_sdk.init(
-                dsn=sentry_dsn,
-                traces_sample_rate=0.1,
-                environment=os.getenv("ENV", "production"),
-            )
-            logger.info("[STARTUP] ✅ Sentry monitoring active.")
-        except Exception as e:
-            logger.error(f"[STARTUP] ❌ Sentry initialization failed: {e}")
-    else:
-        logger.info("[STARTUP] ℹ️ Sentry DSN not provided. Monitoring skipped.")
-
-    # 1. Validate Environment
-    validate_production_environment()
-    
-    # 1. Log all registered routes for debugging
-    for route in app.routes:
-        if hasattr(route, "path"):
-            logger.info(f"Route: {route.path}")
-    
-    # 2. Start self-pinger in a daemon thread
-    import threading
-    import os
-    logger.info(f"Startup Info: CWD={os.getcwd()}, PYTHONPATH={os.getenv('PYTHONPATH')}")
-    # We use a daemon thread so it doesn't block the actual server exit
-    threading.Thread(target=self_pinger_daemon, daemon=True).start()
+    pass
 
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")

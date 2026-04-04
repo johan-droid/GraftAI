@@ -137,23 +137,14 @@ export default function DashboardLayout({
         {/* Neural Pulse Header (Desktop) */}
         <header className="hidden lg:flex items-center justify-between px-8 py-4 border-b border-white/5 backdrop-blur-sm">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/40 border border-white/5 backdrop-blur-md">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-              </span>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">System Nominal</span>
+            <div className="flex items-center gap-4">
+              {/* Status indicators removed for pinpoint accuracy */}
             </div>
           </div>
           <div className="flex items-center gap-6">
-             <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Orbital Link</span>
-                <div className="flex gap-0.5">
-                   {[1,2,3,4,5].map(i => (
-                     <div key={i} className={`w-1 h-3 rounded-full ${i <= 4 ? 'bg-primary/60' : 'bg-slate-800'}`} />
-                   ))}
-                </div>
-             </div>
+          <div className="flex items-center gap-6">
+             {/* Link indicators removed */}
+          </div>
           </div>
         </header>
         

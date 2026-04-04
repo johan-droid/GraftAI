@@ -39,7 +39,17 @@ export function getToken(): string | null {
   if (typeof document === "undefined") return null;
   const value = `; ${document.cookie}`;
   const parts = value.split(`; graftai_access_token=`);
-  if (parts.length === 2) return parts.pop()?.split(";").shift() || null;
+  const token = parts.length === 2 ? parts.pop()?.split(";").shift() || null : null;
+  if (token) return token;
+
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      return window.sessionStorage.getItem("graftai_access_token");
+    }
+  } catch {
+    // Ignore storage access issues.
+  }
+
   return null;
 }
 

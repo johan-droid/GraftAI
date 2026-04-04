@@ -12,7 +12,7 @@ import os
 import logging
 import uuid
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from dotenv import load_dotenv
 
 # Load backend .env for auth settings
@@ -491,7 +491,10 @@ async def sso_callback(
             else:
                 bridge_url = f"{callback_base}/sso/callback"
 
-            final_target = f"{bridge_url}?token={tokens['access_token']}&refresh_token={tokens['refresh_token']}"
+            final_target = (
+                f"{bridge_url}?token={quote(tokens['access_token'])}"
+                f"&refresh_token={quote(tokens['refresh_token'])}"
+            )
             return RedirectResponse(url=final_target, status_code=303)
 
         # Standard Same-Site flow: Set HttpOnly cookies directly

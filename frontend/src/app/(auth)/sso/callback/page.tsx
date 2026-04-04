@@ -25,7 +25,8 @@ function SSOCallbackContent() {
         // This makes them FIRST-PARTY cookies, which browsers allow.
         
         const isProd = window.location.hostname !== "localhost";
-        const cookieBase = `path=/; samesite=lax; ${isProd ? "secure;" : ""}`;
+        const secureFlag = isProd ? "secure;" : "";
+        const cookieBase = `path=/; samesite=None; ${secureFlag}`;
         
         // Access Token (1 hour)
         document.cookie = `graftai_access_token=${token}; max-age=3600; ${cookieBase}`;
@@ -37,7 +38,15 @@ function SSOCallbackContent() {
 
         // Generate a temporary XSRF token for the frontend
         const xsrfToken = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-        document.cookie = `xsrf-token=${xsrfToken}; max-age=86400; path=/; samesite=lax; ${isProd ? "secure;" : ""}`;
+        document.cookie = `xsrf-token=${xsrfToken}; max-age=86400; path=/; samesite=None; ${secureFlag}`;
+
+        // Fallback storage in case cookie writing is blocked.
+        if (typeof window !== "undefined" && window.sessionStorage) {
+          window.sessionStorage.setItem("graftai_access_token", token);
+          if (refreshToken) {
+            window.sessionStorage.setItem("graftai_refresh_token", refreshToken);
+          }
+        }
 
         console.log("[SSO_CALLBACK]: Session established. Redirecting to dashboard...");
         

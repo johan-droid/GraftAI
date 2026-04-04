@@ -120,7 +120,7 @@ PROVIDERS = {
 # This matches the existing Next.js `/auth-callback` page flow in frontend/src/app/auth-callback/page.tsx
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 OAUTH2_REDIRECT_URI = os.getenv(
-    "OAUTH2_REDIRECT_URI", f"{APP_BASE_URL}/auth/sso/callback"
+    "OAUTH2_REDIRECT_URI", f"{APP_BASE_URL}/api/v1/auth/sso/callback"
 )
 
 

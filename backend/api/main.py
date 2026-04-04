@@ -427,7 +427,7 @@ def validate_production_environment():
     """
     try:
         critical_vars = [
-            "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
+            "SECRET_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
             "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET",
             "PINECONE_API_KEY", "REDIS_URL", "DATABASE_URL"
         ]
@@ -512,8 +512,9 @@ async def readiness(db: AsyncSession = Depends(get_db)):
 
     # 2. Verify Redis connectivity
     try:
-        r = _get_redis_client()
-        r.ping()
+        r = get_redis_client()
+        if r:
+            r.ping()
     except Exception as e:
         logger.warning(f"Readiness Redis check degraded: {e}")
         # allow partial readiness for availability

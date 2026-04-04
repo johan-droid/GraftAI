@@ -43,7 +43,13 @@ from backend.auth.schemes import (
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY environment variable is required")
+    if os.getenv("ENV") == "production":
+        logger.critical("[AUTH] 🚨 FATAL: SECRET_KEY environment variable is MISSING in production.")
+        raise RuntimeError("SECRET_KEY environment variable is required for production security.")
+    else:
+        logger.warning("[AUTH] ⚠ SECRET_KEY not set - using insecure dev default.")
+        SECRET_KEY = "dev_insecure_token_signing_key_change_me_in_production"
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))

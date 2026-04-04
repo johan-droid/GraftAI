@@ -18,6 +18,7 @@ import {
   X,
   Play,
   Shield,
+  Crown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -110,6 +111,42 @@ const STATS = [
   { value: "12k+", label: "active teams" },
   { value: "99.9%", label: "uptime" },
   { value: "4.9★", label: "avg rating" },
+];
+
+const PRICING_TIERS = [
+  {
+    id: "free",
+    name: "Standard",
+    price: "$0",
+    description: "Perfect for secondary calendar management and casual AI scheduling.",
+    features: ["10 AI Copilot Messages / Day", "3 Manual Calendar Syncs / Day", "Google & Outlook Integration", "Standard LLM Processing"],
+    highlight: false,
+    cta: "Start Free",
+    href: "/register",
+    icon: <Zap className="w-5 h-5 text-slate-400" />
+  },
+  {
+    id: "pro",
+    name: "Professional",
+    price: "$12",
+    description: "The ultimate productivity engine for high-density power users.",
+    features: ["200 AI Copilot Messages / Day", "50 Manual Calendar Syncs / Day", "Priority LLM Processing", "Advanced Time Analytics"],
+    highlight: true,
+    cta: "Get Pro",
+    href: "/pricing",
+    icon: <Crown className="w-5 h-5 text-indigo-400" />
+  },
+  {
+    id: "elite",
+    name: "Elite Sovereign",
+    price: "$49",
+    description: "Unbounded AI coordination for executive-level time mastery.",
+    features: ["Unlimited AI Messages", "Unlimited Calendar Syncs", "24/7 Concierge Support", "Zero-Data-Retention Option"],
+    highlight: false,
+    cta: "Contact Sales",
+    href: "/pricing",
+    icon: <Sparkles className="w-5 h-5 border-amber-400 text-amber-400" />
+  }
 ];
 
 export default function Home() {
@@ -557,7 +594,73 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-5 py-24">
+        <section id="pricing" className="mx-auto max-w-6xl px-5 py-24 border-t border-slate-800/40 mt-12">
+          <div className="mb-16 text-center">
+            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-indigo-400">Pricing</p>
+            <h2 className="text-4xl font-black text-white sm:text-5xl" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+              Simple, transparent pricing.
+            </h2>
+            <p className="mt-4 text-base text-slate-400 max-w-2xl mx-auto">
+              Optimized for individual power users. Choose the tier that fits your scheduling volume.
+            </p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto items-center">
+            {PRICING_TIERS.map((pt, i) => (
+              <motion.div
+                key={pt.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className={`relative flex flex-col rounded-3xl p-8 transition-all ${
+                  pt.highlight 
+                    ? "bg-slate-900/80 border border-indigo-500/40 shadow-2xl shadow-indigo-500/10 scale-100 sm:scale-105 z-10" 
+                    : "bg-slate-900/30 border border-slate-800/60"
+                }`}
+              >
+                {pt.highlight && (
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg">
+                    Most Popular
+                  </div>
+                )}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`p-2 rounded-xl bg-slate-950/50 border border-slate-800`}>
+                    {pt.icon}
+                  </div>
+                  <h3 className="text-xl font-bold text-white">{pt.name}</h3>
+                </div>
+                <div className="mb-4 flex items-end gap-1">
+                  <span className="text-4xl font-black">{pt.price}</span>
+                  {pt.id !== 'free' && <span className="text-slate-500 mb-1">/ month</span>}
+                </div>
+                <p className="text-sm text-slate-400 mb-8 max-w-[240px]">
+                  {pt.description}
+                </p>
+                <div className="flex-1 space-y-4 mb-8">
+                  {pt.features.map((feat) => (
+                    <div key={feat} className="flex gap-3 text-sm text-slate-300">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                      {feat}
+                    </div>
+                  ))}
+                </div>
+                <Link
+                  href={pt.href}
+                  className={`w-full py-3.5 rounded-xl text-center text-sm font-bold transition-all ${
+                    pt.highlight 
+                      ? "bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-500/20" 
+                      : "bg-slate-800 hover:bg-slate-700 text-white"
+                  }`}
+                >
+                  {pt.cta}
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-6xl px-5 py-24 pb-32">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -615,7 +718,7 @@ export default function Home() {
 
       <footer className="border-t border-slate-800/40 py-12">
         <div className="mx-auto max-w-6xl px-5">
-          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
+          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
             <div className="flex items-center gap-2.5">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600">
                 <span className="text-xs font-black text-white">G</span>
@@ -626,14 +729,12 @@ export default function Home() {
               >
                 GraftAI
               </span>
-              <span className="text-xs text-slate-700">© 2026</span>
+              <span className="text-xs text-slate-700">© 2026 Student Academic Project.</span>
             </div>
-            <div className="flex gap-6 text-xs font-medium text-slate-600">
-              {['Privacy', 'Terms', 'Status', 'GitHub'].map((item) => (
-                <Link key={item} href="#" className="transition-colors hover:text-slate-400">
-                  {item}
-                </Link>
-              ))}
+            <div className="flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-500">
+              <Link href="/privacy-policy" className="transition-colors hover:text-slate-300">Privacy Policy</Link>
+              <Link href="/terms-of-service" className="transition-colors hover:text-slate-300">Terms of Service</Link>
+              <Link href="#" className="transition-colors hover:text-slate-300">GitHub</Link>
             </div>
           </div>
         </div>

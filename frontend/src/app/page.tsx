@@ -62,7 +62,8 @@ export default function Home() {
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     try {
-      const resp = await fetch("/health", { cache: "no-store" });
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+      const resp = await fetch(`${baseUrl}/health`.replace(/\/+/g, '/').replace(':/', '://'), { cache: "no-store" });
       if (!resp.ok) throw new Error(`Status ${resp.status}`);
       const data = await resp.json();
       if (backendStatus === "sleeping" || backendStatus === "waking" || backendStatus === "unknown") {

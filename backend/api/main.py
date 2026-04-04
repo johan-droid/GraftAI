@@ -351,6 +351,7 @@ cors_origins = [
     "https://www.graftai.tech",         # Secondary production domain
     "https://graft-ai-two.vercel.app",  # Vercel deployment preview url
     "https://graftai-api.onrender.com", # Render backend canonical domain
+    "https://graftai.onrender.com",      # Alternative Render domain
     # ── Configurable via Render env vars ────────────
     *([os.getenv("FRONTEND_URL")] if os.getenv("FRONTEND_URL") else []),
     *([os.getenv("LOAD_BALANCER_URL")] if os.getenv("LOAD_BALANCER_URL") else []),
@@ -461,6 +462,8 @@ async def startup_event():
     
     # 2. Start self-pinger in a daemon thread
     import threading
+    import os
+    logger.info(f"Startup Info: CWD={os.getcwd()}, PYTHONPATH={os.getenv('PYTHONPATH')}")
     threading.Thread(target=self_pinger, daemon=True).start()
 
 
@@ -481,7 +484,14 @@ def root():
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
-    return {"status": "ok", "environment": "production-hardened"}
+    """Detailed health check for Render monitoring."""
+    return {
+        "status": "healthy",
+        "service": "graftai-backend",
+        "environment": os.getenv("ENV", "production"),
+        "version": "1.0.1",
+        "timestamp": datetime.now().isoformat()
+    }
 
 
 @app.get("/readiness")

@@ -1,0 +1,18 @@
+name: Keep Alive
+
+on:
+  schedule:
+    - cron: '*/14 * * * *' # Every 14 minutes to stay ahead of Render's 15m sleep timer
+  workflow_dispatch: # Allows manual triggering for testing
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tickle Render Backend
+        run: |
+          curl -sS https://graftai-api.onrender.com/health || echo "Backend waking up..."
+      
+      - name: Tickle Production Frontend (Optional)
+        run: |
+          curl -sS https://graftai.tech || echo "Frontend pinged."

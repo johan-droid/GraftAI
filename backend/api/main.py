@@ -430,13 +430,38 @@ v1_router.include_router(billing_router)
 app.include_router(v1_router)
 app.include_router(auth_router)
 
-# --- Diagnostic: Log all registered routes on startup ---
+# --- Keep-Alive / Anti-Sleep Task ---
+def self_pinger():
+    """Background thread to keep the service awake by hitting the public URL."""
+    # Wait for the server to fully stabilize
+    import time
+    import httpx
+    time.sleep(30)
+    
+    # Target our own canonical URL
+    public_url = os.getenv("APP_BASE_URL", "https://graftai-api.onrender.com").rstrip("/")
+    health_url = f"{public_url}/health"
+    
+    logger.info(f"Self-pinger active. Target: {health_url}")
+    while True:
+        try:
+            # Hitting the public URL resets Render's 15-minute idle timer
+            httpx.get(health_url, timeout=10.0)
+        except Exception as e:
+            logger.debug(f"Self-ping failed (harmless): {e}")
+        time.sleep(600) # Every 10 minutes (Render sleeps after 15)
+
+# --- Diagnostic & Startup ---
 @app.on_event("startup")
-async def log_routes():
-    # Only show in production if needed, but useful for initial 404 troubleshooting
+async def startup_event():
+    # 1. Log all registered routes for debugging
     for route in app.routes:
         if hasattr(route, "path"):
-            logger.info(f"Registered route: {route.path}")
+            logger.info(f"Route: {route.path}")
+    
+    # 2. Start self-pinger in a daemon thread
+    import threading
+    threading.Thread(target=self_pinger, daemon=True).start()
 
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")

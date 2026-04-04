@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, func, Boolean, Index
+from .base import Base
 
 class UserTokenTable(Base):
     """

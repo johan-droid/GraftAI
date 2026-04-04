@@ -463,22 +463,25 @@ async def sso_callback(
         target_url = f"{frontend_base}{target_path if target_path.startswith('/') else '/' + target_path}"
         
         # Cross-Domain Bridge Detection:
-        # If the frontend is on a different domain than the backend (e.g., .vercel.app or .tech), 
-        # third-party cookie blocking will prevent HttpOnly cookies from working.
-        # We manually hand over the tokens to the frontend callback page to be set as First-Party cookies.
+        # If the frontend is on a different domain than the backend (e.g., .vercel.app or .tech),
+        # third-party cookie blocking often prevents HttpOnly cookies from being accepted.
+        # In that case, use the token bridge to hand off tokens to the frontend callback page.
         backend_host = request.url.hostname
         frontend_host = urlparse(target_url).hostname
-        
+
         # LOG FOR DIAGNOSTICS: Using WARNING to ensure it's not swallowed by level filters
         logger.warning(f"[AUTH_DIAGNOSTIC]: Backend host: {backend_host}, Frontend host: {frontend_host}, Env: {os.getenv('ENV')}")
-        
-        is_cross_domain = frontend_host and backend_host and frontend_host != backend_host
-        is_render_suffix = ".onrender.com" in str(backend_host)
-        
-# Token bridge was originally intended for cross-domain cookie handoff.
-        # In most secure HTTPS deployments, direct cookie flow is supported and simpler.
+
+        is_cross_domain = bool(frontend_host and backend_host and frontend_host != backend_host)
+        is_localhost = bool(
+            "localhost" in str(backend_host)
+            or "127.0.0.1" in str(backend_host)
+            or "localhost" in str(frontend_host)
+            or "127.0.0.1" in str(frontend_host)
+        )
+
         use_token_bridge = os.getenv("ENABLE_TOKEN_BRIDGE", "0") == "1"
-        should_use_bridge = use_token_bridge
+        should_use_bridge = use_token_bridge or (is_cross_domain and not is_localhost)
 
         if should_use_bridge:
             logger.warning(f"[AUTH_DIAGNOSTIC]: Using Token Bridge for callback handoff. Target: {target_url}")

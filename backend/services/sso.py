@@ -5,6 +5,7 @@ SSO (OAuth2, OIDC) authentication implementation with Redis-backed state storage
 from datetime import datetime, timedelta, timezone
 import os
 import json
+from typing import Any
 from fastapi import HTTPException, Request
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 import redis
@@ -77,6 +78,12 @@ def _get_oauth_state(state: str) -> dict | None:
     raw_data = client.get(key)
     if not raw_data:
         return None
+
+    if isinstance(raw_data, bytes):
+        raw_data = raw_data.decode("utf-8")
+    elif not isinstance(raw_data, str):
+        raw_data = str(raw_data)
+
     state_data = json.loads(raw_data)
     data = json.loads(state_data["data"])
     return data
@@ -228,13 +235,14 @@ async def complete_oauth2_flow(request: Request, code: str, state: str):
 
     logger.info(f"Using redirect_uri for token exchange: {redirect_uri}")
 
-    async with AsyncOAuth2Client(
+    session: Any = AsyncOAuth2Client(
         client_id=client_id,
         client_secret=client_secret,
         scope=config["scope"],
         redirect_uri=redirect_uri,
         state=state,
-    ) as session:
+    )
+    try:
         # Pass the FULL URL from the request for robust parameter verification by authlib
         # This handles cases where scheme/host/port might be tricky behind proxies.
         token = await session.fetch_token(
@@ -242,6 +250,9 @@ async def complete_oauth2_flow(request: Request, code: str, state: str):
             code=code,
             authorization_response=str(request.url),
         )
+    finally:
+        if hasattr(session, "aclose"):
+            await getattr(session, "aclose")()
 
     import httpx
 

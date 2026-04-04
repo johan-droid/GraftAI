@@ -434,8 +434,35 @@ async def sso_callback(
         
         target_url = f"{frontend_base}{target_path if target_path.startswith('/') else '/' + target_path}"
         
-        logger.info(f"SSO success. Redirecting user to: {target_url}")
+        # Cross-Domain Bridge Detection:
+        # If the frontend is on a different domain than the backend (e.g., .vercel.app or .tech), 
+        # third-party cookie blocking will prevent HttpOnly cookies from working.
+        # We manually hand over the tokens to the frontend callback page to be set as First-Party cookies.
+        backend_host = request.url.hostname
+        frontend_host = urlparse(target_url).hostname
         
+        is_cross_domain = frontend_host and backend_host and frontend_host != backend_host
+        
+        # Also check if we are on a .render.com domain which is on the Public Suffix List
+        is_pub_suffix = backend_host.endswith(".onrender.com") if backend_host else False
+        
+        if is_cross_domain or is_pub_suffix:
+            # Token Bridge: Pass tokens via URL to a special frontend callback page
+            # This allows the frontend to set its own FIRST-PARTY cookies.
+            logger.info(f"Cross-domain detected ({frontend_host} vs {backend_host}). Using Token Bridge.")
+            
+            # The bridge callback URL
+            callback_base = target_url.rstrip("/")
+            if "/dashboard" in callback_base:
+                # Redirect to the specific callback bridge we just created
+                bridge_url = callback_base.replace("/dashboard", "/sso/callback")
+            else:
+                bridge_url = f"{callback_base}/sso/callback"
+            
+            final_target = f"{bridge_url}?token={tokens['access_token']}&refresh_token={tokens['refresh_token']}"
+            return RedirectResponse(url=final_target, status_code=303)
+
+        # Standard Same-Site flow: Set HttpOnly cookies directly
         response = RedirectResponse(url=target_url, status_code=303)
         _attach_jwt_cookies(response, tokens, request)
         return response

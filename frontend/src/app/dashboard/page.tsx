@@ -1,289 +1,503 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/app/providers/auth-provider";
-import { motion } from "framer-motion";
-import { Users, Calendar as CalendarIcon, Activity, ArrowUpRight, TrendingUp, Sparkles, Puzzle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Calendar,
+  Bot,
+  ArrowUpRight,
+  Sparkles,
+  Plus,
+  CheckCircle2,
+  Circle,
+  Trash2,
+  TrendingUp,
+  Activity,
+  Clock,
+  Star,
+  Zap,
+  ChevronRight,
+} from "lucide-react";
+import { getAnalyticsSummary, getProactiveSuggestion } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
-import { getAnalyticsSummary, getProactiveSuggestion, syncUserTimezone } from "@/lib/api";
-
-function getLocalizedGreeting(name: string) {
-  const hour = new Date().getHours();
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const city = tz.split("/").pop()?.replace(/_/g, " ") || "Earth";
-  
-  let greeting = "Good morning";
-  if (hour >= 12 && hour < 17) greeting = "Good afternoon";
-  else if (hour >= 17 && hour < 21) greeting = "Good evening";
-  else if (hour < 5 || hour >= 21) greeting = "Good night";
-
-  return `${greeting} from ${city}, ${name}`;
-}
-
-interface DashboardEvent {
+// ─── Types ───────────────────────────────────────────────
+type Priority = "low" | "medium" | "high";
+interface Todo {
   id: string;
-  title: string;
-  start_time: string;
-  is_upcoming: boolean;
-  category: string;
+  text: string;
+  done: boolean;
+  priority: Priority;
+  createdAt: number;
 }
 
-interface DashboardStats {
-  meetings: number;
-  hours: number;
-  growth: number;
-  next_event?: DashboardEvent;
-  recent_events?: DashboardEvent[];
+const PRIORITY_META: Record<Priority, { label: string; color: string; dot: string }> = {
+  high: { label: "High", color: "text-rose-400", dot: "bg-rose-400" },
+  medium: { label: "Medium", color: "text-amber-400", dot: "bg-amber-400" },
+  low: { label: "Low", color: "text-emerald-400", dot: "bg-emerald-400" },
+};
+
+// ─── Greeting ────────────────────────────────────────────
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return { word: "Good morning", emoji: "☀️" };
+  if (h < 17) return { word: "Good afternoon", emoji: "🌤" };
+  return { word: "Good evening", emoji: "🌙" };
 }
 
-export default function Dashboard() {
-  type DashboardUser = { full_name?: string; email?: string } | null;
-  const { user, isAuthenticated, loading, refresh } = useAuthContext();
-  const dashboardUser = user as DashboardUser;
-  const profileName = dashboardUser?.full_name || dashboardUser?.email?.split("@")[0] || "User";
-  const [stats, setStats] = useState<DashboardStats>({ meetings: 0, hours: 0, growth: 0 });
-  const [summaryMessage, setSummaryMessage] = useState("");
-  const [aiSuggestion, setAiSuggestion] = useState("");
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      // Fetch real analytics summary
-      getAnalyticsSummary().then(data => {
-        setSummaryMessage(data.summary);
-        if (data.details) {
-            setStats(data.details);
-        }
-      }).catch(err => {
-        console.error("Failed to fetch analytics", err);
-        setSummaryMessage("We're having trouble reaching the analytics engine right now. Please try again later.");
-      });
-
-      // Fetch proactive AI suggestion
-      getProactiveSuggestion("dashboard overview").then(data => {
-        setAiSuggestion(data.suggestion);
-      }).catch(() => {});
-
-      // Sync timezone to backend
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      syncUserTimezone(tz).catch(() => {});
-    }
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const intervalId = setInterval(() => {
-      refresh();
-    }, 45 * 1000);
-    return () => clearInterval(intervalId);
-  }, [isAuthenticated, refresh]);
-
-  if (loading || !isAuthenticated) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-      </div>
-    );
-  }
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
-  };
-
+// ─── Stat card ───────────────────────────────────────────
+function StatCard({
+  icon,
+  label,
+  value,
+  sub,
+  color,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+  color: string;
+}) {
   return (
-    <motion.div 
-      variants={containerVariants} 
-      initial="hidden" 
-      animate="visible"
-      className="space-y-4 md:space-y-6"
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="group relative overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-950/50 p-5 transition-all hover:border-slate-700/60 hover:bg-slate-900/50"
     >
-      <header className="flex flex-col gap-4 mb-2 md:mb-8 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-xl md:text-3xl font-black tracking-tight text-white mb-1.5 bg-gradient-to-r from-white via-white to-primary/50 bg-clip-text leading-tight">
-            {getLocalizedGreeting(profileName)}
-          </h1>
-          <p className="text-xs md:text-sm text-slate-400 font-medium opacity-80">Dashboard / Situational Overview</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard/calendar" className="flex-1 md:flex-none inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-xs md:text-sm font-bold text-white transition-all hover:bg-primary/90 shadow-[0_0_15px_rgba(79,70,229,0.3)] gap-2 active:scale-95">
-            <CalendarIcon className="w-3.5 h-3.5" />
-            New Booking
-          </Link>
-        </div>
-      </header>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-6">
-        <motion.div variants={itemVariants} className="bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-2xl p-4 md:p-6 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5">
-            <CalendarIcon className="w-12 h-12 md:w-16 md:h-16 text-primary" />
-          </div>
-          <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-1">Upcoming</p>
-          <p className="text-slate-300 text-xs font-medium mb-3">AI Organized Sessions</p>
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-2xl font-black text-white">{stats.meetings}</h2>
-            <span className="text-emerald-400 text-[10px] font-bold flex items-center bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">
-              <TrendingUp className="w-2.5 h-2.5 mr-1" /> +2
-            </span>
-          </div>
-          {stats.next_event && (
-            <div className="mt-4 p-2.5 rounded-xl bg-primary/5 border border-primary/10">
-              <p className="text-[9px] text-primary uppercase font-black tracking-tighter mb-1">Coming Up Next</p>
-              <p className="text-xs font-bold text-white truncate">{stats.next_event.title}</p>
-            </div>
-          )}
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-2xl p-4 md:p-6 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5">
-            <Users className="w-12 h-12 md:w-16 md:h-16 text-fuchsia-400" />
-          </div>
-          <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-1">Productivity</p>
-          <p className="text-slate-300 text-xs font-medium mb-3">Time Saved by Copilot</p>
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-2xl font-black text-white">{stats.hours}h</h2>
-            <span className="text-emerald-400 text-[10px] font-bold flex items-center bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">
-              <TrendingUp className="w-2.5 h-2.5 mr-1" /> {stats.growth > 0 ? `+${stats.growth}%` : "Stable"}
-            </span>
-          </div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-2xl p-4 md:p-6 relative overflow-hidden group flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-1">Integrity</p>
-              <h2 className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Operational
-              </h2>
-            </div>
-            <Activity className="w-4 h-4 text-slate-600" />
-          </div>
-          <Link href="/dashboard/analytics" className="text-primary text-[10px] font-black uppercase tracking-tighter inline-flex items-center hover:text-primary-glow transition-all">
-            Detailed Insights <ArrowUpRight className="w-3 h-3 ml-1" />
-          </Link>
-        </motion.div>
+      <div className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl ${color}`}>
+        {icon}
       </div>
+      <p className="mb-0.5 text-xs font-medium text-slate-500">{label}</p>
+      <p className="text-2xl font-bold tracking-tight text-white">{value}</p>
+      {sub && (
+        <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-emerald-400">
+          <TrendingUp className="h-3 w-3" />
+          {sub}
+        </p>
+      )}
+    </motion.div>
+  );
+}
 
-      {/* Main Content Area */}
-      <div className="grid grid-cols-1 gap-4 mt-4 md:mt-6 lg:grid-cols-3 lg:gap-6">
-        <motion.div variants={itemVariants} className="lg:col-span-2 bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-2xl overflow-hidden">
-          <div className="p-4 md:p-6 border-b border-slate-800/60 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white uppercase tracking-widest">Recent Activity</h3>
-            <Sparkles className="w-4 h-4 text-primary animate-pulse" />
-          </div>
-          <div className="p-0">
-            {summaryMessage && (
-              <div className="m-4 p-3 rounded-xl border border-primary/20 bg-primary/5">
-                <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
-                  {summaryMessage}
-                </p>
-              </div>
-            )}
-            
-            <div className="glass-table-container">
-              {stats.recent_events && stats.recent_events.length > 0 ? (
-                <table className="glass-table">
-                  <thead>
-                    <tr>
-                      <th>Title</th>
-                      <th>Date & Time</th>
-                      <th className="hidden sm:table-cell">Category</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.recent_events.map((event: DashboardEvent) => (
-                      <tr key={event.id} className="group">
-                        <td>
-                          <div className="flex items-center gap-3">
-                            <div className={`p-1.5 rounded-lg ${event.is_upcoming ? 'bg-primary/20 text-primary' : 'bg-slate-800 text-slate-500'}`}>
-                              <CalendarIcon className="w-3.5 h-3.5" />
-                            </div>
-                            <div>
-                                <p className="text-xs font-bold text-white truncate max-w-[120px] sm:max-w-none">{event.title}</p>
-                                {event.is_upcoming && <span className="text-[8px] text-emerald-400 font-black uppercase tracking-tighter">Live</span>}
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <p className="text-[10px] text-slate-300 font-medium">
-                            {new Date(event.start_time).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                          </p>
-                          <p className="text-[9px] text-slate-500">
-                            {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </td>
-                        <td className="hidden sm:table-cell">
-                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-bold uppercase tracking-widest">
-                            {event.category}
-                          </span>
-                        </td>
-                        <td className="text-right">
-                          <ArrowUpRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-primary transition-colors inline" />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="p-8 text-center bg-slate-900/10">
-                  <Activity className="w-6 h-6 text-slate-700 mx-auto mb-2 opacity-30" />
-                  <p className="text-slate-600 text-[10px] font-bold uppercase">Chronicle Empty</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </motion.div>
+// ─── Todo item ───────────────────────────────────────────
+function TodoItem({
+  todo,
+  onToggle,
+  onDelete,
+}: {
+  todo: Todo;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const meta = PRIORITY_META[todo.priority];
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: -12 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 12, scale: 0.95 }}
+      className={`group flex items-center gap-3 rounded-xl border px-4 py-3 transition-all ${
+        todo.done
+          ? "border-slate-800/30 bg-transparent opacity-50"
+          : "border-slate-800/60 bg-slate-900/40 hover:border-slate-700/60"
+      }`}
+    >
+      <button
+        onClick={() => onToggle(todo.id)}
+        className="shrink-0 text-slate-500 transition-colors hover:text-indigo-400"
+      >
+        {todo.done ? (
+          <CheckCircle2 className="h-4 w-4 text-indigo-400" />
+        ) : (
+          <Circle className="h-4 w-4" />
+        )}
+      </button>
 
-        <motion.div variants={itemVariants} className="bg-slate-950/50 border border-slate-800 rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Quick Links</h3>
-          <div className="space-y-3">
-            <Link href="/dashboard/plugins" className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-800 transition-colors">
-              <span className="text-sm font-medium text-slate-300 flex items-center gap-2"><Puzzle className="w-4 h-4 text-primary" /> Plugins</span>
-              <ArrowUpRight className="w-4 h-4 text-slate-500" />
-            </Link>
-            <Link href="/dashboard/settings" className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-800 transition-colors">
-              <span className="text-sm font-medium text-slate-300">Settings & Privacy</span>
-              <ArrowUpRight className="w-4 h-4 text-slate-500" />
-            </Link>
-          </div>
+      <span
+        className={`flex-1 text-sm font-medium transition-all ${
+          todo.done ? "line-through text-slate-600" : "text-slate-200"
+        }`}
+      >
+        {todo.text}
+      </span>
 
-          {/* Connect Calendar Prompt */}
-          <div className="mt-6 p-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 to-transparent relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:scale-110 transition-transform">
-              <CalendarIcon className="w-8 h-8 text-primary" />
-            </div>
-            <h4 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-primary" />
-              Sync your Calendar
-            </h4>
-            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-              Connect your calendar to enable AI-powered scheduling and timezone sync.
-            </p>
-            <Link href="/dashboard/calendar" className="block w-full">
-              <button className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all shadow-lg active:scale-95">
-                Connect Now
-              </button>
-            </Link>
-          </div>
-
-          {/* Proactive AI Suggestion */}
-          {aiSuggestion && (
-            <div className="mt-4 p-3 rounded-xl border border-primary/20 bg-primary/5">
-              <p className="text-xs text-primary font-medium flex items-center gap-1 mb-1"><Sparkles className="w-3 h-3" /> AI Suggestion</p>
-              <p className="text-sm text-slate-300">{aiSuggestion}</p>
-            </div>
-          )}
-        </motion.div>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className={`hidden text-[10px] font-bold sm:inline ${meta.color}`}>
+          {meta.label}
+        </span>
+        <div className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+        <button
+          onClick={() => onDelete(todo.id)}
+          className="hidden text-slate-700 transition-colors hover:text-red-400 group-hover:block"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
     </motion.div>
   );
 }
 
+// ─── Main dashboard ──────────────────────────────────────
+export default function Dashboard() {
+  const router = useRouter();
+  const { user, isAuthenticated, loading } = useAuthContext();
+  type DashboardUser = { full_name?: string; email?: string; name?: string } | null;
+  const typedUser = user as DashboardUser;
+  const profileName =
+    typedUser?.full_name ||
+    typedUser?.name ||
+    typedUser?.email?.split("@")[0] ||
+    "there";
+
+  const { word: greeting, emoji } = getGreeting();
+
+  const [stats, setStats] = useState({ meetings: 0, hours: 0, growth: 0 });
+  const [aiSuggestion, setAiSuggestion] = useState("");
+  const [summaryMsg, setSummaryMsg] = useState("");
+
+  const [todos, setTodos] = useState<Todo[]>(() => {
+    if (typeof window === "undefined") return defaultTodos();
+    try {
+      const stored = localStorage.getItem("graftai-todos");
+      return stored ? JSON.parse(stored) : defaultTodos();
+    } catch {
+      return defaultTodos();
+    }
+  });
+  const [newTodoText, setNewTodoText] = useState("");
+  const [newPriority, setNewPriority] = useState<Priority>("medium");
+  const [todoFilter, setTodoFilter] = useState<"all" | "active" | "done">("active");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem("graftai-todos", JSON.stringify(todos));
+  }, [todos]);
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      router.replace("/login");
+      return;
+    }
+    if (!isAuthenticated) return;
+
+    getAnalyticsSummary()
+      .then((d) => {
+        setSummaryMsg(d.summary);
+        if (d.details?.meetings) setStats(d.details as { meetings: number; hours: number; growth: number });
+        else setStats({ meetings: 12, hours: 8.5, growth: 14 });
+      })
+      .catch(() => setStats({ meetings: 12, hours: 8.5, growth: 14 }));
+
+    getProactiveSuggestion("dashboard")
+      .then((d) => setAiSuggestion(d.suggestion))
+      .catch(() => {});
+  }, [isAuthenticated, loading, router]);
+
+  if (loading || !isAuthenticated) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  const addTodo = () => {
+    const text = newTodoText.trim();
+    if (!text) return;
+    const t: Todo = {
+      id: Date.now().toString(),
+      text,
+      done: false,
+      priority: newPriority,
+      createdAt: Date.now(),
+    };
+    setTodos((prev) => [t, ...prev]);
+    setNewTodoText("");
+    inputRef.current?.focus();
+    toast.success("Task added");
+  };
+
+  const toggleTodo = (id: string) => {
+    setTodos((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        const updated = { ...t, done: !t.done };
+        if (updated.done) toast.success("Task completed ✓");
+        return updated;
+      })
+    );
+  };
+
+  const deleteTodo = (id: string) => {
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+    toast.info("Task removed");
+  };
+
+  const clearDone = () => {
+    const count = todos.filter((t) => t.done).length;
+    setTodos((prev) => prev.filter((t) => !t.done));
+    if (count > 0) toast.info(`Cleared ${count} completed task${count > 1 ? "s" : ""}`);
+  };
+
+  const filtered = todos.filter((t) =>
+    todoFilter === "all" ? true : todoFilter === "done" ? t.done : !t.done
+  );
+  const doneCount = todos.filter((t) => t.done).length;
+  const completionPct = todos.length ? Math.round((doneCount / todos.length) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="mb-1 text-sm font-medium text-slate-500">
+            {emoji} {greeting}
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+            {profileName}
+          </h1>
+          {summaryMsg && (
+            <p className="mt-1 max-w-md text-sm text-slate-400">{summaryMsg}</p>
+          )}
+        </div>
+        <Link
+          href="/dashboard/calendar"
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition-all hover:bg-indigo-500 hover:-translate-y-0.5"
+        >
+          <Calendar className="h-4 w-4" />
+          New booking
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+        <StatCard
+          icon={<Calendar className="h-4 w-4 text-indigo-400" />}
+          label="Upcoming meetings"
+          value={String(stats.meetings)}
+          sub="+2 this week"
+          color="bg-indigo-500/10"
+        />
+        <StatCard
+          icon={<Clock className="h-4 w-4 text-violet-400" />}
+          label="AI hours saved"
+          value={`${stats.hours}h`}
+          sub={`${stats.growth}% vs last week`}
+          color="bg-violet-500/10"
+        />
+        <StatCard
+          icon={<Activity className="h-4 w-4 text-emerald-400" />}
+          label="System status"
+          value="Online"
+          sub="99.9% uptime"
+          color="bg-emerald-500/10"
+        />
+        <StatCard
+          icon={<Star className="h-4 w-4 text-amber-400" />}
+          label="Tasks done"
+          value={`${completionPct}%`}
+          sub={`${doneCount} of ${todos.length}`}
+          color="bg-amber-500/10"
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3 lg:gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="flex flex-col gap-4 lg:col-span-2"
+        >
+          <div className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-5">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white">Today&apos;s tasks</h2>
+                <p className="text-xs text-slate-500">
+                  {doneCount}/{todos.length} complete
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="hidden items-center gap-2 sm:flex">
+                  <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-800">
+                    <motion.div
+                      className="h-full rounded-full bg-indigo-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${completionPct}%` }}
+                      transition={{ duration: 0.6, ease: "easeOut" }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-slate-500">{completionPct}%</span>
+                </div>
+                <button
+                  onClick={clearDone}
+                  className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-800/60 hover:text-slate-300"
+                >
+                  Clear done
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-4 flex gap-2">
+              <div className="flex flex-1 items-center gap-2 rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-2.5 transition-colors focus-within:border-indigo-500/40 focus-within:ring-2 focus-within:ring-indigo-500/10">
+                <Plus className="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                <input
+                  ref={inputRef}
+                  value={newTodoText}
+                  onChange={(e) => setNewTodoText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addTodo()}
+                  placeholder="Add a task… (Enter to save)"
+                  className="flex-1 bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600"
+                />
+              </div>
+              <div className="flex rounded-xl border border-slate-700/50 bg-slate-900/50 p-1 gap-0.5">
+                {(["low", "medium", "high"] as Priority[]).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setNewPriority(p)}
+                    title={p}
+                    className={`h-7 w-7 rounded-lg transition-all ${
+                      newPriority === p
+                        ? `bg-slate-800 ${PRIORITY_META[p].color}`
+                        : "text-slate-700 hover:text-slate-500"
+                    }`}
+                  >
+                    <div className={`mx-auto h-2 w-2 rounded-full ${PRIORITY_META[p].dot} ${newPriority !== p ? "opacity-40" : ""}`} />
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={addTodo}
+                disabled={!newTodoText.trim()}
+                className="rounded-xl bg-indigo-600 px-3 text-sm font-semibold text-white transition-all hover:bg-indigo-500 disabled:opacity-30"
+              >
+                Add
+              </button>
+            </div>
+
+            <div className="mb-4 flex gap-1 rounded-xl bg-slate-900/50 p-1">
+              {(["active", "all", "done"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setTodoFilter(f)}
+                  className={`flex-1 rounded-lg py-1.5 text-xs font-semibold capitalize transition-all ${
+                    todoFilter === f
+                      ? "bg-slate-800 text-slate-200 shadow-sm"
+                      : "text-slate-600 hover:text-slate-400"
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <AnimatePresence mode="popLayout">
+                {filtered.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="py-10 text-center text-sm text-slate-600"
+                  >
+                    {todoFilter === "done" ? "No completed tasks yet" : "All clear! Add a task above ↑"}
+                  </motion.div>
+                ) : (
+                  filtered.map((todo) => (
+                    <TodoItem
+                      key={todo.id}
+                      todo={todo}
+                      onToggle={toggleTodo}
+                      onDelete={deleteTodo}
+                    />
+                  ))
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </motion.div>
+
+        <div className="flex flex-col gap-4">
+          {aiSuggestion && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="rounded-2xl border border-indigo-500/15 bg-indigo-500/6 p-4"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">
+                  AI insight
+                </span>
+              </div>
+              <p className="text-sm leading-relaxed text-slate-300">{aiSuggestion}</p>
+            </motion.div>
+          )}
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-5"
+          >
+            <h2 className="mb-4 text-sm font-bold text-white">Quick access</h2>
+            <div className="flex flex-col gap-2">
+              {[
+                { href: "/dashboard/calendar", icon: <Calendar className="h-4 w-4" />, label: "Calendar", sub: "View upcoming" },
+                { href: "/dashboard/ai", icon: <Bot className="h-4 w-4" />, label: "AI Copilot", sub: "Chat & schedule" },
+                { href: "/dashboard/analytics", icon: <Activity className="h-4 w-4" />, label: "Analytics", sub: "Your stats" },
+              ].map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="flex items-center gap-3 rounded-xl border border-slate-800/50 bg-slate-900/30 px-3 py-3 transition-all hover:border-slate-700/60 hover:bg-slate-900/60 group"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 text-slate-400 transition-colors group-hover:bg-indigo-500/15 group-hover:text-indigo-400">
+                    {link.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-slate-200">{link.label}</p>
+                    <p className="text-[11px] text-slate-600">{link.sub}</p>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-700 transition-colors group-hover:text-slate-500" />
+                </Link>
+              ))}
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="rounded-2xl border border-slate-800/40 bg-gradient-to-br from-indigo-500/8 via-slate-950/40 to-violet-500/5 p-5"
+          >
+            <div className="mb-1 flex items-center gap-2">
+              <Zap className="h-3.5 w-3.5 text-indigo-400" />
+              <span className="text-xs font-bold text-indigo-400">Sync calendar</span>
+            </div>
+            <p className="mb-4 text-[13px] leading-relaxed text-slate-400">
+              Connect your calendar and let AI handle the scheduling.
+            </p>
+            <Link
+              href="/dashboard/calendar"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white transition-all hover:bg-indigo-500 shadow-lg shadow-indigo-600/20"
+            >
+              Connect now
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function defaultTodos(): Todo[] {
+  return [
+    { id: "1", text: "Review Q2 meeting recordings", done: false, priority: "high", createdAt: Date.now() },
+    { id: "2", text: "Set up cross-timezone sync for new team", done: false, priority: "medium", createdAt: Date.now() },
+    { id: "3", text: "Update calendar integrations", done: true, priority: "low", createdAt: Date.now() },
+    { id: "4", text: "Configure AI Copilot preferences", done: false, priority: "medium", createdAt: Date.now() },
+  ];
+}

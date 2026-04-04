@@ -1,117 +1,133 @@
 @import "tailwindcss";
 
+/* ── Design tokens ────────────────────────────────────────── */
 :root {
-  --background: #020617;
-  --foreground: #f8fafc;
-  --primary: #4f46e5;
-  --primary-glow: rgba(79, 70, 229, 0.4);
-  --accent: #a855f7;
-  --glass: rgba(15, 23, 42, 0.7);
-  --card-border: rgba(255, 255, 255, 0.08);
-  --floating-nav-top: 1rem;
-  --floating-nav-height: 3.25rem;
+  --background: #070711;
+  --foreground: #e2e8f0;
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --primary-glow: rgba(99, 102, 241, 0.3);
+  --surface: rgba(15, 15, 25, 0.8);
+  --border: rgba(51, 65, 85, 0.4);
+  --font-sans: var(--font-dm-sans), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-dm-serif), Georgia, serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
-  --color-accent: var(--accent);
-  --color-glass: var(--glass);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-mono: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
 }
 
-@media (prefers-color-scheme: light) {
-  /* GraftAI is default dark for that "Galaxy" aesthetic, but we can support light tokens here if needed */
-  :root {
-    --background: #f8fafc;
-    --foreground: #020617;
-  }
+/* ── Base reset ───────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-/* ── Fluid Typography & Mobile First ── */
 html {
-  font-size: 14px;
   scroll-behavior: smooth;
-  -webkit-tap-highlight-color: transparent;
-}
-
-@media (min-width: 375px) {
-  html { font-size: calc(14px + (16 - 14) * ((100vw - 375px) / (1440 - 375))); }
-}
-
-@media (min-width: 1440px) {
-  html { font-size: 16px; }
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  padding: 0;
   min-height: 100dvh;
-  background: #020617;
-  color: #f8fafc;
-  font-family: var(--font-sans), system-ui;
-  overflow-x: hidden;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* 🪐 Galaxy Background System */
-.galaxy-canvas {
-  position: fixed;
-  inset: 0;
-  z-index: -10;
-  overflow: hidden;
-  background: radial-gradient(circle at 50% 50%, #0f172a 0%, #020617 100%);
+/* ── Selection ────────────────────────────────────────────── */
+::selection {
+  background: rgba(99, 102, 241, 0.25);
+  color: #e2e8f0;
 }
 
-.galaxy-stars {
-  position: absolute;
-  inset: -100%;
-  background-image: 
-    radial-gradient(1px 1px at 20px 30px, #ffffff15, rgba(0,0,0,0)),
-    radial-gradient(1.5px 1.5px at 100px 100px, #ffffff10, rgba(0,0,0,0)),
-    radial-gradient(1px 1px at 150px 50px, #ffffff15, rgba(0,0,0,0));
-  background-size: 200px 200px;
-  animation: galaxy-rotate 300s linear infinite;
-  opacity: 0.5;
+/* ── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.4);
 }
 
-@keyframes galaxy-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* ── Focus visible ────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.6);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
-/* 💎 Premium Glass Housing */
-.floating-nav {
-  position: fixed;
-  top: var(--floating-nav-top);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  background: rgba(15, 23, 42, 0.7);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 2rem;
-  padding: 0.5rem 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.6);
-  max-width: min(calc(100vw - 2rem), 48rem);
-  width: fit-content;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+/* ── Typography helpers ───────────────────────────────────── */
+.font-serif {
+  font-family: var(--font-serif);
 }
 
-.page-with-floating-nav {
-  padding-top: calc(var(--floating-nav-top) + var(--floating-nav-height) + 1.5rem);
-}
-
-/* Mobile Touch Optimization */
-@media (max-width: 767px) {
-  .floating-nav {
-    --floating-nav-top: 1rem;
-    padding: 0.4rem 0.6rem;
+/* ── Touch targets (mobile a11y) ─────────────────────────── */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  a {
+    min-height: 44px;
+    min-width: 44px;
   }
+}
+
+/* ── App shell ────────────────────────────────────────────── */
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── Gradient animation ───────────────────────────────────── */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.animate-gradient {
+  animation: gradient-shift 4s ease infinite;
+  background-size: 200% auto;
+}
+
+/* ── Motion preferences ───────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Utility ──────────────────────────────────────────────── */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

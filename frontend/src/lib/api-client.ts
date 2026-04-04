@@ -116,14 +116,23 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
 
     // 4. Handle Unauthorized (Response Interceptor)
     if (response.status === 401 || response.status === 403) {
-      // Attempt a one-time refresh using cookie-based refresh token.
+      // Attempt a one-time refresh using either the browser refresh cookie
+      // or the explicit refresh token stored on the frontend host.
       const refreshUrl = composeEndpoint("/auth/refresh", true);
+      const refreshBody: Record<string, string> = {};
+      const refreshToken = getCookie("graftai_refresh_token");
+      if (refreshToken) {
+        refreshBody.refresh_token = refreshToken;
+      }
+
       const refreshResponse = await fetch(refreshUrl, {
         method: "POST",
         credentials: "include",
         headers: {
           Accept: "application/json",
+          "Content-Type": "application/json",
         },
+        body: Object.keys(refreshBody).length ? JSON.stringify(refreshBody) : undefined,
       }).catch(() => null);
 
       if (refreshResponse?.ok) {

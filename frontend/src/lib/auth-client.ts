@@ -80,12 +80,19 @@ export function getCsrfHeaders(): Record<string, string> {
 
 export const getSessionSafe = async () => {
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+
+    const token = getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
     const res = await fetch(authEndpoint("/auth/check"), {
       method: "GET",
       credentials: "include",
-      headers: {
-        Accept: "application/json",
-      },
+      headers,
     });
 
     if (!res.ok) {

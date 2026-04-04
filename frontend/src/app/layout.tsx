@@ -1,53 +1,53 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { DM_Sans, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/app/providers/auth-provider";
-import { Navbar } from "@/components/navbar";
+import { NotificationProvider } from "@/providers/notification-provider";
+import { ToastContainer } from "@/components/ui/Toast";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const dmSerif = DM_Serif_Display({
+  variable: "--font-dm-serif",
   subsets: ["latin"],
+  weight: ["400"],
+  display: "swap",
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
-  title: "GraftAI Scheduler",
-  description: "Next-Gen AI SaaS Scheduler with a dark galaxy aesthetic",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "GraftAI",
+  title: {
+    default: "GraftAI — Scheduling, handled.",
+    template: "%s · GraftAI",
   },
-  formatDetection: {
-    telephone: false,
+  description:
+    "AI-powered scheduling that handles timezones, conflicts, and back-and-forth — so you just show up.",
+  keywords: ["scheduling", "AI", "calendar", "meetings", "productivity"],
+  authors: [{ name: "GraftAI" }],
+  openGraph: {
+    type: "website",
+    title: "GraftAI — Scheduling, handled.",
+    description: "AI-powered scheduling that handles timezones, conflicts, and back-and-forth.",
+    siteName: "GraftAI",
   },
-  icons: [
-    { rel: "icon", url: "/favicon.ico" },
-    { rel: "icon", url: "/icon-192x192.png" },
-    { rel: "apple-touch-icon", url: "/icon-192x192.png" },
-  ],
-  manifest: "/manifest.json",
+  twitter: {
+    card: "summary_large_image",
+    title: "GraftAI — Scheduling, handled.",
+  },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
+  themeColor: "#070711",
+  colorScheme: "dark",
   width: "device-width",
-  initialScale: 1.0,
-  minimumScale: 1.0,
-  maximumScale: 1.0,
-  userScalable: false,
+  initialScale: 1,
+  maximumScale: 1,
 };
-
-export const themeColor = [
-  { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
-  { media: "(prefers-color-scheme: dark)", color: "#020617" },
-];
-
-import { NotificationProvider } from "@/providers/notification-provider";
-import SmartToaster from "@/components/ui/smart-toaster";
 
 export default function RootLayout({
   children,
@@ -57,21 +57,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${dmSans.variable} ${dmSerif.variable} dark`}
       suppressHydrationWarning
-      data-scroll-behavior="smooth"
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground selection:bg-primary/30" suppressHydrationWarning>
-        <div className="galaxy-canvas">
-          <div className="galaxy-stars" />
-        </div>
+      <body
+        className="min-h-dvh bg-[#070711] text-slate-200 antialiased"
+        style={{ fontFamily: "var(--font-dm-sans), system-ui, sans-serif" }}
+        suppressHydrationWarning
+      >
         <NotificationProvider>
           <AuthProvider>
-            <Navbar />
-            <main className="flex-1 relative z-0">
-              {children}
-            </main>
-            <SmartToaster />
+            {children}
+            <ToastContainer />
           </AuthProvider>
         </NotificationProvider>
       </body>

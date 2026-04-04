@@ -26,6 +26,7 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: [
+    { rel: "icon", url: "/favicon.ico" },
     { rel: "icon", url: "/icon-192x192.png" },
     { rel: "apple-touch-icon", url: "/icon-192x192.png" },
   ],

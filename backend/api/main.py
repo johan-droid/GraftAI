@@ -430,11 +430,6 @@ v1_router.include_router(billing_router)
 app.include_router(v1_router)
 
 
-@app.get("/favicon.ico")
-def favicon():
-    return Response(status_code=204)
-
-
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")
 def chrome_devtools():
     return Response(status_code=404)

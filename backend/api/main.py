@@ -416,7 +416,8 @@ from backend.api.webhooks import router as webhooks_router
 v1_router.include_router(webhooks_router)
 v1_router.include_router(billing_router)
 
-# Include v1 as both /api/v1 
+# Include auth routes at both legacy root and v1 paths for maximum compatibility
+app.include_router(auth_router)
 app.include_router(v1_router)
 
 def validate_production_environment():

@@ -176,6 +176,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
                 <button
                   onClick={() => setMobileOpen(false)}
+                  title="Close menu"
                   className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-800/50 hover:text-white"
                 >
                   <X className="h-4 w-4" />
@@ -196,6 +197,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="border-t border-slate-800/40 p-4">
                 <button
                   onClick={logout}
+                  title="Sign out"
                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-800/50 hover:text-white"
                 >
                   <LogOut className="h-4 w-4" />
@@ -213,6 +215,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <header className="flex items-center justify-between border-b border-slate-800/40 bg-slate-950/80 px-4 py-3 backdrop-blur-xl lg:hidden">
           <button
             onClick={() => setMobileOpen(true)}
+            title="Open menu"
             className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white"
           >
             <Menu className="h-5 w-5" />

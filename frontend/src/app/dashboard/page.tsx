@@ -108,6 +108,7 @@ function TodoItem({
     >
       <button
         onClick={() => onToggle(todo.id)}
+        title={todo.done ? "Mark task incomplete" : "Mark task complete"}
         className="shrink-0 text-slate-500 transition-colors hover:text-indigo-400"
       >
         {todo.done ? (
@@ -132,6 +133,7 @@ function TodoItem({
         <div className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
         <button
           onClick={() => onDelete(todo.id)}
+          title="Delete task"
           className="hidden text-slate-700 transition-colors hover:text-red-400 group-hover:block"
         >
           <Trash2 className="h-3.5 w-3.5" />

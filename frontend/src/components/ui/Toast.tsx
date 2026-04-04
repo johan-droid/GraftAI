@@ -56,6 +56,7 @@ export function ToastContainer() {
 
             <button
               onClick={() => dismiss(t.id)}
+              title="Dismiss notification"
               className="shrink-0 rounded-lg p-1 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300"
             >
               <X className="h-3.5 w-3.5" />

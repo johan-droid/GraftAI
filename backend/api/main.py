@@ -435,7 +435,7 @@ def chrome_devtools():
     return Response(status_code=404)
 
 
-@app.get("/")
+@app.get("/", methods=["GET", "HEAD"])
 def root():
     return {
         "message": "GraftAI Sovereign API is online.",
@@ -445,7 +445,7 @@ def root():
     }
 
 
-@app.get("/health")
+@app.get("/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "ok", "environment": "production-hardened"}
 

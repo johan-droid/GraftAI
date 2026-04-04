@@ -190,21 +190,32 @@ def _create_jwt_token(sub: str, email: Optional[str] = None):
     }
 
 
-def _attach_jwt_cookies(response: Response, token_data: dict):
+def _attach_jwt_cookies(response: Response, token_data: dict, request: Optional[Request] = None):
     # For SPA frontends on different domains/origins, SameSite=None is required
     # so browser includes cookies in cross-site requests from localhost:3000 etc.
     # IMPORTANT: SameSite=None REQUIRES Secure flag in modern browsers.
     # In production we use secure=True; in local dev we also use secure=True when using HTTPS.
     # For HTTP localhost development, we must use SameSite=Lax instead.
-    is_prod = os.getenv("NODE_ENV") == "production"
+    env_name = (os.getenv("ENV") or os.getenv("NODE_ENV") or "production").lower()
+    is_prod = env_name == "production"
+    
+    # Detect if we should use Secure/SameSite:None
+    # 1. If explicitly configured for HTTPS
+    # 2. If running on a production environment
+    # 3. BUT NOT if the origin is localhost and we're not in prod (to allow local HTTP dev)
     is_https = os.getenv("PROTOCOL") == "https" or is_prod
-
-    # SameSite=None requires Secure flag. For HTTP localhost, use Lax.
-    if is_https:
+    
+    origin = request.headers.get("origin", "") if request else ""
+    is_localhost = "localhost" in origin or (request.url.hostname == "localhost" if request else False)
+    
+    # SameSite=None requires Secure flag. 
+    # Only use Secure if it's actually HTTPS OR if it's production.
+    # On localhost HTTP, we must use Lax/Secure=False to allow frontend middleware to see the cookie.
+    if is_https and not (is_localhost and not is_prod):
         same_site_value = "none"
         secure_value = True
     else:
-        # Development over HTTP: use Lax which works without Secure
+        # Development over HTTP or localhost: use Lax which works without Secure
         same_site_value = "lax"
         secure_value = False
 
@@ -227,30 +238,22 @@ def _attach_jwt_cookies(response: Response, token_data: dict):
         path="/",
     )
 
-    # Always ensure XSRF token is available for double-submit CSRF checks.
+    # Always ensure XSRF token is available for double-submit CSRF checks (accessible by JS)
     xsrf_token = secrets.token_urlsafe(32)
     response.set_cookie(
         key="xsrf-token",
         value=xsrf_token,
-        httponly=False,
+        httponly=False, 
         secure=secure_value,
         samesite=same_site_value,
         max_age=86400,
-        path="/",
-    )
-    response.set_cookie(
-        key="graftai_refresh_token",
-        value=token_data["refresh_token"],
-        httponly=True,
-        secure=secure_value,
-        samesite=same_site_value,
-        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
         path="/",
     )
 
 
 @router.post("/token")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=5, window_seconds=60)),
@@ -275,7 +278,7 @@ async def login(
             "user": {"id": user.id, "email": user.email}
         }
     )
-    _attach_jwt_cookies(response, tokens)
+    _attach_jwt_cookies(response, tokens, request)
     return response
 
 
@@ -434,7 +437,7 @@ async def sso_callback(
         logger.info(f"SSO success. Redirecting user to: {target_url}")
         
         response = RedirectResponse(url=target_url, status_code=303)
-        _attach_jwt_cookies(response, tokens)
+        _attach_jwt_cookies(response, tokens, request)
         return response
         
     except HTTPException:
@@ -542,6 +545,7 @@ def _passwordless_request(
 
 @router.post("/passwordless/verify")
 def _passwordless_verify(
+    request: Request,
     email: str,
     code: str,
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=5, window_seconds=60)),
@@ -552,7 +556,7 @@ def _passwordless_verify(
         )
     token_data = _create_jwt_token(email)
     response = JSONResponse(content=token_data)
-    _attach_jwt_cookies(response, token_data)
+    _attach_jwt_cookies(response, token_data, request)
     return response
 
 
@@ -738,7 +742,7 @@ def refresh_token(request: Request, payload: Optional[RefreshTokenRequest] = Non
     # Refresh tokens (Token Rotation is enforced)
     token_data = _create_jwt_token(user_id)
     response = JSONResponse(content={"message": "Token refreshed successfully"})
-    _attach_jwt_cookies(response, token_data)
+    _attach_jwt_cookies(response, token_data, request)
     return response
 
 

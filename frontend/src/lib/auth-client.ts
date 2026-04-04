@@ -31,12 +31,38 @@ async function parseError(res: Response): Promise<AuthError> {
   }
 }
 
+let _cachedToken: string | null = null;
+let _cacheExpiry = 0;
+const SESSION_CACHE_TTL_MS = 30_000;
+
 export function getToken(): string | null {
   if (typeof document === "undefined") return null;
   const value = `; ${document.cookie}`;
   const parts = value.split(`; graftai_access_token=`);
   if (parts.length === 2) return parts.pop()?.split(";").shift() || null;
   return null;
+}
+
+export async function getAuthToken(): Promise<string | null> {
+  const now = Date.now();
+  if (_cachedToken && now < _cacheExpiry) {
+    return _cachedToken;
+  }
+
+  try {
+    const session = await getSessionSafe();
+    const token = session?.data?.session?.token ?? null;
+    _cachedToken = token;
+    _cacheExpiry = now + SESSION_CACHE_TTL_MS;
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+export function invalidateSessionCache(): void {
+  _cachedToken = null;
+  _cacheExpiry = 0;
 }
 
 export function getCsrfHeaders(): Record<string, string> {
@@ -97,6 +123,7 @@ export const signOut = async () => {
       return { data: null, error };
     }
 
+    invalidateSessionCache();
     return { data: await res.json().catch(() => ({ success: true })), error: null };
   } catch (err) {
     console.error("[AUTH_CLIENT]: Sign-out error:", err);

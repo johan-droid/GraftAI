@@ -1,5 +1,7 @@
 import logging
+import os
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +12,7 @@ from backend.models.tables import UserTable, UserTier
 from backend.auth.schemes import get_current_user_id
 
 logger = logging.getLogger(__name__)
+DEFAULT_TRIAL_DAYS = int(os.getenv("FREE_TRIAL_DAYS", "7"))
 
 # Daily Usage Limits PER TIER
 TIER_LIMITS = {
@@ -27,21 +30,48 @@ TIER_LIMITS = {
     }
 }
 
+def _start_of_utc_day(dt: datetime) -> datetime:
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
 async def _reset_usage_if_needed(user: UserTable, db: AsyncSession):
-    """Reset daily counters if 24h have passed since last reset."""
+    """Reset daily counters once per UTC day at midnight."""
     now = datetime.now(timezone.utc)
-    
+
     # If last_usage_reset is naive, make it aware (for safety)
     last_reset = user.last_usage_reset
     if last_reset and last_reset.tzinfo is None:
         last_reset = last_reset.replace(tzinfo=timezone.utc)
-        
-    if not last_reset or (now - last_reset) >= timedelta(days=1):
+
+    if not last_reset or last_reset < _start_of_utc_day(now):
         user.daily_ai_count = 0
         user.daily_sync_count = 0
         user.last_usage_reset = now
         await db.commit()
         logger.info(f"📅 Reset daily usage for user {user.id}")
+
+
+def get_tier_usage_limits(tier: UserTier):
+    return TIER_LIMITS.get(tier, TIER_LIMITS[UserTier.FREE])
+
+
+def get_next_quota_reset() -> datetime:
+    now = datetime.now(timezone.utc)
+    tomorrow = now + timedelta(days=1)
+    return _start_of_utc_day(tomorrow)
+
+
+def get_trial_days_left(created_at: Optional[datetime]) -> int:
+    if not created_at:
+        return 0
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+
+    expires_at = created_at + timedelta(days=DEFAULT_TRIAL_DAYS)
+    now = datetime.now(timezone.utc)
+    if expires_at <= now:
+        return 0
+    return max(0, int((expires_at - now).total_seconds() // 86400) + 1)
+
 
 def check_usage_limit(feature: str):
     """

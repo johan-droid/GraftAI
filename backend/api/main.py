@@ -121,6 +121,10 @@ class RateLimitMiddleware:
         # Fail open if Redis is unavailable so core API endpoints stay reachable.
         try:
             client = get_redis_client()
+            if client is None:
+                await self.app(scope, receive, send)
+                return
+
             key = f"rate_limit:{identifier}:{request.url.path}"
 
             # Use eval to run the script atomically
@@ -290,19 +294,28 @@ async def lifespan(app: FastAPI):
     # 0. Sentry
     sentry_dsn = os.getenv("SENTRY_DSN")
     if sentry_dsn:
-        import sentry_sdk
         try:
-            sentry_sdk.init(dsn=sentry_dsn, env=os.getenv("ENV", "production"))
-        except Exception: pass
+            import sentry_sdk  # type: ignore[import]
+        except ImportError:
+            sentry_sdk = None
+
+        if sentry_sdk is not None:
+            try:
+                sentry_sdk.init(dsn=sentry_dsn, env=os.getenv("ENV", "production"))
+            except Exception:
+                pass
     
-    # 1. DB Verification
-    if db_utils.engine:
+    # 1. DB Verification / Schema Initialization
+    skip_schema = os.getenv("SKIP_SCHEMA_INIT", "false").lower() == "true"
+    if db_utils.engine and not skip_schema:
         try:
             async with db_utils.engine.begin() as conn:
                 await conn.run_sync(ModelsBase.metadata.create_all)
             logger.info("✅ Database systems online.")
         except Exception as e:
             logger.error(f"DB Error: {e}")
+    elif skip_schema:
+        logger.info("⚠ SKIP_SCHEMA_INIT=true — skipping SQLAlchemy metadata creation to avoid overriding external schema management.")
 
     # 2. worker
     reminder_task = asyncio.create_task(reminder_worker(app))

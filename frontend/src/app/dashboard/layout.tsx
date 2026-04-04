@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Calendar, Settings, Bot, Menu, X, LogOut, Activity, Puzzle, CreditCard, Crown, Zap } from "lucide-react";
+import { LayoutDashboard, Calendar, Settings, Bot, Menu, X, LogOut, Globe2, Puzzle, CreditCard, Crown, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthContext } from "@/app/providers/auth-provider";
 
 const SIDEBAR_LINKS = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Analytics", href: "/dashboard/analytics", icon: Activity },
+  { name: "Client Tools", href: "/dashboard/analytics", icon: Globe2 },
   { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
   { name: "AI Copilot", href: "/dashboard/ai", icon: Bot },
   { name: "Plugins", href: "/dashboard/plugins", icon: Puzzle },

@@ -1,4 +1,4 @@
-import { getToken } from "./auth-client";
+import { getAuthToken, getToken } from "./auth-client";
 
 function getApiBaseUrl() {
   const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -76,7 +76,10 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
     headers.set("Content-Type", "application/json");
   }
 
-  const token = getToken();
+  let token = getToken();
+  if (!token) {
+    token = await getAuthToken();
+  }
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -186,7 +189,24 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
     }
 
     // 6. Response Parsing
-    return response.json() as Promise<T>;
+    if (response.status === 204 || response.headers.get("content-length") === "0") {
+      return null as unknown as T;
+    }
+
+    const text = await response.text().catch(() => "");
+    if (!text) {
+      return null as unknown as T;
+    }
+
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new ApiError(
+        `Failed to parse JSON response: ${text.slice(0, 100)}`,
+        response.status,
+        text
+      );
+    }
   } catch (error: unknown) {
     clearTimeout(id);
     if (error instanceof Error && error.name === "AbortError") {

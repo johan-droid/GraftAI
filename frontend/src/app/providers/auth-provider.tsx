@@ -1,26 +1,40 @@
 "use client";
 
-import React, { createContext, useContext } from "react";
+import * as React from "react";
+import { createContext, useContext } from "react";
 import { getSessionSafe, signOut } from "@/lib/auth-client";
+import { invalidateSessionCache } from "@/lib/api";
 
 type User = {
   id: string;
   email: string;
   name: string;
+  /** Legacy alias — Better Auth uses `name`, app code may read `full_name` */
+  full_name?: string;
   tier?: string;
   subscription_status?: string;
   razorpay_subscription_id?: string;
   daily_ai_count?: number;
   daily_sync_count?: number;
+  daily_ai_limit?: number;
+  daily_sync_limit?: number;
+  ai_remaining?: number;
+  sync_remaining?: number;
+  quota_reset_at?: string;
+  trial_days_left?: number;
+  trial_expires_at?: string;
+  trial_active?: boolean;
 };
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (token?: string) => Promise<void>;
-  refresh: () => Promise<void>;
+  /** Store a newly-acquired token and refresh the session context */
+  login: (token: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Re-fetch the session (used by dashboard for periodic refresh) */
+  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -50,7 +64,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let active = true;
 
     async function loadSession() {
-      // Keep loading until we get a definitive non-network answer.
       setLoading(true);
       try {
         const response = await getSessionSafe();
@@ -58,20 +71,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (response?.data) {
           setSession(response.data);
-          setLoading(false);
         } else if (response?.error) {
           if (isLikelyNetworkError(response.error)) {
             console.debug("Session check encountered a network glitch; retrying without kicking user out.");
-            // Keep prior session state (do not set null) and keep loading until next heartbeat.
-            return;
+          } else {
+            setSession(null);
           }
+        } else {
           setSession(null);
-          setLoading(false);
         }
       } catch (err) {
         console.error("Session load failure", err);
-        // Full fallback: do not log out on transient backend startup failures
-        return;
+        setSession(null);
+      } finally {
+        if (active) setLoading(false);
       }
     }
 
@@ -128,9 +141,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return;
   };
 
-  const loginFn = async () => {
+  /**
+   * FIX BUG-021: loginFn now invalidates the apiFetch session token cache
+   * so the next API call immediately uses the newly-acquired token, and
+   * refreshes the React session state from Better Auth.
+   */
+  const loginFn = async (_token: string) => {
+    invalidateSessionCache();
     if (typeof window !== "undefined") {
-      // Clear OAuth in-progress flag after successful login
       sessionStorage.removeItem("oauth_in_progress");
       sessionStorage.removeItem("oauth_redirect_to");
     }

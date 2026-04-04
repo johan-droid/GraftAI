@@ -20,6 +20,14 @@ from backend.services.integrations.zoom import create_zoom_meeting
 logger = logging.getLogger(__name__)
 
 
+def to_utc(dt: datetime) -> datetime:
+    if dt is None:
+        return dt
+    if dt.tzinfo is None:
+        return pytz.UTC.localize(dt)
+    return dt.astimezone(pytz.UTC)
+
+
 async def _generate_meeting_link(db, user_id: str, platform: str, event_details: dict) -> str:
     """
     Generates a real meeting link using connected third-party integrations.
@@ -161,30 +169,34 @@ async def find_available_slots(
     Scans the database for overlaps and returns free windows.
     If target_timezone is provided, finds the intersection of business hours.
     """
+    def to_utc(dt: datetime) -> datetime:
+        if dt.tzinfo is None:
+            return pytz.UTC.localize(dt)
+        return dt.astimezone(pytz.UTC)
+
     # 1. Resolve Timezones
     user_tz = pytz.UTC  # Default to UTC, should be passed from frontend
     guest_tz = pytz.timezone(target_timezone) if target_timezone else None
 
     # 2. Define User's Day Boundaries (Normalized to UTC for DB queries)
-    # We assume 'date' is at 00:00:00 in some base (usually UTC from frontend)
-    day_start = date.replace(hour=working_start, minute=0, second=0, microsecond=0)
-    day_end = date.replace(hour=working_end, minute=0, second=0, microsecond=0)
+    date_utc = to_utc(date)
+    day_start = date_utc.replace(hour=working_start, minute=0, second=0, microsecond=0)
+    day_end = date_utc.replace(hour=working_end, minute=0, second=0, microsecond=0)
 
     # 3. Intersection Logic (If Guest TZ is provided)
     if guest_tz:
         # We need to find the window that is 9-6 in BOTH timezones
-        # This is the 'Sovereign Intersection'
-        # Start by defining guest's 9-6 for that same 'day'
-        guest_day_start = guest_tz.localize(
-            datetime(date.year, date.month, date.day, working_start, 0)
-        ).astimezone(pytz.UTC)
-        guest_day_end = guest_tz.localize(
-            datetime(date.year, date.month, date.day, working_end, 0)
-        ).astimezone(pytz.UTC)
+        guest_local_date = date.astimezone(guest_tz) if date.tzinfo else guest_tz.localize(date)
+        guest_day_start = to_utc(
+            guest_local_date.replace(hour=working_start, minute=0, second=0, microsecond=0)
+        )
+        guest_day_end = to_utc(
+            guest_local_date.replace(hour=working_end, minute=0, second=0, microsecond=0)
+        )
 
         # Intersection: Max of starts, Min of ends
-        day_start = max(day_start.replace(tzinfo=pytz.UTC), guest_day_start)
-        day_end = min(day_end.replace(tzinfo=pytz.UTC), guest_day_end)
+        day_start = max(day_start, guest_day_start)
+        day_end = min(day_end, guest_day_end)
 
         # If they don't overlap at all (e.g. SF vs Tokyo), return empty or shifted suggestion
         if day_start >= day_end:
@@ -261,8 +273,8 @@ async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
     conflict_stmt = select(EventTable).where(
         and_(
             EventTable.user_id == new_event.user_id,
-            EventTable.start_time < new_event.end_time,
-            EventTable.end_time > new_event.start_time,
+            EventTable.start_time < to_utc(new_event.end_time),
+            EventTable.end_time > to_utc(new_event.start_time),
         )
     )
     conflict_result = await db.execute(conflict_stmt)
@@ -343,9 +355,34 @@ async def update_event(
     if not event:
         return None
 
+    proposed_start = update_data.get("start_time", event.start_time)
+    proposed_end = update_data.get("end_time", event.end_time)
+
+    proposed_start = to_utc(proposed_start)
+    proposed_end = to_utc(proposed_end)
+    if proposed_start >= proposed_end:
+        raise ValueError("Event must end after it starts.")
+
+    conflict_stmt = select(EventTable).where(
+        and_(
+            EventTable.user_id == user_id,
+            EventTable.id != event.id,
+            EventTable.start_time < proposed_end,
+            EventTable.end_time > proposed_start,
+        )
+    )
+    conflict_result = await db.execute(conflict_stmt)
+    if conflict_result.scalars().first():
+        raise ValueError("Updated timing overlaps with another event.")
+
     for key, value in update_data.items():
         if hasattr(event, key):
             setattr(event, key, value)
+
+    if event.start_time:
+        event.start_time = to_utc(event.start_time)
+    if event.end_time:
+        event.end_time = to_utc(event.end_time)
 
     # 2. Proactively generate/refresh meeting link if requested during update
     if event.is_meeting and event.meeting_platform and not event.meeting_link:
@@ -364,19 +401,6 @@ async def update_event(
 
     # Push to External if applicable
     await _push_to_external(db, event, action="update")
-
-    # Check for overlaps after update (if schedule changed)
-    conflict_stmt = select(EventTable).where(
-        and_(
-            EventTable.user_id == user_id,
-            EventTable.id != event.id,
-            EventTable.start_time < event.end_time,
-            EventTable.end_time > event.start_time,
-        )
-    )
-    conflict_result = await db.execute(conflict_stmt)
-    if conflict_result.scalars().first():
-        raise ValueError("Updated timing overlaps with another event.")
 
     # Real-time sync to AI orchestrator (Background)
     await sync_event_to_ai(event.id, event.user_id)

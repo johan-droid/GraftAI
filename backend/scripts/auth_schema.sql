@@ -1,22 +1,19 @@
 -- GraftAI Authentication Database Schema
--- Legacy auth schema helpers for session/account compatibility
+-- Aligns the auth schema with Better Auth expectations and app-specific profile storage.
 
--- Enable UUID extension if not already enabled
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Ensure pgcrypto is available for gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- Users table (if not exists)
--- Note: Your existing users table may have different columns, this ensures compatibility
-CREATE TABLE IF NOT EXISTS users (
-    id VARCHAR(100) PRIMARY KEY,
+-- Better Auth users table compatibility
+CREATE TABLE IF NOT EXISTS public.users (
+    id VARCHAR(100) PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) UNIQUE NOT NULL,
-    full_name VARCHAR(255),
-    emailVerified BOOLEAN DEFAULT FALSE,
+    name VARCHAR(255),
+    email_verified BOOLEAN DEFAULT FALSE,
+    image VARCHAR(1024),
     hashed_password VARCHAR(512),
-    image TEXT,
-    createdAt TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updatedAt TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Additional fields from your existing schema
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     is_active BOOLEAN DEFAULT TRUE NOT NULL,
     is_superuser BOOLEAN DEFAULT FALSE NOT NULL,
     tier VARCHAR(20) DEFAULT 'free' NOT NULL,
@@ -26,76 +23,85 @@ CREATE TABLE IF NOT EXISTS users (
     subscription_status VARCHAR(50) DEFAULT 'inactive',
     daily_ai_count INTEGER DEFAULT 0 NOT NULL,
     daily_sync_count INTEGER DEFAULT 0 NOT NULL,
-    last_usage_reset TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_usage_reset TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     timezone VARCHAR(50) DEFAULT 'UTC' NOT NULL,
     consent_analytics BOOLEAN DEFAULT TRUE NOT NULL,
     consent_notifications BOOLEAN DEFAULT TRUE NOT NULL,
     consent_ai_training BOOLEAN DEFAULT FALSE NOT NULL
 );
 
--- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(createdAt);
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON public.users(created_at);
 
--- Session table for legacy compatibility
-CREATE TABLE IF NOT EXISTS session (
-    id VARCHAR(255) PRIMARY KEY,
-    userId VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expiresAt TIMESTAMP WITH TIME ZONE NOT NULL,
-    ipAddress VARCHAR(50),
-    userAgent TEXT,
-    createdAt TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updatedAt TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+CREATE TABLE IF NOT EXISTS public.session (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
--- Create indexes for session lookups
-CREATE INDEX IF NOT EXISTS idx_session_userId ON session(userId);
-CREATE INDEX IF NOT EXISTS idx_session_expiresAt ON session(expiresAt);
+CREATE INDEX IF NOT EXISTS idx_session_token ON public.session(token);
+CREATE INDEX IF NOT EXISTS idx_session_user_id ON public.session(user_id);
 
--- Account table for OAuth providers
-CREATE TABLE IF NOT EXISTS account (
-    id VARCHAR(255) PRIMARY KEY,
-    userId VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    accountId VARCHAR(255) NOT NULL,
-    providerId VARCHAR(255) NOT NULL,
-    accessToken TEXT,
-    refreshToken TEXT,
-    idToken TEXT,
-    accessTokenExpiresAt TIMESTAMP WITH TIME ZONE,
-    refreshTokenExpiresAt TIMESTAMP WITH TIME ZONE,
+CREATE TABLE IF NOT EXISTS public.account (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    access_token TEXT,
+    refresh_token TEXT,
+    id_token TEXT,
+    access_token_expires_at TIMESTAMPTZ,
+    refresh_token_expires_at TIMESTAMPTZ,
     scope TEXT,
-    idTokenExpiresAt TIMESTAMP WITH TIME ZONE,
-    createdAt TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updatedAt TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
--- Create indexes for account lookups
-CREATE INDEX IF NOT EXISTS idx_account_userId ON account(userId);
-CREATE INDEX IF NOT EXISTS idx_account_providerId ON account(providerId);
-CREATE INDEX IF NOT EXISTS idx_account_accountId ON account(accountId);
+CREATE INDEX IF NOT EXISTS idx_account_user_id ON public.account(user_id);
+CREATE INDEX IF NOT EXISTS idx_account_provider_id ON public.account(provider_id);
+CREATE INDEX IF NOT EXISTS idx_account_account_id ON public.account(account_id);
 
--- Verification table for email verification and password reset tokens
-CREATE TABLE IF NOT EXISTS verification (
-    id VARCHAR(255) PRIMARY KEY,
-    identifier VARCHAR(255) NOT NULL,
-    value VARCHAR(255) NOT NULL,
-    expiresAt TIMESTAMP WITH TIME ZONE NOT NULL,
-    createdAt TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updatedAt TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+CREATE TABLE IF NOT EXISTS public.verification (
+    id TEXT PRIMARY KEY,
+    identifier TEXT NOT NULL,
+    value TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
--- Create index for verification lookups
-CREATE INDEX IF NOT EXISTS idx_verification_identifier ON verification(identifier);
-CREATE INDEX IF NOT EXISTS idx_verification_expiresAt ON verification(expiresAt);
+CREATE INDEX IF NOT EXISTS idx_verification_identifier ON public.verification(identifier);
+CREATE INDEX IF NOT EXISTS idx_verification_expires_at ON public.verification(expires_at);
 
--- Add comments for documentation
-COMMENT ON TABLE users IS 'User accounts for authentication';
-COMMENT ON TABLE session IS 'Active user sessions for legacy compatibility';
-COMMENT ON TABLE account IS 'OAuth provider account links';
-COMMENT ON TABLE verification IS 'Email verification and password reset tokens';
+CREATE TABLE IF NOT EXISTS public.user_profiles (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(100) NOT NULL UNIQUE REFERENCES public.users(id) ON DELETE CASCADE,
+    subscription_tier VARCHAR(50) NOT NULL DEFAULT 'free',
+    monthly_ai_credits INTEGER NOT NULL DEFAULT 100,
+    used_ai_credits INTEGER NOT NULL DEFAULT 0,
+    onboarding_complete BOOLEAN NOT NULL DEFAULT FALSE,
+    preferred_locale VARCHAR(20) NOT NULL DEFAULT 'en-US',
+    avatar_url VARCHAR(1024),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- Grant permissions (adjust as needed for your setup)
--- GRANT ALL PRIVILEGES ON TABLE users TO your_app_user;
--- GRANT ALL PRIVILEGES ON TABLE session TO your_app_user;
--- GRANT ALL PRIVILEGES ON TABLE account TO your_app_user;
--- GRANT ALL PRIVILEGES ON TABLE verification TO your_app_user;
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON public.user_profiles(user_id);
+
+COMMENT ON TABLE public.user_profiles IS 'App-specific SaaS data decoupled from Better Auth users table';
+COMMENT ON TABLE public.session IS 'Better Auth managed session tokens (snake_case columns)';
+
+-- Enable RLS on events so Better Auth tenant isolation can be enforced in application code.
+ALTER TABLE IF EXISTS public.events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS events_user_isolation ON public.events;
+CREATE POLICY events_user_isolation ON public.events
+    USING (user_id = current_setting('app.current_user_id', true));
+
+-- Note: set app.current_user_id per connection in application code:
+--   SET LOCAL app.current_user_id = '<uuid>';

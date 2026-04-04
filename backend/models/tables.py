@@ -1,3 +1,5 @@
+import uuid
+import uuid
 from sqlalchemy import (
     Column,
     Integer,
@@ -24,12 +26,21 @@ class UserTier(str, enum.Enum):
 class UserTable(Base):
     __tablename__ = "users"
 
-    id = Column(String(100), primary_key=True, index=True)
+    id = Column(String(100), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     email = Column(String(255), unique=True, index=True, nullable=False)
+
+    # Better Auth native columns (snake_case)
+    name = Column(String(255))
+    email_verified = Column(Boolean, default=False)
+    image = Column(String(1024))
+
+    # Custom / legacy columns — nullable so Better Auth users don't need them
     full_name = Column(String(255))
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
     hashed_password = Column(String(512))
+    tenant_id = Column(Integer, index=True)
+
     # SaaS & Billing
     tier = Column(String(20), default=UserTier.FREE, nullable=False)
     stripe_customer_id = Column(String(255), index=True)
@@ -59,20 +70,42 @@ class UserTable(Base):
     sessions = relationship(
         "SessionTable", back_populates="user", cascade="all, delete-orphan"
     )
+    profile = relationship(
+        "UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class SessionTable(Base):
     __tablename__ = "session"
 
     id = Column(String(255), primary_key=True)
-    userId = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    expiresAt = Column(DateTime(timezone=True), nullable=False)
-    userAgent = Column(Text)
-    ipAddress = Column(String(50))
-    createdAt = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token = Column(String(255), unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    ip_address = Column(String(255))
+    user_agent = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     user = relationship("UserTable", back_populates="sessions")
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    subscription_tier = Column(String(50), default="free")
+    monthly_ai_credits = Column(Integer, default=100)
+    used_ai_credits = Column(Integer, default=0)
+    onboarding_complete = Column(Boolean, default=False)
+    preferred_locale = Column(String(20), default="en-US")
+    avatar_url = Column(String(1024))
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship("UserTable", back_populates="profile")
 
 
 class AccountTable(Base):

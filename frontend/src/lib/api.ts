@@ -1,8 +1,9 @@
 import { apiClient } from "./api-client";
-import { getSessionSafe } from "./auth-client";
+import { getSessionSafe, invalidateSessionCache } from "./auth-client";
 
 // Re-exporting API_BASE_URL for backward compatibility if needed
 export { API_BASE_URL } from "./api-client";
+export { invalidateSessionCache };
 
 // ──────────────────────────────────────
 // Auth: Session Check
@@ -118,7 +119,7 @@ export async function upgradeLLM(modelName: string, version?: string) {
 // ──────────────────────────────────────
 export interface CalendarEvent {
   id: number;
-  user_id: number;
+  user_id: string;
   title: string;
   description?: string;
   category: "meeting" | "event" | "birthday" | "task";
@@ -147,7 +148,7 @@ export async function updateEvent(id: number, data: Partial<CalendarEvent>) {
 }
 
 export async function deleteEvent(id: number) {
-  return apiClient.delete<{ status: string }>(`/calendar/events/${id}`);
+  return apiClient.delete<void>(`/calendar/events/${id}`);
 }
 
 // ──────────────────────────────────────

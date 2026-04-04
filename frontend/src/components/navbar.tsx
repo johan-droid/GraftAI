@@ -70,13 +70,15 @@ export function Navbar() {
         })}
       </div>
 
-      <Link
-        href="/login"
-        className="ml-auto px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] sm:text-xs font-black uppercase tracking-tighter transition-all flex items-center gap-2 group"
-      >
-        <LogIn className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-        <span>Sync</span>
-      </Link>
+      {!isAuthenticated && (
+        <Link
+          href="/login"
+          className="ml-auto px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] sm:text-xs font-black uppercase tracking-tighter transition-all flex items-center gap-2 group"
+        >
+          <LogIn className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+          <span>Sync</span>
+        </Link>
+      )}
     </nav>
   );
 }

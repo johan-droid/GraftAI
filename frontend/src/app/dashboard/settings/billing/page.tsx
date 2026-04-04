@@ -15,8 +15,6 @@ import {
 } from "lucide-react";
 import { useAuthContext } from "@/app/providers/auth-provider";
 
-// In a real implementation, usage would come from the API
-
 export default function BillingPage() {
   const { user } = useAuthContext();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -25,8 +23,14 @@ export default function BillingPage() {
     tier: user.tier || 'free',
     daily_ai_count: user.daily_ai_count || 0,
     daily_sync_count: user.daily_sync_count || 0,
-    ai_limit: user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10),
-    sync_limit: user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3),
+    daily_ai_limit: user.daily_ai_limit ?? (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10)),
+    daily_sync_limit: user.daily_sync_limit ?? (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3)),
+    ai_remaining: user.ai_remaining ?? Math.max(0, (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10)) - (user.daily_ai_count || 0)),
+    sync_remaining: user.sync_remaining ?? Math.max(0, (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3)) - (user.daily_sync_count || 0)),
+    quota_reset_at: user.quota_reset_at,
+    trial_days_left: user.trial_days_left || 0,
+    trial_expires_at: user.trial_expires_at,
+    trial_active: user.trial_active || false,
     subscription_status: user.subscription_status || 'inactive'
   } : null;
 
@@ -56,8 +60,8 @@ export default function BillingPage() {
   };
 
 
-  const aiProgress = stats ? (stats.daily_ai_count / stats.ai_limit) * 100 : 0;
-  const syncProgress = stats ? (stats.daily_sync_count / stats.sync_limit) * 100 : 0;
+  const aiProgress = stats ? (stats.daily_ai_count / stats.daily_ai_limit) * 100 : 0;
+  const syncProgress = stats ? (stats.daily_sync_count / stats.daily_sync_limit) * 100 : 0;
 
   return (
     <div className="max-w-4xl space-y-8">
@@ -91,7 +95,16 @@ export default function BillingPage() {
               )}
             </div>
             <h2 className="text-4xl font-black text-white mb-6 capitalize">{stats?.tier} Edition</h2>
-            
+
+            {stats?.trial_active && (
+              <div className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4 text-sm text-amber-100">
+                <p className="font-semibold tracking-tight">Free trial active</p>
+                <p className="text-[12px] text-amber-200/90 leading-relaxed">
+                  You have <span className="font-bold text-white">{stats.trial_days_left} day{stats.trial_days_left === 1 ? '' : 's'}</span> left in your trial. Trial expires {stats.trial_expires_at ? new Date(stats.trial_expires_at).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }) : 'soon'}.
+                </p>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-4 mb-8">
               <button 
                 onClick={handleManageSubscription}
@@ -119,7 +132,7 @@ export default function BillingPage() {
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter flex items-center gap-1.5">
                       <Sparkles className="w-3 h-3 text-primary" /> AI Copilot Messages
                     </span>
-                    <span className="text-xs font-black text-white">{stats?.daily_ai_count} / {stats?.ai_limit}</span>
+                    <span className="text-xs font-black text-white">{stats?.daily_ai_count} / {stats?.daily_ai_limit}</span>
                   </div>
                   <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                     <motion.div 
@@ -135,7 +148,7 @@ export default function BillingPage() {
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter flex items-center gap-1.5">
                       <BarChart3 className="w-3 h-3 text-primary" /> Calendar Syncs
                     </span>
-                    <span className="text-xs font-black text-white">{stats?.daily_sync_count} / {stats?.sync_limit}</span>
+                    <span className="text-xs font-black text-white">{stats?.daily_sync_count} / {stats?.daily_sync_limit}</span>
                   </div>
                   <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                     <motion.div 
@@ -195,7 +208,10 @@ export default function BillingPage() {
       <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-center gap-3">
         <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
         <p className="text-[10px] font-medium text-amber-200/60 leading-relaxed">
-          Daily usage counters reset every 24 hours at 00:00 UTC. Unused requests do not roll over to the next day.
+          Daily usage counters reset at midnight UTC.
+          {stats?.quota_reset_at ? (
+            <> Next reset: {new Date(stats.quota_reset_at).toLocaleString('en-US', { timeZone: 'UTC', hour12: false })} UTC.</>
+          ) : null}
         </p>
       </div>
     </div>

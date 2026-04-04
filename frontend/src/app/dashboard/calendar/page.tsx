@@ -102,13 +102,31 @@ export default function PremiumCalendarPage() {
   };
 
   const getEventsForDay = (day: Date) => {
+    const dayStart = new Date(day);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(23, 59, 59, 999);
+
     return events.filter(e => {
-      const d = new Date(e.start_time);
-      return d.getDate() === day.getDate() && 
-             d.getMonth() === day.getMonth() && 
-             d.getFullYear() === day.getFullYear();
+      const start = new Date(e.start_time);
+      const end = new Date(e.end_time);
+
+      return (
+        (start >= dayStart && start <= dayEnd) ||
+        (end >= dayStart && end <= dayEnd) ||
+        (start <= dayStart && end >= dayEnd)
+      );
     });
   };
+
+  const eventsByCategory = useMemo(() => {
+    return events.reduce<Record<string, Event[]>>((acc, event) => {
+      const category = event.category || "meeting";
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(event);
+      return acc;
+    }, {});
+  }, [events]);
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -230,10 +248,10 @@ export default function PremiumCalendarPage() {
                 </h2>
               </div>
               <div className="flex gap-2 p-1 bg-slate-900/80 rounded-xl border border-slate-800">
-                <button onClick={() => toggleMonth("prev")} className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400">
+                <button aria-label="Previous month" title="Previous month" onClick={() => toggleMonth("prev")} className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400">
                    <ChevronLeft className="w-5 h-5" />
                 </button>
-                <button onClick={() => toggleMonth("next")} className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400">
+                <button aria-label="Next month" title="Next month" onClick={() => toggleMonth("next")} className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400">
                    <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
@@ -346,6 +364,8 @@ export default function PremiumCalendarPage() {
 
                       <div className="flex items-center gap-2">
                         <button 
+                          aria-label="Edit event"
+                          title="Edit event"
                           onClick={() => setEditingEvent(evt)}
                           className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-white hover:border-primary transition-all active:scale-90"
                         >
@@ -356,6 +376,59 @@ export default function PremiumCalendarPage() {
                   ))
                 )}
              </div>
+          </GlassCard>
+
+          <GlassCard className="p-6 md:p-10">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-xl font-black text-white">Category Breakdown</h3>
+                <p className="text-sm text-slate-500">Events grouped by category across the visible month.</p>
+              </div>
+              <div className="text-xs uppercase tracking-[0.3em] text-slate-600 font-black">{events.length} total events</div>
+            </div>
+
+            <div className="space-y-4">
+              {Object.entries(CATEGORIES).map(([key, meta]) => {
+                const categoryEvents = eventsByCategory[key] || [];
+                return (
+                  <div key={key} className="rounded-[1.5rem] border border-slate-800/60 bg-slate-950/80 p-4">
+                    <div className="flex items-center justify-between mb-4 gap-4">
+                      <div className="flex items-center gap-3">
+                        <span className={cn("w-3 h-3 rounded-full", meta.dot)} />
+                        <div>
+                          <div className="text-sm font-black text-white uppercase tracking-[0.2em]">{meta.label}</div>
+                          <div className="text-[11px] text-slate-500">{categoryEvents.length} events</div>
+                        </div>
+                      </div>
+                      {categoryEvents.length > 0 && (
+                        <div className="text-[11px] text-slate-400 uppercase tracking-[0.25em] font-bold">Next: {new Date(categoryEvents[0].start_time).toLocaleDateString()}</div>
+                      )}
+                    </div>
+
+                    <div className="grid gap-3">
+                      {categoryEvents.slice(0, 3).map(evt => (
+                        <div key={evt.id} className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-bold text-white">{evt.title}</p>
+                              <p className="text-[11px] text-slate-500">{new Date(evt.start_time).toLocaleString()}</p>
+                            </div>
+                            <span className="text-[10px] uppercase tracking-[0.25em] text-slate-400">{evt.source || "local"}</span>
+                          </div>
+                          <p className="mt-3 text-xs text-slate-500 line-clamp-2">{evt.description || "No additional details."}</p>
+                        </div>
+                      ))}
+
+                      {categoryEvents.length === 0 && (
+                        <div className="rounded-2xl border border-dashed border-slate-800/50 bg-slate-900/40 p-4 text-sm text-slate-500">
+                          No events were synced into this category yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </GlassCard>
         </main>
 
@@ -393,6 +466,8 @@ export default function PremiumCalendarPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-black text-white uppercase tracking-widest">Cross-Country</h3>
                   <button 
+                    aria-label="Toggle cross-country coordination"
+                    title="Toggle cross-country coordination"
                     onClick={() => setCoordinationMode(!coordinationMode)}
                     className={cn(
                       "w-12 h-6 rounded-full transition-all relative flex items-center px-1",
@@ -415,6 +490,8 @@ export default function PremiumCalendarPage() {
                       className="space-y-4 overflow-hidden"
                     >
                       <select 
+                        aria-label="Target timezone"
+                        title="Target timezone"
                         value={targetTimezone}
                         onChange={(e) => setTargetTimezone(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-slate-400 appearance-none focus:border-primary outline-none"
@@ -471,7 +548,7 @@ export default function PremiumCalendarPage() {
               <form onSubmit={handleUpdateEvent} className="p-8 md:p-12 space-y-8">
                  <div className="flex items-center justify-between">
                     <h3 className="text-3xl font-black text-white tracking-tighter">Edit <span className="text-primary">Timeline</span></h3>
-                    <button type="button" onClick={() => setEditingEvent(null)} className="p-2 bg-slate-900 border border-slate-800 rounded-full text-slate-500 hover:text-white transition-colors">
+                    <button type="button" aria-label="Close editor" title="Close editor" onClick={() => setEditingEvent(null)} className="p-2 bg-slate-900 border border-slate-800 rounded-full text-slate-500 hover:text-white transition-colors">
                       <X className="w-5 h-5" />
                     </button>
                  </div>
@@ -503,6 +580,8 @@ export default function PremiumCalendarPage() {
                        <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Event Logic</label>
                           <select 
+                            aria-label="Event category"
+                            title="Event category"
                             value={editingEvent.category}
                             onChange={(e) => setEditingEvent({...editingEvent, category: e.target.value as CalendarCategory})}
                             className="w-full bg-[#121416] border border-[#333537]/40 rounded-2xl px-6 py-4 text-white font-bold outline-none focus:border-primary appearance-none ring-0"

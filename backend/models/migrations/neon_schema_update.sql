@@ -3,31 +3,72 @@
 -- Run this against your Neon PostgreSQL database to bring it to current spec
 -- ============================================================================
 
+-- 0. Ensure Postgres UUID helper functions are available for Better Auth UUID defaults.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- =============================================================================
 -- 1. USERS TABLE UPDATES
 -- =============================================================================
 
--- Add tenant_id column if missing (for Row-Level Security)
-ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id INTEGER;
+-- Add Better Auth / application columns if missing.
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS tenant_id INTEGER;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS name VARCHAR(255);
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS image VARCHAR(1024);
+ALTER TABLE public.users ALTER COLUMN id SET DEFAULT gen_random_uuid();
 
--- Create index for tenant_id for fast RLS queries
-CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
+-- Create indexes for fast lookup
+CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON public.users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 
--- Create index for email lookups (authentication)
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-
--- Ensure id column can handle string UUIDs (if currently integer)
--- Note: Only run this if users.id is still INTEGER
--- ALTER TABLE users ALTER COLUMN id TYPE VARCHAR(100);
+-- Ensure id column can handle string UUIDs for Better Auth compatibility
+-- Uncomment if your current users.id is still an integer.
+-- ALTER TABLE public.users ALTER COLUMN id TYPE VARCHAR(100);
 
 -- =============================================================================
--- 2. EVENTS TABLE CREATION
+-- 2. BETTER AUTH SESSION TABLE
 -- =============================================================================
 
--- Create events table for sovereign scheduling
-CREATE TABLE IF NOT EXISTS events (
+CREATE TABLE IF NOT EXISTS public.session (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_token ON public.session(token);
+CREATE INDEX IF NOT EXISTS idx_session_user_id ON public.session(user_id);
+
+-- =============================================================================
+-- 3. USER PROFILE TABLE
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.user_profiles (
     id SERIAL PRIMARY KEY,
-    user_id VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id VARCHAR(100) NOT NULL UNIQUE REFERENCES public.users(id) ON DELETE CASCADE,
+    subscription_tier VARCHAR(50) NOT NULL DEFAULT 'free',
+    monthly_ai_credits INTEGER NOT NULL DEFAULT 100,
+    used_ai_credits INTEGER NOT NULL DEFAULT 0,
+    onboarding_complete BOOLEAN NOT NULL DEFAULT FALSE,
+    preferred_locale VARCHAR(20) NOT NULL DEFAULT 'en-US',
+    avatar_url VARCHAR(1024),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON public.user_profiles(user_id);
+
+-- =============================================================================
+-- 4. EVENTS TABLE CREATION
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.events (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(100) NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     title VARCHAR(512) NOT NULL,
     description TEXT,
     category VARCHAR(50) DEFAULT 'meeting',
@@ -41,14 +82,12 @@ CREATE TABLE IF NOT EXISTS events (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
--- Create indexes for events table
-CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
-CREATE INDEX IF NOT EXISTS idx_events_start_time ON events(start_time);
-CREATE INDEX IF NOT EXISTS idx_events_category ON events(category);
-CREATE INDEX IF NOT EXISTS idx_events_user_time ON events(user_id, start_time);
+CREATE INDEX IF NOT EXISTS idx_events_user_id ON public.events(user_id);
+CREATE INDEX IF NOT EXISTS idx_events_start_time ON public.events(start_time);
+CREATE INDEX IF NOT EXISTS idx_events_category ON public.events(category);
+CREATE INDEX IF NOT EXISTS idx_events_user_time ON public.events(user_id, start_time);
 
--- Create trigger for updated_at timestamp on events
-CREATE OR REPLACE FUNCTION update_updated_at_column()
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
@@ -56,48 +95,47 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-DROP TRIGGER IF EXISTS update_events_updated_at ON events;
+DROP TRIGGER IF EXISTS update_events_updated_at ON public.events;
 CREATE TRIGGER update_events_updated_at
-    BEFORE UPDATE ON events
+    BEFORE UPDATE ON public.events
     FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+    EXECUTE FUNCTION public.update_updated_at_column();
 
 -- =============================================================================
--- 3. ROW-LEVEL SECURITY (RLS) POLICIES
+-- 5. ROW-LEVEL SECURITY (RLS) POLICIES
 -- =============================================================================
 
--- Enable RLS on events table
-ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 
--- Create policy for users to only see their own events
-CREATE POLICY IF NOT EXISTS events_user_isolation ON events
+DROP POLICY IF EXISTS events_user_isolation ON public.events;
+CREATE POLICY events_user_isolation ON public.events
     USING (user_id = current_setting('app.current_user_id', true));
 
 -- =============================================================================
--- 4. OPTIONAL: SET DEFAULT TENANT_ID FOR EXISTING USERS
+-- 6. VERIFY MIGRATION
 -- =============================================================================
 
--- Uncomment and modify if you need to assign existing users to a default tenant
--- UPDATE users SET tenant_id = 1 WHERE tenant_id IS NULL;
-
--- =============================================================================
--- 5. VERIFY MIGRATION
--- =============================================================================
-
--- Verify users table structure
-SELECT column_name, data_type, is_nullable 
-FROM information_schema.columns 
-WHERE table_name = 'users' 
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'users'
 ORDER BY ordinal_position;
 
--- Verify events table structure
-SELECT column_name, data_type, is_nullable 
-FROM information_schema.columns 
-WHERE table_name = 'events' 
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'session'
 ORDER BY ordinal_position;
 
--- Verify indexes
-SELECT indexname, indexdef 
-FROM pg_indexes 
-WHERE tablename IN ('users', 'events') 
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'user_profiles'
+ORDER BY ordinal_position;
+
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'events'
+ORDER BY ordinal_position;
+
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE tablename IN ('users', 'session', 'user_profiles', 'events')
 ORDER BY tablename, indexname;

@@ -1,5 +1,6 @@
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status, Request
+import hashlib
 import jwt
 from jwt import PyJWTError as JWTError
 from typing import Optional, Any
@@ -10,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession
+from backend.api.deps import get_db
 from backend.services.access_control import check_user_role
 from backend.services.redis_client import get_redis
 
@@ -64,6 +67,12 @@ def is_token_blacklisted(token: str) -> bool:
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
+
+
+def _session_cache_key(token: str) -> str:
+    """Hash the full token for a collision-safe Redis session key."""
+    digest = hashlib.sha256(str(token).encode()).hexdigest()[:32]
+    return f"active_session:{digest}"
 
 
 async def _get_neon_signing_key(token: str) -> Any:
@@ -191,8 +200,10 @@ async def get_current_user(
     # Session persistence and active telemetry are best-effort only.
     try:
         client = _get_redis_client()
-        session_key = f"active_session:{token[-20:]}"
-        telemetry_key = f"session_telemetry:{token[-20:]}"
+        normalized_token = str(token)
+        token_hash = hashlib.sha256(normalized_token.encode()).hexdigest()
+        session_key = f"active_session:{token_hash}"
+        telemetry_key = f"session_telemetry:{token_hash}"
 
         # Atomic extension/refresh
         client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, payload.get("sub"))
@@ -212,10 +223,127 @@ async def get_current_user(
     return payload
 
 
+async def verify_better_auth_session(token: str, db: AsyncSession) -> Optional[dict]:
+    """
+    Validate a Better Auth opaque session token using Better Auth's default snake_case schema.
+    """
+    from sqlalchemy import text
+
+    try:
+        result = await db.execute(
+            text("SELECT user_id, expires_at FROM public.session WHERE token = :t"),
+            {"t": token},
+        )
+        row = result.fetchone()
+        if not row:
+            logger.debug("Better Auth: session token not found")
+            return None
+
+        user_id, expires_at = row
+        if expires_at is None:
+            return None
+
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        if expires_at < datetime.now(timezone.utc):
+            logger.debug("Better Auth: session expired")
+            return None
+
+        user_res = await db.execute(
+            text("SELECT id, email, name FROM public.users WHERE id = :uid"),
+            {"uid": user_id},
+        )
+        user_row = user_res.fetchone()
+        if not user_row:
+            logger.debug(f"Better Auth: user {user_id} not found")
+            return None
+
+        return {
+            "sub": str(user_row[0]),
+            "email": user_row[1],
+            "name": user_row[2],
+            "type": "better-auth",
+        }
+    except Exception as exc:
+        logger.error(f"Better Auth session verification failed: {exc}")
+        return None
+
+
+async def get_current_user(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get current user payload from Authorization bearer token, cookie-based JWT, or Better Auth session cookie.
+    """
+    if not token:
+        cookie_token = (
+            request.cookies.get("graftai_access_token")
+            or request.cookies.get("better-auth.session_token")
+        )
+        if cookie_token:
+            token = cookie_token
+
+    if token and isinstance(token, str) and token.lower().startswith("bearer "):
+        token = token[7:].strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session not found or expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Better Auth opaque sessions are not JWTs
+    if token.count(".") != 2:
+        payload = await verify_better_auth_session(token, db)
+        if payload:
+            client = _get_redis_client()
+            session_key = _session_cache_key(token)
+            client.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, payload["sub"])
+            return payload
+    
+    if is_token_blacklisted(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    payload = await decode_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    client = _get_redis_client()
+    session_key = _session_cache_key(token)
+    if not client.exists(session_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has expired or was revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    backend_id = os.getenv("HOSTNAME", "unknown-worker")
+    telemetry_key = f"session_telemetry:{session_key}"
+    client.hset(
+        telemetry_key,
+        mapping={"last_seen": str(datetime.now(timezone.utc)), "backend": backend_id},
+    )
+    client.expire(telemetry_key, 3600)
+
+    return payload
+
+
 def get_current_user_id(current_user: dict = Depends(get_current_user)) -> str:
     """
     Dependency that extracts and validates the user ID from the authenticated user payload.
-    Ensures 'sub' exists and is a valid integer to prevent IDOR via body-supplied IDs.
+    Better Auth and JWT user IDs are string UUIDs, so this returns a string.
     """
     user_id_raw = current_user.get("sub")
     if not user_id_raw:

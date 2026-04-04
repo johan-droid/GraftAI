@@ -90,8 +90,14 @@ async def sync_google_events(db: AsyncSession, token_record: UserTokenTable):
     try:
         # 1. Fetch events from Google (using sync_token if available)
         # Note: google_calendar service needs update to support syncToken
+        token_data = {
+            "access_token": token_record.access_token,
+            "refresh_token": token_record.refresh_token,
+            "scopes": token_record.scopes or "",
+        }
+
         results = await google_calendar.list_google_events(
-            token_record.access_token, 
+            token_data,
             sync_token=token_record.sync_token
         )
         

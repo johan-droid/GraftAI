@@ -60,6 +60,35 @@ def test_auth_register_and_login_flow(client):
     assert auth_response.json().get("authenticated") is True
 
 
+def test_auth_check_returns_usage_and_trial(client):
+    unique_email = f"testuser3+{uuid.uuid4().hex[:8]}@example.com"
+
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": unique_email, "password": "StrongPassw0rd!", "full_name": "Trial User"},
+    )
+    assert response.status_code == 200
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": unique_email, "password": "StrongPassw0rd!"},
+    )
+    assert login_response.status_code == 200
+    access_token = login_response.json().get("access_token")
+    assert access_token
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    check_response = client.get("/api/v1/auth/check", headers=headers)
+    assert check_response.status_code == 200
+
+    user_payload = check_response.json().get("user", {})
+    assert user_payload.get("daily_ai_limit") == 10
+    assert user_payload.get("daily_sync_limit") == 3
+    assert user_payload.get("trial_days_left") is not None
+    assert user_payload.get("trial_active") is True
+    assert user_payload.get("quota_reset_at")
+
+
 def test_auth_refresh_rotates_token(client):
     unique_email = f"testuser2+{uuid.uuid4().hex[:8]}@example.com"
 

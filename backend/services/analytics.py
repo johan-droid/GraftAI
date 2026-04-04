@@ -82,7 +82,7 @@ async def analytics_summary(
         elif meetings_count > 0:
             growth = 100  # First week growth
 
-        # 4. Next/Recent Activity List
+        # 4. Recent Activity List
         activity_stmt = select(EventTable).where(
             EventTable.user_id == user_id
         ).order_by(EventTable.start_time.desc()).limit(5)
@@ -97,6 +97,23 @@ async def analytics_summary(
                 "is_upcoming": event.start_time >= now
             })
 
+        # 5. Next upcoming event (nearest future event)
+        next_event_stmt = select(EventTable).where(
+            EventTable.user_id == user_id,
+            EventTable.start_time >= now
+        ).order_by(EventTable.start_time.asc()).limit(1)
+        next_event_result = await db.execute(next_event_stmt)
+        next_event_obj = next_event_result.scalar_one_or_none()
+        next_event = None
+        if next_event_obj:
+            next_event = {
+                "id": next_event_obj.id,
+                "title": next_event_obj.title,
+                "start_time": next_event_obj.start_time.isoformat(),
+                "category": next_event_obj.category,
+                "is_upcoming": True,
+            }
+
         if meetings_count > 0:
             summary_text = f"You've got {meetings_count} meetings on the books for the last {range}. That's about {total_hours:.1f} hours of focused time coordinated by your AI Copilot."
         else:
@@ -109,7 +126,7 @@ async def analytics_summary(
                 "hours": round(total_hours, 1),
                 "growth": growth,
                 "recent_events": activity_list,
-                "next_event": activity_list[0] if activity_list and activity_list[0]["is_upcoming"] else None
+                "next_event": next_event
             },
         )
     except Exception as e:

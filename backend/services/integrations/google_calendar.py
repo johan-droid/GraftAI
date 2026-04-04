@@ -122,33 +122,28 @@ async def create_google_event(token_data: dict, event_details: dict) -> dict:
         logger.error(f"❌ Unexpected error in Google event creation: {e}")
         raise e
 
-async def list_google_events(access_token: str, calendar_id: str = "primary", sync_token: Optional[str] = None) -> dict:
+async def list_google_events(token_data: dict, calendar_id: str = "primary", sync_token: Optional[str] = None) -> dict:
     """
     Lists events from Google Calendar. 
     Supports incremental sync via sync_token.
     """
     try:
-        from googleapiclient.discovery import build
-        from google.oauth2.credentials import Credentials
-        
-        creds = Credentials(token=access_token)
+        creds = get_google_credentials(token_data)
         service = build("calendar", "v3", credentials=creds)
 
-        # Standard list request
         request = service.events().list(
             calendarId=calendar_id,
             syncToken=sync_token,
-            singleEvents=True, # Expand recurring events
+            singleEvents=True,
+            orderBy="startTime",
         )
-        
         return request.execute()
     except HttpError as error:
         if error.resp.status == 410:
-            # Sync token is invalid, perform full sync
             logger.warning(f"🔄 Google Sync token expired (410), performing full sync for {calendar_id}")
-            service = build("calendar", "v3", credentials=creds)
-            return service.events().list(calendarId=calendar_id, singleEvents=True).execute()
-        
+            service = build("calendar", "v3", credentials=get_google_credentials(token_data))
+            return service.events().list(calendarId=calendar_id, singleEvents=True, orderBy="startTime").execute()
+
         logger.error(f"❌ Google list_events failed: {error}")
         raise error
 

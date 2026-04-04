@@ -4,6 +4,7 @@ import secrets
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+import hashlib
 import jwt
 from jwt import PyJWTError as JWTError
 from datetime import datetime, timedelta, timezone
@@ -33,7 +34,8 @@ from backend.services import (
     auth_utils,
     sso,
 )
-from backend.models.tables import UserTable
+from backend.services.usage import get_tier_usage_limits, get_next_quota_reset, get_trial_days_left
+from backend.models.tables import UserTable, UserTier
 from backend.api.deps import get_db
 
 # Auth dependencies
@@ -64,6 +66,21 @@ def _get_redis_client():
     return get_redis()
 
 
+_AUTH_RATE_LIMIT_LUA = """
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local current = redis.call('INCR', key)
+if current == 1 then
+    redis.call('EXPIRE', key, window)
+end
+if current > limit then
+    return 0
+end
+return 1
+"""
+
+
 def get_rate_limiter(max_requests: int, window_seconds: int):
     """Dependency-based rate limiter for FastAPI routes."""
 
@@ -78,20 +95,21 @@ def get_rate_limiter(max_requests: int, window_seconds: int):
             client_ip = client_ip.split(",")[0].strip()
 
         client = _get_redis_client()
-        # Use a path-specific key to avoid cross-endpoint leakage
         key = f"auth_rate_limit:{client_ip}:{request.url.path}"
 
-        current = client.get(key)
-        if current is None:
-            client.setex(key, window_seconds, 1)
-        elif int(current) >= max_requests:
+        try:
+            allowed = client.eval(_AUTH_RATE_LIMIT_LUA, 1, key, max_requests, window_seconds)
+        except Exception as e:
+            logger.error(f"Rate limiter Redis failure: {e}")
+            return True
+
+        if not allowed:
             logger.warning(f"Rate limit exceeded for {client_ip} on {request.url.path}")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Too many attempts. Please try again in {window_seconds} seconds.",
             )
-        else:
-            client.incr(key)
+
         return True
 
     return rate_limiter
@@ -174,7 +192,8 @@ def _create_jwt_token(sub: str, email: Optional[str] = None):
     client.sadd(f"user_tokens:{sub}", refresh_token)
 
     # Register this specific access session in Redis
-    session_key = f"active_session:{access_token[-20:]}"
+    cache_key = hashlib.sha256(access_token.encode()).hexdigest()[:32]
+    session_key = f"active_session:{cache_key}"
     tokens_key = f"user_tokens:{sub}"
     
     pipe = client.pipeline()
@@ -191,32 +210,37 @@ def _create_jwt_token(sub: str, email: Optional[str] = None):
     }
 
 
+def _is_secure_request(request: Optional[Request]) -> bool:
+    if not request:
+        return False
+
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    request_scheme = request.url.scheme.lower() if request.url.scheme else ""
+
+    return forwarded_proto == "https" or request_scheme == "https"
+
+
 def _attach_jwt_cookies(response: Response, token_data: dict, request: Optional[Request] = None):
     # For SPA frontends on different domains/origins, SameSite=None is required
-    # so browser includes cookies in cross-site requests from localhost:3000 etc.
+    # so browser includes cookies in cross-site requests from other secure origins.
     # IMPORTANT: SameSite=None REQUIRES Secure flag in modern browsers.
-    # In production we use secure=True; in local dev we also use secure=True when using HTTPS.
-    # For HTTP localhost development, we must use SameSite=Lax instead.
-    env_name = (os.getenv("ENV") or os.getenv("NODE_ENV") or "production").lower()
+    env_name = (os.getenv("ENV") or os.getenv("ENVIRONMENT") or "production").lower()
     is_prod = env_name == "production"
-    
-    # Detect if we should use Secure/SameSite:None
-    # 1. If explicitly configured for HTTPS
-    # 2. If running on a production environment
-    # 3. BUT NOT if the origin is localhost and we're not in prod (to allow local HTTP dev)
-    is_https = os.getenv("PROTOCOL") == "https" or is_prod
-    
+
+    is_https = _is_secure_request(request) or os.getenv("PROTOCOL") == "https" or is_prod
     origin = request.headers.get("origin", "") if request else ""
-    is_localhost = "localhost" in origin or (request.url.hostname == "localhost" if request else False)
-    
-    # SameSite=None requires Secure flag. 
-    # Only use Secure if it's actually HTTPS OR if it's production.
-    # On localhost HTTP, we must use Lax/Secure=False to allow frontend middleware to see the cookie.
+    is_localhost = (
+        "localhost" in origin
+        or "127.0.0.1" in origin
+        or request.url.hostname in ("localhost", "127.0.0.1", "::1")
+        if request
+        else False
+    )
+
     if is_https and not (is_localhost and not is_prod):
         same_site_value = "none"
         secure_value = True
     else:
-        # Development over HTTP or localhost: use Lax which works without Secure
         same_site_value = "lax"
         secure_value = False
 
@@ -264,9 +288,11 @@ async def login(
     result = await db.execute(select(UserTable).where(UserTable.email == email))
     user = result.scalars().first()
 
-    if not user or not auth_utils.verify_password(
-        form_data.password, user.hashed_password
-    ):
+    dummy_hash = auth_utils.get_password_hash("dummy-constant-string")
+    stored_hash = user.hashed_password if (user and user.hashed_password) else dummy_hash
+    password_ok = auth_utils.verify_password(form_data.password, stored_hash)
+
+    if not user or not password_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -449,22 +475,19 @@ async def sso_callback(
         is_cross_domain = frontend_host and backend_host and frontend_host != backend_host
         is_render_suffix = ".onrender.com" in str(backend_host)
         
-        # Force bridge in production cloud environments if hosts mismatch
-        should_use_bridge = is_cross_domain or is_render_suffix
-        
+# Token bridge was originally intended for cross-domain cookie handoff.
+        # In most secure HTTPS deployments, direct cookie flow is supported and simpler.
+        use_token_bridge = os.getenv("ENABLE_TOKEN_BRIDGE", "0") == "1"
+        should_use_bridge = use_token_bridge
+
         if should_use_bridge:
-            # Token Bridge: Pass tokens via URL to a special frontend callback page
-            # This allows the frontend to set its own FIRST-PARTY cookies.
             logger.warning(f"[AUTH_DIAGNOSTIC]: Using Token Bridge for callback handoff. Target: {target_url}")
-            
-            # The bridge callback URL
             callback_base = target_url.rstrip("/")
             if "/dashboard" in callback_base:
-                # Redirect to the specific callback bridge we just created
                 bridge_url = callback_base.replace("/dashboard", "/sso/callback")
             else:
                 bridge_url = f"{callback_base}/sso/callback"
-            
+
             final_target = f"{bridge_url}?token={tokens['access_token']}&refresh_token={tokens['refresh_token']}"
             return RedirectResponse(url=final_target, status_code=303)
 
@@ -683,6 +706,28 @@ async def check_auth(
         user_data["subscription_status"] = user.subscription_status
         user_data["daily_ai_count"] = user.daily_ai_count
         user_data["daily_sync_count"] = user.daily_sync_count
+
+        tier = UserTier(user.tier) if user.tier else UserTier.FREE
+        tier_limits = get_tier_usage_limits(tier)
+        user_data["daily_ai_limit"] = tier_limits["ai_messages"]
+        user_data["daily_sync_limit"] = tier_limits["calendar_syncs"]
+        user_data["ai_remaining"] = max(0, tier_limits["ai_messages"] - user.daily_ai_count)
+        user_data["sync_remaining"] = max(0, tier_limits["calendar_syncs"] - user.daily_sync_count)
+        user_data["quota_reset_at"] = get_next_quota_reset().isoformat()
+
+        trial_days_left = get_trial_days_left(user.created_at)
+        user_data["trial_days_left"] = trial_days_left
+        if user.created_at:
+            created_at = user.created_at
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            user_data["trial_expires_at"] = (
+                (created_at + timedelta(days=int(os.getenv("FREE_TRIAL_DAYS", "7"))))
+                .isoformat()
+            )
+        else:
+            user_data["trial_expires_at"] = None
+        user_data["trial_active"] = trial_days_left > 0 and user.subscription_status != "active"
         # Consent fields
         user_data["consent_analytics"] = user.consent_analytics
         user_data["consent_notifications"] = user.consent_notifications
@@ -691,10 +736,14 @@ async def check_auth(
     # Ensure a readable XSRF cookie is present for the double-submit pattern.
     # The cookie must NOT be HttpOnly so client-side JS can read it and include
     # it in the `X-XSRF-TOKEN` header for mutating requests.
-    is_prod = os.getenv("NODE_ENV") == "production"
-    is_https = os.getenv("PROTOCOL") == "https" or is_prod
+    env_name = (os.getenv("ENV") or os.getenv("NODE_ENV") or "production").lower()
+    is_prod = env_name == "production"
+    is_https = _is_secure_request(request) or os.getenv("PROTOCOL") == "https" or is_prod
 
-    if is_https:
+    origin = request.headers.get("origin", "")
+    is_localhost = "localhost" in origin or "127.0.0.1" in origin
+
+    if is_https and not (is_localhost and not is_prod):
         same_site_value = "none"
         secure_value = True
     else:

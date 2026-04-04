@@ -4,10 +4,12 @@ import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Loader2, ShieldCheck, AlertCircle } from "lucide-react";
+import { useAuthContext } from "@/app/providers/auth-provider";
 
 function SSOCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { login } = useAuthContext();
 
   useEffect(() => {
     const token = searchParams.get("token");
@@ -40,7 +42,6 @@ function SSOCallbackContent() {
         const xsrfToken = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
         document.cookie = `xsrf-token=${xsrfToken}; max-age=86400; path=/; samesite=None; ${secureFlag}`;
 
-        // Fallback storage in case cookie writing is blocked.
         if (typeof window !== "undefined" && window.sessionStorage) {
           window.sessionStorage.setItem("graftai_access_token", token);
           if (refreshToken) {
@@ -48,12 +49,20 @@ function SSOCallbackContent() {
           }
         }
 
-        console.log("[SSO_CALLBACK]: Session established. Redirecting to dashboard...");
+        console.log("[SSO_CALLBACK]: Session established. Syncing context...");
         
-        // Small delay to ensure cookies are written before redirect and for visual feedback
-        setTimeout(() => {
-          router.replace("/dashboard");
-        }, 800);
+        // Force the AuthProvider to refresh its session from the newly set cookies
+        login(token).then(() => {
+          setTimeout(() => {
+            router.replace("/dashboard");
+          }, 300);
+        }).catch(err => {
+          console.error("Failed to sync context", err);
+          setTimeout(() => {
+            router.replace("/dashboard");
+          }, 300);
+        });
+
       } catch (err) {
         console.error("[SSO_CALLBACK]: Failed to set session cookies:", err);
       }

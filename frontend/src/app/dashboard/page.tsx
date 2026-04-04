@@ -66,7 +66,7 @@ function StatCard({
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group relative overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-950/50 p-5 transition-all hover:border-slate-700/60 hover:bg-slate-900/50"
+      className="group relative overflow-hidden rounded-2xl p-5 transition-all glass-panel"
     >
       <div className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl ${color}`}>
         {icon}
@@ -258,7 +258,7 @@ export default function Dashboard() {
           <p className="mb-1 text-sm font-medium text-slate-500">
             {emoji} {greeting}
           </p>
-          <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+          <h1 className="text-2xl font-bold tracking-tight text-white text-gradient sm:text-3xl">
             {profileName}
           </h1>
           {summaryMsg && (
@@ -312,7 +312,7 @@ export default function Dashboard() {
           transition={{ delay: 0.15 }}
           className="flex flex-col gap-4 lg:col-span-2"
         >
-          <div className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-5">
+          <div className="rounded-2xl glass-panel p-5">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-white">Today&apos;s tasks</h2>
@@ -441,7 +441,7 @@ export default function Dashboard() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
-            className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-5"
+            className="rounded-2xl glass-panel p-5"
           >
             <h2 className="mb-4 text-sm font-bold text-white">Quick access</h2>
             <div className="flex flex-col gap-2">

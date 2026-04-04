@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth-server";
 
 export async function middleware(request: NextRequest) {
   const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
 
   if (isDashboardRoute) {
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
+    const accessToken = request.cookies.get("graftai_access_token")?.value;
 
-    if (!session) {
+    if (!accessToken) {
       const loginUrl = new URL("/login", request.url);
       return NextResponse.redirect(loginUrl);
     }

@@ -1,83 +1,54 @@
-# JavaScript / Node
-node_modules/
-.pnp
-.pnp.js
-*.tsbuildinfo
-next-env.d.ts
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
 
-# Build outputs
-dist/
-build/
-.next/
-out/
-bin/
-obj/
-.vercel/
-.turbo/
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Environment variables & secrets
+# Environment files
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-*.env.*
+.env.*
 !.env.example
-.python-version
-.node-version
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-env/
-venv/
 .venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
+venv/
+ENV/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
 .coverage
 .coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.pytest_cache/
-.mypy_cache/
-.pyre/
-.hypothesis/
 
-# Logs & Temporary Files
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# Node / frontend deps
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# Build outputs / caches
+.next/
+out/
+dist/
+build/
+.turbo/
+.vercel/
+*.tsbuildinfo
+
+# Local runtime folders
 tmp/
-*.tmp
-build_log*.txt
-lint_output*.txt
+uploads/
 
-# IDE & OS
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Platform files
-.vercelignore
-render.yaml
-
-# Project Specific
-eslint_report.json
-migration_*.sql

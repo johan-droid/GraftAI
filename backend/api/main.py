@@ -165,13 +165,12 @@ class CSRFMiddleware:
 
         request = Request(scope)
 
-        # Fail-safe: Better Auth endpoints are expected to be served by frontend Next.js.
-        # If those requests hit backend, redirect them to frontend auth URL when available.
+        # Fail-safe: frontend owns /api/auth routes.
+        # If those requests hit backend, redirect them to frontend app URL when available.
         auth_path = request.url.path == "/api/auth" or request.url.path.startswith("/api/auth/")
         if auth_path:
             frontend_auth_base = (
                 os.getenv("FRONTEND_URL")
-                or os.getenv("BETTER_AUTH_URL")
                 or os.getenv("NEXT_PUBLIC_APP_URL")
             )
             if frontend_auth_base:
@@ -202,7 +201,7 @@ class CSRFMiddleware:
                 await self.app(scope, receive, send)
                 return
 
-            # Better Auth endpoints are served by frontend Next.js route handlers.
+            # /api/auth endpoints are served by frontend Next.js route handlers.
             # If a misrouted request reaches backend, do not block it with CSRF middleware.
             if request.url.path == "/api/auth" or request.url.path.startswith("/api/auth/"):
                 await self.app(scope, receive, send)

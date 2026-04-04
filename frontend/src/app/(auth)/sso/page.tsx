@@ -1,30 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "@/lib/auth-client";
 import { motion } from "framer-motion";
 import { ArrowRight, Loader2, Shield } from "lucide-react";
 
 export default function SSOPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const redirectTo = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") || "/dashboard" : "/dashboard";
 
   const startSSO = async () => {
     setLoading(true);
     setError("");
-    try {
-      const { error } = await signIn.sso({
-        callbackURL: redirectTo,
-      });
-      if (error) {
-        throw new Error(error.message || "Unable to start SSO flow");
-      }
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
+    setTimeout(() => {
+      setError("SSO is disabled. Please use email and password login.");
       setLoading(false);
-    }
+    }, 300);
   };
 
   return (

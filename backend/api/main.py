@@ -345,24 +345,9 @@ app = FastAPI(
 _raw_extra = os.getenv("EXTRA_CORS_ORIGINS", "")  # comma-separated extra origins
 _extra_origins = [o.strip() for o in _raw_extra.split(",") if o.strip()]
 
-cors_origins = [
-    # ── Production ──────────────────────────────────
-    "https://graftai.tech",             # Primary production domain
-    "https://www.graftai.tech",         # Secondary production domain
-    "https://graft-ai-two.vercel.app",  # Vercel deployment preview url
-    "https://graftai-api.onrender.com", # Render backend canonical domain
-    "https://graftai.onrender.com",      # Alternative Render domain
-    # ── Configurable via Render env vars ────────────
-    *([os.getenv("FRONTEND_URL")] if os.getenv("FRONTEND_URL") else []),
-    *([os.getenv("LOAD_BALANCER_URL")] if os.getenv("LOAD_BALANCER_URL") else []),
-    # ── Any extra origins injected at deploy time ────
-    *_extra_origins,
-    # ── Local development ────────────────────────────
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-    "http://localhost:8080",
-]
+# Use a flexible regex to match all project-related domains
+# Matches: graftai.tech, *.graftai.tech, graftai.onrender.com, *.vercel.app
+cors_origin_regex = r"https://(.*\.)?graftai\.(tech|onrender\.com)|https://(.*\.)?vercel\.app"
 
 class RequestIdMiddleware:
     """Attach a stable request ID to each request and response for traceability."""
@@ -394,14 +379,25 @@ app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
 # 2. CSRF Protection — Guarding mutations
 app.add_middleware(CSRFMiddleware)
 
-# 3. Request ID — add trace context
+# 3. Request ID & Origin Logging — Diagnostics
+class DiagnosticMiddleware:
+    def __init__(self, app):
+        self.app = app
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            request = Request(scope)
+            origin = request.headers.get("origin")
+            if origin:
+                logger.info(f"Incoming Request: {request.method} {request.url.path} from Origin: {origin}")
+        await self.app(scope, receive, send)
+
+app.add_middleware(DiagnosticMiddleware)
 app.add_middleware(RequestIdMiddleware)
 
 # 4. CORS — OUTERMOST LAYER (MUST BE ADDED LAST)
-#    This ensures preflight OPTIONS are handled before CSRF or RateLimit.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

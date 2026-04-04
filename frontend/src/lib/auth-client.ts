@@ -2,12 +2,14 @@ type AuthError = { message: string };
 type AuthResult<T = unknown> = { data: T | null; error: AuthError | null };
 
 function getApiBaseUrl() {
+  if (typeof window !== "undefined") {
+    // Force relative paths in the browser to ensure requests use the Next.js proxy.
+    // This is CRITICAL for cross-domain auth to work via Vercel/Render.
+    return "";
+  }
   const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
   if (envUrl) {
     return envUrl.replace(/\/+$/g, "");
-  }
-  if (typeof window !== "undefined") {
-    return "";
   }
   return "http://localhost:8000";
 }

@@ -28,7 +28,7 @@ function SSOCallbackContent() {
         
         const isProd = window.location.hostname !== "localhost";
         const secureFlag = isProd ? "secure;" : "";
-        const cookieBase = `path=/; samesite=None; ${secureFlag}`;
+        const cookieBase = `path=/; samesite=lax; ${secureFlag}`;
         
         // Access Token (1 hour)
         document.cookie = `graftai_access_token=${token}; max-age=3600; ${cookieBase}`;
@@ -40,7 +40,7 @@ function SSOCallbackContent() {
 
         // Generate a temporary XSRF token for the frontend
         const xsrfToken = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-        document.cookie = `xsrf-token=${xsrfToken}; max-age=86400; path=/; samesite=None; ${secureFlag}`;
+        document.cookie = `xsrf-token=${xsrfToken}; max-age=86400; ${cookieBase}`;
 
         if (typeof window !== "undefined" && window.sessionStorage) {
           window.sessionStorage.setItem("graftai_access_token", token);

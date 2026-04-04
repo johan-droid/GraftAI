@@ -1,3 +1,5 @@
+import logging
+import os
 from backend.services.email import send_email, render_template
 
 logger = logging.getLogger(__name__)

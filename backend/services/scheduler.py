@@ -312,8 +312,15 @@ async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
 
     # Generate meeting links if applicable
     if new_event.is_meeting and new_event.meeting_platform and not new_event.meeting_link:
-        new_event.meeting_link = _generate_meeting_link(new_event.meeting_platform, new_event.id)
-
+        event_details = {
+            "title": new_event.title,
+            "description": new_event.description,
+            "start_time": new_event.start_time,
+            "end_time": new_event.end_time,
+        }
+        new_event.meeting_link = await _generate_meeting_link(
+            db, new_event.user_id, new_event.meeting_platform, event_details
+        )
     db.add(new_event)
     await db.commit()
     await db.refresh(new_event)

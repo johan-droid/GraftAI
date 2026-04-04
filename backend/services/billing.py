@@ -33,10 +33,10 @@ async def create_checkout_session(db: AsyncSession, user_id: str, tier: str) -> 
 
     result = await db.execute(select(UserTable).where(UserTable.id == user_id))
     user = result.scalars().first()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     price_id = STRIPE_PRICE_PRO if tier == "pro" else STRIPE_PRICE_ELITE
     if not price_id:
         raise HTTPException(status_code=400, detail=f"Invalid or unconfigured tier: {tier}")
@@ -63,7 +63,7 @@ async def create_portal_session(db: AsyncSession, user_id: str) -> str:
 
     result = await db.execute(select(UserTable).where(UserTable.id == user_id))
     user = result.scalars().first()
-    
+
     if not user or not user.stripe_customer_id:
         raise HTTPException(status_code=400, detail="User does not have a billing profile")
 
@@ -90,7 +90,7 @@ async def handle_webhook_event(db: AsyncSession, payload: bytes, sig_header: str
 
     event_id = event["id"]
     from backend.models.tables import ProcessedWebhook
-    
+
     # 1. Check for duplicate webhook events
     result = await db.execute(select(ProcessedWebhook).where(ProcessedWebhook.event_id == event_id))
     if result.scalars().first():
@@ -100,55 +100,52 @@ async def handle_webhook_event(db: AsyncSession, payload: bytes, sig_header: str
     event_type = event["type"]
     data_object = event["data"]["object"]
 
-    # 2. Process and Record (Atomic within caller or handled by internal begins)
+    # 2. Process based on event type
     if event_type == "checkout.session.completed":
         await _handle_checkout_completed(db, data_object)
     elif event_type == "customer.subscription.updated":
         await _handle_subscription_updated(db, data_object)
     elif event_type == "customer.subscription.deleted":
         await _handle_subscription_deleted(db, data_object)
-    
-    # 3. Log as processed
+
+    # 3. Log as processed and commit once
     db.add(ProcessedWebhook(event_id=event_id, provider="stripe"))
     await db.commit()
-    
+
     return {"status": "success"}
 
 async def _handle_checkout_completed(db: AsyncSession, session: Dict[str, Any]):
     user_id = session.get("metadata", {}).get("user_id")
     customer_id = session.get("customer")
     subscription_id = session.get("subscription")
-    
-    if not user_id: return
 
-    async with db.begin():
-        result = await db.execute(select(UserTable).where(UserTable.id == user_id))
-        user = result.scalars().first()
-        if user:
-            user.stripe_customer_id = customer_id
-            user.subscription_status = "active"
-            user.tier = session.get("metadata", {}).get("tier", UserTier.PRO)
-            logger.info(f"✅ User {user_id} upgraded to {user.tier}")
+    if not user_id:
+        return
+
+    result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+    user = result.scalars().first()
+    if user:
+        user.stripe_customer_id = customer_id
+        user.subscription_status = "active"
+        user.tier = session.get("metadata", {}).get("tier", UserTier.PRO)
+        logger.info(f"✅ User {user_id} upgraded to {user.tier}")
 
 async def _handle_subscription_updated(db: AsyncSession, subscription: Dict[str, Any]):
     customer_id = subscription.get("customer")
     status = subscription.get("status")
-    
-    async with db.begin():
-        result = await db.execute(select(UserTable).where(UserTable.stripe_customer_id == customer_id))
-        user = result.scalars().first()
-        if user:
-            user.subscription_status = status
-            # Logic for tier mapping based on plan ID could be added here
-            logger.info(f"🔄 User {user.id} subscription status updated to {status}")
+
+    result = await db.execute(select(UserTable).where(UserTable.stripe_customer_id == customer_id))
+    user = result.scalars().first()
+    if user:
+        user.subscription_status = status
+        logger.info(f"🔄 User {user.id} subscription status updated to {status}")
 
 async def _handle_subscription_deleted(db: AsyncSession, subscription: Dict[str, Any]):
     customer_id = subscription.get("customer")
-    
-    async with db.begin():
-        result = await db.execute(select(UserTable).where(UserTable.stripe_customer_id == customer_id))
-        user = result.scalars().first()
-        if user:
-            user.subscription_status = "canceled"
-            user.tier = UserTier.FREE
-            logger.info(f"🗑 User {user.id} subscription canceled, reverted to FREE")
+
+    result = await db.execute(select(UserTable).where(UserTable.stripe_customer_id == customer_id))
+    user = result.scalars().first()
+    if user:
+        user.subscription_status = "canceled"
+        user.tier = UserTier.FREE
+        logger.info(f"🗑 User {user.id} subscription canceled, reverted to FREE")

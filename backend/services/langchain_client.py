@@ -51,9 +51,9 @@ try:
     # Initialize LLM and embeddings
     if OPENAI_API_KEY and ChatOpenAI is not None:
         try:
-            llm = ChatOpenAI(model=OPENAI_MODEL, openai_api_key=OPENAI_API_KEY)
+            llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
             if OpenAIEmbeddings is not None and PineconeVectorStore is not None:
-                embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+                embeddings = OpenAIEmbeddings(api_key=OPENAI_API_KEY)
                 # Using the modern PineconeVectorStore from langchain-pinecone
                 vector_store = PineconeVectorStore(
                     index_name=PINECONE_INDEX,

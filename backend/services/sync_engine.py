@@ -190,30 +190,55 @@ async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
         logger.error(f"Microsoft Sync FAILED for user {user_id}: {e}")
         await db.rollback()
 
+import sentry_sdk
+from backend.utils.cache import acquire_lock, release_lock
+
 async def sync_user_calendar(db: AsyncSession, user_id: str):
     """
     High-level orchestrator to sync ALL active integrations for a user.
-    Designed to be called from a background task worker.
+    Uses a Redis-based sync lock to ensure concurrency safety.
     """
-    logger.info(f"🔄 Starting full calendar sync orchestration for user {user_id}")
-    
-    # Fetch all active tokens for this user
-    stmt = select(UserTokenTable).where(
-        and_(UserTokenTable.user_id == user_id, UserTokenTable.is_active == True)
-    )
-    result = await db.execute(stmt)
-    tokens = result.scalars().all()
-    
-    if not tokens:
-        logger.warning(f"⚠️ No active integrations found for user {user_id}. Skipping sync.")
+    lock_name = f"sync_user_{user_id}"
+    if not acquire_lock(lock_name, ttl_seconds=300):
+        logger.info(f"[SYNC] ⏳ Sync already in progress for user {user_id}. Skipping.")
         return
 
-    for token in tokens:
-        if token.provider == "google":
-            await sync_google_events(db, token)
-        elif token.provider == "microsoft":
-            await sync_ms_graph_events(db, token)
-        else:
-            logger.warning(f"❓ Unknown provider '{token.provider}' for token {token.id}")
+    # Start a Sentry span for the full sync transaction
+    with sentry_sdk.start_span(op="calendar.sync", description=f"Sync for {user_id}"):
+        try:
+            logger.info(f"[SYNC] 🔄 Starting full calendar sync orchestration for user {user_id}")
+            
+            # Fetch all active tokens for this user
+            stmt = select(UserTokenTable).where(
+                and_(UserTokenTable.user_id == user_id, UserTokenTable.is_active == True)
+            )
+            result = await db.execute(stmt)
+            tokens = result.scalars().all()
+            
+            if not tokens:
+                logger.warning(f"[SYNC] ⚠️ No active integrations found for user {user_id}. Skipping sync.")
+                return
 
-    logger.info(f"✨ Orchestration completed for user {user_id}")
+            for token in tokens:
+                # Trace individual provider syncs
+                with sentry_sdk.start_span(op=f"sync.{token.provider}", description=f"Provider: {token.provider}"):
+                    if token.provider == "google":
+                        await sync_google_events(db, token)
+                    elif token.provider == "microsoft":
+                        await sync_ms_graph_events(db, token)
+                    else:
+                        logger.warning(f"[SYNC] ❓ Unknown provider '{token.provider}' for token {token.id}")
+
+            logger.info(f"[SYNC] ✨ Orchestration completed for user {user_id}")
+            
+            # 3. Ensure Real-Time Webhooks are active for this user
+            with sentry_sdk.start_span(op="webhook.register", description="Webhook Maintenance"):
+                try:
+                    from backend.services.integrations.webhook_manager import register_user_webhooks
+                    await register_user_webhooks(db, user_id)
+                except Exception as webhook_err:
+                    logger.warning(f"[SYNC] ⚠️ Webhook registration skipped for {user_id}: {webhook_err}")
+                    
+        finally:
+            # Always release the lock
+            release_lock(lock_name)

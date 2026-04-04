@@ -343,7 +343,9 @@ async def sso_start(provider: str = "google", redirect_to: str = "/dashboard"):
     Initializes OAuth2 login flow for the given provider.
     """
     try:
-        return sso.start_oauth2_flow(provider, redirect_to)
+        result = sso.start_oauth2_flow(provider, redirect_to)
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=result["authorization_url"], status_code=302)
     except HTTPException:
         raise
     except Exception as e:

@@ -12,7 +12,7 @@ from langchain_core.documents import Document
 import json
 import pytz
 from backend.models.user_token import UserTokenTable
-from backend.services.integrations.google_calendar import create_google_meet_event, update_google_event, delete_google_event
+from backend.services.integrations.google_calendar import create_google_meet_event, update_google_event, delete_google_event, create_google_event
 from backend.services.integrations.ms_graph import create_teams_meeting, update_ms_event, delete_ms_event
 from backend.services.integrations.zoom import create_zoom_meeting
 
@@ -96,15 +96,24 @@ async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "
         }
 
         if event.source == "google":
-            if action == "update":
+            if action == "create":
+                result = await create_google_event(token_data, event_details)
+                return result.get("id")
+            elif action == "update":
                 await update_google_event(token_data, event.external_id, event_details)
             elif action == "delete":
                 await delete_google_event(token_data, event.external_id)
         elif event.source == "microsoft":
-            if action == "update":
+            if action == "create":
+                # Assuming ms_graph has a similar function or using placeholder
+                # await create_ms_event(token_data, event_details)
+                pass
+            elif action == "update":
                 await update_ms_event(token_data, event.external_id, event_details)
             elif action == "delete":
                 await delete_ms_event(token_data, event.external_id)
+
+        return None
 
     except Exception as e:
         logger.error(f"❌ Failed to push {action} to {event.source}: {e}")
@@ -233,65 +242,15 @@ async def find_available_slots(
     return available_slots
 
 
-async def sync_event_to_ai(event: EventTable):
+from backend.utils.arq_utils import enqueue_job
+
+async def sync_event_to_ai(event_id: int, user_id: str, action: str = "upsert"):
     """
-    Feeds event data to the LLM Vector Store in real-time with semantic JSON formatting.
-    This 'Smart Feedback Loop' ensures the AI has a high-fidelity, consistent view
-    of the user's schedule for intelligent slot discovery and scheduling assistance.
+    Triggers a background task to sync event data to the AI Vector Store.
+    This prevents Pinecone operations from blocking the API request lifecycle.
     """
-    try:
-        namespace = f"user_{event.user_id}"
-
-        # Calculate semantic duration for LLM reasoning
-        duration = (event.end_time - event.start_time).total_seconds() / 60
-
-        # 'Smart' LLM JSON block - clean, structured, and parseable
-        smart_context_block = {
-            "entry_type": "calendar_event",
-            "event_id": event.id,
-            "title": event.title,
-            "category": event.category,
-            "description": event.description or "No description provided.",
-            "schedule": {
-                "start": event.start_time.strftime("%Y-%m-%d %H:%M"),
-                "end": event.end_time.strftime("%Y-%m-%d %H:%M"),
-                "duration_minutes": int(duration),
-                "human_readable": f"{event.start_time.strftime('%A, %b %d at %I:%M %p')}",
-            },
-            "status": {
-                "current": event.status,
-                "is_confirmed": event.status == "confirmed",
-            },
-        }
-
-        # We store the JSON as the page content for perfect LLM parsing (one-shot reasoning)
-        # We also add a natural language 'summary' line to help with initial embedding relevance
-        llm_ready_content = f"SCHEDULE_ENTRY: {event.title} ({event.category})\n{json.dumps(smart_context_block, indent=2)}"
-
-        doc = Document(
-            page_content=llm_ready_content,
-            metadata={
-                "id": event.id,
-                "type": "calendar_event",
-                "category": event.category,
-                "start_time": event.start_time.isoformat(),
-                "user_id": event.user_id,
-            },
-        )
-
-        # Use consistent document ID to implement idempotent 'Upsert' behavior in Pinecone.
-        # This prevents 'stale memory' by overwriting the old version of this event.
-        vector_store.add_documents(
-            [doc], namespace=namespace, ids=[f"calendar_event_{event.id}"]
-        )
-
-        logger.info(
-            f"✅ AI Feedback Loop triggered: Context synchronized for {event.title} (ID: {event.id})"
-        )
-    except Exception as e:
-        logger.error(
-            f"⚠ AI Feedback Loop failed for event {event.id}: {type(e).__name__} - {e}"
-        )
+    await enqueue_job("task_background_ai_sync", event_id=event_id, user_id=user_id, action=action)
+    logger.info(f"📤 Queued background AI context sync for event {event_id} (Action: {action})")
 
 
 async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
@@ -321,12 +280,34 @@ async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
         new_event.meeting_link = await _generate_meeting_link(
             db, new_event.user_id, new_event.meeting_platform, event_details
         )
+
+    # 3. Check for active integrations to sync to external (bi-directional sync)
+    # If no source is specified, we default to Google if active
+    if not new_event.source or new_event.source == "local":
+        stmt = select(UserTokenTable).where(
+            and_(
+                UserTokenTable.user_id == new_event.user_id,
+                UserTokenTable.provider == "google",
+                UserTokenTable.is_active == True
+            )
+        )
+        res = await db.execute(stmt)
+        if res.scalars().first():
+            new_event.source = "google"
+
     db.add(new_event)
     await db.commit()
     await db.refresh(new_event)
 
-    # Trigger real-time AI sync
-    await sync_event_to_ai(new_event)
+    # 4. Push to external if matched
+    if new_event.source and new_event.source != "local":
+        ext_id = await _push_to_external(db, new_event, action="create")
+        if ext_id:
+            new_event.external_id = ext_id
+            await db.commit()
+
+    # Trigger real-time AI sync (Background)
+    await sync_event_to_ai(new_event.id, new_event.user_id)
 
     # Notify user about new event
     target_user = await db.get(UserTable, new_event.user_id)
@@ -338,8 +319,11 @@ async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
                 "id": new_event.id,
                 "user_id": new_event.user_id,
                 "title": new_event.title,
-                "start_time": new_event.start_time,
-                "end_time": new_event.end_time,
+                "start_time": new_event.start_time.strftime("%I:%M %p"),
+                "end_time": new_event.end_time.strftime("%I:%M %p"),
+                "is_meeting": new_event.is_meeting,
+                "meeting_link": new_event.meeting_link,
+                "meeting_platform": new_event.meeting_platform,
             },
         )
 
@@ -363,6 +347,18 @@ async def update_event(
         if hasattr(event, key):
             setattr(event, key, value)
 
+    # 2. Proactively generate/refresh meeting link if requested during update
+    if event.is_meeting and event.meeting_platform and not event.meeting_link:
+        event_details = {
+            "title": event.title,
+            "description": event.description,
+            "start_time": event.start_time,
+            "end_time": event.end_time,
+        }
+        event.meeting_link = await _generate_meeting_link(
+            db, event.user_id, event.meeting_platform, event_details
+        )
+
     await db.commit()
     await db.refresh(event)
 
@@ -382,8 +378,8 @@ async def update_event(
     if conflict_result.scalars().first():
         raise ValueError("Updated timing overlaps with another event.")
 
-    # Real-time sync to AI orchestrator
-    await sync_event_to_ai(event)
+    # Real-time sync to AI orchestrator (Background)
+    await sync_event_to_ai(event.id, event.user_id)
 
     target_user = await db.get(UserTable, user_id)
     if target_user:
@@ -394,8 +390,11 @@ async def update_event(
                 "id": event.id,
                 "user_id": event.user_id,
                 "title": event.title,
-                "start_time": event.start_time,
-                "end_time": event.end_time,
+                "start_time": event.start_time.strftime("%I:%M %p"),
+                "end_time": event.end_time.strftime("%I:%M %p"),
+                "is_meeting": event.is_meeting,
+                "meeting_link": event.meeting_link,
+                "meeting_platform": event.meeting_platform,
             },
         )
 
@@ -416,13 +415,8 @@ async def delete_event(db: AsyncSession, event_id: int, user_id: str) -> bool:
     if not event:
         return False
 
-    try:
-        # Purge from Vector Store first (fail-safe)
-        namespace = f"user_{user_id}"
-        vector_store.delete(ids=[f"calendar_event_{event_id}"], namespace=namespace)
-        logger.info(f"🗑 AI Memory purged for event {event_id}")
-    except Exception as e:
-        logger.warning(f"⚠ AI Memory purge failed for event {event_id}: {e}")
+    # Purge from Vector Store (Background)
+    await sync_event_to_ai(event_id, user_id, action="delete")
 
     # Push to External if applicable (before DB deletion)
     await _push_to_external(db, event, action="delete")

@@ -53,6 +53,8 @@ class EventResponse(EventBase):
     model_config = ConfigDict(from_attributes=True) #  <- New Pydantic v2 syntax ConfigDict
 
 
+from backend.utils.cache import get_calendar_cache_key, get_cache, set_cache, invalidate_user_calendar_cache
+
 @router.get("/events", response_model=List[EventResponse])
 async def get_events(
     start: datetime,
@@ -60,8 +62,22 @@ async def get_events(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Fetch events for a user within a time range."""
-    return await scheduler.get_events_for_range(db, user_id, start, end)
+    """Fetch events for a user within a time range (Redis Cache First)."""
+    cache_key = get_calendar_cache_key(user_id, start, end)
+    cached_data = get_cache(cache_key)
+
+    if cached_data is not None:
+        logger.info(f"⚡ Redis Cache HIT for user {user_id} (Range: {start}_{end})")
+        return cached_data
+
+    logger.info(f"🗄️ Redis Cache MISS for user {user_id}. Fetching from PostgreSQL...")
+    events = await scheduler.get_events_for_range(db, user_id, start, end)
+
+    # Store in Redis (TTL: 5 minutes)
+    event_dicts = [EventResponse.model_validate(e).model_dump(mode='json') for e in events]
+    set_cache(cache_key, event_dicts, ttl_seconds=300)
+
+    return events
 
 
 @router.post("/events", response_model=EventResponse)
@@ -76,10 +92,12 @@ async def create_event(
     event_dict["user_id"] = user_id
 
     try:
-        return await scheduler.create_event(db, event_dict)
+        new_event = await scheduler.create_event(db, event_dict)
+        invalidate_user_calendar_cache(user_id)
+        return new_event
     except Exception as e:
         logger.error(f"Event creation failed: {e}")
-        raise HTTPException(status_code=500, detail="Could not create event")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not create event")
 
 
 @router.patch("/events/{event_id}", response_model=EventResponse)
@@ -97,6 +115,7 @@ async def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    invalidate_user_calendar_cache(user_id)
     return event
 
 
@@ -124,6 +143,8 @@ async def delete_event(
     success = await scheduler.delete_event(db, event_id, user_id)
     if not success:
         raise HTTPException(status_code=404, detail="Event not found")
+    
+    invalidate_user_calendar_cache(user_id)
     return None
 
 @router.post("/sync")

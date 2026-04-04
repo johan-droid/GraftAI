@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+    <div class="badge badge-primary">Onboarding Active</div>
+    <h1>Welcome to the Future, {{ full_name }}!</h1>
+    <p>Your GraftAI account is now active and your workspace is ready. Your AI Copilot is standing by to automate your scheduling and unlock consistent deep work.</p>
+    
+    <div style="margin: 32px 0;">
+        <h3 style="font-size: 14px; text-transform: uppercase; color: #6366f1; margin-bottom: 16px;">Next steps for total sovereignty:</h3>
+        <div style="margin-bottom: 24px;">
+            <div style="font-weight: 800; color: #ffffff; margin-bottom: 4px;">1. Connect Your Ecosystem</div>
+            <p style="font-size: 14px; margin: 0;">Sync Google Calendar or Microsoft 365 in Settings to activate autonomous synchronization.</p>
+        </div>
+        <div style="margin-bottom: 24px;">
+            <div style="font-weight: 800; color: #ffffff; margin-bottom: 4px;">2. Converse with AI</div>
+            <p style="font-size: 14px; margin: 0;">Try saying: "Schedule a 30-min strategy deep-dive next Tuesday at 10 AM with the engineering lead."</p>
+        </div>
+    </div>
+    
+    <div style="text-align: center;">
+        <a href="{{ frontend_url }}/dashboard" class="button">Go to My Dashboard</a>
+    </div>
+</div>
+{% endblock %}

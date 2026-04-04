@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+    <div class="badge badge-success">Calendar Update</div>
+    <h1>{{ action_title }}</h1>
+    <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 24px; border-left: 2px solid #6366f1; padding-left: 16px;">{{ event_title }}</h2>
+    <p>{{ summary_text }}</p>
+    
+    <div style="background-color: rgba(30, 41, 59, 1); border-radius: 16px; padding: 24px; margin: 32px 0;">
+        <div style="display: flex; gap: 24px;">
+            <div style="flex: 1;">
+                <div style="font-size: 10px; font-weight: 800; color: #6366f1; text-transform: uppercase;">Time</div>
+                <div style="font-size: 14px; font-weight: 600; color: #ffffff;">{{ start_time }} - {{ end_time }}</div>
+            </div>
+            {% if is_meeting %}
+            <div style="flex: 1;">
+                <div style="font-size: 10px; font-weight: 800; color: #6366f1; text-transform: uppercase;">Meeting Platform</div>
+                <div style="font-size: 14px; font-weight: 600; color: #ffffff;">{{ meeting_platform }}</div>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if is_meeting and meeting_link %}
+        <div style="margin-top: 24px; text-align: center;">
+            <a href="{{ meeting_link }}" class="button">Join {{ meeting_platform }}</a>
+        </div>
+        {% endif %}
+    </div>
+    
+    <p style="font-size: 14px; text-align: center;">You can manage your full schedule at <a href="{{ frontend_url }}/dashboard/calendar" style="color: #6366f1; text-decoration: none;">Dashboard > Calendar</a>.</p>
+</div>
+{% endblock %}

@@ -45,17 +45,7 @@ from backend.utils.db import get_db
 from backend.utils import db as db_utils
 from backend.models.tables import Base as ModelsBase
 
-# Rate limiting setup
-_redis_client = None
-
-
-def _get_redis_client():
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
-
+from backend.utils.cache import get_redis_client
 
 # Atomic Rate Limiting Lua Script
 RATE_LIMIT_LUA = """
@@ -126,7 +116,7 @@ class RateLimitMiddleware:
         # Atomic check-and-increment via Lua.
         # Fail open if Redis is unavailable so core API endpoints stay reachable.
         try:
-            client = _get_redis_client()
+            client = get_redis_client()
             key = f"rate_limit:{identifier}:{request.url.path}"
 
             # Use eval to run the script atomically
@@ -345,9 +335,8 @@ app = FastAPI(
 _raw_extra = os.getenv("EXTRA_CORS_ORIGINS", "")  # comma-separated extra origins
 _extra_origins = [o.strip() for o in _raw_extra.split(",") if o.strip()]
 
-# Use a flexible regex to match all project-related domains
-# Matches: graftai.tech, *.graftai.tech, graftai.onrender.com, *.vercel.app
-cors_origin_regex = r"https://(.*\.)?graftai\.(tech|onrender\.com)|https://(.*\.)?vercel\.app"
+# Use a narrow regex to match production and local development domains
+cors_origin_regex = r"^https?://(localhost|127\.0\.0\.1|graftai\.tech|.*\.graftai\.tech|graftai\.onrender\.com)(:\d+)?$"
 
 class RequestIdMiddleware:
     """Attach a stable request ID to each request and response for traceability."""
@@ -423,36 +412,56 @@ v1_router.include_router(admin_router)
 v1_router.include_router(upgrade_router)
 v1_router.include_router(plugin_router)
 v1_router.include_router(notifications_router)
+from backend.api.webhooks import router as webhooks_router
+v1_router.include_router(webhooks_router)
 v1_router.include_router(billing_router)
 
 # Include v1 as both /api/v1 and flat root-level aliases
 app.include_router(v1_router)
 app.include_router(auth_router)
 
-# --- Keep-Alive / Anti-Sleep Task ---
-def self_pinger():
-    """Background thread to keep the service awake by hitting the public URL."""
-    # Wait for the server to fully stabilize
-    import time
-    import httpx
-    time.sleep(30)
-    
-    # Target our own canonical URL
-    public_url = os.getenv("APP_BASE_URL", "https://graftai.onrender.com").rstrip("/")
-    health_url = f"{public_url}/health"
-    
-    logger.info(f"Self-pinger active. Target: {health_url}")
-    while True:
-        try:
-            # Hitting the public URL resets Render's 15-minute idle timer
-            httpx.get(health_url, timeout=10.0)
-        except Exception as e:
-            logger.debug(f"Self-ping failed (harmless): {e}")
-        time.sleep(600) # Every 10 minutes (Render sleeps after 15)
+def validate_production_environment():
+    """
+    Checks for critical environment variables and logs warnings if missing.
+    Ensures 'Pinpoint Accuracy' in production configuration.
+    """
+    try:
+        critical_vars = [
+            "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
+            "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET",
+            "PINECONE_API_KEY", "REDIS_URL", "DATABASE_URL"
+        ]
+        missing = [v for v in critical_vars if not os.getenv(v)]
+        
+        if missing:
+            logger.warning(f"[STARTUP] ⚠️ Production Warning: Missing critical environment variables: {', '.join(missing)}")
+        else:
+            logger.info("[STARTUP] ✅ Production environment validation passed.")
+    except Exception as e:
+        logger.error(f"[STARTUP] ❌ Environment validation logic failed: {e}")
 
 # --- Diagnostic & Startup ---
 @app.on_event("startup")
 async def startup_event():
+    # 0. Initialize Sentry (if DSN provided)
+    sentry_dsn = os.getenv("SENTRY_DSN")
+    if sentry_dsn:
+        import sentry_sdk
+        try:
+            sentry_sdk.init(
+                dsn=sentry_dsn,
+                traces_sample_rate=0.1,
+                environment=os.getenv("ENV", "production"),
+            )
+            logger.info("[STARTUP] ✅ Sentry monitoring active.")
+        except Exception as e:
+            logger.error(f"[STARTUP] ❌ Sentry initialization failed: {e}")
+    else:
+        logger.info("[STARTUP] ℹ️ Sentry DSN not provided. Monitoring skipped.")
+
+    # 1. Validate Environment
+    validate_production_environment()
+    
     # 1. Log all registered routes for debugging
     for route in app.routes:
         if hasattr(route, "path"):

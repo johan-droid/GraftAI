@@ -46,6 +46,9 @@ export const themeColor = [
   { media: "(prefers-color-scheme: dark)", color: "#020617" },
 ];
 
+import { NotificationProvider } from "@/providers/notification-provider";
+import SmartToaster from "@/components/ui/smart-toaster";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -59,10 +62,18 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
     >
       <body className="min-h-full flex flex-col bg-background text-foreground selection:bg-primary/30" suppressHydrationWarning>
-        <AuthProvider>
-          <Navbar />
-          {children}
-        </AuthProvider>
+        <div className="galaxy-canvas">
+          <div className="galaxy-stars" />
+        </div>
+        <NotificationProvider>
+          <AuthProvider>
+            <Navbar />
+            <main className="flex-1 relative z-0">
+              {children}
+            </main>
+            <SmartToaster />
+          </AuthProvider>
+        </NotificationProvider>
       </body>
     </html>
   );

@@ -22,14 +22,30 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Optional
-
+from typing import Optional, Any
 import httpx
 from dotenv import load_dotenv
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 # Ensure .env from project root is loaded (backend/.env)
 project_root = Path(__file__).resolve().parents[1]
 load_dotenv(project_root / '.env')
+
+# Initialize Jinja2 Environment
+template_dir = project_root / "templates" / "email"
+jinja_env = Environment(
+    loader=FileSystemLoader(str(template_dir)),
+    autoescape=select_autoescape(['html', 'xml'])
+)
+
+def render_template(template_name: str, context: dict[str, Any]) -> str:
+    """Render a Jinja2 email template found in backend/templates/email/."""
+    # Ensure frontend_url is available to all templates for logo/dashboard links
+    if "frontend_url" not in context:
+        context["frontend_url"] = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+    
+    template = jinja_env.get_template(template_name)
+    return template.render(**context)
 
 
 def _get_smtp_config() -> dict:

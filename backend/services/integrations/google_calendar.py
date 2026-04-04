@@ -83,6 +83,45 @@ async def create_google_meet_event(token_data: dict, event_details: dict) -> str
         logger.error(f"❌ Unexpected error in Google Meet creation: {e}")
         raise e
 
+
+async def create_google_event(token_data: dict, event_details: dict) -> dict:
+    """
+    Creates a standard Google Calendar event.
+    Returns the created event object from Google.
+    """
+    try:
+        creds = get_google_credentials(token_data)
+        service = build("calendar", "v3", credentials=creds)
+
+        event = {
+            "summary": event_details.get("title", "GraftAI Event"),
+            "description": event_details.get("description", ""),
+            "start": {
+                "dateTime": event_details["start_time"].isoformat(),
+                "timeZone": event_details.get("timezone", "UTC"),
+            },
+            "end": {
+                "dateTime": event_details["end_time"].isoformat(),
+                "timeZone": event_details.get("timezone", "UTC"),
+            },
+            "attendees": [{"email": e} for e in event_details.get("attendees", [])],
+        }
+
+        created_event = service.events().insert(
+            calendarId="primary",
+            body=event
+        ).execute()
+
+        logger.info(f"✅ Google Event created: {created_event.get('id')}")
+        return created_event
+
+    except HttpError as error:
+        logger.error(f"❌ Google Calendar API failed: {error}")
+        raise RuntimeError(f"Could not create Google event: {error}")
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in Google event creation: {e}")
+        raise e
+
 async def list_google_events(access_token: str, calendar_id: str = "primary", sync_token: Optional[str] = None) -> dict:
     """
     Lists events from Google Calendar. 

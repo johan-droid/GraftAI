@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+    <div class="badge badge-warning">Starting Soon</div>
+    <h1>Reminder: {{ event_title }}</h1>
+    <p>This is a quick notification from your AI Copilot. Your event <strong>{{ event_title }}</strong> starts at {{ start_time }}.</p>
+    
+    <div style="background-color: rgba(30, 41, 59, 1); border-radius: 16px; padding: 24px; margin: 32px 0; border-left: 4px solid #facc15;">
+        <div style="font-size: 14px; font-weight: 600; color: #ffffff;">Time: {{ start_time }} - {{ end_time }}</div>
+        {% if is_meeting %}
+        <div style="font-size: 14px; font-weight: 600; color: #ffffff;">Platform: {{ meeting_platform }}</div>
+        {% if meeting_link %}
+        <div style="margin-top: 24px; text-align: center;">
+            <a href="{{ meeting_link }}" class="button" style="background-color: #facc15; color: #020617; box-shadow: 0 10px 15px -3px rgba(234, 179, 8, 0.3);">Join Immediately</a>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+    
+    <div style="text-align: center;">
+        <a href="{{ frontend_url }}/dashboard/calendar" style="color: #6366f1; font-weight: 600; text-decoration: none; font-size: 13px;">View Complete Schedule &rarr;</a>
+    </div>
+</div>
+{% endblock %}

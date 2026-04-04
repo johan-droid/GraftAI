@@ -156,3 +156,36 @@ class ProcessedWebhook(Base):
     event_id = Column(String(255), primary_key=True)
     provider = Column(String(50), nullable=False) # stripe, razorpay
     processed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class WebhookSubscriptionTable(Base):
+    """
+    Tracks active push notification subscriptions for Google and MS Graph.
+    Ensures 'Perfect Sync' by enabling proactive renewal before expiration.
+    """
+    __tablename__ = "webhook_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider = Column(String(50), nullable=False) # google, microsoft
+    
+    # Provider-specific tracking
+    external_subscription_id = Column(String(255), unique=True, index=True, nullable=False)
+    resource_id = Column(String(255), index=True) # Used by Google for renewals/stopping
+    
+    client_state = Column(String(255)) # Secret token for verification
+    expiration_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    
+    __table_args__ = (
+        Index("idx_webhook_expiry", "expiration_at", "is_active"),
+    )
+    
+    # Relationship
+    user = relationship("UserTable")

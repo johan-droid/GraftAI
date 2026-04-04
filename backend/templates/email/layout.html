@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #020617;
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #020617;
+            color: #f8fafc;
+        }
+        .header {
+            padding: 40px 20px;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%);
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+            color: #f8fafc;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .logo span {
+            color: #6366f1;
+        }
+        .content {
+            padding: 40px 20px;
+            background-color: #020617;
+        }
+        .card {
+            background-color: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+            border-radius: 24px;
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 800;
+            margin: 0 0 16px 0;
+            color: #ffffff;
+            letter-spacing: -0.02em;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #94a3b8;
+            margin: 0 0 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 16px 32px;
+            background-color: #6366f1;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
+        }
+        .footer {
+            padding: 40px 20px;
+            text-align: center;
+            border-top: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        .footer p {
+            font-size: 12px;
+            color: #475569;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+        }
+        .badge-primary { background-color: rgba(99, 102, 241, 0.2); color: #818cf8; }
+        .badge-success { background-color: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .badge-warning { background-color: rgba(234, 179, 8, 0.2); color: #facc15; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="{{ frontend_url }}" class="logo">Graft<span>AI</span></a>
+        </div>
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+        <div class="footer">
+            <p>&copy; 2026 GraftAI Technologies. All rights reserved.<br>
+            Autonomous Scheduling for the Sovereign Individual.</p>
+        </div>
+    </div>
+</body>
+</html>

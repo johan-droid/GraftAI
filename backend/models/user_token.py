@@ -1,6 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, func, Boolean
-from sqlalchemy.orm import relationship
-from .base import Base
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, func, Boolean, Index
 
 class UserTokenTable(Base):
     """
@@ -18,12 +16,13 @@ class UserTokenTable(Base):
     expires_at = Column(DateTime(timezone=True))
     scopes = Column(Text)  # JSON-string of granted scopes
     
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
     
     # Sync Positioning
     sync_token = Column(Text) # google nextSyncToken or MS odata.deltaLink
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    # Relationship back to the user
-    user = relationship("UserTable", backref="tokens")
+    __table_args__ = (
+        Index("idx_user_provider_active", "user_id", "provider", "is_active"),
+    )

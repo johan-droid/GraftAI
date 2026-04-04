@@ -361,6 +361,7 @@ async def sso_start(provider: str = "google", redirect_to: str = "/dashboard"):
 
 @router.get("/sso/callback")
 async def sso_callback(
+    request: Request,
     code: str, 
     state: str, 
     db: AsyncSession = Depends(get_db)
@@ -371,7 +372,7 @@ async def sso_callback(
     """
     try:
         # 1. Complete OAuth flow via authlib
-        sso_data = await sso.complete_oauth2_flow(code, state)
+        sso_data = await sso.complete_oauth2_flow(request, code, state)
         profile = sso_data.get("profile", {})
         email = auth_utils.canonical_email(profile.get("email"))
         name = profile.get("name")
@@ -436,9 +437,10 @@ async def sso_callback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"SSO callback exception: {e}")
+        logger.exception("SSO callback exception")
+        error_detail = str(e) or "Unknown authentication error"
         # Return structured error so frontend can show a user-friendly message
-        raise HTTPException(status_code=500, detail=f"Authentication failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Authentication failed: {error_detail}")
 
 
 @router.post("/sync-consent")

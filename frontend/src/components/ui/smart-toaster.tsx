@@ -57,29 +57,31 @@ const ToastItem = ({
       exit={{ opacity: 0, scale: 0.8, filter: "blur(10px)", transition: { duration: 0.2 } }}
       transition={{ 
         type: "spring", 
-        stiffness: 150, 
-        damping: 20,
-        delay: index * 0.05 
+        stiffness: 400, 
+        damping: 30,
+        mass: 0.8,
+        delay: index * 0.03
       }}
       drag="x"
       dragConstraints={{ left: 0, right: 300 }}
       dragElastic={{ left: 0, right: 0.5 }}
       onDragEnd={(_, info) => {
-        if (info.offset.x > 100) onDismiss();
+        if (info.offset.x > 80) onDismiss();
       }}
       className={cn(
         "pointer-events-auto relative overflow-hidden",
-        "bg-slate-900/70 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl",
-        "p-4 flex items-start gap-3 group select-none"
+        "bg-[#0f172a]/80 backdrop-blur-2xl border border-white/10 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)]",
+        "p-4 flex items-start gap-3 group select-none",
+        "hover:border-primary/40 transition-colors duration-500"
       )}
     >
-      {/* Progress Bar (Auto-dismiss timer) */}
+      {/* Cybernetic Progress Bar */}
       {notification.duration !== Infinity && (
         <motion.div 
           initial={{ scaleX: 1 }}
           animate={{ scaleX: 0 }}
           transition={{ duration: (notification.duration || 5000) / 1000, ease: "linear" }}
-          className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary/30 origin-left"
+          className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-primary via-fuchsia-500 to-primary origin-left opacity-60"
         />
       )}
 

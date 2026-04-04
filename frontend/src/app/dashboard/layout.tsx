@@ -27,10 +27,45 @@ export default function DashboardLayout({
   const { logout, user } = useAuthContext();
 
   return (
-    <div className="flex h-screen w-full bg-background overflow-hidden relative">
+    <div className="flex h-screen w-full bg-[#020617] overflow-hidden relative selection:bg-primary/30 selection:text-primary-foreground">
       
-      {/* Background Ambience */}
-      <div className="absolute top-0 right-0 w-full h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+      {/* 🚀 GALAXY HUD LAYERS */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        {/* Animated Starfield */}
+        <div className="starfield-container absolute inset-0 opacity-40">
+          <div className="stars-small animate-pulse-slow bg-white/20" />
+          <div className="stars-medium animate-pulse bg-white/10" />
+          <div className="stars-large animate-bounce-slow bg-primary/20" />
+        </div>
+        
+        {/* Dynamic Nebulae */}
+        <div className="absolute -top-[10%] -right-[10%] w-[60%] h-[60%] bg-blue-600/10 rounded-full blur-[140px] animate-pulse-slow" />
+        <div className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] bg-fuchsia-600/10 rounded-full blur-[160px] animate-pulse" />
+        <div className="absolute top-[30%] left-[20%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]" />
+      </div>
+
+      <style jsx global>{`
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.05); }
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 8s infinite ease-in-out;
+        }
+        .starfield-container::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-image: 
+            radial-gradient(1px 1px at 20px 30px, #fff, rgba(0,0,0,0)),
+            radial-gradient(1px 1px at 40px 70px, #fff, rgba(0,0,0,0)),
+            radial-gradient(1.5px 1.5px at 150px 150px, rgba(236, 72, 153, 0.4), rgba(0,0,0,0)),
+            radial-gradient(2px 2px at 300px 300px, rgba(79, 70, 229, 0.4), rgba(0,0,0,0));
+          background-repeat: repeat;
+          background-size: 400px 400px;
+          opacity: 0.3;
+        }
+      `}</style>
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-60 border-r border-slate-800/50 bg-slate-950/40 backdrop-blur-xl z-20">
@@ -97,7 +132,30 @@ export default function DashboardLayout({
       </aside>
 
       {/* Mobile Header & Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 z-10">
+      <div className="flex-1 flex flex-col min-w-0 z-10 relative">
+        
+        {/* Neural Pulse Header (Desktop) */}
+        <header className="hidden lg:flex items-center justify-between px-8 py-4 border-b border-white/5 backdrop-blur-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/40 border border-white/5 backdrop-blur-md">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">System Nominal</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+             <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Orbital Link</span>
+                <div className="flex gap-0.5">
+                   {[1,2,3,4,5].map(i => (
+                     <div key={i} className={`w-1 h-3 rounded-full ${i <= 4 ? 'bg-primary/60' : 'bg-slate-800'}`} />
+                   ))}
+                </div>
+             </div>
+          </div>
+        </header>
         
         {/* Mobile Header */}
         <header className="lg:hidden flex items-center justify-between p-3.5 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30">

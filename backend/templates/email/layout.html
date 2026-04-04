@@ -41,12 +41,14 @@
             padding: 0 20px;
         }
         .card {
-            background-color: rgba(15, 23, 42, 0.8);
-            border: 2px solid rgba(99, 102, 241, 0.3);
-            border-radius: 32px;
+            background-color: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-top: 4px solid #6366f1;
+            border-radius: 24px;
             padding: 40px;
             margin-bottom: 24px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+            position: relative;
         }
         h1 {
             font-size: 32px;
@@ -59,7 +61,7 @@
         p {
             font-size: 16px;
             line-height: 1.6;
-            color: #94a3b8;
+            color: #cbd5e1;
             margin: 0 0 20px 0;
         }
         .button {
@@ -69,20 +71,27 @@
             color: #ffffff !important;
             text-decoration: none;
             border-radius: 16px;
-            font-weight: 700;
-            font-size: 15px;
+            font-weight: 800;
+            font-size: 14px;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+            letter-spacing: 0.15em;
+            box-shadow: 0 0 25px rgba(99, 102, 241, 0.5);
+            animation: pulse-glow 3s infinite ease-in-out;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); transform: scale(1); }
+            50% { box-shadow: 0 0 35px rgba(99, 102, 241, 0.7); transform: scale(1.02); }
         }
         .footer {
             padding: 60px 20px;
             text-align: center;
         }
         .footer p {
-            font-size: 13px;
-            color: #475569;
+            font-size: 11px;
+            color: #64748b;
             line-height: 1.8;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
         }
         .badge {
             display: inline-block;

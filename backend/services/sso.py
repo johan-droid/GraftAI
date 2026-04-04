@@ -5,7 +5,7 @@ SSO (OAuth2, OIDC) authentication implementation with Redis-backed state storage
 from datetime import datetime, timedelta, timezone
 import os
 import json
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 import redis
 import hmac
@@ -187,7 +187,7 @@ def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard")
     }
 
 
-async def complete_oauth2_flow(code: str, state: str):
+async def complete_oauth2_flow(request: Request, code: str, state: str):
     # Verify HMAC signature first
     original_state = _verify_state(state)
     if not original_state:
@@ -197,6 +197,7 @@ async def complete_oauth2_flow(code: str, state: str):
 
     data = _get_oauth_state(original_state)
     if not data:
+        logger.error(f"State not found in Redis for: {original_state}")
         raise RuntimeError("Invalid or expired state")
     
     # Enforce one-time use semantics
@@ -208,7 +209,7 @@ async def complete_oauth2_flow(code: str, state: str):
     if datetime.now(timezone.utc) - created_at > timedelta(minutes=5):
         raise RuntimeError("OAuth2 state expired")
 
-    provider_name = data.get("provider", "github")
+    provider_name = data.get("provider", "google")
     config = PROVIDERS.get(provider_name)
     if not config:
         raise RuntimeError(f"Provider config for {provider_name} not found")
@@ -217,8 +218,15 @@ async def complete_oauth2_flow(code: str, state: str):
     client_id = config["client_id"]
     client_secret = config["client_secret"]
 
-    # Use provider-specific redirect URI if available, otherwise global default
-    redirect_uri = config.get("redirect_uri") or OAUTH2_REDIRECT_URI
+    # Use provider-specific redirect URI if available, 
+    # otherwise dynamically determine it from the current request URL (stripping query/fragment)
+    # to maintain consistency regardless of prefix (/api/v1/auth vs /auth)
+    redirect_uri = config.get("redirect_uri")
+    if not redirect_uri:
+        # Reconstruct the redirect_uri from the incoming request to be prefix-agnostic
+        redirect_uri = str(request.url.replace(query="", fragment=""))
+
+    logger.info(f"Using redirect_uri for token exchange: {redirect_uri}")
 
     async with AsyncOAuth2Client(
         client_id=client_id,
@@ -227,10 +235,12 @@ async def complete_oauth2_flow(code: str, state: str):
         redirect_uri=redirect_uri,
         state=state,
     ) as session:
+        # Pass the FULL URL from the request for robust parameter verification by authlib
+        # This handles cases where scheme/host/port might be tricky behind proxies.
         token = await session.fetch_token(
             config.get("token_url"),
             code=code,
-            authorization_response=f"?code={code}&state={state}",
+            authorization_response=str(request.url),
         )
 
     import httpx

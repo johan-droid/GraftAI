@@ -12,8 +12,8 @@ from dotenv import load_dotenv
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-# Ensure project root is on sys.path so `import backend...` works even when the process starts from inside backend/
-project_root = Path(__file__).resolve().parents[1]
+# Ensure project root is on sys.path so `import backend...` works correctly regardless of execution context
+project_root = Path(__file__).resolve().parents[2] # Root directory (parent of backend/)
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
@@ -347,8 +347,10 @@ _extra_origins = [o.strip() for o in _raw_extra.split(",") if o.strip()]
 
 cors_origins = [
     # ── Production ──────────────────────────────────
-    "https://graft-ai-two.vercel.app",  # Vercel production frontend
-    "https://graftai.onrender.com",  # Render backend self-reference
+    "https://graftai.tech",             # Primary production domain
+    "https://www.graftai.tech",         # Secondary production domain
+    "https://graft-ai-two.vercel.app",  # Vercel deployment preview url
+    "https://graftai-api.onrender.com", # Render backend canonical domain
     # ── Configurable via Render env vars ────────────
     *([os.getenv("FRONTEND_URL")] if os.getenv("FRONTEND_URL") else []),
     *([os.getenv("LOAD_BALANCER_URL")] if os.getenv("LOAD_BALANCER_URL") else []),
@@ -410,9 +412,6 @@ from fastapi import APIRouter
 v1_router = APIRouter(prefix="/api/v1")
 
 v1_router.include_router(auth_router)
-
-# Expose auth routes at both /api/v1/auth and /auth so OAuth providers can use either callback URL
-app.include_router(auth_router)
 v1_router.include_router(users_router)
 v1_router.include_router(uploads_router)
 v1_router.include_router(calendar_router)
@@ -427,7 +426,17 @@ v1_router.include_router(plugin_router)
 v1_router.include_router(notifications_router)
 v1_router.include_router(billing_router)
 
+# Include v1 as both /api/v1 and flat root-level aliases
 app.include_router(v1_router)
+app.include_router(auth_router)
+
+# --- Diagnostic: Log all registered routes on startup ---
+@app.on_event("startup")
+async def log_routes():
+    # Only show in production if needed, but useful for initial 404 troubleshooting
+    for route in app.routes:
+        if hasattr(route, "path"):
+            logger.info(f"Registered route: {route.path}")
 
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")

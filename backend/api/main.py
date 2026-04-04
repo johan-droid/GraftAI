@@ -388,6 +388,17 @@ class RequestIdMiddleware:
         await self.app(scope, receive, send_with_request_id)
 
 
+# 1. Rate Limiting — Applied only to real requests, not OPTIONS
+app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
+
+# 2. CSRF Protection — Guarding mutations
+app.add_middleware(CSRFMiddleware)
+
+# 3. Request ID — add trace context
+app.add_middleware(RequestIdMiddleware)
+
+# 4. CORS — OUTERMOST LAYER (MUST BE ADDED LAST)
+#    This ensures preflight OPTIONS are handled before CSRF or RateLimit.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -395,17 +406,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["X-Backend-Server", "X-Request-Id", "x-xsrf-token", "X-XSRF-TOKEN"],
-    max_age=600,  # Cache preflight for 10 minutes to reduce OPTIONS overhead
+    max_age=600,
 )
-
-# 2. Request ID — add trace context to all requests
-app.add_middleware(RequestIdMiddleware)
-
-# 3. Rate Limiting — Inner layer (applied only to real requests, not OPTIONS)
-app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
-
-# 3. CSRF Protection — Guarding mutations
-app.add_middleware(CSRFMiddleware)
 
 # --- Router Inclusion (API v1) ---
 from fastapi import APIRouter
@@ -440,7 +442,7 @@ def self_pinger():
     time.sleep(30)
     
     # Target our own canonical URL
-    public_url = os.getenv("APP_BASE_URL", "https://graftai-api.onrender.com").rstrip("/")
+    public_url = os.getenv("APP_BASE_URL", "https://graftai.onrender.com").rstrip("/")
     health_url = f"{public_url}/health"
     
     logger.info(f"Self-pinger active. Target: {health_url}")

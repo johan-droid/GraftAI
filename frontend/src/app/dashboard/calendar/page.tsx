@@ -26,6 +26,7 @@ import {
   updateEvent,
   deleteEvent,
   getAvailableSlots,
+  manualSync,
   CalendarEvent as Event,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -73,6 +74,7 @@ export default function CalendarPage() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [slots, setSlots] = useState<{
     start: string;
     end: string;
@@ -140,6 +142,19 @@ export default function CalendarPage() {
       console.error(e);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await manualSync();
+      const refreshed = await getEvents(startDate.toISOString(), endDate.toISOString());
+      setEvents(refreshed);
+    } catch (e) {
+      console.error("Calendar sync failed", e);
+    } finally {
+      setSyncing(false);
     }
   };
 

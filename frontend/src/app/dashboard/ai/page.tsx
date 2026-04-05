@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Send, Sparkles, User as UserIcon, Loader2, Zap, Clock, Calendar, Globe, Paperclip } from "lucide-react";
+import { Bot, Send, Sparkles, User as UserIcon, Loader2, Zap, Clock, Calendar, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sendAiChat } from "@/lib/api";
 
@@ -174,10 +174,10 @@ export default function AISchedulerAssistantPage() {
                   msg.role === "user" ? "items-end" : "items-start"
                 )}>
                   <div className={cn(
-                    "px-4 py-3 rounded-2xl text-sm leading-relaxed",
+                    "px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words",
                     msg.role === "user"
-                      ? "bg-indigo-600 text-white rounded-tr-sm shadow-lg shadow-indigo-600/15"
-                      : "bg-white/[0.05] border border-white/[0.07] text-slate-200 rounded-tl-sm"
+                      ? "bg-indigo-600/95 text-white rounded-2xl shadow-sm"
+                      : "bg-white/[0.035] border border-white/[0.04] text-slate-200 rounded-2xl"
                   )}>
                     {msg.content}
                   </div>
@@ -197,7 +197,7 @@ export default function AISchedulerAssistantPage() {
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500/20 to-violet-600/20 border border-indigo-500/30 flex items-center justify-center">
                   <Bot className="w-4 h-4 text-indigo-400 animate-pulse" />
                 </div>
-                <div className="flex gap-1.5 px-4 py-3 bg-white/5 border border-white/8 rounded-2xl rounded-tl-sm">
+                <div className="flex gap-1.5 px-4 py-3 bg-white/[0.03] border border-white/[0.04] rounded-2xl">
                   {[0, 1, 2].map((i) => (
                     <motion.span
                       key={i}
@@ -227,12 +227,7 @@ export default function AISchedulerAssistantPage() {
           <form onSubmit={handleSubmit} className="relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 via-violet-500/20 to-indigo-500/20 rounded-[24px] blur-md opacity-50 group-focus-within:opacity-100 transition-opacity duration-500" />
             <div className="relative flex items-end gap-2 p-2 bg-slate-900/80 backdrop-blur-3xl border border-white/[0.1] rounded-[24px] shadow-2xl">
-              <button
-                type="button"                aria-label="Attach file"
-                title="Attach file"                className="p-3 text-slate-400 hover:text-indigo-400 hover:bg-white/[0.05] rounded-full transition-colors flex-shrink-0"
-              >
-                <Paperclip className="w-[18px] h-[18px]" strokeWidth={2.5} />
-              </button>
+              {/* Attachment removed for a cleaner, less-cluttered input on mobile and desktop. */}
 
               <textarea
                 ref={inputRef}
@@ -241,7 +236,7 @@ export default function AISchedulerAssistantPage() {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask Scheduler Assistant..."
                 rows={1}
-                className="w-full min-h-[52px] bg-transparent text-[14.5px] text-slate-200 placeholder-slate-500 focus:outline-none resize-none pt-3.5 pb-3 max-h-[150px] scrollbar-hide leading-relaxed"
+                className="w-full min-h-[56px] bg-transparent text-[15px] text-slate-200 placeholder-slate-500 focus:outline-none resize-none pt-4 pb-3 max-h-[150px] scrollbar-hide leading-relaxed break-words"
               />
 
               <div className="flex items-center gap-1 mb-0.5 mr-0.5 shrink-0">
@@ -250,7 +245,7 @@ export default function AISchedulerAssistantPage() {
                   aria-label="Send message"
                   title="Send message"
                   disabled={!input.trim() || isTyping}
-                  className="p-2.5 rounded-full bg-white text-slate-900 hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-white transition-all flex items-center justify-center shrink-0 shadow-sm"
+                  className="p-2.5 rounded-full bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 transition-all flex items-center justify-center shrink-0 shadow-md"
                 >
                   {isTyping ? <Loader2 className="w-[18px] h-[18px] animate-spin" /> : <Send className="w-[18px] h-[18px]" strokeWidth={2.5} />}
                 </button>

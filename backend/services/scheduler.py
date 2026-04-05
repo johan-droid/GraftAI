@@ -5,7 +5,7 @@ from typing import List, Optional, Dict
 from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from backend.models.tables import EventTable, UserTable
+from backend.models.tables import EventTable, UserTable, NotificationTable
 from backend.utils.db import unwrap_result
 from .langchain_client import vector_store
 from .notifications import notify_event_created, notify_event_updated, notify_event_deleted
@@ -139,8 +139,8 @@ async def get_events_for_range(
         .where(
             and_(
                 EventTable.user_id == user_id,
-                EventTable.start_time >= start,
-                EventTable.end_time <= end,
+                EventTable.start_time < end,
+                EventTable.end_time > start,
             )
         )
         .order_by(EventTable.start_time.asc())
@@ -370,6 +370,20 @@ async def create_event(
                 new_event.id,
             )
 
+        # Persist an in-app notification for the user
+        try:
+            notif = NotificationTable(
+                user_id=new_event.user_id,
+                type="event",
+                title=f"Event scheduled: {new_event.title}",
+                body=f"{new_event.title} at {new_event.start_time.isoformat()}",
+                data={"event_id": new_event.id},
+            )
+            db.add(notif)
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to persist notification: {e}")
+
     return new_event
 
 
@@ -463,6 +477,20 @@ async def update_event(
                 event.id,
             )
 
+        # Persist an in-app notification for the user about update
+        try:
+            notif = NotificationTable(
+                user_id=user_id,
+                type="event",
+                title=f"Event updated: {event.title}",
+                body=f"{event.title} at {event.start_time.isoformat()}",
+                data={"event_id": event.id},
+            )
+            db.add(notif)
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to persist notification (update): {e}")
+
     return event
 
 
@@ -516,5 +544,19 @@ async def delete_event(
                 event.title,
                 event.id,
             )
+
+        # Persist an in-app notification for the user about deletion
+        try:
+            notif = NotificationTable(
+                user_id=user_id,
+                type="event",
+                title=f"Event canceled: {event.title}",
+                body=f"{event.title} was removed from your calendar.",
+                data={"event_id": event.id},
+            )
+            db.add(notif)
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to persist notification (delete): {e}")
 
     return True

@@ -12,6 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getAnalyticsRealtime, type AnalyticsRealtimeResponse } from "@/lib/api";
+import TimelineLineChart from "@/components/TimelineLineChart";
 
 const STAGGER = {
   hidden: { opacity: 0 },
@@ -136,8 +137,8 @@ export default function AnalyticsPage() {
           })}
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
-          <motion.div variants={ITEM} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 items-start">
+          <motion.div variants={ITEM} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-5 overflow-hidden">
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="text-sm font-bold text-white">Meetings timeline</h2>
@@ -147,20 +148,32 @@ export default function AnalyticsPage() {
             </div>
 
             {loading ? (
-              <div className="h-36 flex items-center justify-center">
+              <div className="min-h-[9rem] flex items-center justify-center">
                 <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
               </div>
             ) : (
-              <div className="grid grid-cols-7 md:grid-cols-10 gap-2 items-end h-36">
-                {series.slice(-10).map((point) => (
-                  <div key={`${point.bucket}-${point.meetings}-${point.hours}`} className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] text-slate-500 font-semibold">{point.meetings}</span>
-                    <div className="relative h-20 w-full flex items-end">
-                      <Bar value={point.meetings} max={maxMeetings} />
-                    </div>
-                    <span className="text-[10px] text-slate-600 font-medium">{point.bucket}</span>
-                  </div>
-                ))}
+              <div className="min-h-[9rem]">
+                <TimelineLineChart data={series.slice(-10)} height={140} />
+
+                <div className="mt-3 flex flex-wrap gap-3 items-center">
+                  {((data?.meeting_types) || []).map((t) => {
+                    const colorMap: Record<string, string> = {
+                      meeting: "#7c3aed",
+                      event: "#06b6d4",
+                      birthday: "#f97316",
+                      task: "#10b981",
+                      other: "#94a3b8",
+                    };
+                    const color = colorMap[t.label] ?? colorMap.other;
+                    return (
+                      <div key={t.label} className="flex items-center gap-2 text-xs text-slate-400">
+                        <span className="w-3 h-3 rounded" style={{ background: color }} />
+                        <span className="capitalize">{t.label}</span>
+                        <span className="text-[11px] text-slate-500">{t.pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </motion.div>

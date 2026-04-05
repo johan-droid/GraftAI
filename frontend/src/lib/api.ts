@@ -116,7 +116,7 @@ export interface AnalyticsRealtimeResponse {
     unique_attendees: number;
     cancellations: number;
   };
-  series: { bucket: string; meetings: number; hours: number }[];
+  series: { bucket: string; meetings: number; hours: number; categories?: Record<string, number>; dominant_category?: string | null }[];
   meeting_types: { label: string; count: number; pct: number }[];
   peak_hours: { hour: string; count: number }[];
   recent_events: {
@@ -184,6 +184,36 @@ export interface IntegrationStatusResponse {
 
 export async function getIntegrationStatus() {
   return apiClient.get<IntegrationStatusResponse>("/auth/integrations/status");
+}
+
+// ──────────────────────────────────────
+// Notifications
+// ──────────────────────────────────────
+export interface NotificationItem {
+  id: number;
+  user_id: string;
+  type: string;
+  title: string;
+  body?: string;
+  data?: Record<string, unknown>;
+  is_read: boolean;
+  created_at: string;
+}
+
+export async function getNotifications(limit: number = 25, unread_only: boolean = false) {
+  return apiClient.get<NotificationItem[]>("/notifications/", { params: { limit, unread_only } });
+}
+
+export async function markNotification(id: number, is_read: boolean = true) {
+  return apiClient.patch(`/notifications/${id}`, null, { params: { is_read } });
+}
+
+export async function markAllNotificationsRead() {
+  return apiClient.patch(`/notifications/mark_all_read`);
+}
+
+export async function deleteNotification(id: number) {
+  return apiClient.delete(`/notifications/${id}`);
 }
 
 // ──────────────────────────────────────

@@ -31,6 +31,8 @@ class AnalyticsSeriesPoint(BaseModel):
     bucket: str
     meetings: int
     hours: float
+    categories: Optional[Dict[str, int]] = None
+    dominant_category: Optional[str] = None
 
 
 class AnalyticsDistributionPoint(BaseModel):
@@ -126,12 +128,14 @@ def _build_analytics_payload(
 
     per_day_meetings: Dict[str, int] = {}
     per_day_hours: Dict[str, float] = {}
+    per_day_category: Dict[str, Counter[str]] = {}
 
     cursor = start_date.date()
     while cursor <= end_date.date():
         key = cursor.isoformat()
         per_day_meetings[key] = 0
         per_day_hours[key] = 0.0
+        per_day_category[key] = Counter()
         cursor += timedelta(days=1)
 
     upcoming_events = sorted(
@@ -170,6 +174,7 @@ def _build_analytics_payload(
         if day_key in per_day_meetings:
             per_day_meetings[day_key] += 1
             per_day_hours[day_key] += duration_hours
+            per_day_category[day_key][event_category] += 1
 
     growth = 0
 
@@ -180,11 +185,17 @@ def _build_analytics_payload(
     for day_key in sorted(per_day_meetings.keys()):
         dt = datetime.fromisoformat(day_key).replace(tzinfo=timezone.utc)
         bucket = dt.strftime("%a") if use_short_label else dt.strftime("%m-%d")
+        categories_counter = per_day_category.get(day_key, Counter())
+        dominant = None
+        if categories_counter:
+            dominant = categories_counter.most_common(1)[0][0]
         series.append(
             {
                 "bucket": bucket,
                 "meetings": per_day_meetings[day_key],
                 "hours": round(per_day_hours[day_key], 2),
+                "categories": dict(categories_counter),
+                "dominant_category": dominant,
             }
         )
 

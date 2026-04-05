@@ -217,9 +217,25 @@ def _is_secure_request(request: Optional[Request]) -> bool:
         return False
 
     forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
-    request_scheme = request.url.scheme.lower() if request.url.scheme else ""
+    if forwarded_proto == "https":
+        return True
 
-    return forwarded_proto == "https" or request_scheme == "https"
+    forwarded = request.headers.get("forwarded", "").lower()
+    if "proto=https" in forwarded:
+        return True
+
+    request_scheme = request.url.scheme.lower() if request.url.scheme else ""
+    if request_scheme == "https":
+        return True
+
+    if os.getenv("PROTOCOL", "").strip().lower() == "https":
+        return True
+
+    frontend_url = os.getenv("FRONTEND_URL", "") or os.getenv("NEXT_PUBLIC_APP_URL", "")
+    if isinstance(frontend_url, str) and frontend_url.lower().startswith("https://"):
+        return True
+
+    return False
 
 
 def _attach_jwt_cookies(response: Response, token_data: dict, request: Optional[Request] = None):
@@ -854,6 +870,9 @@ def refresh_token(request: Request, payload: Optional[RefreshTokenRequest] = Non
         refresh_token_value = payload.refresh_token
     else:
         refresh_token_value = request.cookies.get("graftai_refresh_token")
+
+    if not refresh_token_value:
+        refresh_token_value = request.query_params.get("refresh_token")
 
     if not refresh_token_value:
         raise HTTPException(

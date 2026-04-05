@@ -113,6 +113,27 @@ def test_auth_refresh_rotates_token(client):
     assert refresh_response.json().get("message") == "Token refreshed successfully"
 
 
+def test_auth_refresh_accepts_query_param_refresh_token(client):
+    unique_email = f"testuserqref+{uuid.uuid4().hex[:8]}@example.com"
+
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": unique_email, "password": "StrongPassw0rd!", "full_name": "Query Refresh User"},
+    )
+
+    response = client.post(
+        "/api/v1/auth/token",
+        data={"username": unique_email, "password": "StrongPassw0rd!"},
+    )
+    assert response.status_code == 200
+    refresh_token = response.cookies.get("graftai_refresh_token")
+    assert refresh_token
+
+    refresh_response = client.post(f"/api/v1/auth/refresh?refresh_token={refresh_token}")
+    assert refresh_response.status_code == 200
+    assert refresh_response.json().get("message") == "Token refreshed successfully"
+
+
 def test_auth_check_accepts_query_access_token(client):
     unique_email = f"testuserq+{uuid.uuid4().hex[:8]}@example.com"
 

@@ -131,12 +131,20 @@ async def list_google_events(token_data: dict, calendar_id: str = "primary", syn
         creds = get_google_credentials(token_data)
         service = build("calendar", "v3", credentials=creds)
 
-        request = service.events().list(
-            calendarId=calendar_id,
-            syncToken=sync_token,
-            singleEvents=True,
-            orderBy="startTime",
-        )
+        if sync_token:
+            request = service.events().list(
+                calendarId=calendar_id,
+                syncToken=sync_token,
+                showDeleted=True,
+                singleEvents=False,
+            )
+        else:
+            request = service.events().list(
+                calendarId=calendar_id,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+
         return request.execute()
     except HttpError as error:
         if error.resp.status == 410:

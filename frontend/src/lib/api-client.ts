@@ -27,7 +27,7 @@ export function composeEndpoint(path: string, apiVersionPrefix: boolean = true):
 
 interface RequestOptions extends RequestInit {
   timeout?: number;
-  params?: Record<string, string>;
+  params?: Record<string, string | number | boolean | null | undefined>;
   json?: unknown;
 }
 
@@ -57,7 +57,10 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
   );
 
   if (params) {
-    Object.entries(params).forEach(([key, value]) => url.searchParams.append(key, value));
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      url.searchParams.append(key, String(value));
+    });
   }
 
   const fetchUrl = API_BASE_URL ? url.toString() : url.pathname + url.search;

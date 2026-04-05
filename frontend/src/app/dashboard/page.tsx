@@ -202,7 +202,7 @@ export default function Dashboard() {
           ))}
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
           <motion.div variants={ITEM}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-white">Upcoming meetings</h2>
@@ -268,7 +268,7 @@ export default function Dashboard() {
             </div>
           </motion.div>
 
-          <div className="space-y-5">
+          <div className="space-y-5 min-h-[120px]">
             <motion.div variants={ITEM}>
               <h2 className="text-base font-bold text-white mb-3">Event types</h2>
               <div className="space-y-2">

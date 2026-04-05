@@ -19,18 +19,18 @@ const PROVIDERS = [
   {
     id: "google",
     name: "Google Workspace",
-    description: "Sync your Google Calendar and create Google Meet links automatically.",
+    description: "Two-way sync for calendars and automated meeting link creation.",
     color: "from-blue-500/10 to-red-500/10",
     iconColor: "text-red-400",
-    scopes: ["Calendar", "Meet"]
+    scopes: ["Calendar", "Meetings"]
   },
   {
     id: "microsoft",
     name: "Microsoft 365",
-    description: "Connect Outlook Calendar and generate Microsoft Teams meeting links.",
+    description: "Two-way sync for calendars and automated meeting link creation.",
     color: "from-blue-600/10 to-cyan-500/10",
     iconColor: "text-blue-400",
-    scopes: ["Outlook", "Teams"]
+    scopes: ["Calendar", "Meetings"]
   }
 ];
 
@@ -117,18 +117,19 @@ export default function IntegrationsPage() {
   };
 
   return (
-    <motion.div 
-      variants={containerVariants} 
-      initial="hidden" 
-      animate="visible"
-      className="space-y-6"
-    >
+    <div className="p-5 md:p-8 max-w-[900px] mx-auto">
+      <motion.div 
+        variants={containerVariants} 
+        initial="hidden" 
+        animate="visible"
+        className="space-y-6"
+      >
       <header className="mb-8">
         <h1 className="text-2xl md:text-3xl font-black text-white mb-2 bg-gradient-to-r from-white to-slate-500 bg-clip-text">
-          SaaS Integrations
+          Workspace Connectors
         </h1>
-        <p className="text-sm text-slate-400 font-medium opacity-80">
-          Connect your ecosystem to activate autonomous scheduling.
+        <p className="text-sm text-slate-400 font-medium opacity-90">
+          Link calendars, meetings, and tools for automated scheduling.
         </p>
       </header>
 
@@ -139,22 +140,22 @@ export default function IntegrationsPage() {
       )}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 space-y-4">
+        <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] uppercase tracking-widest font-black text-slate-600">Verifying Encrypted Links</p>
+          <p className="text-[10px] uppercase tracking-widest font-black text-slate-600">Verifying encrypted links</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {PROVIDERS.map((provider) => (
             <motion.div 
               key={provider.id} 
               variants={itemVariants}
-              className="group relative bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-2xl p-6 overflow-hidden transition-all hover:border-primary/40"
+              className="group relative bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-2xl p-4 md:p-6 overflow-hidden transition-all hover:border-primary/40"
             >
               <div className={`absolute inset-0 bg-gradient-to-br ${provider.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
               
               <div className="relative z-10 flex flex-col h-full">
-                <div className="flex justify-between items-start mb-6">
+                <div className="flex justify-between items-start mb-4 md:mb-6">
                   <div className={`p-3 bg-slate-900 rounded-xl border border-slate-800 ${provider.iconColor}`}>
                     {provider.id === 'google' && <Video className="w-6 h-6" />}
                     {provider.id === 'microsoft' && <Calendar className="w-6 h-6" />}
@@ -171,22 +172,21 @@ export default function IntegrationsPage() {
                 </div>
 
                 <h3 className="text-lg font-bold text-white mb-2">{provider.name}</h3>
-                <p className="text-xs text-slate-400 leading-relaxed mb-6 flex-grow">
+                <p className="text-xs text-slate-400 leading-relaxed mb-4 md:mb-6 flex-grow">
                   {provider.description}
                 </p>
 
-                <div className="flex flex-wrap gap-2 mb-6">
+                <div className="flex flex-wrap gap-2 mb-4 md:mb-6">
                   {provider.scopes.map(scope => (
                     <span key={scope} className="text-[9px] px-2 py-0.5 rounded-full bg-slate-900/50 text-slate-500 border border-slate-800 font-bold uppercase tracking-tighter">
                       {scope}
                     </span>
                   ))}
                 </div>
-
                 <button 
                   onClick={() => handleConnect(provider.id)}
                   disabled={!availableProviders[provider.id]}
-                  className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                  className={`w-full py-2.5 md:py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${
                     !availableProviders[provider.id]
                       ? "bg-slate-900/70 text-slate-500 border border-slate-800 cursor-not-allowed"
                       : connections[provider.id]
@@ -219,6 +219,7 @@ export default function IntegrationsPage() {
           </p>
         </div>
       </div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }

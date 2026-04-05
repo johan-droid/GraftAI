@@ -2,6 +2,10 @@ import logging
 import os
 from typing import Optional, Any, List
 from backend.services.email import send_email, render_template
+from backend.services.onesignal import send_push_notification
+from backend.services.redis_client import publish
+from backend.utils.db import AsyncSessionLocal
+from backend.models.tables import NotificationTable
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +116,22 @@ async def _send_notification(user_email: str, user_player_ids: list[str], conten
         publish(channel, str(payload))
     except Exception as e:
         logger.warning(f"Realtime publish failed: {e}")
+
+    # Persist an in-app notification record for the user
+    try:
+        # create a DB session and write notification
+        async with AsyncSessionLocal() as session:
+            notif = NotificationTable(
+                user_id=str(event_data.get("user_id")),
+                type=("event" if event_data.get("id") is not None else "system"),
+                title=(event_data.get("title") or "Notification"),
+                body=event_data.get("message") or "",
+                data=event_data,
+            )
+            session.add(notif)
+            await session.commit()
+    except Exception as e:
+        logger.warning(f"Failed to persist in-app notification: {e}")
 
 
 async def notify_event_created(user_email: str, user_player_ids: list[str], event_data: dict):

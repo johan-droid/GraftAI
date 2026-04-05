@@ -20,6 +20,7 @@ import {
   Zap,
   Command,
 } from "lucide-react";
+import NotificationCenter from "@/components/NotificationCenter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthContext } from "@/app/providers/auth-provider";
 
@@ -213,13 +214,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <button
-              aria-label="View notifications"
-              className="p-2 rounded-lg bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8 transition-all relative"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-indigo-400 rounded-full" />
-            </button>
+            <NotificationCenter />
             <button className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8 transition-all text-[12px] font-medium">
               <Command className="w-3.5 h-3.5" />
               <span>Command</span>

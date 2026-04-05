@@ -222,3 +222,23 @@ class WebhookSubscriptionTable(Base):
     
     # Relationship
     user = relationship("UserTable")
+
+
+class NotificationTable(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    type = Column(String(50), default="event", index=True)  # event, reminder, system
+    title = Column(String(255), nullable=False)
+    body = Column(Text)
+    data = Column(JSONB().with_variant(JSON, "sqlite"), default={}, nullable=False)
+    is_read = Column(Boolean, default=False, nullable=False, index=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationship
+    user = relationship("UserTable")

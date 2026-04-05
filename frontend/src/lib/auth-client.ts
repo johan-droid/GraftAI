@@ -67,14 +67,25 @@ export function getToken(): string | null {
   }
 
   // 4. Try URL query params for one-time SSO handoff token bridge
-  if (!token && typeof window !== "undefined") {
+  if (typeof window !== "undefined") {
     try {
       const params = new URLSearchParams(window.location.search);
-      token = params.get("token") || params.get("access_token") || null;
-      if (token && typeof window !== "undefined") {
+      const urlToken = params.get("token") || params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+
+      if (!token && urlToken) {
+        token = urlToken;
+      }
+
+      if (token) {
         // Persist token into storage so future requests don't need URL fallback.
         window.sessionStorage?.setItem("graftai_access_token", token);
         window.localStorage?.setItem("graftai_access_token", token);
+      }
+
+      if (refreshToken) {
+        window.sessionStorage?.setItem("graftai_refresh_token", refreshToken);
+        window.localStorage?.setItem("graftai_refresh_token", refreshToken);
       }
     } catch (e) {
       /* ignore malformed URLs */
@@ -156,6 +167,23 @@ function getRefreshTokenFromClientStorage(): string | null {
   } catch {
     // ignore
   }
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const refreshToken = params.get("refresh_token");
+    if (refreshToken) {
+      try {
+        window.sessionStorage?.setItem("graftai_refresh_token", refreshToken);
+        window.localStorage?.setItem("graftai_refresh_token", refreshToken);
+      } catch {
+        // ignore storage write failure
+      }
+      return refreshToken;
+    }
+  } catch {
+    // ignore malformed URLs
+  }
+
   return null;
 }
 

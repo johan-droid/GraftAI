@@ -24,6 +24,35 @@ def generate_fingerprint(event_data: Dict[str, Any]) -> str:
     raw = f"{start}|{end}|{title}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
+
+def classify_google_category(item: Dict[str, Any]) -> str:
+    summary = str(item.get("summary", "")).strip().lower()
+    description = str(item.get("description", "")).strip().lower()
+    event_type = str(item.get("eventType", "")).strip().lower()
+    attendees = item.get("attendees") or []
+    conference = item.get("conferenceData")
+
+    if "birthday" in summary or "birthday" in description or event_type == "birthday":
+        return "birthday"
+
+    if "anniversary" in summary or "anniversary" in description:
+        return "birthday"
+
+    task_keywords = ["task", "todo", "reminder", "follow-up", "follow up", "action item", "deadline", "due"]
+    if any(keyword in summary for keyword in task_keywords) or any(keyword in description for keyword in task_keywords):
+        return "task"
+
+    if event_type in ["focusTime".lower(), "outOfOffice".lower()]:
+        return "event"
+
+    if conference or item.get("hangoutLink") or (isinstance(attendees, list) and len(attendees) > 0):
+        return "meeting"
+
+    if "party" in summary or "ceremony" in summary or "webinar" in summary or "conference" in summary:
+        return "event"
+
+    return "event"
+
 async def upsert_event(db: AsyncSession, user_id: str, source: str, event_data: Dict[str, Any]) -> EventTable:
     """
     Smart-upsert that handles both provider-specific updates and cross-provider merging.
@@ -117,16 +146,21 @@ async def sync_google_events(db: AsyncSession, token_record: UserTokenTable):
                 continue
                 
             # Map Google item to our schema
+            start_value = item["start"].get("dateTime", item["start"].get("date"))
+            end_value = item["end"].get("dateTime", item["end"].get("date"))
             event_payload = {
                 "external_id": item.get("id"),
-                "title": item.get("summary", "Untitled Meeting"),
+                "title": item.get("summary", "Untitled Event"),
                 "description": item.get("description"),
-                "start_time": datetime.fromisoformat(item["start"].get("dateTime", item["start"].get("date")).replace("Z", "+00:00")),
-                "end_time": datetime.fromisoformat(item["end"].get("dateTime", item["end"].get("date")).replace("Z", "+00:00")),
-                "is_meeting": True,
-                "meeting_platform": "google_meet",
+                "start_time": datetime.fromisoformat(str(start_value).replace("Z", "+00:00")),
+                "end_time": datetime.fromisoformat(str(end_value).replace("Z", "+00:00")),
+                "category": classify_google_category(item),
+                "color": None,
+                "is_meeting": bool(item.get("hangoutLink") or item.get("conferenceData") or (item.get("attendees") or [])),
+                "meeting_platform": item.get("hangoutLink") or item.get("conferenceData") and "google_meet" or None,
                 "meeting_link": item.get("hangoutLink"),
                 "attendees": item.get("attendees", []),
+                "source": "google",
             }
             
             await upsert_event(db, user_id, "google", event_payload)

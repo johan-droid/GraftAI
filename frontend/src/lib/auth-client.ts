@@ -139,7 +139,22 @@ export function getCsrfHeaders(): Record<string, string> {
   };
 }
 
-export const getSessionSafe = async () => {
+async function tryRefreshSession(): Promise<boolean> {
+  try {
+    const res = await fetch(authEndpoint("/auth/refresh"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export const getSessionSafe = async (allowRefreshRetry = true) => {
   try {
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -161,8 +176,14 @@ export const getSessionSafe = async () => {
 
     if (!res.ok) {
       if (res.status === 401) {
-         console.warn("[AUTH_CLIENT]: 401 Unauthorized from backend. Clearing local session state.");
-         invalidateSessionCache();
+        if (allowRefreshRetry) {
+          const refreshed = await tryRefreshSession();
+          if (refreshed) {
+            return await getSessionSafe(false);
+          }
+        }
+        console.warn("[AUTH_CLIENT]: 401 Unauthorized from backend. Clearing local session state.");
+        invalidateSessionCache();
       }
       const err = await parseError(res);
       return { data: null, error: err };

@@ -217,54 +217,92 @@ function getCsrfHeaders() {
         "x-xsrf-token": token,
     };
 }
-var getSessionSafe = function () { return __awaiter(void 0, void 0, void 0, function () {
-    var headers, token, res, err, data, err_1;
-    return __generator(this, function (_a) {
-        switch (_a.label) {
-            case 0:
-                _a.trys.push([0, 5, , 6]);
-                headers = {
-                    Accept: "application/json",
-                };
-                token = getToken();
-                if (token) {
-                    headers.Authorization = "Bearer ".concat(token);
-                    headers["X-Authorization"] = "Bearer ".concat(token);
-                }
-                return [4 /*yield*/, fetch(authEndpoint("/auth/check"), {
-                        method: "GET",
-                        credentials: "include",
-                        headers: headers,
-                    })];
-            case 1:
-                res = _a.sent();
-                if (!!res.ok) return [3 /*break*/, 3];
-                if (res.status === 401) {
-                    console.warn("[AUTH_CLIENT]: 401 Unauthorized from backend. Clearing local session state.");
-                    invalidateSessionCache();
-                }
-                return [4 /*yield*/, parseError(res)];
-            case 2:
-                err = _a.sent();
-                return [2 /*return*/, { data: null, error: err }];
-            case 3: return [4 /*yield*/, res.json()];
-            case 4:
-                data = _a.sent();
-                if (!(data === null || data === void 0 ? void 0 : data.authenticated)) {
-                    return [2 /*return*/, { data: null, error: { message: "Session not authenticated" } }];
-                }
-                return [2 /*return*/, { data: data, error: null }];
-            case 5:
-                err_1 = _a.sent();
-                console.error("[AUTH_CLIENT]: Unexpected session fetch error:", err_1);
-                return [2 /*return*/, {
-                        data: null,
-                        error: { message: err_1 instanceof Error ? err_1.message : "Failed to fetch session" },
-                    }];
-            case 6: return [2 /*return*/];
-        }
+function tryRefreshSession() {
+    return __awaiter(this, void 0, void 0, function () {
+        var res;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    _a.trys.push([0, 2, , 3]);
+                    return [4 /*yield*/, fetch(authEndpoint("/auth/refresh"), {
+                            method: "POST",
+                            credentials: "include",
+                            headers: {
+                                Accept: "application/json",
+                            },
+                        })];
+                case 1:
+                    res = _a.sent();
+                    return [2 /*return*/, res.ok];
+                case 2:
+                    _a.sent();
+                    return [2 /*return*/, false];
+                case 3: return [2 /*return*/];
+            }
+        });
     });
-}); };
+}
+var getSessionSafe = function (allowRefreshRetry) {
+    if (allowRefreshRetry === void 0) { allowRefreshRetry = true; }
+    return __awaiter(void 0, void 0, void 0, function () {
+        var headers, token, res, refreshed, err, data, err_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    _a.trys.push([0, 7, , 8]);
+                    headers = {
+                        Accept: "application/json",
+                    };
+                    token = getToken();
+                    if (token) {
+                        headers.Authorization = "Bearer ".concat(token);
+                        headers["X-Authorization"] = "Bearer ".concat(token);
+                    }
+                    return [4 /*yield*/, fetch(authEndpoint("/auth/check"), {
+                            method: "GET",
+                            credentials: "include",
+                            headers: headers,
+                        })];
+                case 1:
+                    res = _a.sent();
+                    if (!!res.ok) return [3 /*break*/, 5];
+                    if (!(res.status === 401)) return [3 /*break*/, 3];
+                    if (!allowRefreshRetry) return [3 /*break*/, 3];
+                    return [4 /*yield*/, tryRefreshSession()];
+                case 2:
+                    refreshed = _a.sent();
+                    if (refreshed) {
+                        return [2 /*return*/, getSessionSafe(false)];
+                    }
+                    _a.label = 3;
+                case 3:
+                    if (res.status === 401) {
+                        console.warn("[AUTH_CLIENT]: 401 Unauthorized from backend. Clearing local session state.");
+                        invalidateSessionCache();
+                    }
+                    return [4 /*yield*/, parseError(res)];
+                case 4:
+                    err = _a.sent();
+                    return [2 /*return*/, { data: null, error: err }];
+                case 5: return [4 /*yield*/, res.json()];
+                case 6:
+                    data = _a.sent();
+                    if (!(data === null || data === void 0 ? void 0 : data.authenticated)) {
+                        return [2 /*return*/, { data: null, error: { message: "Session not authenticated" } }];
+                    }
+                    return [2 /*return*/, { data: data, error: null }];
+                case 7:
+                    err_1 = _a.sent();
+                    console.error("[AUTH_CLIENT]: Unexpected session fetch error:", err_1);
+                    return [2 /*return*/, {
+                            data: null,
+                            error: { message: err_1 instanceof Error ? err_1.message : "Failed to fetch session" },
+                        }];
+                case 8: return [2 /*return*/];
+            }
+        });
+    });
+};
 exports.getSessionSafe = getSessionSafe;
 var signOut = function () { return __awaiter(void 0, void 0, void 0, function () {
     var res, error, err_2;

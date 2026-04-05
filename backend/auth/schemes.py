@@ -13,6 +13,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.utils.db import get_db
+from backend.services.redis_client import get_redis as get_redis_service
 from backend.utils.redis_singleton import safe_get, safe_set
 
 # Initialize logger
@@ -227,12 +228,21 @@ async def get_current_user(
         )
 
     session_key = _session_cache_key(token)
-    if safe_get(session_key) is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session has expired or was revoked",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    try:
+        redis_client = get_redis_service()
+        if redis_client.get(session_key) is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session has expired or was revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except Exception:
+        if safe_get(session_key) is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session has expired or was revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     return payload
 

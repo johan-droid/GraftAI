@@ -151,13 +151,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("🟢 [STARTUP] ALL SYSTEMS GO.")
     yield
-    # Shutdown
-    _rate_buckets.clear()
-    logger.info("🛑 [SHUTDOWN] Cleaning up...")
-
-    yield
     # Shutdown: clean up rate-limit buckets to avoid memory leak on reload
     _rate_buckets.clear()
+    logger.info("🛑 [SHUTDOWN] Cleaning up...")
 
 
 # ── App Definition ──────────────────────────────────────────────────────────

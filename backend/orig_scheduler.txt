@@ -336,24 +336,15 @@ async def create_event(
     conflict_result = await db.execute(conflict_stmt)
     existing_conflict = conflict_result.scalars().first()
     if existing_conflict:
-        # Trigger proactive conflict alert email when we have a valid user and email.
+        # Trigger proactive conflict alert email
         from backend.services.bg_tasks import enqueue_conflict_alert
         user = await db.get(UserTable, new_event.user_id)
-        if user and isinstance(getattr(user, "email", None), str):
-            conflict_title = getattr(existing_conflict, "title", None)
-            conflict_start = getattr(existing_conflict, "start_time", None)
-            if conflict_title and conflict_start is not None:
-                await enqueue_conflict_alert(
-                    user.email,
-                    f"{new_event.title} ({new_event.start_time.strftime('%I:%M %p')})",
-                    f"{conflict_title} ({conflict_start.strftime('%I:%M %p')})"
-                )
-            else:
-                await enqueue_conflict_alert(
-                    user.email,
-                    f"{new_event.title} ({new_event.start_time.strftime('%I:%M %p')})",
-                    "Existing conflicting event detected"
-                )
+        if user:
+            await enqueue_conflict_alert(
+                user.email, 
+                f"{new_event.title} ({new_event.start_time.strftime('%I:%M %p')})",
+                f"{existing_conflict.title} ({existing_conflict.start_time.strftime('%I:%M %p')})"
+            )
         raise ValueError("Event overlaps with existing schedule. Please choose another time.")
 
     # Generate meeting links if applicable
@@ -383,13 +374,15 @@ async def create_event(
             new_event.source = "google"
 
     db.add(new_event)
-    await db.flush()
+    await db.commit()
+    await db.refresh(new_event)
 
     # 4. Push to external if matched
     if new_event.source and new_event.source != "local":
         ext_id = await _push_to_external(db, new_event, action="create")
         if ext_id:
             new_event.external_id = ext_id
+            await db.commit()
 
     # Trigger real-time AI sync (Background)
     if background_tasks:
@@ -417,17 +410,19 @@ async def create_event(
             )
 
         # Persist an in-app notification for the user
-        notif = NotificationTable(
-            user_id=new_event.user_id,
-            type="event",
-            title=f"Event scheduled: {new_event.title}",
-            body=f"{new_event.title} at {new_event.start_time.isoformat()}",
-            data={"event_id": new_event.id},
-        )
-        db.add(notif)
-
-    await db.commit()
-    await db.refresh(new_event)
+        try:
+            notif = NotificationTable(
+                user_id=new_event.user_id,
+                type="event",
+                title=f"Event scheduled: {new_event.title}",
+                body=f"{new_event.title} at {new_event.start_time.isoformat()}",
+                data={"event_id": new_event.id},
+            )
+            db.add(notif)
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to persist notification: {e}")
+            await db.rollback() # Ensure session is clean for subsequent usage tracking
 
     return new_event
 

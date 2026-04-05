@@ -81,35 +81,35 @@ def _delete_oauth_state(state: str):
     safe_delete(f"oauth:state:{state}")
 
 
+PROVIDERS = {
+    "google": {
+        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+        "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_url": "https://oauth2.googleapis.com/token",
+        "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
+        # Unified broad scope for full features (Calendar + Meet)
+        "scope": "openid profile email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly",
+        "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
+        "revoke_url": "https://oauth2.googleapis.com/revoke",
+        "access_type": "offline",
+    },
+    "microsoft": {
+        "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
+        "client_secret": os.getenv("MICROSOFT_CLIENT_SECRET"),
+        "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+        "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        "userinfo_url": "https://graph.microsoft.com/v1.0/me",
+        # Unified broad scope for MS (Calendar + Teams)
+        "scope": "openid profile email offline_access User.Read Calendars.ReadWrite OnlineMeetings.ReadWrite",
+        "redirect_uri": os.getenv("MICROSOFT_REDIRECT_URI"),
+    },
+}
+
+
 def get_provider_config(provider: str) -> dict | None:
     """Get provider configuration dynamically, allowing for late env loading."""
-    provider = provider.lower()
-    
-    if provider == "google":
-        return {
-            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-            "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
-            "token_url": "https://oauth2.googleapis.com/token",
-            "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
-            # Unified broad scope for full features (Calendar + Meet)
-            "scope": "openid profile email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly",
-            "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
-            "revoke_url": "https://oauth2.googleapis.com/revoke",
-            "access_type": "offline",
-        }
-    elif provider == "microsoft":
-        return {
-            "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
-            "client_secret": os.getenv("MICROSOFT_CLIENT_SECRET"),
-            "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-            "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-            "userinfo_url": "https://graph.microsoft.com/v1.0/me",
-            # Unified broad scope for MS (Calendar + Teams)
-            "scope": "openid profile email offline_access User.Read Calendars.ReadWrite OnlineMeetings.ReadWrite",
-            "redirect_uri": os.getenv("MICROSOFT_REDIRECT_URI"),
-        }
-    return None
+    return PROVIDERS.get(provider.lower())
 
 
 # During OAuth2 login the provider should return to the frontend callback endpoint.

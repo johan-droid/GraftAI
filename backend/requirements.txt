@@ -7,7 +7,6 @@ pytz
 
 # Database
 asyncpg
-psycopg2-binary
 sqlalchemy[asyncio]
 
 # Auth
@@ -20,7 +19,7 @@ httpx
 python-multipart>=0.0.18
 argon2-cffi>=23.1.0
 bcrypt>=4.0.0
-msal>=1.0.0
+# msal>=1.0.0 (removed as unused)
 
 # Cache
 redis
@@ -32,8 +31,8 @@ langchain>=0.2.0,<1.3
 langchain-openai>=0.1.0,<2
 langchain-community>=0.2.0,<1
 openai>=1.0.0,<3
-pinecone>=5.0.0
-langchain-pinecone>=0.2.13
+# pinecone>=5.0.0 (removed as unused)
+# langchain-pinecone>=0.2.13 (removed as unused)
 
 # Google API integration (required for google_calendar sync)
 google-auth>=2.20.0
@@ -59,6 +58,6 @@ boto3>=1.34.0
 jinja2>=3.1.0
 
 # Payment
-stripe>=11.0.0
-razorpay>=1.5.0
+# stripe>=11.0.0 (removed as unused)
+# razorpay>=1.5.0 (removed as unused)
 aiosqlite>=0.20.0

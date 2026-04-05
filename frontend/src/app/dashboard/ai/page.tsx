@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Send, Sparkles, User as UserIcon, Loader2, Zap, Clock, Calendar, Globe } from "lucide-react";
+import { Bot, Send, Sparkles, User as UserIcon, Loader2, Zap, Clock, Calendar, Globe, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sendAiChat } from "@/lib/api";
 

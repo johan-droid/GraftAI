@@ -1,6 +1,7 @@
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
+from fastapi import BackgroundTasks
 
 from backend.services import scheduler
 
@@ -56,10 +57,6 @@ async def test_create_event_success_commits_and_notify(monkeypatch):
     conflict_result.scalars = lambda: DummyScalars(None)
     db_mock.execute = AsyncMock(return_value=conflict_result)
 
-    # stub sync and notify
-    monkeypatch.setattr(scheduler, 'sync_event_to_ai', AsyncMock())
-    monkeypatch.setattr(scheduler, 'notify_event_created', AsyncMock())
-
     event_data = {
         "user_id": 2,
         "title": "Test No Conflict",
@@ -77,9 +74,10 @@ async def test_create_event_success_commits_and_notify(monkeypatch):
     user_obj = AsyncMock(email="user@example.com")
     db_mock.get.return_value = user_obj
 
-    # execute
-    event = await scheduler.create_event(db_mock, event_data)
+    background_tasks = BackgroundTasks()
+    event = await scheduler.create_event(db_mock, event_data, background_tasks=background_tasks)
 
     db_mock.commit.assert_called_once()
-    scheduler.sync_event_to_ai.assert_awaited_once()
-    scheduler.notify_event_created.assert_awaited_once()
+    assert len(background_tasks.tasks) == 2
+    assert any(getattr(task, "func", None) == scheduler.sync_event_to_ai for task in background_tasks.tasks)
+    assert any(getattr(task, "func", None) == scheduler._safe_notify for task in background_tasks.tasks)

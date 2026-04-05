@@ -1,15 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from backend.api.deps import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.services import scheduler
 from backend.utils.sanitization import sanitize_recursive
 import logging
 
-# Initialize logger
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
@@ -18,7 +17,7 @@ router = APIRouter(prefix="/calendar", tags=["calendar"])
 class EventBase(BaseModel):
     title: str
     description: Optional[str] = None
-    category: str = "meeting"  # meeting, event, birthday, task
+    category: str = "meeting"
     color: Optional[str] = None
     start_time: datetime
     end_time: datetime
@@ -45,15 +44,12 @@ class EventUpdate(BaseModel):
 class EventResponse(EventBase):
     id: int
     user_id: str
-    source: Optional[str] = "local"
-    external_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True) #  <- New Pydantic v2 syntax ConfigDict
+    class Config:
+        from_attributes = True
 
-
-from backend.utils.cache import get_calendar_cache_key, get_cache, set_cache, invalidate_user_calendar_cache
 
 @router.get("/events", response_model=List[EventResponse])
 async def get_events(
@@ -62,60 +58,43 @@ async def get_events(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Fetch events for a user within a time range (Redis Cache First)."""
-    cache_key = get_calendar_cache_key(user_id, start, end)
-    cached_data = get_cache(cache_key)
-
-    if cached_data is not None:
-        logger.info(f"⚡ Redis Cache HIT for user {user_id} (Range: {start}_{end})")
-        return cached_data
-
-    logger.info(f"🗄️ Redis Cache MISS for user {user_id}. Fetching from PostgreSQL...")
-    events = await scheduler.get_events_for_range(db, user_id, start, end)
-
-    # Store in Redis (TTL: 5 minutes)
-    event_dicts = [EventResponse.model_validate(e).model_dump(mode='json') for e in events]
-    set_cache(cache_key, event_dicts, ttl_seconds=300)
-
-    return events
+    return await scheduler.get_events_for_range(db, user_id, start, end)
 
 
 @router.post("/events", response_model=EventResponse)
 async def create_event(
     event_in: EventCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Create a new event and sync to AI."""
-    # Sanitize incoming data to prevent XSS in description/metadata
     event_dict = sanitize_recursive(event_in.model_dump())
     event_dict["user_id"] = user_id
-
     try:
-        new_event = await scheduler.create_event(db, event_dict)
-        invalidate_user_calendar_cache(user_id)
-        return new_event
-    except Exception as e:
-        logger.error(f"Event creation failed: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not create event")
+        return await scheduler.create_event(db, event_dict, background_tasks)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        logger.error(f"Event creation failed: {exc}")
+        raise HTTPException(status_code=500, detail="Could not create event")
 
 
 @router.patch("/events/{event_id}", response_model=EventResponse)
 async def update_event(
     event_id: int,
     event_in: EventUpdate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Update event and trigger real-time AI context update."""
-    # Sanitize incoming update data
     update_data = sanitize_recursive(event_in.model_dump(exclude_unset=True))
-    event = await scheduler.update_event(db, event_id, user_id, update_data)
+    try:
+        event = await scheduler.update_event(db, event_id, user_id, update_data, background_tasks)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-
-    invalidate_user_calendar_cache(user_id)
     return event
 
 
@@ -127,7 +106,6 @@ async def get_available_slots(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Detect available time slots for scheduling (Smart Pipeline)."""
     return await scheduler.find_available_slots(
         db, user_id, date, duration, target_timezone=target_timezone
     )
@@ -136,57 +114,11 @@ async def get_available_slots(
 @router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_event(
     event_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Delete event and purge from AI memory."""
-    success = await scheduler.delete_event(db, event_id, user_id)
+    success = await scheduler.delete_event(db, event_id, user_id, background_tasks)
     if not success:
         raise HTTPException(status_code=404, detail="Event not found")
-    
-    invalidate_user_calendar_cache(user_id)
     return None
-
-@router.post("/sync")
-async def trigger_manual_sync(
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Trigger a manual synchronization of all external calendars.
-    Offloaded to background worker for performance.
-    Falls back to inline sync when background queue is unavailable.
-    """
-    from backend.services.sync_engine import sync_user_calendar
-
-    try:
-        from backend.services.bg_tasks import enqueue_calendar_sync
-        await enqueue_calendar_sync(user_id)
-        return {"status": "accepted", "message": "Synchronization task enqueued"}
-    except Exception as enqueue_error:
-        logger.warning(
-            f"Background sync queue unavailable for user {user_id}: {enqueue_error}. Falling back to inline sync."
-        )
-
-        from backend.utils.db import AsyncSessionLocal
-        if AsyncSessionLocal is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Background queue unavailable and database session factory is not configured.",
-            )
-
-        try:
-            async with AsyncSessionLocal() as db:
-                await sync_user_calendar(db, user_id)
-            return {
-                "status": "ok",
-                "message": "Background queue unavailable; inline sync performed successfully.",
-            }
-        except Exception as inline_error:
-            logger.error(
-                f"Inline fallback sync failed for user {user_id}: {inline_error}",
-                exc_info=True,
-            )
-            raise HTTPException(
-                status_code=500,
-                detail=f"Could not trigger synchronization: {enqueue_error}. Inline fallback also failed: {inline_error}",
-            )

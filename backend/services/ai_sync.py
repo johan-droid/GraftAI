@@ -3,7 +3,6 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.tables import EventTable
 from backend.services.langchain_client import vector_store
-from langchain_core.documents import Document
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +39,16 @@ async def sync_event_to_vector_store(event: EventTable):
         }
 
         llm_ready_content = f"SCHEDULE_ENTRY: {event.title} ({event.category})\n{json.dumps(smart_context_block, indent=2)}"
+
+        try:
+            from langchain_core.documents import Document
+        except Exception as exc:
+            logger.warning(f"AI sync skipped because langchain_core is unavailable: {exc}")
+            return False
+
+        if not hasattr(vector_store, "add_documents"):
+            logger.warning("AI sync skipped because vector_store does not support add_documents")
+            return False
 
         doc = Document(
             page_content=llm_ready_content,

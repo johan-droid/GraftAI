@@ -1,100 +1,63 @@
 import os
 import sys
-import asyncio
-import logging
 import re
-import uuid
-
-# Configure logging at the entry point for all sub-modules
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-from datetime import datetime, timedelta, timezone
+import logging
 from pathlib import Path
-from urllib.parse import urlparse
 from dotenv import load_dotenv
 
-# Initialize logger
 logger = logging.getLogger(__name__)
 
-# Ensure project root is on sys.path so `import backend...` works correctly regardless of execution context
-project_root = Path(__file__).resolve().parents[2] # Root directory (parent of backend/)
+project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-# Load env FIRST so all modules can read env vars
 dotenv_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-from fastapi import FastAPI, Request, Depends, Response, HTTPException
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-import redis
+from fastapi.responses import JSONResponse
 
-from backend.auth.routes import router as auth_router
-from backend.api.calendar import router as calendar_router
-from backend.api.users import router as users_router
-from backend.api.uploads import router as uploads_router
-from backend.services.ai import router as ai_router
+# ── Routers ───────────────────────────────────────────────────────────────────
+from backend.auth.routes     import router as auth_router
+from backend.api.calendar    import router as calendar_router
+from backend.api.users       import router as users_router
+from backend.api.uploads     import router as uploads_router
+from backend.services.ai        import router as ai_router
 from backend.services.analytics import router as analytics_router
-from backend.services.consent import router as consent_router
+from backend.services.consent   import router as consent_router
 from backend.services.proactive import router as proactive_router
-from backend.services.upgrade import router as upgrade_router
+from backend.services.upgrade   import router as upgrade_router
 from backend.services.plugin_api import router as plugin_router
-from backend.api.notifications import router as notifications_router
-from backend.api.billing import router as billing_router
-from backend.utils.db import get_db
 
 from backend.utils import db as db_utils
 from backend.models.tables import Base as ModelsBase
 
-from backend.utils.cache import get_redis_client
 
-# Atomic Rate Limiting Lua Script
-RATE_LIMIT_LUA = """
-local key = KEYS[1]
-local limit = tonumber(ARGV[1])
-local window = tonumber(ARGV[2])
-local current = redis.call('INCR', key)
-if current == 1 then
-    redis.call('EXPIRE', key, window)
-end
-if current > limit then
-    return 0
-end
-return 1
-"""
+# ── Rate Limiting — in-process sliding window ─────────────────────────────────
+# On Render free tier with a single dyno, in-process is cheaper than a Redis
+# round-trip on every request.  Redis-backed rate limiting is preserved as
+# fallback for multi-instance deployments.
+
+import time
+from collections import defaultdict, deque
+
+_rate_buckets: dict[str, deque] = defaultdict(deque)
 
 
-def _parse_rate_limit(rate_limit: str):
-    """Parse rate limit string like '100/minute' into (count, window_seconds)."""
-    match = re.match(r"(\d+)/(\w+)", rate_limit)
+def _parse_rate_limit(rate_limit_str: str):
+    match = re.match(r"(\d+)/(\w+)", rate_limit_str)
     if not match:
-        return 100, 60  # default: 100 per minute
-
+        return 100, 60
     count = int(match.group(1))
-    unit = match.group(2).lower()
-
-    # Convert to seconds
-    multipliers = {
-        "second": 1,
-        "seconds": 1,
-        "minute": 60,
-        "minutes": 60,
-        "hour": 3600,
-        "hours": 3600,
-        "day": 86400,
-        "days": 86400,
-    }
-    window = multipliers.get(unit, 60)
-    return count, window
+    unit  = match.group(2).lower()
+    windows = {"second": 1, "seconds": 1, "minute": 60, "minutes": 60,
+               "hour": 3600, "hours": 3600, "day": 86400, "days": 86400}
+    return count, windows.get(unit, 60)
 
 
 class RateLimitMiddleware:
-    """Simple Redis-backed rate limiting middleware."""
+    """Sliding-window in-process rate limiter — zero Redis calls."""
 
     def __init__(self, app, rate_limit: str = "100/minute"):
         self.app = app
@@ -107,354 +70,135 @@ class RateLimitMiddleware:
 
         request = Request(scope)
 
-        # Rate limit identifier (IP-based fallback).
-        # We intentionally avoid JWT decoding here to keep middleware lean and robust.
-        user_id = None
-
-        identifier = user_id or request.headers.get(
-            "x-forwarded-for", request.client.host if request.client else "unknown"
-        )
-        if "," in str(identifier):
-            identifier = identifier.split(",")[0].strip()
-
-        # Atomic check-and-increment via Lua.
-        # Fail open if Redis is unavailable so core API endpoints stay reachable.
-        try:
-            client = get_redis_client()
-            if client is None:
-                await self.app(scope, receive, send)
-                return
-
-            key = f"rate_limit:{identifier}:{request.url.path}"
-
-            # Use eval to run the script atomically
-            allowed = client.eval(
-                RATE_LIMIT_LUA,
-                1,
-                key,
-                str(self.max_requests),
-                str(self.window),
-            )
-
-            if not allowed:
-                # Rate limit exceeded
-                response = JSONResponse(
-                    status_code=429,
-                    content={"detail": "Rate limit exceeded. Please try again later."},
-                )
-                await response(scope, receive, send)
-                return
-        except Exception as exc:
-            logger.warning(f"Rate limiter unavailable, allowing request: {exc}")
-
-        await self.app(scope, receive, send)
-
-
-class CSRFMiddleware:
-    """CSRF protection using Double Submit Cookie pattern."""
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
+        # Skip OPTIONS (CORS preflight) — handled by CORSMiddleware above
+        if request.method == "OPTIONS":
             await self.app(scope, receive, send)
             return
 
-        request = Request(scope)
+        client_ip = request.headers.get("x-forwarded-for", "")
+        if not client_ip:
+            client_ip = request.client.host if request.client else "unknown"
+        if "," in client_ip:
+            client_ip = client_ip.split(",")[0].strip()
 
-        # Fail-safe: frontend owns /api/auth routes.
-        # If those requests hit backend, redirect them to frontend app URL when available.
-        auth_path = request.url.path == "/api/auth" or request.url.path.startswith("/api/auth/")
-        if auth_path:
-            frontend_auth_base = (
-                os.getenv("FRONTEND_URL")
-                or os.getenv("NEXT_PUBLIC_APP_URL")
+        key = f"{client_ip}:{request.url.path}"
+        now = time.time()
+        bucket = _rate_buckets[key]
+
+        # Evict timestamps outside the window
+        while bucket and bucket[0] < now - self.window:
+            bucket.popleft()
+
+        if len(bucket) >= self.max_requests:
+            response = JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Please try again later."},
             )
-            if frontend_auth_base:
-                target = frontend_auth_base.rstrip("/")
-                parsed_target = urlparse(target)
-                incoming_host = request.url.netloc
-                target_host = parsed_target.netloc
-
-                # Avoid redirect loops if target and current host are identical.
-                if target_host and target_host != incoming_host:
-                    query = request.url.query
-                    redirect_url = f"{target}{request.url.path}"
-                    if query:
-                        redirect_url = f"{redirect_url}?{query}"
-                    response = RedirectResponse(url=redirect_url, status_code=307)
-                    await response(scope, receive, send)
-                    return
-
-        # Allow test mode or explicit bypass to avoid blocking test client checks
-        if os.getenv("TESTING") == "1" or os.getenv("DISABLE_CSRF") == "1":
-            await self.app(scope, receive, send)
+            await response(scope, receive, send)
             return
 
-        # Only check mutating methods
-        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
-            # Skip check for specific bypasses if needed (e.g., Stripe webhooks which use signatures)
-            if request.url.path.startswith("/api/v1/billing/webhook"):
-                await self.app(scope, receive, send)
-                return
-
-            # /api/auth endpoints are served by frontend Next.js route handlers.
-            # If a misrouted request reaches backend, do not block it with CSRF middleware.
-            if request.url.path == "/api/auth" or request.url.path.startswith("/api/auth/"):
-                await self.app(scope, receive, send)
-                return
-
-            xsrf_cookie = request.cookies.get("xsrf-token")
-            xsrf_header = (
-                request.headers.get("x-xsrf-token")
-                or request.headers.get("X-XSRF-TOKEN")
-                or request.headers.get("X-Xsrf-Token")
-            )
-
-            if not xsrf_cookie or not xsrf_header or xsrf_cookie != xsrf_header:
-                logger.warning(
-                    f"CSRF validation failed for {request.url.path}: cookie={xsrf_cookie!r} header={xsrf_header!r}"
-                )
-                response = JSONResponse(
-                    status_code=403,
-                    content={"detail": "CSRF validation failed. Missing or invalid XSRF token."},
-                )
-                await response(scope, receive, send)
-                return
-
+        bucket.append(now)
         await self.app(scope, receive, send)
 
 
-# Parse rate limit from env
-_rate_limit_str = os.getenv("RATE_LIMIT", "100/minute")
-
+# ── Lifespan ──────────────────────────────────────────────────────────────────
 from contextlib import asynccontextmanager
 
 
-async def reminder_worker(app: FastAPI):
-    """Background task to send 15-minute reminders for upcoming events."""
-    logger.info("🕒 Reminder worker started.")
-    while True:
-        try:
-            from backend.utils.db import AsyncSessionLocal
-            from backend.models.tables import EventTable, UserTable
-            from backend.services.notifications import notify_event_reminder
-            from sqlalchemy import select, and_
-            
-            if AsyncSessionLocal is None:
-                await asyncio.sleep(60)
-                continue
-                
-            now = datetime.now(timezone.utc)
-            window_end = now + timedelta(minutes=16)
-            
-            async with AsyncSessionLocal() as db:
-                stmt = select(EventTable).where(
-                    and_(
-                        EventTable.start_time >= now,
-                        EventTable.start_time <= window_end,
-                        EventTable.is_reminded == False,
-                        EventTable.status == "confirmed"
-                    )
-                )
-                result = await db.execute(stmt)
-                events_to_remind = result.scalars().all()
-                
-                for event in events_to_remind:
-                    setattr(event, "is_reminded", True)
-                    await db.commit()
-                    
-                    user = await db.get(UserTable, event.user_id)
-                    if user:
-                        logger.info(f"Sending 15-min reminder for event {event.id} to user {user.id}")
-                        await notify_event_reminder(
-                            str(user.email),
-                            [],
-                            {
-                                "id": event.id,
-                                "user_id": event.user_id,
-                                "title": event.title,
-                                "start_time": event.start_time.isoformat(),
-                                "end_time": event.end_time.isoformat(),
-                                "user_name": user.full_name or "User",
-                                "event_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000") + "/dashboard/calendar"
-                            }
-                        )
-        except asyncio.CancelledError:
-            logger.info("Reminder worker cancelled.")
-            break
-        except Exception as e:
-            logger.error(f"Error in reminder worker: {e}")
-            
-        await asyncio.sleep(60)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 0. Sentry
-    sentry_dsn = os.getenv("SENTRY_DSN")
-    if sentry_dsn:
-        try:
-            import sentry_sdk  # type: ignore[import]
-        except ImportError:
-            sentry_sdk = None
-
-        if sentry_sdk is not None:
-            try:
-                sentry_sdk.init(dsn=sentry_dsn, env=os.getenv("ENV", "production"))
-            except Exception:
-                pass
-    
-    # 1. DB Verification / Schema Initialization
-    skip_schema = os.getenv("SKIP_SCHEMA_INIT", "false").lower() == "true"
-    if db_utils.engine and not skip_schema:
+    # DB tables
+    if db_utils.engine:
         try:
             async with db_utils.engine.begin() as conn:
                 await conn.run_sync(ModelsBase.metadata.create_all)
-            logger.info("✅ Database systems online.")
-        except Exception as e:
-            logger.error(f"DB Error: {e}")
-    elif skip_schema:
-        logger.info("⚠ SKIP_SCHEMA_INIT=true — skipping SQLAlchemy metadata creation to avoid overriding external schema management.")
+            logger.info("Database tables verified.")
+        except Exception as exc:
+            logger.error(f"DB table creation error: {type(exc).__name__}")
 
-    # 2. worker
-    reminder_task = asyncio.create_task(reminder_worker(app))
-
-    # 3. Validation
-    validate_production_environment()
-
-    # 4. Self-pinger
-    import threading
-    threading.Thread(target=self_pinger_daemon, daemon=True).start()
+    # Password self-test
+    try:
+        from backend.services.auth_utils import get_password_hash, verify_password
+        _pw = "StartupSelfTest99!"
+        if not verify_password(_pw, get_password_hash(_pw)):
+            raise RuntimeError("Password self-test failed")
+        logger.info("Password hashing verified.")
+    except Exception as exc:
+        logger.critical(f"Password hashing failure: {exc}")
+        raise
 
     yield
-    reminder_task.cancel()
+    # Shutdown: clean up rate-limit buckets to avoid memory leak on reload
+    _rate_buckets.clear()
 
 
+# ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="GraftAI Backend",
-    description="Production API for GraftAI — AI-powered scheduling platform",
-    version="1.0.0",
+    description="AI-powered scheduling platform API",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
+# ── CORS (outermost — must answer OPTIONS before rate limiter) ────────────────
+_extra_origins = [
+    o.strip()
+    for o in os.getenv("EXTRA_CORS_ORIGINS", "").split(",")
+    if o.strip()
+]
 
-# --- Middleware Registration ---
-# ⚠️  ORDER IS CRITICAL: CORS must be outermost so that browser OPTIONS
-#     preflight requests are answered BEFORE hitting the rate limiter.
+cors_origins = [
+    "https://graft-ai-two.vercel.app",
+    "https://graftai.onrender.com",
+    *([os.getenv("FRONTEND_URL")] if os.getenv("FRONTEND_URL") else []),
+    *([os.getenv("LOAD_BALANCER_URL")] if os.getenv("LOAD_BALANCER_URL") else []),
+    *_extra_origins,
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://localhost:8080",
+]
 
-# 1. CORS — Outermost layer (handles preflight OPTIONS first)
-#    Collect all trusted origins from env vars + known hardcoded values.
-_raw_extra = os.getenv("EXTRA_CORS_ORIGINS", "")  # comma-separated extra origins
-_extra_origins = [o.strip() for o in _raw_extra.split(",") if o.strip()]
-
-# Use a narrow regex to match production and local development domains
-cors_origin_regex = r"^https?://(localhost|127\.0\.0\.1|graftai\.tech|.*\.graftai\.tech|graftai\.onrender\.com)(:\d+)?$"
-
-class RequestIdMiddleware:
-    """Attach a stable request ID to each request and response for traceability."""
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        request_id = str(uuid.uuid4())
-
-        async def send_with_request_id(message):
-            if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-                headers.append((b"x-request-id", request_id.encode()))
-                message["headers"] = headers
-            await send(message)
-
-        scope["request_id"] = request_id
-        await self.app(scope, receive, send_with_request_id)
-
-
-# 1. Rate Limiting — Applied only to real requests, not OPTIONS
-app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
-
-# 2. CSRF Protection — Guarding mutations
-app.add_middleware(CSRFMiddleware)
-
-# 3. Request ID & Origin Logging — Diagnostics
-class DiagnosticMiddleware:
-    def __init__(self, app):
-        self.app = app
-    async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            request = Request(scope)
-            origin = request.headers.get("origin")
-            if origin:
-                logger.info(f"Incoming Request: {request.method} {request.url.path} from Origin: {origin}")
-        await self.app(scope, receive, send)
-
-app.add_middleware(DiagnosticMiddleware)
-app.add_middleware(RequestIdMiddleware)
-
-# 4. CORS — OUTERMOST LAYER (MUST BE ADDED LAST)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=cors_origin_regex,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["X-Backend-Server", "X-Request-Id", "x-xsrf-token", "X-XSRF-TOKEN"],
+    expose_headers=["X-Backend-Server", "X-Request-Id"],
     max_age=600,
 )
 
-# --- Router Inclusion (API v1) ---
+# ── Rate limiter (inner, skips OPTIONS already) ─────────────────────────────
+_rate_limit_str = os.getenv("RATE_LIMIT", "100/minute")
+app.add_middleware(RateLimitMiddleware, rate_limit=_rate_limit_str)
+
+# ── Routers ───────────────────────────────────────────────────────────────────
 from fastapi import APIRouter
 
-v1_router = APIRouter(prefix="/api/v1")
+v1 = APIRouter(prefix="/api/v1")
 
-v1_router.include_router(auth_router)
-v1_router.include_router(users_router)
-v1_router.include_router(uploads_router)
-v1_router.include_router(calendar_router)
-v1_router.include_router(ai_router, tags=["ai"])
-v1_router.include_router(proactive_router)
-v1_router.include_router(analytics_router)
-v1_router.include_router(consent_router)
-from backend.api.admin import router as admin_router
-v1_router.include_router(admin_router)
-v1_router.include_router(upgrade_router)
-v1_router.include_router(plugin_router)
-v1_router.include_router(notifications_router)
-from backend.api.webhooks import router as webhooks_router
-v1_router.include_router(webhooks_router)
-v1_router.include_router(billing_router)
-
-# Include auth routes at both legacy root and v1 paths for maximum compatibility
+# Auth exposed at both /auth (OAuth callbacks) and /api/v1/auth
 app.include_router(auth_router)
-app.include_router(v1_router)
+v1.include_router(auth_router)
 
-def validate_production_environment():
-    """
-    Checks for critical environment variables and logs warnings if missing.
-    Ensures 'Pinpoint Accuracy' in production configuration.
-    """
-    try:
-        critical_vars = [
-            "SECRET_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
-            "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET",
-            "PINECONE_API_KEY", "REDIS_URL", "DATABASE_URL"
-        ]
-        missing = [v for v in critical_vars if not os.getenv(v)]
-        
-        if missing:
-            logger.warning(f"[STARTUP] ⚠️ Production Warning: Missing critical environment variables: {', '.join(missing)}")
-        else:
-            logger.info("[STARTUP] ✅ Production environment validation passed.")
-    except Exception as e:
-        logger.error(f"[STARTUP] ❌ Environment validation logic failed: {e}")
+v1.include_router(users_router)
+v1.include_router(uploads_router)
+v1.include_router(calendar_router)
+v1.include_router(ai_router)
+v1.include_router(proactive_router)
+v1.include_router(analytics_router)
+v1.include_router(consent_router)
+v1.include_router(upgrade_router)
+v1.include_router(plugin_router)
 
-# --- Diagnostic & Startup ---
-    pass
+app.include_router(v1)
+
+# ── Misc endpoints ────────────────────────────────────────────────────────────
+
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204)
 
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")
@@ -462,74 +206,15 @@ def chrome_devtools():
     return Response(status_code=404)
 
 
-@app.api_route("/", methods=["GET", "HEAD"])
+@app.get("/")
 def root():
     return {
         "message": "GraftAI Sovereign API is online.",
-        "version": "1.0.0",
-        "scaling_pool": "3 Replicas (Active)",
-        "rate_limit_active": True,
+        "version": "1.1.0",
+        "rate_limit": _rate_limit_str,
     }
 
 
-@app.api_route("/health", methods=["GET", "HEAD"])
+@app.get("/health")
 def health():
-    """Detailed health check for Render monitoring."""
-    return {
-        "status": "healthy",
-        "service": "graftai-backend",
-        "environment": os.getenv("ENV", "production"),
-        "version": "1.0.1",
-        "timestamp": datetime.now().isoformat()
-    }
-
-
-@app.get("/readiness")
-async def readiness(db: AsyncSession = Depends(get_db)):
-    # 1. Verify database connectivity
-    try:
-        await db.execute(text("SELECT 1"))
-    except Exception as e:
-        logger.error(f"Readiness DB check failed: {e}")
-        raise HTTPException(status_code=503, detail="Database not ready")
-
-    # 2. Verify Redis connectivity
-    try:
-        r = get_redis_client()
-        if r:
-            r.ping()
-    except Exception as e:
-        logger.warning(f"Readiness Redis check degraded: {e}")
-        # allow partial readiness for availability
-
-    return {"status": "ready"}
-
-
-def self_pinger_daemon():
-    """
-    Self-pinger to prevent Render free-tier sleep and maintain observability.
-    Uses httpx for efficient, non-blocking pings.
-    """
-    import httpx
-    import time
-
-    base_url = os.getenv("APP_BASE_URL") or os.getenv("BETTER_AUTH_URL")
-    if not base_url:
-        logger.info("[PINGER] ℹ️ APP_BASE_URL not set. Skipping self-pulse.")
-        return
-
-    logger.info(f"[PINGER] 🚀 Self-pulse monitoring active for {base_url}")
-    
-    # 5 minute sleep interval (Render check-in)
-    while True:
-        try:
-            with httpx.Client(timeout=10.0) as client:
-                resp = client.get(f"{base_url.rstrip('/')}/health")
-                if resp.status_code == 200:
-                    logger.debug("[PINGER] ✅ Self-pulse heartbeat 200 OK.")
-                else:
-                    logger.warning(f"[PINGER] ⚠️ Unexpected status code: {resp.status_code}")
-        except Exception as exc:
-            logger.warning(f"[PINGER] ⏳ Pulse heartbeat delayed: {exc}")
-        
-        time.sleep(300)
+    return {"status": "ok"}

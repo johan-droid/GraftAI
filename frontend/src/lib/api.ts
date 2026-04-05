@@ -49,7 +49,7 @@ export async function deleteAccount() {
 // ──────────────────────────────────────
 // Auth: SSO Start
 // ──────────────────────────────────────
-export async function ssoStart(provider: string = "github", redirectTo: string = "/dashboard") {
+export async function ssoStart(provider: string = "microsoft", redirectTo: string = "/dashboard") {
   return apiClient.get<{ authorization_url: string; state: string }>(
     `/auth/sso/start`, 
     { params: { provider, redirect_to: redirectTo } }

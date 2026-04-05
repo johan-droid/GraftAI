@@ -42,7 +42,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleOAuth = async (provider: "google" | "github") => {
+  const handleOAuth = async (provider: "google" | "microsoft") => {
     setError("");
     setLoading(true);
     try {
@@ -194,14 +194,14 @@ export default function LoginPage() {
                     Continue with Google
                   </button>
                   <button
-                    onClick={() => handleOAuth("github")}
+                    onClick={() => handleOAuth("microsoft")}
                     disabled={loading}
                     className="flex items-center justify-center gap-3 rounded-3xl border border-white/[0.08] bg-slate-900/80 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-indigo-500/40 hover:bg-slate-800/90 disabled:opacity-50"
                   >
                     <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
-                      <Fingerprint className="h-4 w-4 text-white" />
+                      <Shield className="h-4 w-4 text-white" />
                     </span>
-                    Continue with GitHub
+                    Continue with Microsoft
                   </button>
                 </div>
                 <p className="text-center text-xs uppercase tracking-[0.24em] text-slate-500">We’ll redirect you securely.</p>

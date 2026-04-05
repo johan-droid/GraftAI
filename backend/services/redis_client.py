@@ -5,6 +5,7 @@ import time
 from typing import Optional
 
 import redis
+from backend.utils.redis_singleton import get_redis as get_redis_singleton
 
 logger = logging.getLogger(__name__)
 _redis = None
@@ -254,18 +255,16 @@ def get_redis():
         if _redis is not None:
             return _redis
 
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         try:
-            client = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=5)
-            client.ping()
+            client = get_redis_singleton()
             _redis = client
-        except Exception as exc:
+            return _redis
+        except Exception:
             logger.warning(
-                f"⚠ Redis connection failed ({type(exc).__name__}): {exc}. Using in-memory fallback."
+                "⚠ Redis singleton unavailable — using in-memory fallback."
             )
             _redis = InMemoryRedis()
-
-        return _redis
+            return _redis
 
 
 def publish(channel: str, message: str):

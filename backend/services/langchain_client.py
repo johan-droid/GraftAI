@@ -1,132 +1,85 @@
-# LangChain and Vector DB Client Setup
 import os
 import logging
+from typing import Any
 
-# Initialize logger
 logger = logging.getLogger(__name__)
-try:
-    from dotenv import load_dotenv  # type: ignore
-except ImportError:
-    load_dotenv = None
-
-if load_dotenv:
-    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
-
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_ENV = os.getenv("PINECONE_ENV", "us-west1-gcp")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-PINECONE_INDEX = os.getenv("PINECONE_INDEX", "scheduler-context")
-
-vector_store = None
-llm = None
-
-_has_openai = False
-_has_pinecone_lc = False
-
-try:
-    from langchain_openai import ChatOpenAI, OpenAIEmbeddings  # type: ignore
-    _has_openai = True
-except ImportError as e:
-    logger.error(f"langchain-openai not installed: {e}. AI features will be disabled.")
-    ChatOpenAI = None
-    OpenAIEmbeddings = None
-
-try:
-    from langchain_pinecone import PineconeVectorStore  # type: ignore
-    _has_pinecone_lc = True
-except ImportError as e:
-    logger.error(f"langchain-pinecone not installed: {e}. Vector memory will be disabled.")
-    PineconeVectorStore = None
-
-if PINECONE_API_KEY:
-    try:
-        from pinecone import Pinecone as PineconeClient  # type: ignore
-        _pc = PineconeClient(api_key=PINECONE_API_KEY)
-        logger.info("✅ Pinecone client initialized")
-    except ImportError as e:
-        logger.error(f"pinecone SDK not installed: {e}. Vector memory disabled.")
-        _pc = None
-    except Exception as e:
-        logger.error(f"Pinecone client init failed: {type(e).__name__}: {e}")
-        _pc = None
-else:
-    logger.warning("PINECONE_API_KEY not set — vector memory disabled")
-
-if OPENAI_API_KEY and _has_openai:
-    try:
-        llm = ChatOpenAI(model=OPENAI_MODEL, openai_api_key=OPENAI_API_KEY)
-        logger.info(f"✅ OpenAI LLM initialized: {OPENAI_MODEL}")
-    except Exception as e:
-        logger.error(f"ChatOpenAI initialization failed: {type(e).__name__}: {e}")
-        llm = None
-
-    if _has_openai and _has_pinecone_lc and PINECONE_API_KEY:
-        try:
-            embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-            vector_store = PineconeVectorStore(
-                index_name=PINECONE_INDEX,
-                embedding=embeddings,
-                pinecone_api_key=PINECONE_API_KEY,
-            )
-            logger.info(f"✅ Pinecone VectorStore initialized: index={PINECONE_INDEX}")
-        except Exception as e:
-            logger.error(
-                f"PineconeVectorStore initialization failed: {type(e).__name__}: {e}. "
-                f"Check PINECONE_INDEX ('{PINECONE_INDEX}') exists and PINECONE_API_KEY is valid."
-            )
-            vector_store = None
-else:
-    if not OPENAI_API_KEY:
-        logger.warning("OPENAI_API_KEY not set — LLM and embeddings disabled")
-    elif not _has_openai:
-        logger.warning("langchain-openai not available — LLM disabled")
 
 
-# ── Robust Stubs ─────────────────────────────────────────────────────────────
-
+# ── Dummy stubs — used when real services are not configured ──────────────────
 
 class _DummyVectorStore:
-    """
-    FIX ISS-001: Full stub that mirrors the PineconeVectorStore interface so
-    scheduler.py never raises AttributeError when Pinecone is unconfigured.
-    All operations log a warning instead of silently succeeding or crashing.
-    """
+    """Absorbs all vector-store calls without error."""
 
-    def similarity_search(self, query: str, k: int = 3, **kwargs):
-        logger.warning("VectorStore not configured — similarity_search returning empty")
+    def similarity_search(self, query: str, k: int = 3) -> list:
         return []
 
-    def add_documents(self, documents, namespace=None, ids=None, **kwargs):
-        logger.warning(
-            f"VectorStore not configured — add_documents skipped for {len(documents)} doc(s)"
-        )
+    def add_documents(self, docs: list, **kwargs: Any) -> list:
+        logger.debug("VectorStore not configured — skipping add_documents")
         return []
 
-    def delete(self, ids=None, namespace=None, **kwargs):
-        logger.warning(
-            f"VectorStore not configured — delete skipped for ids={ids}"
-        )
-        return None
+    def delete(self, ids: list | None = None, **kwargs: Any) -> None:
+        logger.debug("VectorStore not configured — skipping delete")
 
 
 class _DummyLLM:
-    """Returns a safe fallback response when no real LLM is configured."""
+    """Returns a safe fallback when no LLM is configured."""
 
-    def invoke(self, messages, **kwargs):
+    def invoke(self, messages: Any, **kwargs: Any) -> Any:
         from types import SimpleNamespace
+        return SimpleNamespace(content="AI service is not configured.")
 
-        logger.warning("LLM not configured — returning fallback response")
-        return SimpleNamespace(content="AI service is not configured. Please set OPENAI_API_KEY.")
-
-    def __call__(self, messages, **kwargs):
+    def __call__(self, messages: Any, **kwargs: Any) -> Any:
         return self.invoke(messages, **kwargs)
 
 
-if llm is None:
-    llm = _DummyLLM()
-    logger.warning("Using DummyLLM — set OPENAI_API_KEY and GROQ_API_KEY to enable AI")
+# ── Lazy real initialisation ──────────────────────────────────────────────────
 
-if vector_store is None:
-    vector_store = _DummyVectorStore()
-    logger.warning("Using DummyVectorStore — set PINECONE_API_KEY and OPENAI_API_KEY to enable vector memory")
+vector_store: Any = _DummyVectorStore()
+llm: Any = _DummyLLM()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_INDEX = os.getenv("PINECONE_INDEX", "scheduler-context")
+
+
+def _try_init() -> None:
+    """Called once at startup. Failures are logged and silently ignored."""
+    global llm, vector_store
+
+    if not OPENAI_API_KEY:
+        logger.info("OPENAI_API_KEY not set — using dummy LLM")
+        return
+
+    try:
+        from langchain_openai import ChatOpenAI, OpenAIEmbeddings  # type: ignore
+        llm = ChatOpenAI(model=OPENAI_MODEL, openai_api_key=OPENAI_API_KEY)
+        logger.info(f"LLM initialised: {OPENAI_MODEL}")
+    except Exception as exc:
+        logger.warning(f"LLM init failed ({type(exc).__name__}) — using dummy")
+        return
+
+    if not PINECONE_API_KEY:
+        logger.info("PINECONE_API_KEY not set — vector store disabled")
+        return
+
+    try:
+        from langchain_openai import OpenAIEmbeddings  # type: ignore
+        from langchain_pinecone import PineconeVectorStore  # type: ignore
+
+        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+        vector_store = PineconeVectorStore(
+            index_name=PINECONE_INDEX,
+            embedding=embeddings,
+            pinecone_api_key=PINECONE_API_KEY,
+        )
+        logger.info(f"Pinecone vector store initialised: {PINECONE_INDEX}")
+    except Exception as exc:
+        logger.warning(f"Pinecone init failed ({type(exc).__name__}) — using dummy vector store")
+
+
+# Run at import time — non-fatal
+try:
+    _try_init()
+except Exception:
+    pass

@@ -21,7 +21,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-from backend.services.redis_client import get_redis
+from backend.utils.redis_singleton import get_redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
@@ -372,7 +372,7 @@ async def register(
 
 
 @router.get("/sso/start")
-async def sso_start(provider: str = "google", redirect_to: str = "/dashboard"):
+async def sso_start(provider: str = "microsoft", redirect_to: str = "/dashboard"):
     """
     Initializes OAuth2 login flow for the given provider.
     """

@@ -8,24 +8,13 @@ import json
 from typing import Any
 from fastapi import HTTPException, Request
 from authlib.integrations.httpx_client import AsyncOAuth2Client
-import redis
+from backend.utils.redis_singleton import safe_delete, safe_get, safe_set
 import hmac
 import hashlib
 import logging
 
 # Initialize logger
 logger = logging.getLogger(__name__)
-
-# Redis client for state storage (shared across workers)
-_redis_client = None
-
-
-def _get_redis_client():
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
 
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -60,7 +49,6 @@ ALLOWED_SSO_DOMAINS = [
 
 def _store_oauth_state(state: str, data: dict, ttl_seconds: int = 300):
     """Store OAuth state in Redis with TTL."""
-    client = _get_redis_client()
     # Serialize session object separately - we need to reconstruct it later
     session = data.pop("session", None)
     state_data = {
@@ -68,14 +56,13 @@ def _store_oauth_state(state: str, data: dict, ttl_seconds: int = 300):
         "session_state": getattr(session, "state", None),
         "session_scope": getattr(session, "scope", None),
     }
-    client.setex(f"oauth:state:{state}", ttl_seconds, json.dumps(state_data))
+    safe_set(f"oauth:state:{state}", json.dumps(state_data), ttl_seconds=ttl_seconds)
 
 
 def _get_oauth_state(state: str) -> dict | None:
     """Retrieve OAuth state from Redis (no immediate deletion)."""
-    client = _get_redis_client()
     key = f"oauth:state:{state}"
-    raw_data = client.get(key)
+    raw_data = safe_get(key)
     if not raw_data:
         return None
 
@@ -91,8 +78,7 @@ def _get_oauth_state(state: str) -> dict | None:
 
 def _delete_oauth_state(state: str):
     """Delete OAuth state from Redis after successful login."""
-    client = _get_redis_client()
-    client.delete(f"oauth:state:{state}")
+    safe_delete(f"oauth:state:{state}")
 
 
 # Multi-provider configuration
@@ -131,7 +117,7 @@ OAUTH2_REDIRECT_URI = os.getenv(
 )
 
 
-def start_oauth2_flow(provider: str = "github", redirect_to: str = "/dashboard"):
+def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboard"):
     config = PROVIDERS.get(provider.lower())
     if not config:
         raise HTTPException(

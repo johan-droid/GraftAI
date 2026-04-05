@@ -2,51 +2,35 @@
 RBAC/ABAC (roles/attributes) implementation with Redis-backed storage.
 """
 
-from typing import Any
 import json
-import os
-import redis
-
-# Redis client for roles and attributes
-_redis_client = None
+from backend.utils.redis_singleton import safe_get, safe_set
 
 
-def _get_redis_client():
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
+def _ensure_defaults(user_id: str | int) -> None:
+    uid = str(user_id)
+    if safe_get(f"roles:{uid}") is None:
+        if uid in ("1", "2"):
+            roles = ["admin"] if uid == "1" else ["user"]
+            attrs = (
+                {"tier": "enterprise", "region": "us-east"}
+                if uid == "1"
+                else {"tier": "starter", "region": "us-west"}
+            )
+            safe_set(f"roles:{uid}", json.dumps(roles))
+            safe_set(f"attrs:{uid}", json.dumps(attrs))
 
 
-def _init_default_roles():
-    """Initialize default roles for users 1 and 2 if not exists."""
-    client = _get_redis_client()
-    if not client.exists("roles:1"):
-        client.set("roles:1", json.dumps(["admin"]))
-    if not client.exists("roles:2"):
-        client.set("roles:2", json.dumps(["user"]))
-    if not client.exists("attrs:1"):
-        client.set("attrs:1", json.dumps({"tier": "enterprise", "region": "us-east"}))
-    if not client.exists("attrs:2"):
-        client.set("attrs:2", json.dumps({"tier": "starter", "region": "us-west"}))
-
-
-def check_user_role(user_id: str, role: str) -> bool:
-    _init_default_roles()
-    client = _get_redis_client()
-    roles_json = client.get(f"roles:{user_id}")
-    if not roles_json:
+def check_user_role(user_id: str | int, role: str) -> bool:
+    _ensure_defaults(user_id)
+    raw = safe_get(f"roles:{user_id}")
+    if not raw:
         return False
-    roles = json.loads(roles_json)
-    return role in roles
+    return role in json.loads(raw)
 
 
-def check_user_attribute(user_id: str, attribute: str, value: Any) -> bool:
-    _init_default_roles()
-    client = _get_redis_client()
-    attrs_json = client.get(f"attrs:{user_id}")
-    if not attrs_json:
+def check_user_attribute(user_id: str | int, attribute: str, value: str) -> bool:
+    _ensure_defaults(user_id)
+    raw = safe_get(f"attrs:{user_id}")
+    if not raw:
         return False
-    attrs = json.loads(attrs_json)
-    return attrs.get(attribute) == value
+    return json.loads(raw).get(attribute) == value

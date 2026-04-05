@@ -2,13 +2,13 @@ import logging
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
+from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from backend.models.tables import EventTable, UserTable
 from backend.utils.db import unwrap_result
 from .langchain_client import vector_store
 from .notifications import notify_event_created, notify_event_updated, notify_event_deleted
-from langchain_core.documents import Document
 import json
 import pytz
 from backend.models.user_token import UserTokenTable
@@ -265,7 +265,34 @@ async def sync_event_to_ai(event_id: int, user_id: str, action: str = "upsert"):
     logger.info(f"📤 Queued background AI context sync for event {event_id} (Action: {action})")
 
 
-async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
+async def _safe_notify(action: str, user_email: str, user_id: Optional[str], title: str, event_id: int = -1) -> None:
+    try:
+        event_data = {
+            "title": title,
+            "id": event_id,
+            "user_id": user_id,
+            "start_time": "",
+            "end_time": "",
+            "is_meeting": False,
+            "meeting_link": None,
+            "meeting_platform": None,
+        }
+
+        if action == "created":
+            await notify_event_created(user_email, [], event_data)
+        elif action == "updated":
+            await notify_event_updated(user_email, [], event_data)
+        elif action == "deleted":
+            await notify_event_deleted(user_email, [], event_data)
+    except Exception as exc:
+        logger.warning(f"Email notify skipped ({type(exc).__name__})")
+
+
+async def create_event(
+    db: AsyncSession,
+    event_data: dict,
+    background_tasks: Optional[BackgroundTasks] = None,
+) -> EventTable:
     """Create a new event and trigger AI feedback pipeline."""
     new_event = EventTable(**event_data)
 
@@ -319,31 +346,41 @@ async def create_event(db: AsyncSession, event_data: dict) -> EventTable:
             await db.commit()
 
     # Trigger real-time AI sync (Background)
-    await sync_event_to_ai(new_event.id, new_event.user_id)
+    if background_tasks:
+        background_tasks.add_task(sync_event_to_ai, new_event.id, new_event.user_id, "upsert")
+    else:
+        await sync_event_to_ai(new_event.id, new_event.user_id)
 
     # Notify user about new event
     target_user = await db.get(UserTable, new_event.user_id)
     if target_user:
-        await notify_event_created(
-            target_user.email,
-            [],
-            {
-                "id": new_event.id,
-                "user_id": new_event.user_id,
-                "title": new_event.title,
-                "start_time": new_event.start_time.strftime("%I:%M %p"),
-                "end_time": new_event.end_time.strftime("%I:%M %p"),
-                "is_meeting": new_event.is_meeting,
-                "meeting_link": new_event.meeting_link,
-                "meeting_platform": new_event.meeting_platform,
-            },
-        )
+        if background_tasks:
+            background_tasks.add_task(
+                _safe_notify,
+                "created",
+                target_user.email,
+                str(new_event.user_id),
+                new_event.title,
+                new_event.id,
+            )
+        else:
+            await _safe_notify(
+                "created",
+                target_user.email,
+                str(new_event.user_id),
+                new_event.title,
+                new_event.id,
+            )
 
     return new_event
 
 
 async def update_event(
-    db: AsyncSession, event_id: int, user_id: str, update_data: dict
+    db: AsyncSession,
+    event_id: int,
+    user_id: str,
+    update_data: dict,
+    background_tasks: Optional[BackgroundTasks] = None,
 ) -> Optional[EventTable]:
     """Update event and sync changes to LLM service."""
     stmt = select(EventTable).where(
@@ -403,29 +440,40 @@ async def update_event(
     await _push_to_external(db, event, action="update")
 
     # Real-time sync to AI orchestrator (Background)
-    await sync_event_to_ai(event.id, event.user_id)
+    if background_tasks:
+        background_tasks.add_task(sync_event_to_ai, event.id, event.user_id, "upsert")
+    else:
+        await sync_event_to_ai(event.id, event.user_id)
 
     target_user = await db.get(UserTable, user_id)
     if target_user:
-        await notify_event_updated(
-            target_user.email,
-            [],
-            {
-                "id": event.id,
-                "user_id": event.user_id,
-                "title": event.title,
-                "start_time": event.start_time.strftime("%I:%M %p"),
-                "end_time": event.end_time.strftime("%I:%M %p"),
-                "is_meeting": event.is_meeting,
-                "meeting_link": event.meeting_link,
-                "meeting_platform": event.meeting_platform,
-            },
-        )
+        if background_tasks:
+            background_tasks.add_task(
+                _safe_notify,
+                "updated",
+                target_user.email,
+                str(user_id),
+                event.title,
+                event.id,
+            )
+        else:
+            await _safe_notify(
+                "updated",
+                target_user.email,
+                str(user_id),
+                event.title,
+                event.id,
+            )
 
     return event
 
 
-async def delete_event(db: AsyncSession, event_id: int, user_id: str) -> bool:
+async def delete_event(
+    db: AsyncSession,
+    event_id: int,
+    user_id: str,
+    background_tasks: Optional[BackgroundTasks] = None,
+) -> bool:
     """
     Remove event from DB and purge from AI long-term memory.
     Completes the real-time feedback loop by ensuring 'deleted' reality is synced.
@@ -440,7 +488,10 @@ async def delete_event(db: AsyncSession, event_id: int, user_id: str) -> bool:
         return False
 
     # Purge from Vector Store (Background)
-    await sync_event_to_ai(event_id, user_id, action="delete")
+    if background_tasks:
+        background_tasks.add_task(sync_event_to_ai, event_id, user_id, action="delete")
+    else:
+        await sync_event_to_ai(event_id, user_id, action="delete")
 
     # Push to External if applicable (before DB deletion)
     await _push_to_external(db, event, action="delete")
@@ -450,14 +501,22 @@ async def delete_event(db: AsyncSession, event_id: int, user_id: str) -> bool:
 
     target_user = await db.get(UserTable, user_id)
     if target_user:
-        await notify_event_deleted(
-            target_user.email,
-            [],
-            {
-                "id": event_id,
-                "user_id": user_id,
-                "title": event.title,
-            },
-        )
+        if background_tasks:
+            background_tasks.add_task(
+                _safe_notify,
+                "deleted",
+                target_user.email,
+                str(user_id),
+                event.title,
+                event.id,
+            )
+        else:
+            await _safe_notify(
+                "deleted",
+                target_user.email,
+                str(user_id),
+                event.title,
+                event.id,
+            )
 
     return True

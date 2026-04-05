@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from dotenv import load_dotenv
+from backend.utils.redis_singleton import get_redis
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -18,25 +19,15 @@ def _get_redis():
     if _redis is not None:
         return _redis
 
-    redis_url = os.getenv("REDIS_URL")
-    if not redis_url:
-        logger.warning("⚠ REDIS_URL not set — using in-memory cache fallback")
-        return None
-
     try:
-        from redis import Redis as RedisPy
-
-        _redis = RedisPy.from_url(
-            redis_url, decode_responses=True, socket_connect_timeout=5
-        )
-        _redis.ping()
+        client = get_redis()
+        _redis = client
         return _redis
-    except Exception as e:
-        logger.warning(
-            f"⚠ Redis connection failed ({type(e).__name__}) — using in-memory cache fallback"
-        )
-        _redis = None
-        return None
+    except Exception:
+        pass
+
+    logger.warning("⚠ Redis singleton unavailable — using in-memory cache fallback")
+    return None
 
 
 def set_cache(key: str, value, expire_seconds: int = 300):

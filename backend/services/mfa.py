@@ -3,25 +3,12 @@ MFA and device fingerprinting implementation with Redis-backed storage.
 """
 
 import pyotp
-import os
-import redis
-
-# Redis client for MFA secrets
-_redis_client = None
-
-
-def _get_redis_client():
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
+from backend.utils.redis_singleton import safe_get, safe_set
 
 
 def start_mfa_enrollment(user_id: int) -> dict:
     secret = pyotp.random_base32()
-    client = _get_redis_client()
-    client.setex(f"mfa:secret:{user_id}", 86400, secret)  # 24h TTL
+    safe_set(f"mfa:secret:{user_id}", secret, ttl_seconds=86400)
     otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
         name=f"user{user_id}@graftai", issuer_name="GraftAI"
     )
@@ -29,8 +16,7 @@ def start_mfa_enrollment(user_id: int) -> dict:
 
 
 def verify_mfa_token(user_id: int, token: str) -> bool:
-    client = _get_redis_client()
-    secret = client.get(f"mfa:secret:{user_id}")
+    secret = safe_get(f"mfa:secret:{user_id}")
     if not secret:
         return False
 

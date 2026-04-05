@@ -1,27 +1,19 @@
 import os
-import redis
 import json
 import logging
 from typing import Optional, Any
 
+from backend.utils.redis_singleton import get_redis
+
 logger = logging.getLogger(__name__)
 
-# Single instance of the Redis client for efficiency
-_redis_client = None
 
 def get_redis_client():
     """Returns a singleton Redis client instance."""
-    global _redis_client
-    if _redis_client is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        try:
-            # Use decode_responses=True for string keys/values
-            _redis_client = redis.from_url(redis_url, decode_responses=True)
-            logger.info("✅ Redis client successfully initialized.")
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize Redis client: {e}")
-            return None
-    return _redis_client
+    try:
+        return get_redis()
+    except Exception:
+        return None
 
 def set_cache(key: str, value: Any, ttl_seconds: int = 300):
     """Stores a value in Redis with an expiration time."""

@@ -96,3 +96,7 @@ config.prod.json
 !SRS.md
 !AUTH_RECONSTRUCTION_PLAN.md
 
+# Local dev/test outputs
+backend_test_output.txt
+*.test_output.txt
+

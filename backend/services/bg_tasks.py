@@ -1,5 +1,6 @@
 import os
 import logging
+from typing import Optional
 
 try:
     from arq import create_pool

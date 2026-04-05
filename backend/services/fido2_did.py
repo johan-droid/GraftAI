@@ -4,7 +4,7 @@ FIDO2 and decentralized identity (DID) support with Redis-backed storage.
 
 import uuid
 import json
-from backend.utils.redis_singleton import safe_delete, safe_get, safe_set
+from backend.utils.redis_singleton import safe_get, safe_set
 
 
 def start_fido2_registration(user_id: int) -> dict:

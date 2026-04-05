@@ -9,7 +9,6 @@ This mirrors the app lifespan behavior but exits immediately after creating tabl
 """
 import asyncio
 import logging
-import os
 
 from backend.utils import db as db_utils
 from backend.models.tables import Base as ModelsBase

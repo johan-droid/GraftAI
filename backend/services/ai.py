@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.schemes import get_current_user_id
-from backend.auth.routes import get_rate_limiter
+from backend.auth.logic import get_rate_limiter
 from backend.services import scheduler
 from backend.services.langchain_client import llm
 from backend.services.mailbox import get_recent_emails

@@ -32,7 +32,7 @@ async def get_sync_status(
         redis_ok = False
         try:
             redis_ok = redis_client.ping()
-        except:
+        except Exception:
             pass
 
         # 2. Token Health Metrics

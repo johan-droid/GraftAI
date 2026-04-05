@@ -7,7 +7,7 @@ from backend.services.bg_tasks import enqueue_account_deletion
 from pydantic import BaseModel
 
 from backend.auth.schemes import get_current_user_id
-from backend.services import passwordless, mfa, fido2_did, access_control
+from backend.services import passwordless, fido2_did, access_control
 from backend.auth.logic import (
     get_rate_limiter,
     create_jwt_token,

@@ -1,10 +1,8 @@
-import os
 import logging
 import threading
 import time
 from typing import Optional
 
-import redis
 from backend.utils.redis_singleton import get_redis as get_redis_singleton
 
 logger = logging.getLogger(__name__)

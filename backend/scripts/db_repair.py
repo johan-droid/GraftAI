@@ -13,6 +13,10 @@ async def repair_database():
         logger.warning("Database engine not initialized. Skipping repair.")
         return
 
+    if engine.dialect.name == "sqlite":
+        logger.info("SQLite detected: skipping PostgreSQL-specific schema repair.")
+        return
+
     try:
         async with engine.begin() as conn:
             # 1. Check for 'title' column in 'notifications' table

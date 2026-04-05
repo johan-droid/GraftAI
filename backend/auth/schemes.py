@@ -13,8 +13,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.utils.db import get_db
-from backend.services.access_control import check_user_role
-from backend.utils.redis_singleton import safe_get, safe_set, safe_delete
+from backend.utils.redis_singleton import safe_get, safe_set
 
 # Initialize logger
 logger = logging.getLogger(__name__)

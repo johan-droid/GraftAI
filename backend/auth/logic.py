@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import HTTPException, Request, Response, status
-from backend.utils.redis_singleton import get_redis
+from backend.services.redis_client import get_redis as _get_redis_from_service
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
 def get_redis_client():
-    return get_redis()
+    return _get_redis_from_service()
 
 _AUTH_RATE_LIMIT_LUA = """
 local key = KEYS[1]
@@ -70,6 +70,14 @@ def get_rate_limiter(max_requests: int, window_seconds: int):
             )
         return True
     return rate_limiter
+
+
+def is_secure_request(request: Request | None) -> bool:
+    if request is None:
+        return False
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    return forwarded_proto.lower() == "https" or request.url.scheme == "https"
+
 
 def create_jwt_token(sub: str, email: Optional[str] = None):
     """Create access and refresh tokens and persist refresh token in Redis."""

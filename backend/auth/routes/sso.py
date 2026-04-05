@@ -1,19 +1,18 @@
 import os
-import uuid
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from backend.utils.db import get_db
-from backend.models.tables import UserTable, UserTokenTable
+from backend.models.tables import UserTable
+from backend.models.user_token import UserTokenTable
 from backend.services import sso
 from backend.auth import logic
-from backend.utils.redis_singleton import safe_set
 
 router = APIRouter(tags=["auth-sso"])
 logger = logging.getLogger(__name__)

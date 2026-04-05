@@ -3,8 +3,8 @@ import uuid
 import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-from backend.models.tables import WebhookSubscriptionTable, UserTable
+from sqlalchemy import select
+from backend.models.tables import WebhookSubscriptionTable, AccountTable
 from backend.models.user_token import UserTokenTable
 from backend.services.integrations.google_calendar import get_google_service
 from backend.services.integrations.ms_graph import get_ms_graph_client

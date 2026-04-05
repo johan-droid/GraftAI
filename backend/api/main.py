@@ -34,7 +34,6 @@ from backend.services.upgrade   import router as upgrade_router
 from backend.services.plugin_api import router as plugin_router
 
 from backend.utils import db as db_utils
-from backend.models.tables import Base as ModelsBase
 from backend.scripts.db_repair import repair_database
 
 

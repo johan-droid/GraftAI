@@ -1,6 +1,5 @@
 import json
 import logging
-from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.tables import EventTable
 from backend.services.langchain_client import vector_store
 

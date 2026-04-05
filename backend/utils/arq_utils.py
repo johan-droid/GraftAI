@@ -1,7 +1,6 @@
 import os
 import logging
 from arq.connections import RedisSettings, create_pool
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

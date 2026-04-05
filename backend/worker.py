@@ -121,7 +121,7 @@ async def task_purge_expired_accounts(ctx):
         # Find and Delete (Cascades will handle child records: events, sessions, etc.)
         stmt = delete(UserTable).where(
             and_(
-                UserTable.deleted_at != None,
+                UserTable.deleted_at is not None,
                 UserTable.deleted_at < retention_threshold
             )
         )

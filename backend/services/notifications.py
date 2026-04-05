@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional, Any, List
+from typing import Optional
 from backend.services.email import send_email, render_template
 from backend.services.onesignal import send_push_notification
 from backend.services.redis_client import publish

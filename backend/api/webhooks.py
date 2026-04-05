@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Request, Response, Depends, status
+from fastapi import APIRouter, Request, Response, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.api.deps import get_db

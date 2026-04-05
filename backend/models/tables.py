@@ -1,5 +1,4 @@
 import uuid
-import uuid
 from sqlalchemy import (
     Column,
     Integer,

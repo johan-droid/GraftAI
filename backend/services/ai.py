@@ -1,73 +1,401 @@
-from datetime import datetime, timedelta
-import os
+from datetime import datetime, timedelta, timezone, tzinfo
 import json
 import logging
-import hashlib
+import os
 import re
-from typing import Optional
+from typing import Optional, Any, Dict
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.utils.db import get_db
 from backend.auth.schemes import get_current_user_id
+from backend.auth.routes import get_rate_limiter
 from backend.services import scheduler
-from backend.services.cache import get_cache, set_cache
 from backend.services.langchain_client import llm
-from backend.services.usage import check_usage_limit, increment_usage
 from backend.services.mailbox import get_recent_emails
+from backend.services.cache import get_cache, set_cache
+from backend.services.usage import check_usage_limit, increment_usage
+from backend.utils.db import get_db
 
-# Conditional imports for optional dependencies
 try:
     from groq import AsyncGroq
 except ImportError:
     AsyncGroq = None
 
-try:
-    from langchain_core.messages import SystemMessage, HumanMessage
-except ImportError:
-    SystemMessage = None
-    HumanMessage = None
-
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
 
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview")
 
 class AIRequest(BaseModel):
     prompt: str
     timezone: str = "UTC"
 
+
 class AIResponse(BaseModel):
     result: str
     model_used: Optional[str] = None
+    action: Optional[Dict[str, Any]] = None
+
+
+def _safe_zoneinfo(name: str) -> tzinfo:
+    if not name:
+        return timezone.utc
+
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        try:
+            return ZoneInfo("Etc/UTC")
+        except Exception:
+            return timezone.utc
+
+
+def _extract_duration_minutes(prompt: str) -> int:
+    lower = prompt.lower()
+    match = re.search(r"(\d+)\s*(minute|minutes|min|mins|hour|hours|hr|hrs)", lower)
+    if not match:
+        return 30
+
+    value = int(match.group(1))
+    unit = match.group(2)
+    if unit.startswith("hour") or unit.startswith("hr"):
+        return value * 60
+    return value
+
+
+def _extract_event_id(prompt: str) -> Optional[int]:
+    patterns = [
+        r"(?:event|id)\s*#?\s*(\d+)",
+        r"\b(\d+)\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, prompt.lower())
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _parse_update_action_payload(action_text: str, user_timezone: str) -> tuple[Optional[int], Optional[datetime]]:
+    match = re.search(r"ACTION:UPDATE_MEETING:(\{.*\})", action_text, flags=re.IGNORECASE)
+    if not match:
+        return None, None
+
+    try:
+        payload = json.loads(match.group(1))
+    except Exception:
+        return None, None
+
+    event_id = payload.get("event_id")
+    event_id_value = int(event_id) if isinstance(event_id, int) or str(event_id).isdigit() else None
+
+    new_start_raw = payload.get("new_start_time")
+    if not isinstance(new_start_raw, str) or not new_start_raw.strip():
+        return event_id_value, None
+
+    try:
+        parsed = datetime.fromisoformat(new_start_raw.strip())
+    except Exception:
+        return event_id_value, None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_safe_zoneinfo(user_timezone))
+
+    return event_id_value, parsed.astimezone(timezone.utc)
+
+
+def _extract_title(prompt: str) -> str:
+    quoted = re.search(r"['\"]([^'\"]{3,120})['\"]", prompt)
+    if quoted:
+        return quoted.group(1).strip()
+
+    cleaned = re.sub(r"\s+", " ", prompt).strip()
+    cleaned = re.sub(
+        r"\b(schedule|book|add|create|meeting|call|for|at|on|today|tomorrow|next)\b",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).strip(" -:")
+    return cleaned[:120] if cleaned else "New Meeting"
+
+
+def _extract_datetime(prompt: str, user_timezone: str) -> datetime:
+    tz = _safe_zoneinfo(user_timezone)
+    now_local = datetime.now(tz)
+    lower = prompt.lower()
+
+    iso_match = re.search(r"(\d{4}-\d{2}-\d{2}[t\s]\d{1,2}:\d{2}(?::\d{2})?)", prompt)
+    if iso_match:
+        text = iso_match.group(1).replace(" ", "T")
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=tz)
+        return parsed.astimezone(timezone.utc)
+
+    meridian_match = re.search(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)", lower)
+    hour = None
+    minute = 0
+    if meridian_match:
+        hour = int(meridian_match.group(1)) % 12
+        minute = int(meridian_match.group(2) or 0)
+        if meridian_match.group(3) == "pm":
+            hour += 12
+
+    if hour is None:
+        hm_match = re.search(r"\b(\d{1,2}):(\d{2})\b", lower)
+        if hm_match:
+            hour = int(hm_match.group(1))
+            minute = int(hm_match.group(2))
+
+    if hour is None:
+        if "morning" in lower:
+            hour = 9
+        elif "afternoon" in lower:
+            hour = 14
+        elif "evening" in lower:
+            hour = 18
+
+    day_offset = 0
+    if "tomorrow" in lower:
+        day_offset = 1
+    elif "next week" in lower:
+        day_offset = 7
+
+    if hour is None:
+        start_local = now_local + timedelta(hours=1)
+        start_local = start_local.replace(minute=0, second=0, microsecond=0)
+    else:
+        target_day = (now_local + timedelta(days=day_offset)).date()
+        start_local = datetime(
+            target_day.year,
+            target_day.month,
+            target_day.day,
+            hour,
+            minute,
+            tzinfo=tz,
+        )
+        if day_offset == 0 and start_local < now_local:
+            start_local = start_local + timedelta(days=1)
+
+    return start_local.astimezone(timezone.utc)
+
+
+def _detect_intent(prompt: str) -> str:
+    lower = prompt.lower()
+
+    if any(k in lower for k in ["delete", "remove", "cancel"]):
+        return "delete"
+    if any(k in lower for k in ["reschedule", "move", "update", "change time"]):
+        return "update"
+    if any(k in lower for k in ["schedule", "book", "add meeting", "create meeting", "create event", "add event"]):
+        return "schedule"
+    if any(k in lower for k in ["list", "show", "upcoming", "what do i have", "agenda", "calendar today", "calendar this week"]):
+        return "list"
+
+    return "none"
+
+
+async def _resolve_event_id(db: AsyncSession, user_id: str, prompt: str) -> Optional[int]:
+    explicit = _extract_event_id(prompt)
+    if explicit:
+        return explicit
+
+    try:
+        now = datetime.now(timezone.utc)
+        events = await scheduler.get_events_for_range(db, user_id, now, now + timedelta(days=30))
+    except Exception:
+        return None
+
+    if not isinstance(events, (list, tuple)) or not events:
+        return None
+
+    try:
+        candidate = min(events, key=lambda e: getattr(e, "start_time", now))
+        candidate_id = getattr(candidate, "id", None)
+        return int(candidate_id) if candidate_id is not None else None
+    except Exception:
+        return None
+
+
+def _format_events(events: list[Any], user_timezone: str) -> str:
+    if not events:
+        return "No events found in this time window."
+
+    tz = _safe_zoneinfo(user_timezone)
+    lines = []
+    for event in events[:8]:
+        start_value = getattr(event, "start_time", None)
+        if not isinstance(start_value, datetime):
+            continue
+        if start_value.tzinfo is None:
+            start_value = start_value.replace(tzinfo=timezone.utc)
+
+        end_value = getattr(event, "end_time", None)
+        if not isinstance(end_value, datetime):
+            end_value = start_value + timedelta(minutes=30)
+        elif end_value.tzinfo is None:
+            end_value = end_value.replace(tzinfo=timezone.utc)
+
+        event_id = getattr(event, "id", "?")
+        title = getattr(event, "title", "Untitled Event")
+
+        start_local = start_value.astimezone(tz)
+        end_local = end_value.astimezone(tz)
+        lines.append(
+            f"- #{event_id} {title} | {start_local.strftime('%a %b %d, %I:%M %p')} - {end_local.strftime('%I:%M %p')}"
+        )
+
+    if not lines:
+        return "No events found in this time window."
+
+    return "\n".join(lines)
+
+
+async def _offline_assistant_response(
+    prompt: str,
+    user_timezone: str,
+    db: AsyncSession,
+    user_id: str,
+) -> tuple[str, Dict[str, Any]]:
+    intent = _detect_intent(prompt)
+
+    if intent == "list":
+        now = datetime.now(timezone.utc)
+        window_end = now + timedelta(days=7)
+        events = await scheduler.get_events_for_range(db, user_id, now, window_end)
+        formatted = _format_events(events, user_timezone)
+        return (
+            "Here is your current schedule for the next 7 days:\n" + formatted,
+            {"type": "list", "count": len(events)},
+        )
+
+    if intent == "schedule":
+        start_time = _extract_datetime(prompt, user_timezone)
+        duration = _extract_duration_minutes(prompt)
+        title = _extract_title(prompt)
+
+        event_data = {
+            "user_id": user_id,
+            "title": title,
+            "description": "Created by GraftAI Scheduler Assistant",
+            "category": "meeting",
+            "start_time": start_time,
+            "end_time": start_time + timedelta(minutes=duration),
+            "is_remote": True,
+            "status": "confirmed",
+            "metadata_payload": {"source": "assistant_offline_engine"},
+        }
+
+        created = await scheduler.create_event(db, event_data)
+        return (
+            f"Scheduled '{created.title}' on {created.start_time.strftime('%Y-%m-%d %H:%M UTC')} (event #{created.id}).",
+            {
+                "type": "schedule",
+                "event_id": created.id,
+                "start_time": created.start_time.isoformat(),
+                "end_time": created.end_time.isoformat(),
+            },
+        )
+
+    if intent == "update":
+        event_id = await _resolve_event_id(db, user_id, prompt)
+        new_start_override: Optional[datetime] = None
+
+        if not event_id:
+            # Compatibility fallback for prompts resolved through legacy ACTION payloads.
+            try:
+                action_hint = await _generate_with_groq(
+                    "Extract update action only. Output format: ACTION:UPDATE_MEETING:{\"event_id\": number, \"new_start_time\": \"ISO-8601\"}",
+                    prompt,
+                )
+                hinted_event_id, hinted_start = _parse_update_action_payload(action_hint or "", user_timezone)
+                if hinted_event_id:
+                    event_id = hinted_event_id
+                if hinted_start:
+                    new_start_override = hinted_start
+            except Exception:
+                pass
+
+        if not event_id:
+            return (
+                "I could not find an event to update. Mention an event id like 'update event 42 to tomorrow 3pm'.",
+                {"type": "update", "status": "not_found"},
+            )
+
+        new_start = new_start_override or _extract_datetime(prompt, user_timezone)
+        duration = _extract_duration_minutes(prompt)
+        update_payload = {
+            "start_time": new_start,
+            "end_time": new_start + timedelta(minutes=duration),
+        }
+
+        updated = await scheduler.update_event(db, event_id, user_id, update_payload)
+        if not updated:
+            return (
+                f"Event #{event_id} was not found.",
+                {"type": "update", "status": "not_found", "event_id": event_id},
+            )
+
+        updated_id = getattr(updated, "id", event_id)
+        updated_start = getattr(updated, "start_time", None)
+        if isinstance(updated_start, datetime):
+            if updated_start.tzinfo is None:
+                updated_start = updated_start.replace(tzinfo=timezone.utc)
+            updated_time_label = updated_start.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        else:
+            updated_time_label = new_start.strftime("%Y-%m-%d %H:%M UTC")
+
+        return (
+            f"Updated event #{updated_id} to {updated_time_label}",
+            {"type": "update", "event_id": updated_id},
+        )
+
+    if intent == "delete":
+        event_id = await _resolve_event_id(db, user_id, prompt)
+        if not event_id:
+            return (
+                "I could not find an event to delete. Mention an event id like 'delete event 42'.",
+                {"type": "delete", "status": "not_found"},
+            )
+
+        deleted = await scheduler.delete_event(db, event_id, user_id)
+        if not deleted:
+            return (
+                f"Event #{event_id} was not found.",
+                {"type": "delete", "status": "not_found", "event_id": event_id},
+            )
+
+        return (
+            f"Deleted event #{event_id}.",
+            {"type": "delete", "event_id": event_id},
+        )
+
+    return (
+        "I can help with calendar actions: list, schedule, update, or delete events. Try: 'schedule design sync tomorrow 3pm for 45 minutes'.",
+        {"type": "none"},
+    )
+
 
 async def _generate_with_groq(system_prompt: str, user_input: str) -> str:
-    """Helper for direct Groq API access if configured."""
     if AsyncGroq is None:
-        raise RuntimeError("groq package is not installed")
+        raise RuntimeError("Groq SDK not installed")
 
-    client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
-    chat_completion = await client.chat.completions.create(
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY not configured")
+
+    client = AsyncGroq(api_key=api_key)
+    response = await client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input},
         ],
-        model="llama-3.3-70b-versatile",
+        temperature=0.2,
     )
-    return chat_completion.choices[0].message.content or ""
+    return (response.choices[0].message.content or "").strip()
 
-def _get_schedule_context(events):
-    header = "Your Real-Time Schedule (GROUND TRUTH):\n"
-    if not events:
-        return header + "Currently empty."
-    context = header
-    for event in events:
-        context += f"- {event.title} at {event.start_time.strftime('%H:%M')} (ID: {event.id})\n"
-    return context
-
-from backend.auth.routes import get_rate_limiter
 
 @router.post("/chat", response_model=AIResponse)
 async def ai_chat(
@@ -78,144 +406,89 @@ async def ai_chat(
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=10, window_seconds=60)),
 ):
     """
-    State-of-the-Art AI Copilot Chat Endpoint.
-    Detects scheduling intent and executes actions via the scheduler service.
+    GraftAI Scheduler Assistant endpoint.
+    Online mode uses configured model providers.
+    Offline mode automatically executes deterministic calendar operations.
     """
-    current_time = datetime.now()
-    schedule_context = ""
-    user_name = "User"
-    user_email = ""
-    try:
-        from backend.models.tables import UserTable
-        user = await db.get(UserTable, user_id)
-        if user:
-            user_name = user.full_name or "User"
-            user_email = user.email
+    prompt = (request.prompt or "").strip()
+    if not prompt:
+        return AIResponse(result="Please provide a message.", model_used="graftai-assistant")
 
-        window_start = current_time
-        window_end = current_time + timedelta(hours=24)
-        todays_events = await scheduler.get_events_for_range(
-            db, user_id, window_start, window_end
-        )
-        schedule_context = _get_schedule_context(todays_events)
-        
-        # Pull recent emails for context-aware extraction
-        recent_emails = await get_recent_emails(db, user_id, limit=3)
-        email_context = "RECENT EMAILS (CONTEXT):\n"
-        if recent_emails:
-            for em in recent_emails:
-                email_context += f"- From: {em['from']}, Subject: {em['subject']}\n  Snippet: {em['snippet']}\n"
-        else:
-            email_context += "No recent emails found.\n"
-        schedule_context += f"\n{email_context}"
-    except Exception as e:
-        logger.warning(f"Could not fetch proactive context (Schedule/Email): {e}")
+    intent = _detect_intent(prompt)
 
-    # STABLE CONTEXT for caching: Use hourly precision for 'Today's Date' in system reasoning 
-    # to allow cache hits within the same hour while maintaining scheduling accuracy.
-    stable_now = current_time.replace(minute=0, second=0, microsecond=0)
-
-    system_reasoning = f"""
-    IDENTITY: 
-    You are GraftAI, the world's most advanced AI Scheduling Copilot. 
-    You are an expert executive assistant with FULL CONTROL over the user's calendar.
-
-    STRICT CONTEXT GUARDRAILS:
-    1. Your SOLE purpose is to manage calendars and coordinate workspace tasks.
-    2. DO NOT behave as a general-purpose global chatbot.
-    3. If asked about outside topics, politely decline and steer back to the schedule.
-
-    DOMAIN KNOWLEDGE:
-    Today's Date: {stable_now.strftime('%Y-%m-%d %H:00:00')}
-    User Timezone: {request.timezone}
-    User Name: {user_name}
-    User Email: {user_email}
-
-    {schedule_context}
-
-    ACTION PROTOCOL:
-    Suffix response with exactly ONE if requirement met:
-    ACTION:SCHEDULE_MEETING:{{"title": "...", "start_time": "ISO", "duration_minutes": 30, "is_meeting": true, "platform": "google_meet", "attendees": ["email@ex.com"], "agenda": "..."}}
-    ACTION:UPDATE_MEETING:{{"event_id": 1, "new_start_time": "ISO", "new_title": "Optional"}}
-    ACTION:DELETE_MEETING:{{"event_id": 1}}
-
-    MEETING PLATFORMS: google_meet, zoom, teams. 
-    If a user wants a meeting but doesn't specify a platform, ASK them.
-    If they don't provide attendees or agenda, ASK for them to make it a professional invite.
-    """
-
-    user_input = f"User Message: {request.prompt}"
-    
-    # Optimized cache logic: Hash system_reasoning (stable per hour) + prompt
-    cache_key_data = f"{user_id}:{system_reasoning}:{request.prompt}"
-    cache_key = "ai_cache:" + hashlib.sha256(cache_key_data.encode()).hexdigest()
-    
-    cached = get_cache(cache_key)
-    if cached:
-        logger.info(f"💾 AI Cache Hit for user {user_id}")
-        return AIResponse(result=str(cached), model_used="cache-hit")
-
-    # Generate
-    try:
-        if (os.getenv("GROQ_API_KEY") and AsyncGroq) or os.getenv("FORCE_GROQ") == "1":
-            result_text = await _generate_with_groq(system_reasoning, user_input)
-            model_used = "llama-3.3-70b-versatile"
-        else:
-            response = llm.invoke(user_input) # Simplified for brevity in rewrite
-            result_text = response.content if hasattr(response, 'content') else str(response)
-            model_used = "fallback"
-    except Exception as e:
-        logger.error(f"LLM failed: {e}")
-        return AIResponse(result="I'm sorry, I can't process that right now.", model_used="error")
-
-    if result_text:
-        set_cache(cache_key, result_text, 300)
-        # Increment SaaS usage counter
+    if intent in {"list", "schedule", "update", "delete"}:
+        try:
+            result_text, action = await _offline_assistant_response(prompt, request.timezone, db, user_id)
+        except ValueError as exc:
+            result_text = str(exc)
+            action = {"type": intent, "status": "error"}
+        except Exception as exc:
+            logger.error(f"Offline assistant action failed: {exc}")
+            result_text = "I could not complete that calendar action right now. Please try again with event details."
+            action = {"type": intent, "status": "error"}
         await increment_usage(db, user_id, "ai_messages")
-        
-        # Action Layer
-        schedule_match = re.search(r"ACTION:SCHEDULE_MEETING:(\{.*?\})", result_text, re.DOTALL)
-        update_match = re.search(r"ACTION:UPDATE_MEETING:(\{.*?\})", result_text, re.DOTALL)
-        delete_match = re.search(r"ACTION:DELETE_MEETING:(\{.*?\})", result_text, re.DOTALL)
+        return AIResponse(result=result_text, model_used="graftai-assistant-offline", action=action)
 
-        if schedule_match:
-            try:
-                data = json.loads(schedule_match.group(1))
-                event_data = {
-                    "user_id": user_id,
-                    "title": data.get("title", "Meeting"),
-                    "start_time": datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")),
-                    "end_time": (datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")) + timedelta(minutes=data.get("duration_minutes", 30))),
-                    "status": "confirmed",
-                    "is_meeting": data.get("is_meeting", False),
-                    "meeting_platform": data.get("platform"),
-                    "agenda": data.get("agenda"),
-                    "attendees": [{"email": e} for e in data.get("attendees", [])]
-                }
-                await scheduler.create_event(db, event_data)
-                result_text = re.sub(r"ACTION:SCHEDULE_MEETING:\{.*?\}", "", result_text, flags=re.DOTALL).strip() + "\n(Scheduled)"
-            except Exception as e:
-                logger.error(f"Action failed: {e}")
+    cache_key = f"ai:chat:{user_id}:{hash((prompt, request.timezone))}"
+    cached = get_cache(cache_key)
+    if isinstance(cached, str) and cached.strip():
+        await increment_usage(db, user_id, "ai_messages")
+        return AIResponse(result=cached, model_used="graftai-assistant-cache", action={"type": "none"})
 
-        elif update_match:
-            try:
-                data = json.loads(update_match.group(1))
-                payload = {}
-                if "new_start_time" in data:
-                    payload["start_time"] = datetime.fromisoformat(data["new_start_time"].replace("Z", "+00:00"))
-                    payload["end_time"] = payload["start_time"] + timedelta(minutes=30)
-                if "new_title" in data: payload["title"] = data["new_title"]
-                await scheduler.update_event(db, data["event_id"], user_id, payload)
-                result_text = re.sub(r"ACTION:UPDATE_MEETING:\{.*?\}", "", result_text, flags=re.DOTALL).strip() + "\n(Updated)"
-            except Exception as e:
-                logger.error(f"Action failed: {e}")
+    now = datetime.now(timezone.utc)
+    events = await scheduler.get_events_for_range(db, user_id, now, now + timedelta(days=3))
+    try:
+        email_items = await get_recent_emails(db, user_id, limit=3)
+    except Exception as exc:
+        logger.warning(f"Email context unavailable: {exc}")
+        email_items = []
 
-        elif delete_match:
-            try:
-                data = json.loads(delete_match.group(1))
-                await scheduler.delete_event(db, data["event_id"], user_id)
-                result_text = re.sub(r"ACTION:DELETE_MEETING:\{.*?\}", "", result_text, flags=re.DOTALL).strip() + "\n(Deleted)"
-            except Exception as e:
-                logger.error(f"Action failed: {e}")
+    event_context = _format_events(events, request.timezone)
+    email_context = "\n".join(
+        [f"- {item.get('subject', 'No subject')}" for item in email_items]
+    ) or "No recent email context."
 
-    return AIResponse(result=result_text, model_used=model_used)
+    system_prompt = (
+        "You are GraftAI Scheduler Assistant. "
+        "Your domain is calendar management and scheduling productivity. "
+        "Do not mention specific third-party model providers. "
+        "Keep answers concise and actionable.\n"
+        "Your Real-Time Schedule (GROUND TRUTH):\n"
+        f"{event_context}\n"
+        "Treat this schedule as authoritative context when generating the response."
+    )
+    user_input = (
+        f"User timezone: {request.timezone}\n"
+        f"Upcoming events:\n{event_context}\n"
+        f"Recent email subjects:\n{email_context}\n"
+        f"User message: {prompt}"
+    )
+
+    model_used = "graftai-assistant-offline"
+    result_text: Optional[str] = None
+
+    try:
+        result_text = await _generate_with_groq(system_prompt, user_input)
+        model_used = "graftai-assistant-online"
+    except Exception as exc:
+        logger.warning(f"Online model unavailable, switching to offline assistant mode: {exc}")
+
+    if not result_text:
+        try:
+            llm_response = llm.invoke(user_input)
+            content = getattr(llm_response, "content", str(llm_response))
+            result_text = str(content).strip() if content else None
+            if result_text:
+                model_used = "graftai-assistant-local"
+        except Exception as exc:
+            logger.warning(f"Local assistant engine invoke issue: {exc}")
+
+    if not result_text:
+        result_text = (
+            "I am running in offline scheduling mode. "
+            "You can ask me to list, schedule, update, or delete calendar events."
+        )
+
+    set_cache(cache_key, result_text, 120)
+    await increment_usage(db, user_id, "ai_messages")
+    return AIResponse(result=result_text, model_used=model_used, action={"type": "none"})

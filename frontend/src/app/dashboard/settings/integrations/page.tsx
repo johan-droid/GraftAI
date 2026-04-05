@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { composeEndpoint } from "@/lib/api-client";
+import { getIntegrationStatus } from "@/lib/api";
 import { 
   ShieldCheck, 
-  Video, 
+  Video,
   Calendar, 
-  Link as LinkIcon, 
   ExternalLink,
   CheckCircle2,
   Loader2,
@@ -30,37 +31,46 @@ const PROVIDERS = [
     color: "from-blue-600/10 to-cyan-500/10",
     iconColor: "text-blue-400",
     scopes: ["Outlook", "Teams"]
-  },
-  {
-    id: "zoom",
-    name: "Zoom",
-    description: "Connect your Zoom account to generate high-quality video meeting URLs.",
-    color: "from-blue-400/10 to-blue-600/10",
-    iconColor: "text-blue-500",
-    scopes: ["Meetings"]
   }
 ];
 
 export default function IntegrationsPage() {
   const [connections, setConnections] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // In a real app, this would fetch from /api/v1/user/integrations
-    const timer = setTimeout(() => {
-      setConnections({
-        google: false,
-        microsoft: false,
-        zoom: false
+    let alive = true;
+    setLoading(true);
+    setError(null);
+
+    getIntegrationStatus()
+      .then((data) => {
+        if (!alive) return;
+        setConnections({
+          google: Boolean(data.connections?.google),
+          microsoft: Boolean(data.connections?.microsoft),
+        });
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setError(err instanceof Error ? err.message : "Failed to load integrations");
+        setConnections({ google: false, microsoft: false });
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
       });
-      setLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const handleConnect = (providerId: string) => {
     const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
-    const url = `/auth/sso/start?provider=${providerId}&redirect_to=${currentPath}`;
+    const callbackPath = currentPath || "/dashboard/settings/integrations";
+    const base = composeEndpoint("/auth/sso/start", true);
+    const url = `${base}?provider=${encodeURIComponent(providerId)}&redirect_to=${encodeURIComponent(callbackPath)}`;
     window.location.assign(url);
   };
 
@@ -90,6 +100,12 @@ export default function IntegrationsPage() {
         </p>
       </header>
 
+      {error && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+          {error}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 space-y-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -110,7 +126,6 @@ export default function IntegrationsPage() {
                   <div className={`p-3 bg-slate-900 rounded-xl border border-slate-800 ${provider.iconColor}`}>
                     {provider.id === 'google' && <Video className="w-6 h-6" />}
                     {provider.id === 'microsoft' && <Calendar className="w-6 h-6" />}
-                    {provider.id === 'zoom' && <LinkIcon className="w-6 h-6" />}
                   </div>
                   {connections[provider.id] ? (
                     <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase">

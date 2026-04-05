@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import logging
@@ -53,4 +53,4 @@ async def proactive_suggest(
             
     except Exception as e:
         logger.error(f"Proactive engine failure: {e}")
-        return ProactiveResponse(suggestion="Your AI Copilot is monitoring your schedule and will have a suggestion for you soon.")
+        raise HTTPException(status_code=500, detail="Unable to compute proactive suggestion")

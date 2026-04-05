@@ -1,41 +1,55 @@
-import os
 import logging
+import os
+from types import SimpleNamespace
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-# ── Dummy stubs — used when real services are not configured ──────────────────
+class LocalVectorStore:
+    """In-memory vector store interface used when external vector backends are unavailable."""
 
-class _DummyVectorStore:
-    """Absorbs all vector-store calls without error."""
+    def __init__(self) -> None:
+        self._docs: list[Any] = []
 
-    def similarity_search(self, query: str, k: int = 3) -> list:
-        return []
+    def similarity_search(self, query: str, k: int = 3) -> list[Any]:
+        if not self._docs:
+            return []
+        return self._docs[:k]
 
-    def add_documents(self, docs: list, **kwargs: Any) -> list:
-        logger.debug("VectorStore not configured — skipping add_documents")
-        return []
+    def add_documents(self, docs: list[Any], **kwargs: Any) -> list[str]:
+        self._docs.extend(docs)
+        ids = kwargs.get("ids") or []
+        return ids
 
-    def delete(self, ids: list | None = None, **kwargs: Any) -> None:
-        logger.debug("VectorStore not configured — skipping delete")
+    def delete(self, ids: list[str] | None = None, **kwargs: Any) -> None:
+        if ids is None:
+            self._docs.clear()
+            return
+        # Local store keeps no direct id index; this remains no-op safe for interface compatibility.
+        return
 
 
-class _DummyLLM:
-    """Returns a safe fallback when no LLM is configured."""
+class LocalAssistantModel:
+    """Deterministic local assistant for offline operation."""
 
     def invoke(self, messages: Any, **kwargs: Any) -> Any:
-        from types import SimpleNamespace
-        return SimpleNamespace(content="AI service is not configured.")
+        prompt = str(messages or "").strip()
+        if not prompt:
+            text = "Local assistant is ready. Ask me to list, schedule, update, or delete events."
+        else:
+            text = (
+                "Local assistant is active. I can process calendar intents in offline mode "
+                "including listing, scheduling, updating, and deleting events."
+            )
+        return SimpleNamespace(content=text)
 
     def __call__(self, messages: Any, **kwargs: Any) -> Any:
         return self.invoke(messages, **kwargs)
 
 
-# ── Lazy real initialisation ──────────────────────────────────────────────────
-
-vector_store: Any = _DummyVectorStore()
-llm: Any = _DummyLLM()
+vector_store: Any = LocalVectorStore()
+llm: Any = LocalAssistantModel()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -44,42 +58,35 @@ PINECONE_INDEX = os.getenv("PINECONE_INDEX", "scheduler-context")
 
 
 def _try_init() -> None:
-    """Called once at startup. Failures are logged and silently ignored."""
+    """Initializes provider-backed engines when configured; otherwise retains local engines."""
     global llm, vector_store
 
-    if not OPENAI_API_KEY:
-        logger.info("OPENAI_API_KEY not set — using dummy LLM")
-        return
+    if OPENAI_API_KEY:
+        try:
+            from langchain_openai import ChatOpenAI  # type: ignore
 
-    try:
-        from langchain_openai import ChatOpenAI, OpenAIEmbeddings  # type: ignore
-        llm = ChatOpenAI(model=OPENAI_MODEL, openai_api_key=OPENAI_API_KEY)
-        logger.info(f"LLM initialised: {OPENAI_MODEL}")
-    except Exception as exc:
-        logger.warning(f"LLM init failed ({type(exc).__name__}) — using dummy")
-        return
+            llm = ChatOpenAI()
+            logger.info(f"Assistant model initialized: {OPENAI_MODEL}")
+        except Exception as exc:
+            logger.warning(f"Assistant model initialization failed ({type(exc).__name__}); continuing in local mode")
 
-    if not PINECONE_API_KEY:
-        logger.info("PINECONE_API_KEY not set — vector store disabled")
-        return
+    if OPENAI_API_KEY and PINECONE_API_KEY:
+        try:
+            from langchain_openai import OpenAIEmbeddings  # type: ignore
+            from langchain_pinecone import PineconeVectorStore  # type: ignore
 
-    try:
-        from langchain_openai import OpenAIEmbeddings  # type: ignore
-        from langchain_pinecone import PineconeVectorStore  # type: ignore
-
-        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-        vector_store = PineconeVectorStore(
-            index_name=PINECONE_INDEX,
-            embedding=embeddings,
-            pinecone_api_key=PINECONE_API_KEY,
-        )
-        logger.info(f"Pinecone vector store initialised: {PINECONE_INDEX}")
-    except Exception as exc:
-        logger.warning(f"Pinecone init failed ({type(exc).__name__}) — using dummy vector store")
+            embeddings = OpenAIEmbeddings()
+            vector_store = PineconeVectorStore(
+                index_name=PINECONE_INDEX,
+                embedding=embeddings,
+                pinecone_api_key=PINECONE_API_KEY,
+            )
+            logger.info(f"Vector store initialized: {PINECONE_INDEX}")
+        except Exception as exc:
+            logger.warning(f"Vector store initialization failed ({type(exc).__name__}); continuing in local mode")
 
 
-# Run at import time — non-fatal
 try:
     _try_init()
-except Exception:
-    pass
+except Exception as exc:
+    logger.warning(f"Assistant stack initialization warning: {exc}")

@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 # ── Routers ───────────────────────────────────────────────────────────────────
 from backend.auth.routes     import router as auth_router
 from backend.api.calendar    import router as calendar_router
+from backend.api.notifications import router as notifications_router
 from backend.api.users       import router as users_router
 from backend.api.uploads     import router as uploads_router
 from backend.services.ai        import router as ai_router
@@ -165,7 +166,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["X-Backend-Server", "X-Request-Id"],
+    expose_headers=["X-Backend-Server", "X-Request-Id", "x-xsrf-token", "X-XSRF-TOKEN"],
     max_age=600,
 )
 
@@ -185,6 +186,7 @@ v1.include_router(auth_router)
 v1.include_router(users_router)
 v1.include_router(uploads_router)
 v1.include_router(calendar_router)
+v1.include_router(notifications_router)
 v1.include_router(ai_router)
 v1.include_router(proactive_router)
 v1.include_router(analytics_router)

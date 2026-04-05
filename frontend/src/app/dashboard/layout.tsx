@@ -35,7 +35,7 @@ const NAV_GROUPS = [
   {
     label: "Intelligence",
     links: [
-      { name: "AI Copilot", href: "/dashboard/ai", icon: Bot, badge: "New" },
+      { name: "Scheduler Assistant", href: "/dashboard/ai", icon: Bot, badge: "New" },
       { name: "Plugins", href: "/dashboard/plugins", icon: Puzzle },
     ],
   },

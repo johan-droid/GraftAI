@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from backend.api.deps import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.services import scheduler
+from backend.services.sync_engine import sync_user_calendar
 from backend.utils.sanitization import sanitize_recursive
 import logging
 
@@ -122,3 +123,18 @@ async def delete_event(
     if not success:
         raise HTTPException(status_code=404, detail="Event not found")
     return None
+
+
+@router.post("/sync")
+async def manual_calendar_sync(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Trigger real-time synchronization for all active calendar integrations."""
+    await sync_user_calendar(db, user_id)
+
+    return {
+        "status": "ok",
+        "message": "Calendar synchronization completed",
+        "synced_user": str(user_id),
+    }

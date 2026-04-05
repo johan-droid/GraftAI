@@ -20,13 +20,13 @@ const QUICK_PROMPTS = [
   { icon: Zap, text: "Analyze my busiest days and suggest optimizations" },
 ];
 
-export default function AICopilotPage() {
+export default function AISchedulerAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
       role: "ai",
       content:
-        "Hi! I'm your GraftAI Copilot. I can help you schedule meetings, find optimal time slots, coordinate across timezones, and manage your calendar intelligently. What would you like to do?",
+        "Hi! I'm your GraftAI Scheduler Assistant. I can help you schedule meetings, find optimal time slots, coordinate across timezones, and manage your calendar intelligently. What would you like to do?",
       timestamp: new Date(),
     },
   ]);
@@ -71,7 +71,7 @@ export default function AICopilotPage() {
         {
           id: (Date.now() + 1).toString(),
           role: "ai",
-          content: "Connection issue. Please check your API configuration and try again.",
+          content: "Assistant is temporarily offline. I can still handle list, schedule, update, and delete calendar requests once connection resumes.",
           timestamp: new Date(),
         },
       ]);
@@ -105,7 +105,7 @@ export default function AICopilotPage() {
           <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[#030712]" />
         </div>
         <div>
-          <h2 className="text-sm font-bold text-white">GraftAI Copilot</h2>
+          <h2 className="text-sm font-bold text-white">GraftAI Scheduler Assistant</h2>
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
             <span className="text-[11px] text-slate-500">Active · Ready to schedule</span>
@@ -219,9 +219,9 @@ export default function AICopilotPage() {
         <div className="w-full max-w-3xl pointer-events-auto">
           {/* Action pills above input */}
           <div className="flex items-center justify-center gap-2 mb-3">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 backdrop-blur-xl border border-white/[0.08] rounded-full text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shadow-lg">
-              <Sparkles className="w-3 h-3 text-amber-400" /> Deep Seek R1
-            </button>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 backdrop-blur-xl border border-white/[0.08] rounded-full text-[11px] font-semibold text-slate-300 shadow-lg">
+              <Sparkles className="w-3 h-3 text-amber-400" /> Scheduler Core
+            </span>
           </div>
 
           <form onSubmit={handleSubmit} className="relative group">
@@ -239,7 +239,7 @@ export default function AICopilotPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask Copilot anything..."
+                placeholder="Ask Scheduler Assistant..."
                 rows={1}
                 className="w-full min-h-[52px] bg-transparent text-[14.5px] text-slate-200 placeholder-slate-500 focus:outline-none resize-none pt-3.5 pb-3 max-h-[150px] scrollbar-hide leading-relaxed"
               />

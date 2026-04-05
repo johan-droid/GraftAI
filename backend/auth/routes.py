@@ -36,6 +36,7 @@ from backend.services import (
 )
 from backend.services.usage import get_tier_usage_limits, get_next_quota_reset, get_trial_days_left
 from backend.models.tables import UserTable, UserTier
+from backend.models.user_token import UserTokenTable
 from backend.api.deps import get_db
 
 # Auth dependencies
@@ -132,7 +133,6 @@ class FIDO2AttestationRequest(BaseModel):
 
 
 class DIDVerifyRequest(BaseModel):
-    user_id: int
     did: str
 
 
@@ -300,7 +300,11 @@ async def login(
     response = JSONResponse(
         content={
             "message": "Login successful",
-            "user": {"id": user.id, "email": user.email}
+            "user": {"id": user.id, "email": user.email},
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+            "token_type": tokens["token_type"],
+            "expires_in": tokens["expires_in"],
         }
     )
     _attach_jwt_cookies(response, tokens, request)
@@ -677,7 +681,7 @@ def _did_issue(user_id: int = Depends(get_current_user_id)):
 
 
 @router.post("/did/verify")
-def _did_verify(did: str, user_id: int = Depends(get_current_user_id)):
+def _did_verify(payload: DIDVerifyRequest, user_id: int = Depends(get_current_user_id)):
     return {"status": "valid"}
 
 
@@ -790,6 +794,50 @@ async def check_auth(
     response.headers["x-xsrf-token"] = xsrf_token
 
     return response
+
+
+@router.get("/integrations/status")
+async def get_integration_status(
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return per-provider integration status for the authenticated user."""
+    user_id = str(current_user.get("sub"))
+    providers = ["google", "microsoft"]
+
+    stmt = select(
+        UserTokenTable.provider,
+        UserTokenTable.is_active,
+        UserTokenTable.updated_at,
+    ).where(
+        UserTokenTable.user_id == user_id,
+        UserTokenTable.provider.in_(providers),
+    )
+    result = await db.execute(stmt)
+
+    status_map = {provider: False for provider in providers}
+    last_connected_at = {provider: None for provider in providers}
+
+    for provider, is_active, updated_at in result.all():
+        if provider not in status_map:
+            continue
+        status_map[provider] = status_map[provider] or bool(is_active)
+        if is_active and updated_at:
+            ts = updated_at.isoformat()
+            if not last_connected_at[provider] or ts > last_connected_at[provider]:
+                last_connected_at[provider] = ts
+
+    return {
+        "connections": status_map,
+        "providers": [
+            {
+                "id": provider,
+                "connected": status_map[provider],
+                "last_connected_at": last_connected_at[provider],
+            }
+            for provider in providers
+        ],
+    }
 
 
 @router.post("/refresh")

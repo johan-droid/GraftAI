@@ -46,6 +46,10 @@ export async function deleteAccount() {
   return apiClient.delete<{ message: string }>("/auth/account");
 }
 
+export async function updateUserProfile(data: { full_name?: string; timezone?: string }) {
+  return apiClient.patch<{ id: string; email: string; full_name?: string; timezone?: string }>("/users/me", data);
+}
+
 // ──────────────────────────────────────
 // Auth: SSO Start
 // ──────────────────────────────────────
@@ -73,10 +77,65 @@ export async function checkAttribute(attribute: string, value: string) {
 // Services: Analytics
 // ──────────────────────────────────────
 export async function getAnalyticsSummary(range: string = "7d") {
-  return apiClient.get<{ summary: string; details?: { meetings: number; hours: number; growth: number } }>(
+  return apiClient.get<{
+    summary: string;
+    details?: {
+      meetings: number;
+      hours: number;
+      growth: number;
+      recent_events?: {
+        id: number;
+        title: string;
+        start_time: string;
+        category?: string;
+        is_upcoming?: boolean;
+      }[];
+      next_event?: {
+        id: number;
+        title: string;
+        start_time: string;
+        category?: string;
+        is_upcoming?: boolean;
+      } | null;
+    };
+  }>(
     `/analytics/summary`,
     { params: { range } }
   );
+}
+
+export interface AnalyticsRealtimeResponse {
+  summary: string;
+  range: string;
+  generated_at: string;
+  totals: {
+    meetings: number;
+    hours: number;
+    growth: number;
+    unique_attendees: number;
+    cancellations: number;
+  };
+  series: { bucket: string; meetings: number; hours: number }[];
+  meeting_types: { label: string; count: number; pct: number }[];
+  peak_hours: { hour: string; count: number }[];
+  recent_events: {
+    id: number;
+    title: string;
+    start_time: string;
+    category?: string;
+    is_upcoming?: boolean;
+  }[];
+  next_event?: {
+    id: number;
+    title: string;
+    start_time: string;
+    category?: string;
+    is_upcoming?: boolean;
+  } | null;
+}
+
+export async function getAnalyticsRealtime(range: "7d" | "30d" | "90d" = "30d") {
+  return apiClient.get<AnalyticsRealtimeResponse>("/analytics/realtime", { params: { range } });
 }
 
 // ──────────────────────────────────────
@@ -96,8 +155,34 @@ export async function getProactiveSuggestion(context?: string) {
 // ──────────────────────────────────────
 // Services: Plugins
 // ──────────────────────────────────────
+export interface PluginItem {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  category: string;
+  icon: string;
+  installed: boolean;
+  author?: string;
+}
+
 export async function listPlugins() {
-  return apiClient.get<{ plugins: { name: string; description: string; version: string; author?: string }[] }>("/plugins/list");
+  return apiClient.get<{ plugins: PluginItem[] }>("/plugins/list");
+}
+
+export interface IntegrationProviderStatus {
+  id: "google" | "microsoft";
+  connected: boolean;
+  last_connected_at?: string | null;
+}
+
+export interface IntegrationStatusResponse {
+  connections: Record<string, boolean>;
+  providers: IntegrationProviderStatus[];
+}
+
+export async function getIntegrationStatus() {
+  return apiClient.get<IntegrationStatusResponse>("/auth/integrations/status");
 }
 
 // ──────────────────────────────────────
@@ -198,5 +283,5 @@ export async function mfaVerify(userId: number, code: string) {
 }
 
 export async function manualSync() {
-  return apiClient.post<{ status: string; synced_count: number }>("/calendar/sync");
+  return apiClient.post<{ status: string; message: string; synced_user: string }>("/calendar/sync");
 }

@@ -1,16 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { listPlugins } from "@/lib/api";
+import { useState, useEffect, useMemo } from "react";
+import { listPlugins, type PluginItem } from "@/lib/api";
+import { composeEndpoint } from "@/lib/api-client";
 import { motion } from "framer-motion";
-import { Puzzle, Package, Loader2, Search, Check, ArrowUpRight, Zap } from "lucide-react";
-
-interface Plugin {
-  name: string;
-  description: string;
-  version: string;
-  author?: string;
-}
+import { Package, Loader2, Search, Check, ArrowUpRight, Zap, Calendar, Video, Link as LinkIcon } from "lucide-react";
 
 const STAGGER = {
   hidden: { opacity: 0 },
@@ -21,40 +15,64 @@ const ITEM = {
   visible: { opacity: 1, y: 0 },
 };
 
-const MOCK_FEATURED = [
-  { name: "Zoom", desc: "Auto-generate meeting links for every booking", icon: "📹", installed: true, category: "Video" },
-  { name: "Google Calendar", desc: "Two-way sync with your Google calendar", icon: "📅", installed: false, category: "Calendar" },
-  { name: "Stripe", desc: "Accept payments for premium meetings", icon: "💳", installed: false, category: "Payments" },
-  { name: "Slack", desc: "Get booking notifications in Slack channels", icon: "💬", installed: true, category: "Notifications" },
-  { name: "Notion", desc: "Create meeting notes automatically in Notion", icon: "📝", installed: false, category: "Productivity" },
-  { name: "HubSpot", desc: "Sync contacts and deals with CRM", icon: "🔶", installed: false, category: "CRM" },
-];
-
-const CATEGORIES = ["All", "Calendar", "Video", "Payments", "Notifications", "Productivity", "CRM"];
+function providerIcon(name: string) {
+  if (name === "calendar") return <Calendar className="w-5 h-5 text-indigo-300" />;
+  if (name === "video") return <Video className="w-5 h-5 text-cyan-300" />;
+  return <LinkIcon className="w-5 h-5 text-slate-300" />;
+}
 
 export default function PluginsPage() {
-  const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [plugins, setPlugins] = useState<PluginItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let alive = true;
+
     listPlugins()
-      .then((d) => setPlugins(d.plugins))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .then((d) => {
+        if (!alive) return;
+        setPlugins(d.plugins || []);
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setError(err instanceof Error ? err.message : "Failed to load plugins");
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const allPlugins = [
-    ...MOCK_FEATURED,
-    ...plugins.map((p) => ({ name: p.name, desc: p.description, icon: "🔌", installed: false, category: "Custom" })),
-  ];
+  const categories = useMemo(() => {
+    const source = plugins.map((p) => p.category).filter(Boolean);
+    return ["All", ...Array.from(new Set(source))];
+  }, [plugins]);
 
-  const filtered = allPlugins.filter((p) => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.desc.toLowerCase().includes(search.toLowerCase());
+  const filtered = plugins.filter((p) => {
+    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.description.toLowerCase().includes(search.toLowerCase());
     const matchCat = activeCategory === "All" || p.category === activeCategory;
     return matchSearch && matchCat;
   });
+
+  const recommendation = plugins.find((plugin) => !plugin.installed) || null;
+
+  const handlePluginAction = (plugin: PluginItem) => {
+    if (plugin.installed) {
+      window.location.assign("/dashboard/settings/integrations");
+      return;
+    }
+
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "/dashboard/plugins";
+    const callbackPath = currentPath || "/dashboard/plugins";
+    const url = `${composeEndpoint("/auth/sso/start", true)}?provider=${encodeURIComponent(plugin.id)}&redirect_to=${encodeURIComponent(callbackPath)}`;
+    window.location.assign(url);
+  };
 
   return (
     <div className="p-5 md:p-7 max-w-[1200px] mx-auto">
@@ -80,7 +98,7 @@ export default function PluginsPage() {
 
         {/* Category filters */}
         <motion.div variants={ITEM} className="flex gap-2 flex-wrap">
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
@@ -96,20 +114,31 @@ export default function PluginsPage() {
         </motion.div>
 
         {/* AI Recommendation Banner */}
-        <motion.div variants={ITEM} className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 flex items-center gap-4">
-          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
-            <Zap className="w-4 h-4 text-indigo-400" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-white">AI Recommendation</p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Based on your usage, <span className="text-indigo-300 font-semibold">Google Calendar sync</span> would save you ~45 mins/week
-            </p>
-          </div>
-          <button className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shrink-0">
-            Install
-          </button>
-        </motion.div>
+        {recommendation && (
+          <motion.div variants={ITEM} className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 flex items-center gap-4">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
+              <Zap className="w-4 h-4 text-indigo-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-white">Recommended Integration</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Connect <span className="text-indigo-300 font-semibold">{recommendation.name}</span> to enable calendar-native scheduling automation.
+              </p>
+            </div>
+            <button
+              onClick={() => handlePluginAction(recommendation)}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shrink-0"
+            >
+              Connect
+            </button>
+          </motion.div>
+        )}
+
+        {error && (
+          <motion.div variants={ITEM} className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-200">
+            {error}
+          </motion.div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -119,7 +148,7 @@ export default function PluginsPage() {
           <motion.div variants={STAGGER} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((plugin, i) => (
               <motion.div
-                key={`${plugin.name}-${i}`}
+                key={`${plugin.id}-${i}`}
                 variants={ITEM}
                 className="group relative rounded-xl border border-white/[0.07] bg-white/[0.025] hover:border-white/12 hover:bg-white/[0.04] p-5 transition-all"
               >
@@ -130,8 +159,8 @@ export default function PluginsPage() {
                 )}
 
                 <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl shrink-0">
-                    {plugin.icon}
+                  <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                    {providerIcon(plugin.icon)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-bold text-white">{plugin.name}</h3>
@@ -139,20 +168,26 @@ export default function PluginsPage() {
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-400 leading-relaxed mb-4">{plugin.desc}</p>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">{plugin.description}</p>
                 {plugin.author && <p className="text-xs text-slate-500 mb-4">by {plugin.author}</p>}
+                <p className="text-[10px] text-slate-600 mb-4">v{plugin.version}</p>
 
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => handlePluginAction(plugin)}
                     className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
                       plugin.installed
                         ? "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/8"
                         : "bg-indigo-600/80 border-indigo-500/50 text-white hover:bg-indigo-600"
                     }`}
                   >
-                    {plugin.installed ? "Manage" : "Install"}
+                    {plugin.installed ? "Manage" : "Connect"}
                   </button>
-                  <button className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 transition-all" aria-label="View details">
+                  <button
+                    onClick={() => handlePluginAction(plugin)}
+                    className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 transition-all"
+                    aria-label="View details"
+                  >
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </button>
                 </div>

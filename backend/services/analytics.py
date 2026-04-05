@@ -1,17 +1,19 @@
-from fastapi import APIRouter, Depends
+from collections import Counter
+from datetime import datetime, timedelta, timezone
+from typing import Optional, List, Dict, Any
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
-import logging
+from sqlalchemy import select, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.auth.schemes import get_current_user_id
 from backend.models.tables import EventTable
 from backend.utils.db import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
-from datetime import datetime, timedelta, timezone
 
-# Initialize logger
+import logging
+
 logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
@@ -25,113 +27,300 @@ class AnalyticsResponse(BaseModel):
     details: Optional[dict] = None
 
 
+class AnalyticsSeriesPoint(BaseModel):
+    bucket: str
+    meetings: int
+    hours: float
+
+
+class AnalyticsDistributionPoint(BaseModel):
+    label: str
+    count: int
+    pct: int
+
+
+class AnalyticsPeakHourPoint(BaseModel):
+    hour: str
+    count: int
+
+
+class AnalyticsRealtimeResponse(BaseModel):
+    summary: str
+    range: str
+    generated_at: str
+    totals: Dict[str, Any]
+    series: List[AnalyticsSeriesPoint]
+    meeting_types: List[AnalyticsDistributionPoint]
+    peak_hours: List[AnalyticsPeakHourPoint]
+    recent_events: List[Dict[str, Any]]
+    next_event: Optional[Dict[str, Any]] = None
+
+
+def _resolve_range_days(range_value: str) -> int:
+    value = (range_value or "7d").strip().lower()
+    if value == "7d":
+        return 7
+    if value == "30d":
+        return 30
+    if value == "90d":
+        return 90
+    return 7
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _extract_attendee_emails(attendees: Any) -> set[str]:
+    emails: set[str] = set()
+    if not isinstance(attendees, list):
+        return emails
+
+    for item in attendees:
+        if isinstance(item, dict):
+            email = item.get("email")
+            if isinstance(email, str) and email.strip():
+                emails.add(email.strip().lower())
+        elif isinstance(item, str) and item.strip():
+            emails.add(item.strip().lower())
+
+    return emails
+
+
+async def _fetch_events_for_range(
+    db: AsyncSession,
+    user_id: str,
+    start_date: datetime,
+    end_date: datetime,
+) -> List[EventTable]:
+    stmt = (
+        select(EventTable)
+        .where(
+            and_(
+                EventTable.user_id == user_id,
+                EventTable.start_time >= start_date,
+                EventTable.start_time <= end_date,
+            )
+        )
+        .order_by(EventTable.start_time.asc())
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+def _build_analytics_payload(
+    events: List[EventTable],
+    previous_meetings_count: int,
+    start_date: datetime,
+    end_date: datetime,
+    now: datetime,
+) -> Dict[str, Any]:
+    meeting_count = len(events)
+    total_hours = 0.0
+
+    category_counter: Counter[str] = Counter()
+    hour_counter: Counter[int] = Counter()
+    unique_attendees: set[str] = set()
+    cancelled_count = 0
+
+    per_day_meetings: Dict[str, int] = {}
+    per_day_hours: Dict[str, float] = {}
+
+    cursor = start_date.date()
+    while cursor <= end_date.date():
+        key = cursor.isoformat()
+        per_day_meetings[key] = 0
+        per_day_hours[key] = 0.0
+        cursor += timedelta(days=1)
+
+    recent_events = sorted(
+        events,
+        key=lambda x: _as_utc(getattr(x, "start_time")),
+        reverse=True,
+    )[:5]
+
+    next_event = None
+    upcoming_events = [evt for evt in events if _as_utc(getattr(evt, "start_time")) >= now]
+    if upcoming_events:
+        candidate = min(upcoming_events, key=lambda x: _as_utc(getattr(x, "start_time")))
+        next_event = {
+            "id": int(getattr(candidate, "id")),
+            "title": str(getattr(candidate, "title")),
+            "start_time": _as_utc(getattr(candidate, "start_time")).isoformat(),
+            "category": str(getattr(candidate, "category")),
+            "is_upcoming": True,
+        }
+
+    for event in events:
+        start_utc = _as_utc(getattr(event, "start_time"))
+        end_utc = _as_utc(getattr(event, "end_time"))
+        duration_hours = max(0.0, (end_utc - start_utc).total_seconds() / 3600)
+
+        total_hours += duration_hours
+        event_category = str(getattr(event, "category") or "other")
+        category_counter[event_category] += 1
+        hour_counter[start_utc.hour] += 1
+        unique_attendees |= _extract_attendee_emails(getattr(event, "attendees"))
+
+        if str(getattr(event, "status") or "").lower() in {"canceled", "cancelled"}:
+            cancelled_count += 1
+
+        day_key = start_utc.date().isoformat()
+        if day_key in per_day_meetings:
+            per_day_meetings[day_key] += 1
+            per_day_hours[day_key] += duration_hours
+
+    growth = 0
+    if previous_meetings_count > 0:
+        growth = int(((meeting_count - previous_meetings_count) / previous_meetings_count) * 100)
+    elif meeting_count > 0:
+        growth = 100
+
+    total_days = max(1, (end_date.date() - start_date.date()).days + 1)
+    use_short_label = total_days <= 14
+
+    series: List[Dict[str, Any]] = []
+    for day_key in sorted(per_day_meetings.keys()):
+        dt = datetime.fromisoformat(day_key).replace(tzinfo=timezone.utc)
+        bucket = dt.strftime("%a") if use_short_label else dt.strftime("%m-%d")
+        series.append(
+            {
+                "bucket": bucket,
+                "meetings": per_day_meetings[day_key],
+                "hours": round(per_day_hours[day_key], 2),
+            }
+        )
+
+    total_for_pct = max(1, meeting_count)
+    meeting_types = [
+        {
+            "label": label,
+            "count": count,
+            "pct": int((count / total_for_pct) * 100),
+        }
+        for label, count in category_counter.most_common()
+    ]
+
+    peak_hours = [
+        {
+            "hour": f"{hour:02d}:00",
+            "count": count,
+        }
+        for hour, count in hour_counter.most_common(4)
+    ]
+
+    recent_events_payload = [
+        {
+            "id": int(getattr(item, "id")),
+            "title": str(getattr(item, "title")),
+            "start_time": _as_utc(getattr(item, "start_time")).isoformat(),
+            "category": str(getattr(item, "category") or "other"),
+            "is_upcoming": _as_utc(getattr(item, "start_time")) >= now,
+        }
+        for item in recent_events
+    ]
+
+    if meeting_count == 0:
+        summary = "No meetings found in this range. Your schedule is open."
+    else:
+        summary = (
+            f"{meeting_count} meetings across {round(total_hours, 1)}h in this window. "
+            f"Growth is {growth}% compared with the previous period."
+        )
+
+    return {
+        "summary": summary,
+        "totals": {
+            "meetings": meeting_count,
+            "hours": round(total_hours, 1),
+            "growth": growth,
+            "unique_attendees": len(unique_attendees),
+            "cancellations": cancelled_count,
+        },
+        "series": series,
+        "meeting_types": meeting_types,
+        "peak_hours": peak_hours,
+        "recent_events": recent_events_payload,
+        "next_event": next_event,
+    }
+
+
 @router.get("/summary", response_model=AnalyticsResponse)
 async def analytics_summary(
     range: str = "7d",
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    High-Fidelity Analytics Engine.
-    Aggregates real-time data from the EventTable to provide actionable insights.
-    """
-    logger.info(f"Analytics summary requested by user: {user_id}")
-
-    # Calculate time range using aware UTC datetime
+    """Real-time summary metrics backed directly by current event records."""
     now = datetime.now(timezone.utc)
-    if range == "7d":
-        start_date = now - timedelta(days=7)
-    elif range == "30d":
-        start_date = now - timedelta(days=30)
-    else:
-        start_date = now - timedelta(days=7)
+    days = _resolve_range_days(range)
+    start_date = now - timedelta(days=days)
+    prev_start = start_date - timedelta(days=days)
 
     try:
-        # 1. Total Meetings Count
-        count_stmt = select(func.count(EventTable.id)).where(
-            and_(EventTable.user_id == user_id, EventTable.start_time >= start_date)
+        events = await _fetch_events_for_range(db, user_id, start_date, now)
+        previous_events = await _fetch_events_for_range(db, user_id, prev_start, start_date)
+
+        payload = _build_analytics_payload(
+            events=events,
+            previous_meetings_count=len(previous_events),
+            start_date=start_date,
+            end_date=now,
+            now=now,
         )
-        count_result = await db.execute(count_stmt)
-        meetings_count = count_result.scalar() or 0
 
-        # 2. Total Hours Scheduled
-        # Using a direct select to sum durations (end_time - start_time)
-        duration_stmt = select(EventTable.start_time, EventTable.end_time).where(
-            and_(EventTable.user_id == user_id, EventTable.start_time >= start_date)
+        details = {
+            "meetings": payload["totals"]["meetings"],
+            "hours": payload["totals"]["hours"],
+            "growth": payload["totals"]["growth"],
+            "recent_events": payload["recent_events"],
+            "next_event": payload["next_event"],
+            "unique_attendees": payload["totals"]["unique_attendees"],
+            "cancellations": payload["totals"]["cancellations"],
+        }
+        return AnalyticsResponse(summary=payload["summary"], details=details)
+    except Exception as exc:
+        logger.exception(f"Analytics summary failure for user {user_id}: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to compute analytics summary")
+
+
+@router.get("/realtime", response_model=AnalyticsRealtimeResponse)
+async def analytics_realtime(
+    range: str = "30d",
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns graph-ready real-time analytics for dashboard charts."""
+    now = datetime.now(timezone.utc)
+    days = _resolve_range_days(range)
+    start_date = now - timedelta(days=days)
+    prev_start = start_date - timedelta(days=days)
+
+    try:
+        events = await _fetch_events_for_range(db, user_id, start_date, now)
+        previous_events = await _fetch_events_for_range(db, user_id, prev_start, start_date)
+
+        payload = _build_analytics_payload(
+            events=events,
+            previous_meetings_count=len(previous_events),
+            start_date=start_date,
+            end_date=now,
+            now=now,
         )
-        duration_result = await db.execute(duration_stmt)
-        total_hours = 0.0
-        for start, end in duration_result:
-            total_hours += (end - start).total_seconds() / 3600
 
-        # 3. Growth Calculation (Comparison with previous period)
-        prev_start = start_date - (now - start_date)
-        prev_count_stmt = select(func.count(EventTable.id)).where(
-            and_(
-                EventTable.user_id == user_id,
-                EventTable.start_time >= prev_start,
-                EventTable.start_time < start_date,
-            )
+        return AnalyticsRealtimeResponse(
+            summary=payload["summary"],
+            range=range,
+            generated_at=now.isoformat(),
+            totals=payload["totals"],
+            series=payload["series"],
+            meeting_types=payload["meeting_types"],
+            peak_hours=payload["peak_hours"],
+            recent_events=payload["recent_events"],
+            next_event=payload["next_event"],
         )
-        prev_count_result = await db.execute(prev_count_stmt)
-        prev_meetings = prev_count_result.scalar() or 0
-
-        growth = 0
-        if prev_meetings > 0:
-            growth = int(((meetings_count - prev_meetings) / prev_meetings) * 100)
-        elif meetings_count > 0:
-            growth = 100  # First week growth
-
-        # 4. Recent Activity List
-        activity_stmt = select(EventTable).where(
-            EventTable.user_id == user_id
-        ).order_by(EventTable.start_time.desc()).limit(5)
-        activity_result = await db.execute(activity_stmt)
-        activity_list = []
-        for event in activity_result.scalars():
-            activity_list.append({
-                "id": event.id,
-                "title": event.title,
-                "start_time": event.start_time.isoformat(),
-                "category": event.category,
-                "is_upcoming": event.start_time >= now
-            })
-
-        # 5. Next upcoming event (nearest future event)
-        next_event_stmt = select(EventTable).where(
-            EventTable.user_id == user_id,
-            EventTable.start_time >= now
-        ).order_by(EventTable.start_time.asc()).limit(1)
-        next_event_result = await db.execute(next_event_stmt)
-        next_event_obj = next_event_result.scalar_one_or_none()
-        next_event = None
-        if next_event_obj:
-            next_event = {
-                "id": next_event_obj.id,
-                "title": next_event_obj.title,
-                "start_time": next_event_obj.start_time.isoformat(),
-                "category": next_event_obj.category,
-                "is_upcoming": True,
-            }
-
-        if meetings_count > 0:
-            summary_text = f"You've got {meetings_count} meetings on the books for the last {range}. That's about {total_hours:.1f} hours of focused time coordinated by your AI Copilot."
-        else:
-            summary_text = f"Your calendar is clear! No meetings scheduled in the last {range}. Perfect time for some deep work."
-
-        return AnalyticsResponse(
-            summary=summary_text,
-            details={
-                "meetings": meetings_count,
-                "hours": round(total_hours, 1),
-                "growth": growth,
-                "recent_events": activity_list,
-                "next_event": next_event
-            },
-        )
-    except Exception as e:
-        logger.error(f"Analytics engine failure: {e}")
-        return AnalyticsResponse(
-            summary="We're having a bit of trouble crunching your latest numbers, but we'll have them back up shortly.",
-            details={"meetings": 0, "hours": 0, "growth": 0, "next_event": None},
-        )
+    except Exception as exc:
+        logger.exception(f"Analytics realtime failure for user {user_id}: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to compute realtime analytics")

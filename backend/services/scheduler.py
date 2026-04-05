@@ -46,8 +46,7 @@ async def _generate_meeting_link(db, user_id: str, platform: str, event_details:
         token_record = result.scalars().first()
 
         if not token_record:
-            logger.warning(f"⚠ No connected {platform} account for user {user_id}. Using mock link.")
-            return f"https://{platform}.com/mock-meeting-{os.urandom(4).hex()}"
+            raise ValueError(f"No connected {platform} account found for user {user_id}")
 
         token_data = {
             "access_token": token_record.access_token,
@@ -63,11 +62,10 @@ async def _generate_meeting_link(db, user_id: str, platform: str, event_details:
             return await create_zoom_meeting(event_details)
         
     except Exception as e:
-        logger.error(f"❌ Real-world meeting generation failed for {platform}: {e}")
-        # Robust fallback to ensure the user still gets a link even if API fails
-        return f"https://{platform}.com/fallback-{os.urandom(4).hex()}"
+        logger.error(f"❌ Meeting link generation failed for {platform}: {e}")
+        raise
 
-    return f"https://{platform}.com/meeting-{os.urandom(4).hex()}"
+    raise ValueError(f"Unsupported meeting platform '{platform}'")
 
 async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "update"):
     """

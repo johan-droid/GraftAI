@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/app/providers/auth-provider";
-import { setConsent } from "@/lib/api";
+import { deleteAccount, getIntegrationStatus, setConsent, syncUserTimezone, updateUserProfile } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
   User,
@@ -86,6 +88,7 @@ function SettingRow({ icon: Icon, label, description, children }: {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user, logout } = useAuthContext();
   const typedUser = user as { name?: string; email?: string } | null;
   const bookingSlug = typedUser?.email?.split("@")[0] ?? "you";
@@ -101,6 +104,43 @@ export default function SettingsPage() {
     startHour: "09:00",
     endHour: "18:00",
   });
+  const [integrationStatus, setIntegrationStatus] = useState<Record<string, boolean>>({
+    google: false,
+    microsoft: false,
+  });
+  const [loadingIntegrations, setLoadingIntegrations] = useState(true);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(typedUser?.name || "");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [timezoneSaving, setTimezoneSaving] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  useEffect(() => {
+    setNameDraft(typedUser?.name || "");
+  }, [typedUser?.name]);
+
+  useEffect(() => {
+    let alive = true;
+    getIntegrationStatus()
+      .then((data) => {
+        if (!alive) return;
+        setIntegrationStatus({
+          google: Boolean(data.connections?.google),
+          microsoft: Boolean(data.connections?.microsoft),
+        });
+      })
+      .catch(() => {
+        if (!alive) return;
+        setIntegrationStatus({ google: false, microsoft: false });
+      })
+      .finally(() => {
+        if (alive) setLoadingIntegrations(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const toggleConsent = async (key: keyof typeof consents) => {
     const next = !consents[key];
@@ -114,6 +154,43 @@ export default function SettingsPage() {
       // empty
     } finally {
       setSaving(null);
+    }
+  };
+
+  const saveProfileName = async () => {
+    if (!nameDraft.trim()) return;
+    setProfileSaving(true);
+    try {
+      await updateUserProfile({ full_name: nameDraft.trim() });
+      setEditingName(false);
+      router.refresh();
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const updateTimezoneToBrowser = async () => {
+    setTimezoneSaving(true);
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await syncUserTimezone(tz);
+      await updateUserProfile({ timezone: tz });
+      router.refresh();
+    } finally {
+      setTimezoneSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const ok = window.confirm("This will permanently delete your account and data. Continue?");
+    if (!ok) return;
+
+    setDeletingAccount(true);
+    try {
+      await deleteAccount();
+      await logout();
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -182,15 +259,43 @@ export default function SettingsPage() {
               </div>
             </SettingRow>
             <SettingRow icon={User} label="Full name" description="Displayed to invitees">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-300">{typedUser?.name ?? "Not set"}</span>
-                <button className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">Edit</button>
-              </div>
+              {editingName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200"
+                  />
+                  <button
+                    onClick={saveProfileName}
+                    disabled={profileSaving}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 font-medium"
+                  >
+                    {profileSaving ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    onClick={() => setEditingName(false)}
+                    className="text-xs text-slate-400 hover:text-slate-200 font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-300">{typedUser?.name ?? "Not set"}</span>
+                  <button onClick={() => setEditingName(true)} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">Edit</button>
+                </div>
+              )}
             </SettingRow>
             <SettingRow icon={Link2} label="Booking page URL" description="Your personal scheduling link">
               <div className="flex items-center gap-2">
                 <code className="text-xs text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-md font-mono">/{bookingSlug}</code>
-                <button className="text-xs text-slate-500 hover:text-slate-300" aria-label="View booking page" title="View booking page">
+                <button
+                  onClick={() => window.open(`/${bookingSlug}`, "_blank")}
+                  className="text-xs text-slate-500 hover:text-slate-300"
+                  aria-label="View booking page"
+                  title="View booking page"
+                >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -198,7 +303,9 @@ export default function SettingsPage() {
             <SettingRow icon={Globe} label="Timezone" description="Used for all scheduling">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-slate-300">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
-                <button className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">Change</button>
+                <button onClick={updateTimezoneToBrowser} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">
+                  {timezoneSaving ? "Syncing..." : "Sync"}
+                </button>
               </div>
             </SettingRow>
           </Section>
@@ -256,9 +363,9 @@ export default function SettingsPage() {
               </div>
             </SettingRow>
             <div className="px-6 py-3 bg-white/[0.015]">
-              <button className="text-sm text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-2">
+              <Link href="/dashboard/calendar" className="text-sm text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-2">
                 Configure advanced availability <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+              </Link>
             </div>
           </Section>
         </motion.div>
@@ -266,29 +373,44 @@ export default function SettingsPage() {
         <motion.div variants={ITEM}>
           <Section title="Integrations" description="Connect your tools and calendars">
             {[
-              { name: "Google Calendar", icon: "📅", connected: false },
-              { name: "Zoom", icon: "📹", connected: true },
-              { name: "Slack", icon: "💬", connected: false },
-              { name: "Microsoft Teams", icon: "🟦", connected: false },
+              { id: "google", name: "Google Calendar", icon: "📅" },
+              { id: "microsoft", name: "Microsoft Teams", icon: "🟦" },
             ].map((int) => (
-              <SettingRow key={int.name} label={int.name}>
+              <SettingRow key={int.id} label={int.name}>
                 <div className="flex items-center gap-3">
                   <span>{int.icon}</span>
+                  {loadingIntegrations ? (
+                    <span className="text-xs text-slate-500">Checking...</span>
+                  ) : (
                   <button className={cn(
                     "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
-                    int.connected
+                    integrationStatus[int.id]
                       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/15"
                       : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/8"
-                  )}>
-                    {int.connected ? (
+                  )
+                    onClick={() => {
+                      if (!integrationStatus[int.id]) {
+                        router.push("/dashboard/settings/integrations");
+                      }
+                    }}>
+                    {integrationStatus[int.id] ? (
                       <span className="flex items-center gap-1.5"><Check className="w-3 h-3" />Connected</span>
                     ) : (
                       "Connect"
                     )}
                   </button>
+                  )}
                 </div>
               </SettingRow>
             ))}
+            <div className="px-6 py-3 bg-white/[0.015]">
+              <Link
+                href="/dashboard/settings/integrations"
+                className="text-sm text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-2"
+              >
+                Open integration controls <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </Section>
         </motion.div>
 
@@ -328,8 +450,12 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium text-slate-300">Delete account</p>
                 <p className="text-xs text-slate-500 mt-0.5">Permanently delete your account and all data</p>
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition-all">
-                Delete account
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition-all disabled:opacity-60"
+              >
+                {deletingAccount ? "Deleting..." : "Delete account"}
               </button>
             </div>
           </div>

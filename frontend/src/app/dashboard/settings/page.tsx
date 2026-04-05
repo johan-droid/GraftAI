@@ -382,23 +382,25 @@ export default function SettingsPage() {
                   {loadingIntegrations ? (
                     <span className="text-xs text-slate-500">Checking...</span>
                   ) : (
-                  <button className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
-                    integrationStatus[int.id]
-                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/15"
-                      : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/8"
-                  )
-                    onClick={() => {
-                      if (!integrationStatus[int.id]) {
-                        router.push("/dashboard/settings/integrations");
-                      }
-                    }}>
-                    {integrationStatus[int.id] ? (
-                      <span className="flex items-center gap-1.5"><Check className="w-3 h-3" />Connected</span>
-                    ) : (
-                      "Connect"
-                    )}
-                  </button>
+                    <button
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
+                        integrationStatus[int.id]
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/15"
+                          : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/8"
+                      )}
+                      onClick={() => {
+                        if (!integrationStatus[int.id]) {
+                          router.push("/dashboard/settings/integrations");
+                        }
+                      }}
+                    >
+                      {integrationStatus[int.id] ? (
+                        <span className="flex items-center gap-1.5"><Check className="w-3 h-3" />Connected</span>
+                      ) : (
+                        "Connect"
+                      )}
+                    </button>
                   )}
                 </div>
               </SettingRow>

@@ -15,18 +15,30 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 def get_google_credentials(token_data: dict) -> Credentials:
     """Reconstructs Google credentials from stored token data."""
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    
+    if not client_id or not client_secret:
+        logger.error("❌ CRITICAL: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment.")
+        # We try to proceed but expect refresh failure if credentials are not specified
+        
     creds = Credentials(
         token=token_data.get("access_token"),
         refresh_token=token_data.get("refresh_token"),
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=GOOGLE_CLIENT_ID,
-        client_secret=GOOGLE_CLIENT_SECRET,
-        scopes=token_data.get("scopes", "").split(",")
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=token_data.get("scopes", "").split(",") if isinstance(token_data.get("scopes"), str) else token_data.get("scopes", [])
     )
     
-    # Refresh if expired
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+    # Refresh if expired and we have what we need
+    try:
+        if creds and creds.expired and creds.refresh_token:
+            if not client_id or not client_secret:
+                logger.warning("Attempting to refresh Google token without Client ID/Secret. This will likely fail.")
+            creds.refresh(Request())
+    except Exception as e:
+        logger.warning(f"Failed to refresh Google credentials: {e}")
         
     return creds
 

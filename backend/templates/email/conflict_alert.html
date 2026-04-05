@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card" style="border-top-color: #f59e0b;">
+    <div class="badge" style="background-color: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40;">Conflict Detected</div>
+    <h1>Schedule Overlap Alert</h1>
+    <p>Your AI assistant has detected a potential conflict in your schedule. An event you're trying to add overlaps with an existing commitment.</p>
+    
+    <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
+        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700;">Competing Events:</p>
+        <p style="margin-bottom: 4px; font-size: 13px; color: #f87171;">⚠️ {{ requested_event }}</p>
+        <p style="margin-bottom: 0; font-size: 13px; color: #94a3b8;">📅 Overlaps with: {{ existing_event }}</p>
+    </div>
+
+    <p style="font-size: 13px; color: #64748b;">Would you like to find an alternative time? Use the "Proactive Reschedule" feature in your dashboard.</p>
+
+    <center>
+        <a href="{{ frontend_url }}/dashboard/calendar" class="button">Manage Schedule</a>
+    </center>
+</div>
+{% endblock %}

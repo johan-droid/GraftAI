@@ -16,36 +16,32 @@ from sqlalchemy import select, and_
 from backend.models.tables import EventTable, UserTable
 from backend.services.notifications import notify_welcome_email, notify_event_reminder
 from backend.services.sync_engine import sync_user_calendar
+from backend.services.email import send_email, render_template
 
 async def task_notify_welcome(ctx, user_email: str, full_name: str):
-    """
-    Worker task to send a welcome email to a new user.
-    """
+    """Worker task to send a welcome email to a new user."""
     logger.info(f"[WORKER] ✉️ Sending welcome email to {user_email}")
     await notify_welcome_email(user_email, full_name)
 
 async def task_sync_calendar(ctx, user_id: str):
-    """
-    Worker task to perform an initial or periodic calendar sync.
-    """
+    """Worker task to perform an initial or periodic calendar sync."""
     logger.info(f"[WORKER] 🗓 Syncing calendar for user {user_id}")
     async with ctx['db_session_factory']() as db:
         await sync_user_calendar(db, user_id)
 
 async def task_process_event_reminders(ctx):
     """
-    Periodic task to check for upcoming events and send reminders with 'Pinpoint Accuracy'.
-    Matches events starting exactly ~15 minutes (14-16 min window) from now.
+    Periodic task to check for upcoming events and send reminders.
+    Matches events starting exactly ~30 minutes (28-32 min window) from now.
     """
-    logger.info("[WORKER] 🔔 Scanning for events starting in exactly 15 minutes...")
+    logger.info("[WORKER] 🔔 Scanning for events starting in exactly 30 minutes...")
     async with ctx['db_session_factory']() as db:
         now = datetime.now(timezone.utc)
-        min_threshold = now + timedelta(minutes=14)
-        max_threshold = now + timedelta(minutes=16)
+        min_threshold = now + timedelta(minutes=28)
+        max_threshold = now + timedelta(minutes=32)
         
-        # Query events starting exactly in the 15-min pocket
         stmt = (
-            select(EventTable, UserTable.email, UserTable.full_name, UserTable.id)
+            select(EventTable, UserTable.email, UserTable.full_name)
             .join(UserTable, EventTable.user_id == UserTable.id)
             .where(
                 and_(
@@ -61,7 +57,10 @@ async def task_process_event_reminders(ctx):
         
         for event, user_email, user_name in rows:
             try:
-                # Prepare event data for the notification service
+                # Logic Hole Audit: Mark as processing BEFORE sending to avoid duplicates if crash occurs mid-loop
+                event.is_reminded = True
+                await db.flush() # Ensure change is tracked
+                
                 event_data = {
                     "id": event.id,
                     "user_id": event.user_id,
@@ -74,79 +73,84 @@ async def task_process_event_reminders(ctx):
                     "full_name": user_name
                 }
                 
+                # Send the reminder
                 await notify_event_reminder(user_email, [], event_data)
                 
-                # Mark as reminded
-                event.is_reminded = True
-                logger.info(f"[WORKER] 🔔 Reminder sent for event '{event.title}' to {user_email}")
+                # Commit immediately for this specific event to prevent re-processing
+                await db.commit()
+                logger.info(f"[WORKER] 🔔 Reminder sent and committed for event '{event.title}' to {user_email}")
             except Exception as e:
+                # Rollback if send fails so we can retry in the next window (if within 28-32 mins)
+                await db.rollback()
                 logger.error(f"[WORKER] ❌ Failed to send reminder for event {event.id}: {e}")
-        
-        await db.commit()
+
+async def task_notify_event(ctx, to_email: str, template_name: str, subject: str, context: dict):
+    """Unified worker task to render and send any email from a template."""
+    logger.info(f"[WORKER] ✉️ Sending lifecycle email ({template_name}) to {to_email}")
+    try:
+        html_body = render_template(template_name, context)
+        await send_email(to_email, subject, html_body)
+    except Exception as e:
+        logger.error(f"[WORKER] ❌ Failed to send email {template_name}: {e}")
 
 async def task_background_ai_sync(ctx, event_id: int, user_id: str, action: str = "upsert"):
-    """
-    Worker task to perform Pinecone operations in the background.
-    Action can be 'upsert' or 'delete'.
-    """
+    """Worker task to perform Pinecone operations in the background."""
     from backend.services.ai_sync import sync_event_to_vector_store, purge_event_from_vector_store
-    
     if action == "delete":
-        logger.info(f"[WORKER] 🗑 AI Sync: Purging event {event_id} (user: {user_id})")
         await purge_event_from_vector_store(event_id, user_id)
         return
-
-    logger.info(f"[WORKER] 🧠 AI Sync: Indexing context for event {event_id} (user: {user_id})")
     async with ctx['db_session_factory']() as db:
         stmt = select(EventTable).where(EventTable.id == event_id)
         result = await db.execute(stmt)
         event = result.scalars().first()
+        if event:
+            await sync_event_to_vector_store(event)
+
+async def task_purge_expired_accounts(ctx):
+    """
+    Daily Retention Worker: Permanently purges accounts soft-deleted >30 days ago.
+    This fulfills both GDPR right-to-erasure and business retention policies.
+    """
+    logger.info("[WORKER] 🧹 Starting Daily Retention Audit...")
+    from backend.models.tables import UserTable
+    from sqlalchemy import delete
+    
+    async with ctx['db_session_factory']() as db:
+        retention_threshold = datetime.now(timezone.utc) - timedelta(days=30)
         
-        if not event:
-            logger.warning(f"[WORKER] ⚠️ Skipping AI sync: event {event_id} not found in database.")
-            return
-            
-        await sync_event_to_vector_store(event)
+        # Find and Delete (Cascades will handle child records: events, sessions, etc.)
+        stmt = delete(UserTable).where(
+            and_(
+                UserTable.deleted_at != None,
+                UserTable.deleted_at < retention_threshold
+            )
+        )
+        result = await db.execute(stmt)
+        await db.commit()
+        
+        # rowcount represents how many users were purged
+        count = result.rowcount
+        if count > 0:
+            logger.info(f"✅ [WORKER] Successfully purged {count} expired accounts (GDPR Cycle).")
+        else:
+            logger.info("✅ [WORKER] Retention audit complete. No accounts eligible for purge.")
 
 async def task_renew_webhooks(ctx):
-    """
-    Periodic task to renew Google and Microsoft push notification subscriptions.
-    Ensures 'Perfect Sync' remains active by refreshing tokens before they expire.
-    """
+    """Periodic task to renew Google and Microsoft push notification subscriptions."""
     from backend.services.integrations.webhook_manager import renew_all_expiring_subscriptions
-    logger.info("[WORKER] ♻️ Periodic Sync: Checking for expiring webhook subscriptions...")
-    async with ctx['db_session_factory']() as db:
-        await renew_all_expiring_subscriptions(db)
-    logger.info("♻️ Checking for expiring webhook subscriptions...")
     async with ctx['db_session_factory']() as db:
         await renew_all_expiring_subscriptions(db)
 
 async def startup(ctx):
-    """
-    Initializes shared resources (DB and Monitoring) for the background worker.
-    Ensures Sentry observability is active for all jobs.
-    """
     from backend.utils.db import get_async_session_factory
     ctx['db_session_factory'] = get_async_session_factory()
-    
-    # Initialize Sentry for Worker (if DSN provided)
     sentry_dsn = os.getenv("SENTRY_DSN")
     if sentry_dsn:
         import sentry_sdk
-        try:
-            sentry_sdk.init(
-                dsn=sentry_dsn,
-                traces_sample_rate=0.1,
-                environment=os.getenv("ENV", "production"),
-            )
-            logger.info("[WORKER] ✅ Sentry monitoring active.")
-        except Exception as e:
-            logger.error(f"[WORKER] ❌ Sentry initialization failed: {e}")
-    
+        sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=0.1, environment=os.getenv("ENV", "production"))
     logger.info("[WORKER] 🚀 Background worker started.")
 
 async def shutdown(ctx):
-    """Cleanly closes resources upon worker termination."""
     logger.info("[WORKER] 🛑 Background worker shutting down.")
 
 class WorkerSettings:
@@ -157,15 +161,15 @@ class WorkerSettings:
         task_sync_calendar, 
         task_process_event_reminders, 
         task_background_ai_sync,
-        task_renew_webhooks
+        task_renew_webhooks,
+        task_notify_event,
+        task_purge_expired_accounts
     ]
-    
-    # Run reminder check every minute, and webhook renewal twice daily
     cron_jobs = [
         {'function': task_process_event_reminders, 'minute': '*', 'run_at_startup': True},
-        {'function': task_renew_webhooks, 'hour': {0, 12}, 'minute': 0}
+        {'function': task_renew_webhooks, 'hour': {0, 12}, 'minute': 0},
+        {'function': task_purge_expired_accounts, 'hour': 0, 'minute': 0} # Daily Midnight Purge
     ]
-    
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = 10

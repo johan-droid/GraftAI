@@ -49,51 +49,53 @@
 
 ## 🚀 Core Features
 
-### 🔐 1. Identity & Sovereignty (Hardened)
-* **HttpOnly Cookie Auth**: Production-grade session management using `HttpOnly`, `Secure`, `SameSite=Strict` cookies to mitigate XSS and CSRF risks.
-* **Universal SSO**: Native, race-condition-free integration with Google, GitHub, Microsoft, and Apple.
-* **Biometric Auth**: Passwordless login using FIDO2/WebAuthn (TouchID/FaceID).
-* **Sovereign JWT**: Asynchronous token validation with Auth0 JWKS integration and fail-safe local fallback.
+### 🔐 1. Identity & Sovereignty (Sovereign Tier)
+* **HttpOnly Cookie Isolation**: Hardened session management using `HttpOnly`, `Secure`, `SameSite=Strict` cookies to eliminate XSS/CSRF vectors.
+* **Biometric FIDO2/WebAuthn**: Passwordless login with native TouchID/FaceID support.
+* **GDPR Soft-Delete**: Secure account offboarding with a 30-day retention grace period and automated background purging.
 
 ### 🤖 2. Proactive AI Intelligence
-* **Contextual Memory**: Powered by RAG (Retrieval Augmented Generation) for long-term user context.
-* **Resilient Pinecone**: Advanced vector store integration with robust fallback handling to ensure AI availability during provider outages.
-* **Natural Language UI**: Chat-driven scheduling that understands nuances like "find a quick sync before my flight."
-* **Advanced RAG**: Strictly isolated multi-tenant indexing for enterprise-grade data privacy.
+* **Contextual Memory (RAG)**: High-fidelity meeting context extraction powered by LangChain and Pinecone.
+* **Resilient Sync Engine**: Non-blocking, atomic synchronization with Google, Microsoft Graph, and Zoom.
+* **Natural Language Orchestration**: Chat-driven scheduling that understands intent and nuances.
 
-### 📊 3. Enterprise Observability
-* **Live Analytics**: Real-time tracking of meeting health and team productivity.
-* **Non-Blocking API**: Fully asynchronous backend orchestration ensuring extreme concurrency and low latency.
-* **Multi-Cloud Ready**: Optimized for horizontal scaling with tuned database connection pooling (SQLAlchemy 2.0 Async).
+### 📊 3. Enterprise Hardening (Zero-Crash)
+* **Production Pre-flight Audit**: Automatic startup verification of Database, Redis, and Environment availability.
+- **SSL Resilience**: Hardened database connection pooling (Tuned for Render/Neon instability).
+* **Worker-Centric Reminders**: Atomic 'Scan-Mark-Send' pattern to prevent duplicate event notifications.
 
 ---
 
 ## 🏗️ Technical Architecture
 
 ```mermaid
-graph LR
-    subgraph "Hardened Edge"
-        UI["Modern UI (Next.js 15+ + Tailwind 4)"]
-        Guard["Cookie-Based Auth Middleware"]
+graph TD
+    subgraph "Sovereign Frontend (Vercel)"
+        UI["Next.js 15+ Dashboard"]
+        Store["Auth-State Guard"]
     end
 
-    subgraph "Intelligent Core"
-        API["FastAPI Async Orchestrator"]
-        Auth["Sovereign Identity Service"]
-        Agent["Resilient AI Agent (LangChain)"]
+    subgraph "API Orchestrator (Render)"
+        API["FastAPI (Asynchronous)"]
+        Audit["Pre-flight Startup Audit"]
+    end
+
+    subgraph "Background Engine (Arc/Redis)"
+        Worker["Arq Async Worker"]
+        Redis["Redis (In-Memory Queue)"]
     end
 
     subgraph "Sovereign Persistence"
-        RDS["PostgreSQL 16 (Tuned Connection Pool)"]
-        VDB["Pinecone (with Fallback)"]
-        Cache["Redis (Auth Revocation & Rate Limiting)"]
+        RDS["PostgreSQL (Neon SSL-Hardened)"]
+        VDB["Pinecone (Vector RAG)"]
     end
 
     UI --> API
-    Guard --> Auth
-    API --> Agent
-    Agent --> VDB
-    Auth --> Cache
+    API --> Audit
+    API --> Redis
+    Redis --> Worker
+    Worker --> RDS
+    API --> VDB
     API --> RDS
 ```
 

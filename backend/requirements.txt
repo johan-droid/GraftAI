@@ -1,62 +1,58 @@
 # Core
-fastapi
-pydantic[email]>=2.10,<3
-python-dotenv
-bleach>=6.1.0
-pytz
+fastapi==0.115.0
+pydantic[email]==2.10.0
+python-dotenv==1.0.1
+bleach==6.1.0
+pytz==2024.1
 
 # Database
-asyncpg
-sqlalchemy[asyncio]
+asyncpg==0.30.0
+sqlalchemy[asyncio]==2.0.35
+alembic==1.13.3
 
 # Auth
-PyJWT>=2.10.0
-cryptography>=42.0.0
-authlib
-pyotp
-httpx
-python-multipart>=0.0.18
-argon2-cffi>=23.1.0
-# bcrypt>=4.0.0 (removed as unused)
-msal>=1.0.0
+PyJWT==2.10.0
+cryptography==43.0.1
+authlib==1.3.1
+pyotp==2.9.0
+httpx==0.27.2
+python-multipart==0.0.12
+argon2-cffi==23.1.0
+msal==1.31.0
 
-# Cache
-redis
-arq>=0.26.0
+# Cache & Workers
+redis==5.0.8
+arq==0.26.1
 
 # AI & LLM
-groq>=0.4.0
-langchain>=0.2.0,<1.3
-langchain-openai>=0.1.0,<2
-langchain-community>=0.2.0,<1
-openai>=1.0.0,<3
-pinecone>=5.0.0
-langchain-pinecone>=0.2.13
+groq==0.11.0
+langchain==0.2.14
+langchain-openai==0.1.22
+langchain-community==0.2.12
+openai==1.42.0
+pinecone==5.0.1
+langchain-pinecone==0.1.3
 
-# Google API integration (required for google_calendar sync)
-google-auth>=2.20.0
-google-auth-oauthlib>=1.0.0
-google-api-python-client>=2.70.0
-
-# Dev
-pytest>=8.0.0
-pytest-asyncio>=0.25.0
-black
+# Google API integration
+google-auth==2.34.0
+google-auth-oauthlib==1.2.1
+google-api-python-client==2.142.0
 
 # Build & Serving
-uvicorn[standard]
-gunicorn>=21.2.0
-setuptools>=69.0.0
-pyyaml>=6.0.1,<7.0
+uvicorn[standard]==0.30.6
+gunicorn==23.0.0
+setuptools==74.1.2
+pyyaml==6.0.2
+uvloop==0.20.0; sys_platform != 'win32'
 
 # Monitoring
-sentry-sdk[fastapi,sqlalchemy,redis,arq]>=2.10.0
+sentry-sdk[fastapi,sqlalchemy,redis,arq]==2.13.0
 
 # Storage & Templates
-boto3>=1.34.0
-jinja2>=3.1.0
+boto3==1.35.14
+jinja2==3.1.4
 
 # Payment
-stripe>=11.0.0
-razorpay>=1.5.0
-aiosqlite>=0.20.0
+stripe==11.0.0
+razorpay==1.5.0
+aiosqlite==0.20.0

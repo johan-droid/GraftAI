@@ -42,28 +42,22 @@ def _build_event_templates(notification_type: str, event_data: dict) -> tuple[st
     }
 
     if notification_type == "created":
-        subject = f"🎉 New event created: {title}"
-        template_context["action_title"] = "New Event Scheduled"
-        template_context["summary_text"] = f"A new event has been added to your calendar: {title}."
-        html_body = render_template("event_alert.html", template_context)
-        text_body = f"Hello {user_name},\n\nAn event has been added: '{title}'\nTime: {start_time} - {end_time}\n"
+        subject = f"📅 Meeting Confirmed: {title}"
+        html_body = render_template("confirmation.html", template_context)
+        text_body = f"Hello {user_name},\n\nYour meeting '{title}' has been confirmed for {start_time}.\n"
 
     elif notification_type == "updated":
-        subject = f"✅ Event Updated: '{title}'"
-        template_context["action_title"] = "Event Details Modified"
-        template_context["summary_text"] = f"Your event '{title}' has been updated with new information."
-        html_body = render_template("event_alert.html", template_context)
-        text_body = f"Hello {user_name},\n\nYour event '{title}' has been updated.\nTime: {start_time} - {end_time}\n"
+        subject = f"🔄 Update: Meeting Details Changed - {title}"
+        html_body = render_template("update.html", template_context)
+        text_body = f"Hello {user_name},\n\nYour meeting '{title}' has been updated to {start_time}.\n"
 
     elif notification_type == "deleted":
-        subject = f"🗑 Event Removed: {title}"
-        template_context["action_title"] = "Event Canceled"
-        template_context["summary_text"] = f"Your event '{title}' has been removed from your calendar."
-        html_body = render_template("event_alert.html", template_context)
-        text_body = f"Hello {user_name},\n\nYour event '{title}' was deleted.\n"
+        subject = f"🗑️ Meeting Cancelled: {title}"
+        html_body = render_template("cancellation.html", template_context)
+        text_body = f"Hello {user_name},\n\nYour meeting '{title}' has been removed from the schedule.\n"
 
     elif notification_type == "reminder":
-        subject = f"⏳ Reminder: '{title}' starting soon"
+        subject = f"⏳ Reminder: '{title}' starting in 30 minutes"
         html_body = render_template("reminder.html", template_context)
         text_body = f"Hello {user_name},\n\nReminder: '{title}' is starting soon at {start_time}.\n"
 

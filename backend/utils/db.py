@@ -49,37 +49,43 @@ if DATABASE_URL:
                 class_=AsyncSession,
             )
         else:
-            # asyncpg does NOT support sslmode or channel_binding as URL query params.
-            # Strip them and pass ssl=True via connect_args instead.
+            # Render & managed Postgres usually requires SSL.
+            # asyncpg does NOT support sslmode as URL query params.
             _parsed = urlparse(DATABASE_URL)
             _params = parse_qs(_parsed.query)
+            
+            # Explicit Render Detection
+            is_render = os.getenv("RENDER") == "true" or "render.com" in DATABASE_URL
+            
             _needs_ssl = _params.pop("sslmode", [None])[0] in (
                 "require",
                 "verify-ca",
                 "verify-full",
                 "prefer",
-            )
+            ) or is_render
+            
             _params.pop("channel_binding", None)
             _clean_query = urlencode({k: v[0] for k, v in _params.items()}, doseq=False)
             _clean_url = urlunparse(_parsed._replace(query=_clean_query))
-
+ 
             _connect_args = {
-                "command_timeout": 30, # Increased for complex AI queries
-                "server_settings": {"application_name": "GraftAI-SaaS"}
+                "command_timeout": 30,
+                "server_settings": {"application_name": "GraftAI-Production"}
             }
             if _needs_ssl:
-                _connect_args["ssl"] = True
-
-            pool_size = int(os.getenv("DB_POOL_SIZE", "40"))
-            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "120"))
-
+                # Use standard SSL context for production stability
+                _connect_args["ssl"] = "require" if is_render else True
+ 
+            pool_size = int(os.getenv("DB_POOL_SIZE", "20")) # Render starter/pro limits
+            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+ 
             engine = create_async_engine(
                 _clean_url,
                 echo=False,
                 future=True,
                 connect_args=_connect_args,
                 pool_pre_ping=True,
-                pool_recycle=300,  # Recycle before Neon auto-suspends (5m window)
+                pool_recycle=180,  # Pro-grade recycle: 3 minutes to avoid Neon/Render idle kills
                 pool_size=pool_size,
                 max_overflow=max_overflow,
                 pool_timeout=30,

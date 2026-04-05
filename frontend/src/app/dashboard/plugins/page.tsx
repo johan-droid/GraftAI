@@ -63,8 +63,12 @@ export default function PluginsPage() {
   const recommendation = plugins.find((plugin) => !plugin.installed) || null;
 
   const handlePluginAction = (plugin: PluginItem) => {
-    if (plugin.installed) {
-      window.location.assign("/dashboard/settings/integrations");
+    // If already installed, we could show a 'Manage' view or just link to settings
+    // But per user request, we want to stay in Plugins if possible or connect directly.
+    const isCore = plugin.id === "google" || plugin.id === "microsoft";
+    
+    if (plugin.installed && !isCore) {
+      // For generic plugins, maybe they have a custom settings page
       return;
     }
 

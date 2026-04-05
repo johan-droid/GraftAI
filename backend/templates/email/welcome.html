@@ -1,36 +1,20 @@
 {% extends "layout.html" %}
+
 {% block content %}
 <div class="card">
-    <div class="badge badge-primary">Mission Briefing</div>
-    <h1>Welcome to the Future, {{ full_name }}!</h1>
-    <p>Your GraftAI sovereignty engine is now active. Your digital twin is standing by to automate your scheduling and unlock consistent deep work.</p>
+    <div class="badge badge-primary">Onboarding</div>
+    <h1>Welcome to GraftAI, {{ full_name }}!</h1>
+    <p>We're thrilled to have you on board. GraftAI is your new autonomous command center for scheduling and time management.</p>
     
-    <div style="margin: 32px 0;">
-        <h3 style="font-size: 14px; text-transform: uppercase; color: #6366f1; margin-bottom: 24px; letter-spacing: 0.1em;">Flight Checklist:</h3>
-        
-        <div style="margin-bottom: 24px; display: table;">
-            <div style="display: table-cell; vertical-align: top; width: 40px;">
-                <div style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid #6366f1; text-align: center; color: #6366f1; font-weight: 800; font-size: 12px; line-height: 24px;">1</div>
-            </div>
-            <div style="display: table-cell; vertical-align: top;">
-                <div style="font-weight: 800; color: #ffffff; margin-bottom: 4px; font-size: 16px;">Connect Your Ecosystem</div>
-                <p style="font-size: 14px; margin: 0;">Sync Google Calendar or Microsoft 365 in Settings to activate autonomous synchronization.</p>
-            </div>
-        </div>
+    <p>Your workspace is now active and ready to sync with your digital life. Here's what you can do right now:</p>
+    <ul style="color: #cbd5e1; font-size: 14px; margin-bottom: 24px; padding-left: 20px;">
+        <li style="margin-bottom: 10px;">Connect your <strong>Google Calendar</strong> or <strong>Outlook</strong> for instant sync.</li>
+        <li style="margin-bottom: 10px;">Use the <strong>AI Assistant</strong> to schedule meetings naturally.</li>
+        <li style="margin-bottom: 10px;">Monitor your productivity with <strong>Advanced Analytics</strong>.</li>
+    </ul>
 
-        <div style="margin-bottom: 24px; display: table;">
-            <div style="display: table-cell; vertical-align: top; width: 40px;">
-                <div style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid #6366f1; text-align: center; color: #6366f1; font-weight: 800; font-size: 12px; line-height: 24px;">2</div>
-            </div>
-            <div style="display: table-cell; vertical-align: top;">
-                <div style="font-weight: 800; color: #ffffff; margin-bottom: 4px; font-size: 16px;">Converse with AI</div>
-                <p style="font-size: 14px; margin: 0;">Try saying: "Schedule a 30-min strategy deep-dive next Tuesday at 10 AM."</p>
-            </div>
-        </div>
-    </div>
-    
-    <div style="text-align: center; padding-top: 20px;">
-        <a href="{{ frontend_url }}/dashboard" class="button">Launch My Dashboard</a>
-    </div>
+    <center>
+        <a href="{{ frontend_url }}/dashboard" class="button">Go to Dashboard</a>
+    </center>
 </div>
 {% endblock %}

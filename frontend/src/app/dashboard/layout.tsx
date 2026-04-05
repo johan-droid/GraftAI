@@ -76,7 +76,7 @@ function PrivacyToggle() {
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { logout, user } = useAuthContext();
+  const { logout, user, loading } = useAuthContext();
   const displayUser = user as { name?: string; email?: string; timezone?: string } | null;
 
   // Active Timezone Detection & Sync
@@ -94,6 +94,20 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       }
     }
   }, [displayUser]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#030612] flex items-center justify-center">
+        <div className="relative">
+          <div className="w-12 h-12 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+          <div className="absolute inset-0 bg-indigo-500/10 blur-xl rounded-full animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  // Double guard: If no user and not loading (redirection handled by AuthProvider)
+  if (!user) return null;
 
   const userInitials = displayUser?.name
     ? displayUser.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()

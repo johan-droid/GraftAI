@@ -60,7 +60,7 @@ async def upsert_event(db: AsyncSession, user_id: str, source: str, event_data: 
     external_id = event_data.get("external_id")
     fingerprint = generate_fingerprint(event_data)
     
-    # 1. Check for exact match (same source + external_id)
+    # 1. Check for primary match (source + external_id)
     stmt = select(EventTable).where(
         and_(
             EventTable.user_id == user_id,
@@ -72,8 +72,8 @@ async def upsert_event(db: AsyncSession, user_id: str, source: str, event_data: 
     existing_event = result.scalars().first()
     
     if not existing_event:
-        # 2. Check for cross-provider match (same fingerprint, different source)
-        # This handles cases where a meeting is in both Google and Outlook.
+        # 2. Check for fingerprint match (cross-provider merging)
+        # We use this to detect the same meeting in Google and Outlook
         stmt = select(EventTable).where(
             and_(
                 EventTable.user_id == user_id,
@@ -84,18 +84,17 @@ async def upsert_event(db: AsyncSession, user_id: str, source: str, event_data: 
         existing_event = result.scalars().first()
         
     if existing_event:
-        # Update existing record
+        # Smart update: don't overwrite local changes if we have a flag, 
+        # but for sync events from external source, we update.
         for key, value in event_data.items():
-            if hasattr(existing_event, key):
+            if hasattr(existing_event, key) and value is not None:
                 setattr(existing_event, key, value)
         
-        # Ensure sync fields are updated
         existing_event.fingerprint = fingerprint
-        if not existing_event.external_id:
+        if external_id and not existing_event.external_id:
              existing_event.external_id = external_id
-        # We keep the original 'source' if it was already set, or update if this is primary
         
-        logger.debug(f"Updated event {existing_event.id} for user {user_id} (source: {source})")
+        logger.debug(f"✅ Synced existing event {existing_event.id} (user: {user_id}, source: {source})")
         return existing_event
     else:
         # Create new record
@@ -107,8 +106,8 @@ async def upsert_event(db: AsyncSession, user_id: str, source: str, event_data: 
             **{k: v for k, v in event_data.items() if hasattr(EventTable, k) and k not in ["external_id", "fingerprint", "source"]}
         )
         db.add(new_event)
-        await db.flush() # Flush immediately so subsequent checks in this loop see the new ID
-        logger.info(f"Created NEW sync event for user {user_id} (source: {source})")
+        await db.flush() # Flush so ID is available
+        logger.info(f"🆕 Created sync event for user {user_id} (source: {source})")
         return new_event
 
 async def sync_google_events(db: AsyncSession, token_record: UserTokenTable):
@@ -117,12 +116,13 @@ async def sync_google_events(db: AsyncSession, token_record: UserTokenTable):
     """
     user_id = token_record.user_id
     try:
-        # 1. Fetch events from Google (using sync_token if available)
-        # Note: google_calendar service needs update to support syncToken
+        # Use full credentials from environment for refresh capability
         token_data = {
             "access_token": token_record.access_token,
             "refresh_token": token_record.refresh_token,
             "scopes": token_record.scopes or "",
+            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
         }
 
         results = await google_calendar.list_google_events(
@@ -146,36 +146,49 @@ async def sync_google_events(db: AsyncSession, token_record: UserTokenTable):
                 continue
                 
             # Map Google item to our schema
-            start_value = item["start"].get("dateTime", item["start"].get("date"))
-            end_value = item["end"].get("dateTime", item["end"].get("date"))
+            # Handle date vs dateTime
+            start = item["start"].get("dateTime", item["start"].get("date"))
+            end = item["end"].get("dateTime", item["end"].get("date"))
+            
+            # Robust parsing
+            try:
+                start_dt = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+            except Exception:
+                logger.warning(f"Skipping event {item.get('id')} due to invalid date format: {start}")
+                continue
+
             event_payload = {
                 "external_id": item.get("id"),
                 "title": item.get("summary", "Untitled Event"),
                 "description": item.get("description"),
-                "start_time": datetime.fromisoformat(str(start_value).replace("Z", "+00:00")),
-                "end_time": datetime.fromisoformat(str(end_value).replace("Z", "+00:00")),
+                "start_time": start_dt,
+                "end_time": end_dt,
                 "category": classify_google_category(item),
-                "color": None,
-                "is_meeting": bool(item.get("hangoutLink") or item.get("conferenceData") or (item.get("attendees") or [])),
-                "meeting_platform": item.get("hangoutLink") or item.get("conferenceData") and "google_meet" or None,
-                "meeting_link": item.get("hangoutLink"),
+                "is_meeting": bool(item.get("hangoutLink") or item.get("conferenceData") or item.get("attendees")),
+                "meeting_platform": "google_meet" if item.get("hangoutLink") or item.get("conferenceData") else None,
+                "meeting_link": item.get("hangoutLink") or (item.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri") if item.get("conferenceData") else None),
                 "attendees": item.get("attendees", []),
                 "source": "google",
             }
             
             await upsert_event(db, user_id, "google", event_payload)
             
-        # 2. Store next sync token BEFORE commit to ensure progression
+        # Update token with new sync token
         if next_sync_token:
             token_record.sync_token = next_sync_token
-            db.add(token_record)
-            
+        
         await db.commit()
         logger.info(f"Google Sync completed for user {user_id}. Synced {len(items)} items.")
         
     except Exception as e:
         logger.error(f"Google Sync FAILED for user {user_id}: {e}")
         await db.rollback()
+        # Trigger business-grade error notification
+        from backend.services.bg_tasks import enqueue_sync_error_alert
+        user = await db.get(UserTable, user_id)
+        if user:
+            await enqueue_sync_error_alert(user.email, str(e))
 
 async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
     """
@@ -229,6 +242,11 @@ async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
     except Exception as e:
         logger.error(f"Microsoft Sync FAILED for user {user_id}: {e}")
         await db.rollback()
+        # Trigger business-grade error notification
+        from backend.services.bg_tasks import enqueue_sync_error_alert
+        user = await db.get(UserTable, user_id)
+        if user:
+            await enqueue_sync_error_alert(user.email, str(e))
 
 import sentry_sdk
 from backend.utils.cache import acquire_lock, release_lock

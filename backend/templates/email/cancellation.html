@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card" style="border-top-color: #ef4444;">
+    <div class="badge badge-alert">Cancelled</div>
+    <h1>Meeting Cancelled</h1>
+    <p>The following meeting has been removed from your calendar:</p>
+    
+    <div style="background-color: #450a0a; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #991b1b;">
+        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700; text-decoration: line-through;">{{ event_title }}</p>
+        <p style="margin-bottom: 0; font-size: 13px; color: #fca5a5;">📅 Previously scheduled for {{ event_time }}</p>
+    </div>
+
+    <p>If this was a mistake, you can use the AI Assistant to reschedule immediately.</p>
+
+    <center>
+        <a href="{{ frontend_url }}/dashboard" class="button">Go to Dashboard</a>
+    </center>
+</div>
+{% endblock %}

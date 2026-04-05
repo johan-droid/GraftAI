@@ -5,6 +5,11 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+.history/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Logs
 *.log
@@ -20,21 +25,25 @@ yarn-error.log*
 
 # Local Python tool metadata
 .python-version
+.pyre_configuration
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 .venv/
 venv/
 ENV/
 env/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+backend/.venv/
 htmlcov/
 .coverage
 .coverage.*
+.hypothesis/
 
 # Local SQLite artifacts
 *.db
@@ -57,10 +66,20 @@ build/
 .turbo/
 .vercel/
 *.tsbuildinfo
+.sentry-native/
+
+# Testing artifacts
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+screenshots/
+videos/
 
 # Local runtime folders
 tmp/
 uploads/
+.better-auth/
 
 # Local JSON Configs (Excluding Secrets)
 *.local.json
@@ -74,4 +93,6 @@ config.prod.json
 !docker-compose.yml
 !vercel.yml
 !PROJECT_TECHNICAL_SPEC.md
+!SRS.md
+!AUTH_RECONSTRUCTION_PLAN.md
 

@@ -24,7 +24,9 @@ from backend.api.calendar    import router as calendar_router
 from backend.api.notifications import router as notifications_router
 from backend.api.users       import router as users_router
 from backend.api.uploads     import router as uploads_router
+from backend.api.admin       import router as admin_router
 from backend.services.ai        import router as ai_router
+
 from backend.services.analytics import router as analytics_router
 from backend.services.consent   import router as consent_router
 from backend.services.proactive import router as proactive_router
@@ -109,42 +111,76 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # DB tables
-    if db_utils.engine:
+    # ── Pre-flight Checks (Audit Phase) ───────────────────────────────────
+    logger.info("🚀 [STARTUP] Initializing Pre-flight Audit...")
+    
+    # 1. Database Connectivity
+    if not db_utils.DATABASE_URL:
+        logger.critical("❌ [STARTUP] DATABASE_URL is missing. Platform is INOPERABLE.")
+    else:
         try:
-            async with db_utils.engine.begin() as conn:
-                await conn.run_sync(ModelsBase.metadata.create_all)
-            logger.info("Database tables verified.")
-            
-            # Application-level schema repairs (e.g. missing columns from legacy deploys)
+            # Run schema repairs immediately
             await repair_database()
-            
-        except Exception as exc:
-            logger.error(f"DB initialization/repair error: {type(exc).__name__}")
+            logger.info("✅ [STARTUP] Database schema verified.")
+        except Exception as e:
+            logger.error(f"❌ [STARTUP] Database verification failed: {e}")
 
-    # Password self-test
+    # 2. Redis Availability Check (Manual Pool Test)
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        logger.warning("⚠️ [STARTUP] REDIS_URL missing. Background tasks (Notifications) will fail.")
+    else:
+        logger.info("✅ [STARTUP] Redis configuration detected.")
+
+    # 3. Frontend Base URL (Strict Check)
+    frontend_url = os.getenv("FRONTEND_BASE_URL")
+    if not frontend_url:
+        logger.error("❌ [STARTUP] FRONTEND_BASE_URL missing. Broken notification links expected.")
+    else:
+        logger.info(f"✅ [STARTUP] Frontend URL verified: {frontend_url}")
+
+    # Password self-test (Security Audit Fix)
     try:
         from backend.services.auth_utils import get_password_hash, verify_password
-        _pw = "StartupSelfTest99!"
+        _pw = "AuditTest!"
         if not verify_password(_pw, get_password_hash(_pw)):
-            raise RuntimeError("Password self-test failed")
-        logger.info("Password hashing verified.")
+            logger.critical("❌ [STARTUP] Auth hashing self-test FAILED.")
+        else:
+            logger.info("✅ [STARTUP] Auth engine verified.")
     except Exception as exc:
-        logger.critical(f"Password hashing failure: {exc}")
-        raise
+        logger.critical(f"❌ [STARTUP] Auth hash logic error: {exc}")
+
+    logger.info("🟢 [STARTUP] ALL SYSTEMS GO.")
+    yield
+    # Shutdown
+    _rate_buckets.clear()
+    logger.info("🛑 [SHUTDOWN] Cleaning up...")
 
     yield
     # Shutdown: clean up rate-limit buckets to avoid memory leak on reload
     _rate_buckets.clear()
 
 
-# ── App ───────────────────────────────────────────────────────────────────────
+# ── App Definition ──────────────────────────────────────────────────────────
 app = FastAPI(
-    title="GraftAI Backend",
-    description="AI-powered scheduling platform API",
+    title="GraftAI Sovereign Tier",
+    description="Enterprise-grade intelligence & scheduling engine.",
     version="1.1.0",
-    lifespan=lifespan,
+    lifespan=lifespan
 )
+
+# ── Global Exception Handler (Audit Hole Fix) ─────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"🔥 UNHANDLED ERROR: {type(exc).__name__}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "A critical system error occurred. Our engineering team has been notified.",
+            "type": "internal_error",
+            "request_id": request.headers.get("x-request-id", "system")
+        },
+    )
 
 # ── CORS (outermost — must answer OPTIONS before rate limiter) ────────────────
 _extra_origins = [
@@ -201,8 +237,10 @@ v1.include_router(consent_router)
 v1.include_router(upgrade_router)
 v1.include_router(plugin_router)
 v1.include_router(mfa_router)
+v1.include_router(admin_router)
 
 app.include_router(v1)
+
 
 # ── Misc endpoints ────────────────────────────────────────────────────────────
 

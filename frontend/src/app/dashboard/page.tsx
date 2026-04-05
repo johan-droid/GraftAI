@@ -154,6 +154,13 @@ export default function Dashboard() {
     };
   }, [isAuthenticated]);
 
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   if (loading || !isAuthenticated) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -162,16 +169,39 @@ export default function Dashboard() {
     );
   }
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const hour = currentTime.getHours();
+  let greeting = "Good evening";
+  if (hour >= 5 && hour < 12) greeting = "Good morning";
+  else if (hour >= 12 && hour < 17) greeting = "Good afternoon";
+  else if (hour >= 17 && hour < 22) greeting = "Good evening";
+  else greeting = "Good night";
+
+  const timeString = currentTime.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  const timezoneString = Intl.DateTimeFormat().resolvedOptions().timeZone.split("/").pop()?.replace("_", " ") || "Local";
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto">
       <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-8">
         <motion.div variants={ITEM} className="flex flex-col md:flex-row md:items-center gap-6 pb-2">
-          <div>
-            <p className="text-indigo-400 text-sm font-bold uppercase tracking-[0.2em] mb-1">{greeting} 👋</p>
-            <h1 className="text-3xl font-bold text-white tracking-tight">{profileName}&apos;s workspace</h1>
+          <div className="flex items-start gap-4">
+             <div className="hidden sm:flex h-14 w-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 items-center justify-center shrink-0">
+                <Clock className="w-7 h-7 text-indigo-400 animate-pulse" />
+             </div>
+             <div>
+               <div className="flex items-center gap-2 mb-1">
+                 <p className="text-indigo-400 text-[11px] font-black uppercase tracking-[0.25em]">{greeting} 👋</p>
+                 <span className="w-1 h-1 rounded-full bg-slate-700" />
+                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
+                   {timeString} <span className="opacity-50">•</span> {timezoneString}
+                 </p>
+               </div>
+               <h1 className="text-3xl font-bold text-white tracking-tight uppercase">{profileName}&apos;s workspace</h1>
+             </div>
           </div>
           <div className="md:ml-auto flex items-center gap-3">
             <Link

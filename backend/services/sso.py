@@ -92,11 +92,11 @@ def get_provider_config(provider: str) -> dict | None:
             "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
             "token_url": "https://oauth2.googleapis.com/token",
             "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
-            "scope": "openid profile email https://www.googleapis.com/auth/calendar.events.owned https://www.googleapis.com/auth/gmail.readonly",
+            # Unified broad scope for full features (Calendar + Meet)
+            "scope": "openid profile email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly",
             "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
             "revoke_url": "https://oauth2.googleapis.com/revoke",
             "access_type": "offline",
-            "prompt": "select_account",
         }
     elif provider == "microsoft":
         return {
@@ -105,7 +105,8 @@ def get_provider_config(provider: str) -> dict | None:
             "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
             "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
             "userinfo_url": "https://graph.microsoft.com/v1.0/me",
-            "scope": "openid profile email User.Read Calendars.ReadWrite OnlineMeetings.ReadWrite",
+            # Unified broad scope for MS (Calendar + Teams)
+            "scope": "openid profile email offline_access User.Read Calendars.ReadWrite OnlineMeetings.ReadWrite",
             "redirect_uri": os.getenv("MICROSOFT_REDIRECT_URI"),
         }
     return None

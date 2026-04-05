@@ -282,14 +282,28 @@ async def _offline_assistant_response(
             "category": "meeting",
             "start_time": start_time,
             "end_time": start_time + timedelta(minutes=duration),
-            "is_remote": True,
+            "is_meeting": True,
+            "meeting_platform": "google", # Default to google for now, scheduler will pick based on integration
             "status": "confirmed",
             "metadata_payload": {"source": "assistant_offline_engine"},
         }
 
+        # Check for conflicts
+        conflicts = await scheduler.get_events_for_range(
+            db, 
+            user_id, 
+            event_data["start_time"], 
+            event_data["end_time"]
+        )
+        
+        conflict_msg = ""
+        if conflicts:
+            conflict_names = ", ".join([f"'{c.title}'" for c in conflicts[:2]])
+            conflict_msg = f"\n⚠️ NOTE: This overlaps with {conflict_names}."
+
         created = await scheduler.create_event(db, event_data)
         return (
-            f"Scheduled '{created.title}' on {created.start_time.strftime('%Y-%m-%d %H:%M UTC')} (event #{created.id}).",
+            f"Scheduled '{created.title}' on {created.start_time.strftime('%Y-%m-%d %H:%M UTC')} (event #{created.id}).{conflict_msg}",
             {
                 "type": "schedule",
                 "event_id": created.id,

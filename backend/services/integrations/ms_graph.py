@@ -125,6 +125,40 @@ async def list_ms_events(access_token: str, delta_link: Optional[str] = None) ->
         logger.error(f"❌ Unexpected error in MS Graph list_events: {e}")
         raise e
 
+async def create_ms_event(token_data: dict, event_details: dict) -> dict:
+    """
+    Creates a Microsoft Graph calendar event with optional Teams link.
+    """
+    try:
+        access_token = get_ms_graph_token(token_data)
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "Prefer": 'outlook.timezone="UTC"'
+        }
+        is_meeting = event_details.get("is_meeting", False)
+        payload = {
+            "subject": event_details.get("title", "GraftAI Event"),
+            "body": {"contentType": "HTML", "content": event_details.get("description", "")},
+            "start": {"dateTime": event_details["start_time"].isoformat(), "timeZone": "UTC"},
+            "end": {"dateTime": event_details["end_time"].isoformat(), "timeZone": "UTC"},
+            "isOnlineMeeting": is_meeting,
+            # We don't specify provider to let Microsoft default based on account type, 
+            # or we could try 'teamsForBusiness' and fallback.
+            # Actually, omitting it often works better for personal accounts.
+            "onlineMeetingProvider": "teamsForBusiness" if is_meeting else "unknown"
+        }
+        # Fallback for Personal accounts: if teamsForBusiness fails, we can retry without it or with teamsForLife
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post("https://graph.microsoft.com/v1.0/me/events", headers=headers, json=payload)
+            if resp.status_code != 201:
+                logger.error(f"❌ MS Graph create_event failed: {resp.status_code} - {resp.text}")
+                raise RuntimeError(f"MS Graph create_event returned {resp.status_code}")
+            return resp.json()
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in Microsoft event creation: {e}")
+        raise e
+
 async def update_ms_event(token_data: dict, external_id: str, event_details: dict) -> dict:
     """Updates an existing Microsoft Graph calendar event."""
     try:

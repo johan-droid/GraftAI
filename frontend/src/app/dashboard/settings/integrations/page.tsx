@@ -6,11 +6,10 @@ import { composeEndpoint } from "@/lib/api-client";
 import { getIntegrationStatus } from "@/lib/api";
 import { 
   ShieldCheck, 
-  Video,
-  Calendar, 
   ExternalLink,
-  CheckCircle2,
   Loader2,
+  Puzzle,
+  LayoutGrid,
   Sparkles
 } from "lucide-react";
 
@@ -126,86 +125,26 @@ export default function IntegrationsPage() {
       >
       <header className="mb-8">
         <h1 className="text-2xl md:text-3xl font-black text-white mb-2 bg-gradient-to-r from-white to-slate-500 bg-clip-text">
-          Workspace Connectors
+          Integrations Unified
         </h1>
         <p className="text-sm text-slate-400 font-medium opacity-90">
-          Link calendars, meetings, and tools for automated scheduling.
+          GraftAI has moved all workspace connections to the Plugin Marketplace for a unified experience.
         </p>
       </header>
 
-      {error && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-[10px] uppercase tracking-widest font-black text-slate-600">Verifying encrypted links</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          {PROVIDERS.map((provider) => (
-            <motion.div 
-              key={provider.id} 
-              variants={itemVariants}
-              className="group relative bg-slate-950/40 backdrop-blur-xl border border-slate-800/60 rounded-2xl p-4 md:p-6 overflow-hidden transition-all hover:border-primary/40"
-            >
-              <div className={`absolute inset-0 bg-gradient-to-br ${provider.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-              
-              <div className="relative z-10 flex flex-col h-full">
-                <div className="flex justify-between items-start mb-4 md:mb-6">
-                  <div className={`p-3 bg-slate-900 rounded-xl border border-slate-800 ${provider.iconColor}`}>
-                    {provider.id === 'google' && <Video className="w-6 h-6" />}
-                    {provider.id === 'microsoft' && <Calendar className="w-6 h-6" />}
-                  </div>
-                  {connections[provider.id] ? (
-                    <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase">
-                      <CheckCircle2 className="w-3 h-3" /> Active
-                    </span>
-                  ) : (
-                    <span className="px-2 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-500 text-[10px] font-black uppercase">
-                      Offline
-                    </span>
-                  )}
-                </div>
-
-                <h3 className="text-lg font-bold text-white mb-2">{provider.name}</h3>
-                <p className="text-xs text-slate-400 leading-relaxed mb-4 md:mb-6 flex-grow">
-                  {provider.description}
-                </p>
-
-                <div className="flex flex-wrap gap-2 mb-4 md:mb-6">
-                  {provider.scopes.map(scope => (
-                    <span key={scope} className="text-[9px] px-2 py-0.5 rounded-full bg-slate-900/50 text-slate-500 border border-slate-800 font-bold uppercase tracking-tighter">
-                      {scope}
-                    </span>
-                  ))}
-                </div>
-                <button 
-                  onClick={() => handleConnect(provider.id)}
-                  disabled={!availableProviders[provider.id]}
-                  className={`w-full py-2.5 md:py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                    !availableProviders[provider.id]
-                      ? "bg-slate-900/70 text-slate-500 border border-slate-800 cursor-not-allowed"
-                      : connections[provider.id]
-                      ? "bg-slate-900 text-white border border-slate-800 hover:bg-slate-800"
-                      : "bg-primary text-white shadow-lg shadow-primary/20 hover:bg-primary/90"
-                  }`}
-                >
-                  {!availableProviders[provider.id]
-                    ? "Unavailable"
-                    : connections[provider.id]
-                    ? "Manage Link"
-                    : "Connect Account"}
-                  {availableProviders[provider.id] && !connections[provider.id] && <ExternalLink className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      )}
+      <div className="p-8 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 text-center space-y-4">
+        <Puzzle className="w-12 h-12 text-indigo-400 mx-auto mb-2" />
+        <h2 className="text-xl font-bold text-white">We&apos;ve moved!</h2>
+        <p className="text-sm text-slate-400 max-w-md mx-auto">
+          Manage your Google Workspace, Microsoft 365, and other connections directly from the Plugin Marketplace.
+        </p>
+        <button 
+          onClick={() => window.location.assign("/dashboard/plugins")}
+          className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-all shadow-lg shadow-indigo-600/20"
+        >
+          Go to Plugin Marketplace
+        </button>
+      </div>
 
       <div className="mt-12 p-6 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-4">
         <ShieldCheck className="w-6 h-6 text-primary shrink-0" />

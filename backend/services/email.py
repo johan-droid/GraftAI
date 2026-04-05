@@ -14,12 +14,11 @@ Environment variables used (add to backend/.env or .env.example):
 - SMTP_USE_TLS (true/false, default true)
 """
 
-from __future__ import annotations
-
 import os
 import asyncio
 import smtplib
 import ssl
+import logging
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Optional, Any
@@ -27,12 +26,20 @@ import httpx
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+# Initialize logger
+logger = logging.getLogger(__name__)
+
 # Ensure .env from project root is loaded (backend/.env)
+
 project_root = Path(__file__).resolve().parents[1]
 load_dotenv(project_root / '.env')
 
 # Initialize Jinja2 Environment
-template_dir = project_root / "templates" / "email"
+# Hardened: Use absolute directory resolution for production stability
+template_dir = (project_root / "templates" / "email").resolve()
+if not template_dir.exists():
+    logger.warning(f"⚠️ Email template directory not found at {template_dir}. Sending will fail.")
+
 jinja_env = Environment(
     loader=FileSystemLoader(str(template_dir)),
     autoescape=select_autoescape(['html', 'xml'])

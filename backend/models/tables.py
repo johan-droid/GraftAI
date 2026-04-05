@@ -69,6 +69,8 @@ class UserTable(Base):
     consent_notifications = Column(Boolean, default=True, nullable=False)
     consent_ai_training = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), index=True) # Soft-delete timestamp
+    
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -82,6 +84,15 @@ class UserTable(Base):
     )
     profile = relationship(
         "UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    accounts = relationship(
+        "AccountTable", cascade="all, delete-orphan"
+    )
+    webhook_subscriptions = relationship(
+        "WebhookSubscriptionTable", back_populates="user", cascade="all, delete-orphan"
+    )
+    notifications = relationship(
+        "NotificationTable", back_populates="user", cascade="all, delete-orphan"
     )
 
 
@@ -132,6 +143,8 @@ class AccountTable(Base):
     refreshTokenExpiresAt = Column(DateTime(timezone=True))
     createdAt = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    user = relationship("UserTable", back_populates="accounts")
 
 
 class EventTable(Base):
@@ -230,8 +243,8 @@ class WebhookSubscriptionTable(Base):
         Index("idx_webhook_expiry", "expiration_at", "is_active"),
     )
     
-    # Relationship
-    user = relationship("UserTable")
+    # Relationship (Audit: Back-populates for clean cascaded delete)
+    user = relationship("UserTable", back_populates="webhook_subscriptions")
 
 
 class NotificationTable(Base):
@@ -250,5 +263,5 @@ class NotificationTable(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    # Relationship
-    user = relationship("UserTable")
+    # Relationship (Audit: Back-populates for clean cascaded delete)
+    user = relationship("UserTable", back_populates="notifications")

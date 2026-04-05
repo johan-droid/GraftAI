@@ -57,7 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const redirectToLogin = React.useCallback(() => {
-    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    if (typeof window !== "undefined") {
+      // For maximal security and to clear browser history of dashboard pages, use replace to the login screen
       window.location.replace("/login");
     }
   }, []);
@@ -185,9 +186,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logoutFn = async () => {
-    await signOut();
-    setSession(null);
-    redirectToLogin();
+    try {
+      await signOut();
+    } catch (err) {
+      console.debug("SignOut error during cleanup", err);
+    }
+    
+    // Nuke all browser-side storage
+    if (typeof window !== "undefined") {
+      localStorage.clear();
+      sessionStorage.clear();
+      // Ensure all cookies are invalidated by refreshing the page to the landing route
+      setSession(null);
+      window.location.replace("/");
+    }
   };
 
   return (

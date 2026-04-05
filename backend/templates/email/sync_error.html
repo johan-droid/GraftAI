@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card" style="border-top-color: #ef4444;">
+    <div class="badge badge-alert">Action Required</div>
+    <h1>Calendar Sync Failure</h1>
+    <p>We've encountered a persistent issue while attempting to synchronize your calendar. This usually happens when an OAuth token expires or permissions are revoked.</p>
+    
+    <p style="color: #f87171; font-size: 14px;">Error: {{ error_message }}</p>
+
+    <div style="background-color: #1e1b4b; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #3730a3;">
+        <p style="font-size: 13px; margin: 0; color: #c7d2fe;">Your dashboard might not show the latest events until this is resolved. Reconnecting only takes a few seconds.</p>
+    </div>
+
+    <center>
+        <a href="{{ frontend_url }}/dashboard/integrations" class="button" style="background-color: #ef4444;">Reconnect Account</a>
+    </center>
+</div>
+{% endblock %}

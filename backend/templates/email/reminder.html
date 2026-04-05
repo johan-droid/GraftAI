@@ -1,28 +1,69 @@
 {% extends "layout.html" %}
+
 {% block content %}
 <div class="card">
-    <div class="badge badge-warning">Proactive Alert</div>
+    <div class="badge badge-primary">Starts in 30m</div>
     <h1>Reminder: {{ event_title }}</h1>
-    <p>Your AI Copilot has detected an upcoming event starting in <strong>exactly 15 minutes</strong>. Your mission preparedness is our priority.</p>
+    <p>Your GraftAI copilot is reminding you of an upcoming mission starting in 30 minutes. Preparedness is the key to focus.</p>
     
-    <div style="background-color: rgba(99, 102, 241, 0.05); border-radius: 24px; padding: 32px; margin: 32px 0; border: 1px solid rgba(99, 102, 241, 0.2);">
-        <div style="font-size: 13px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 8px;">Event Timing</div>
-        <div style="font-size: 20px; font-weight: 800; color: #ffffff; margin-bottom: 24px;">{{ start_time }} - {{ end_time }}</div>
+    <div style="background-color: #1e293b; padding: 24px; border-radius: 12px; margin: 24px 0; border: 1px solid rgba(99, 102, 241, 0.2);">
+        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700;">{{ event_title }}</p>
+        <p style="margin-bottom: 16px; font-size: 13px; color: #94a3b8;">📅 {{ start_time }} - {{ end_time }}</p>
         
         {% if is_meeting %}
-        <div style="font-size: 13px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 8px;">Platform</div>
-        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 24px;">{{ meeting_platform }}</div>
-        
+        <p style="margin-bottom: 8px; font-size: 12px; color: #64748b; text-transform: uppercase;">Platform: {{ meeting_platform }}</p>
         {% if meeting_link %}
-        <div style="text-align: center;">
-            <a href="{{ meeting_link }}" class="button" style="background-color: #facc15; color: #030712 !important; box-shadow: 0 0 30px rgba(234, 179, 8, 0.4);">Join Mission Now</a>
-        </div>
+        <center>
+            <a href="{{ meeting_link }}" class="button" style="background-color: #fbbf24; color: #000000 !important;">Join Meeting</a>
+        </center>
         {% endif %}
         {% endif %}
     </div>
+
+    <center>
+        <a href="{{ frontend_url }}/dashboard/calendar" style="color: #6366f1; font-weight: 700; text-decoration: none; font-size: 13px;">VIEW FULL AGENDA &rarr;</a>
+    </center>
+</div>
+{% endblock %}
+<!-- slide -->
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card" style="border-top-color: #ef4444;">
+    <div class="badge badge-alert">Action Required</div>
+    <h1>Calendar Sync Failure</h1>
+    <p>We've encountered a persistent issue while attempting to synchronize your calendar. This usually happens when an OAuth token expires or permissions are revoked.</p>
     
-    <div style="text-align: center;">
-        <a href="{{ frontend_url }}/dashboard/calendar" style="color: #6366f1; font-weight: 700; text-decoration: none; font-size: 13px; letter-spacing: 0.05em;">VIEW COMPLETE SCHEDULE &rarr;</a>
+    <p style="color: #f87171; font-size: 14px;">Error: {{ error_message }}</p>
+
+    <div style="background-color: #1e1b4b; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #3730a3;">
+        <p style="font-size: 13px; margin: 0; color: #c7d2fe;">Your dashboard might not show the latest events until this is resolved. Reconnecting only takes a few seconds.</p>
     </div>
+
+    <center>
+        <a href="{{ frontend_url }}/dashboard/integrations" class="button">Reconnect Calendar</a>
+    </center>
+</div>
+{% endblock %}
+<!-- slide -->
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card" style="border-top-color: #f59e0b;">
+    <div class="badge" style="background-color: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40;">Conflict Detected</div>
+    <h1>Schedule Overlap Alert</h1>
+    <p>Your AI assistant has detected a potential conflict in your schedule. An event you're trying to add overlaps with an existing commitment.</p>
+    
+    <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
+        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700;">Competing Events:</p>
+        <p style="margin-bottom: 4px; font-size: 13px; color: #f87171;">⚠️ {{ requested_event }}</p>
+        <p style="margin-bottom: 0; font-size: 13px; color: #94a3b8;">📅 Overlaps with: {{ existing_event }}</p>
+    </div>
+
+    <p style="font-size: 13px; color: #64748b;">Would you like to find an alternative time? Use the "Proactive Reschedule" feature in your dashboard.</p>
+
+    <center>
+        <a href="{{ frontend_url }}/dashboard/calendar" class="button">Manage Schedule</a>
+    </center>
 </div>
 {% endblock %}

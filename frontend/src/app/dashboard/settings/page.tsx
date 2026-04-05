@@ -18,6 +18,7 @@ import {
   Globe,
   ChevronRight,
   Zap,
+  Puzzle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -245,6 +246,15 @@ export default function SettingsPage() {
     setDeletingAccount(true);
     try {
       await deleteAccount();
+      // Use full page reload to root to purge history and all memory states
+      if (typeof window !== "undefined") {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = "/";
+      }
+    } catch (err) {
+      console.error("Critical failure during account deletion redirect", err);
+      // Fallback to standard logout if redirect fails
       await logout();
     } finally {
       setDeletingAccount(false);
@@ -554,47 +564,21 @@ export default function SettingsPage() {
         </motion.div>
 
         <motion.div variants={ITEM}>
-          <Section title="Integrations" description="Connect your tools and calendars">
-            {[
-              { id: "google", name: "Google Calendar", icon: "📅" },
-              { id: "microsoft", name: "Microsoft Teams", icon: "🟦" },
-            ].map((int) => (
-              <SettingRow key={int.id} label={int.name}>
-                <div className="flex items-center gap-3">
-                  <span>{int.icon}</span>
-                  {loadingIntegrations ? (
-                    <span className="text-xs text-slate-500">Checking...</span>
-                  ) : (
-                    <button
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
-                        integrationStatus[int.id]
-                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/15"
-                          : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/8"
-                      )}
-                      onClick={() => {
-                        if (!integrationStatus[int.id]) {
-                          router.push("/dashboard/settings/integrations");
-                        }
-                      }}
-                    >
-                      {integrationStatus[int.id] ? (
-                        <span className="flex items-center gap-1.5"><Check className="w-3 h-3" />Connected</span>
-                      ) : (
-                        "Connect"
-                      )}
-                    </button>
-                  )}
-                </div>
-              </SettingRow>
-            ))}
-            <div className="px-6 py-3 bg-white/[0.015]">
-              <Link
-                href="/dashboard/settings/integrations"
-                className="text-sm text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-2"
+          <Section title="Plugins & Connections" description="Connect your Google, Microsoft, and other workspace tools">
+            <div className="p-6 rounded-[1.5rem] bg-indigo-500/5 border border-indigo-500/10 flex flex-col items-center text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 mb-1">
+                <Puzzle className="w-6 h-6 text-indigo-400" />
+              </div>
+              <h3 className="text-sm font-bold text-white">Unified Marketplace</h3>
+              <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+                We&apos;ve moved all integrations to the Plugin Marketplace for a more streamlined experience.
+              </p>
+              <button
+                onClick={() => router.push("/dashboard/plugins")}
+                className="mt-2 px-6 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-lg shadow-indigo-600/20"
               >
-                Open integration controls <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
+                Open Plugin Marketplace
+              </button>
             </div>
           </Section>
         </motion.div>

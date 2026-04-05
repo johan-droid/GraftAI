@@ -1,125 +1,149 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>GraftAI Notification</title>
     <style>
+        /* Base styles for Outlook/Office 365 */
+        body, table, td, a { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        img { -ms-interpolation-mode: bicubic; }
+
+        /* General styles */
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: #030712;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.1) 0px, transparent 50%);
             margin: 0;
             padding: 0;
             -webkit-font-smoothing: antialiased;
         }
-        .container {
-            max-width: 600px;
+
+        .wrapper {
+            width: 100%;
+            table-layout: fixed;
+            background-color: #030712;
+            padding-bottom: 40px;
+        }
+
+        .main {
+            background-color: #030712;
             margin: 0 auto;
+            width: 100%;
+            max-width: 600px;
+            border-spacing: 0;
+            font-family: sans-serif;
             color: #f8fafc;
         }
+
         .header {
-            padding: 60px 20px 40px;
+            padding: 40px 0 20px;
             text-align: center;
         }
+
         .logo {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 800;
-            letter-spacing: -0.05em;
-            color: #f8fafc;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .logo span {
-            color: #6366f1;
-        }
-        .content {
-            padding: 0 20px;
-        }
-        .card {
-            background-color: rgba(15, 23, 42, 0.95);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-top: 4px solid #6366f1;
-            border-radius: 24px;
-            padding: 40px;
-            margin-bottom: 24px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
-            position: relative;
-        }
-        h1 {
-            font-size: 32px;
-            font-weight: 800;
-            margin: 0 0 16px 0;
             color: #ffffff;
-            letter-spacing: -0.03em;
-            line-height: 1.1;
-        }
-        p {
-            font-size: 16px;
-            line-height: 1.6;
-            color: #cbd5e1;
-            margin: 0 0 20px 0;
-        }
-        .button {
-            display: inline-block;
-            padding: 18px 36px;
-            background-color: #6366f1;
-            color: #ffffff !important;
             text-decoration: none;
-            border-radius: 16px;
-            font-weight: 800;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-            box-shadow: 0 0 25px rgba(99, 102, 241, 0.5);
-            animation: pulse-glow 3s infinite ease-in-out;
-        }
-        @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); transform: scale(1); }
-            50% { box-shadow: 0 0 35px rgba(99, 102, 241, 0.7); transform: scale(1.02); }
-        }
-        .footer {
-            padding: 60px 20px;
-            text-align: center;
-        }
-        .footer p {
-            font-size: 11px;
-            color: #64748b;
-            line-height: 1.8;
             text-transform: uppercase;
             letter-spacing: 0.1em;
         }
+
+        .logo span { color: #6366f1; }
+
+        .content {
+            padding: 20px;
+        }
+
+        .card {
+            background-color: #0f172a;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-top: 4px solid #6366f1;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        h1 {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 800;
+            margin-top: 0;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+        }
+
+        p {
+            color: #94a3b8;
+            font-size: 15px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .button {
+            display: inline-block;
+            background-color: #6366f1;
+            color: #ffffff !important;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .footer {
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .footer p {
+            font-size: 12px;
+            color: #475569;
+            margin-bottom: 10px;
+            letter-spacing: 0.02em;
+        }
+
         .badge {
             display: inline-block;
-            padding: 6px 14px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.12em;
-            margin-bottom: 20px;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
         }
-        .badge-primary { background-color: rgba(99, 102, 241, 0.2); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); }
-        .badge-success { background-color: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
-        .badge-warning { background-color: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
+
+        .badge-primary { background-color: #6366f120; color: #818cf8; border: 1px solid #6366f140; }
+        .badge-success { background-color: #10b98120; color: #34d399; border: 1px solid #10b98140; }
+        .badge-alert { background-color: #ef444420; color: #f87171; border: 1px solid #ef444440; }
+
+        @media screen and (max-width: 600px) {
+            .card { padding: 24px; }
+            h1 { font-size: 20px; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <a href="{{ frontend_url }}" class="logo">Graft<span>AI</span></a>
-        </div>
-        <div class="content">
-            {% block content %}{% endblock %}
-        </div>
-        <div class="footer">
-            <p>&copy; 2026 GraftAI Technologies. All rights reserved.<br>
-            Autonomous Scheduling for the Sovereign Individual.</p>
-        </div>
+    <div class="wrapper">
+        <center>
+            <table class="main">
+                <tr><td class="header"><a href="{{ frontend_url }}" class="logo">Graft<span>AI</span></a></td></tr>
+                <tr><td class="content">{% block content %}{% endblock %}</td></tr>
+                <tr>
+                    <td class="footer">
+                        <p>&copy; 2026 GraftAI Technologies Inc. All rights reserved.</p>
+                        <p>You received this email because you are registered with GraftAI.<br>
+                        Autonomous Intelligence for the Sovereign Individual.</p>
+                        <p><a href="{{ frontend_url }}/dashboard/settings" style="color: #6366f1; text-decoration: none;">Preference Center</a> • <a href="{{ frontend_url }}/privacy" style="color: #64748b; text-decoration: none;">Privacy Policy</a></p>
+                    </td>
+                </tr>
+            </table>
+        </center>
     </div>
 </body>
 </html>

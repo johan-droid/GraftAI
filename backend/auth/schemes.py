@@ -126,12 +126,18 @@ async def verify_better_auth_session(token: str, db: AsyncSession) -> Optional[d
         if expires_at < datetime.now(timezone.utc):
             return None
 
+        # Audit: Explicitly block Soft-Deleted users from accessing the API.
         user_res = await db.execute(
-            text('SELECT id, email, name FROM public.users WHERE id = :uid'),
+            text('SELECT id, email, name, deleted_at FROM public.users WHERE id = :uid'),
             {"uid": user_id},
         )
         user = user_res.fetchone()
         if not user:
+            return None
+            
+        # Hard Lockout: If deleted_at is set, session is revoked instantly
+        if user[3] is not None:
+            logger.warning(f"🔒 Blocked access attempt for Soft-Deleted user: {user[1]}")
             return None
 
         payload = {"sub": str(user[0]), "email": user[1], "name": user[2], "type": "better-auth"}

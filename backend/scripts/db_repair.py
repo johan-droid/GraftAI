@@ -30,8 +30,21 @@ async def repair_database():
                 logger.info("🔧 [REPAIR] Column 'title' missing in 'notifications' table. Patching...")
                 await conn.execute(text("ALTER TABLE notifications ADD COLUMN title VARCHAR(255) DEFAULT 'Notification' NOT NULL;"))
                 logger.info("✅ [REPAIR] 'notifications' table successfully updated with 'title' column.")
+            # 1b. Check for 'data' column in 'notifications' table
+            check_data_sql = text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'notifications' AND column_name = 'data';
+            """)
+            result = await conn.execute(check_data_sql)
+            if result.fetchone() is None:
+                logger.info("🔧 [REPAIR] Column 'data' missing in 'notifications' table. Patching...")
+                # Note: JSONB is PostgreSQL specific, use JSON for others if needed but we are on Postgres on Render
+                await conn.execute(text("ALTER TABLE notifications ADD COLUMN data JSONB DEFAULT '{}' NOT NULL;"))
+                logger.info("✅ [REPAIR] 'notifications' table successfully updated with 'data' column.")
             else:
-                logger.info("✅ [REPAIR] 'notifications' table schema verified (title column exists).")
+                logger.info("✅ [REPAIR] 'notifications' table schema verified (data column exists).")
+
 
             # 2. Check for user profile detailing columns in the 'users' table
             user_columns = ["bio", "job_title", "location"]

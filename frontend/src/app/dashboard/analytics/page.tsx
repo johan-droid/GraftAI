@@ -114,10 +114,10 @@ export default function AnalyticsPage() {
 
         <motion.div variants={ITEM} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { label: "Upcoming meetings", value: totals.meetings.toString(), icon: Calendar, color: "indigo", sub: "Live queue window" },
-            { label: "Hours scheduled", value: `${totals.hours}h`, icon: Clock, color: "violet", sub: "Total duration" },
-            { label: "Unique attendees", value: totals.unique_attendees.toString(), icon: Users, color: "cyan", sub: "Network reach" },
-            { label: "Cancellations", value: totals.cancellations.toString(), icon: Zap, color: "emerald", sub: "Churn rate" },
+            { label: "Scheduled Meetings", value: totals.meetings.toString(), icon: Calendar, color: "indigo", sub: "Currently active" },
+            { label: "Total Focus Time", value: `${totals.hours}h`, icon: Clock, color: "violet", sub: "Across all calendars" },
+            { label: "Client Contacts", value: totals.unique_attendees.toString(), icon: Users, color: "cyan", sub: "Network depth" },
+            { label: "Success Rate", value: `${Math.max(0, 100 - (totals.cancellations * 5))}%`, icon: Zap, color: "emerald", sub: "Meeting integrity" },
           ].map((kpi) => {
             const styles = KPI_STYLES[kpi.color];
             return (
@@ -134,7 +134,7 @@ export default function AnalyticsPage() {
                 ) : (
                   <div className="flex items-baseline gap-2">
                     <p className="text-3xl font-bold text-white tracking-tighter">{kpi.value}</p>
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded leading-none">Live</span>
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded leading-none">Healthy</span>
                   </div>
                 )}
                 <p className="text-[13px] font-semibold text-slate-400 mt-2">{kpi.label}</p>

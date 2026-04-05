@@ -105,17 +105,31 @@ async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "
 
         if event.source == "google":
             if action == "create":
+                # Ensure we request conference data version to get Meet links if enabled by default
                 result = await create_google_event(token_data, event_details)
-                return result.get("id")
+                ext_id = result.get("id")
+                # Extract meeting link if Google created one automatically
+                meet_link = result.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri")
+                if meet_link and not event.meeting_link:
+                    event.meeting_link = meet_link
+                    event.is_meeting = True
+                    event.meeting_platform = "google"
+                return ext_id
             elif action == "update":
                 await update_google_event(token_data, event.external_id, event_details)
             elif action == "delete":
                 await delete_google_event(token_data, event.external_id)
         elif event.source == "microsoft":
             if action == "create":
-                # Assuming ms_graph has a similar function or using placeholder
-                # await create_ms_event(token_data, event_details)
-                pass
+                # Similar logic for Microsoft Teams
+                result = await create_ms_event(token_data, event_details)
+                ext_id = result.get("id")
+                meet_link = result.get("onlineMeeting", {}).get("joinUrl")
+                if meet_link and not event.meeting_link:
+                    event.meeting_link = meet_link
+                    event.is_meeting = True
+                    event.meeting_platform = "microsoft"
+                return ext_id
             elif action == "update":
                 await update_ms_event(token_data, event.external_id, event_details)
             elif action == "delete":
@@ -323,7 +337,17 @@ async def create_event(
         )
     )
     conflict_result = await db.execute(conflict_stmt)
-    if conflict_result.scalars().first():
+    existing_conflict = conflict_result.scalars().first()
+    if existing_conflict:
+        # Trigger proactive conflict alert email
+        from backend.services.bg_tasks import enqueue_conflict_alert
+        user = await db.get(UserTable, new_event.user_id)
+        if user:
+            await enqueue_conflict_alert(
+                user.email, 
+                f"{new_event.title} ({new_event.start_time.strftime('%I:%M %p')})",
+                f"{existing_conflict.title} ({existing_conflict.start_time.strftime('%I:%M %p')})"
+            )
         raise ValueError("Event overlaps with existing schedule. Please choose another time.")
 
     # Generate meeting links if applicable

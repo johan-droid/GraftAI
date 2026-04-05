@@ -1,119 +1,79 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from backend.api.deps import get_db
-from backend.auth.schemes import get_current_user
 import logging
-import os
-import time
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+
+from backend.api.deps import get_db
+from backend.models.user_token import UserTokenTable
+from backend.utils.redis_singleton import get_redis
+from backend.auth.schemes import get_current_user_id
+from backend.services.access_control import check_user_role
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-@router.get("/status")
-async def get_system_status(
+@router.get("/sync-status")
+async def get_sync_status(
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user_id)
 ):
     """
-    Superuser-only system health dashboard.
-    Aggregates status from Neon DB, Redis, and Arq Worker.
+    Administrative overview of synchronization health.
+    Requires admin privileges.
     """
-    if not getattr(current_user, "is_superuser", False):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Administrative privileges required"
+    if not check_user_role(current_user_id, "admin"):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    try:
+        # 1. Check Redis Connectivity
+        redis_client = get_redis()
+        redis_ok = False
+        try:
+            redis_ok = redis_client.ping()
+        except:
+            pass
+
+        # 2. Token Health Metrics
+        # Count total tokens per provider
+        token_counts_stmt = select(
+            UserTokenTable.provider, 
+            func.count(UserTokenTable.id).label("total"),
+            func.count(UserTokenTable.id).filter(UserTokenTable.is_active == True).label("active")
+        ).group_by(UserTokenTable.provider)
+        
+        counts_res = await db.execute(token_counts_stmt)
+        provider_stats = []
+        for row in counts_res.all():
+            provider_stats.append({
+                "provider": row.provider,
+                "total_tokens": row.total,
+                "active_tokens": row.active,
+                "health_rate": (row.active / row.total * 100) if row.total > 0 else 100
+            })
+
+        # 3. Recent Sync Failures (Expired tokens that are still marked active)
+        now = datetime.now(timezone.utc)
+        expired_stmt = select(func.count(UserTokenTable.id)).where(
+            UserTokenTable.is_active == True,
+            UserTokenTable.expires_at < now
         )
-    
-    stats = {
-        "timestamp": time.time(),
-        "database": {"status": "unknown"},
-        "redis": {"status": "unknown"},
-        "worker": {"status": "unknown"},
-        "environment": os.getenv("ENVIRONMENT", "production")
-    }
+        expired_res = await db.execute(expired_stmt)
+        expired_count = expired_res.scalar() or 0
 
-    # 1. Check Neon Database Health
-    try:
-        start_time = time.perf_counter()
-        await db.execute(text("SELECT 1"))
-        latency = (time.perf_counter() - start_time) * 1000
-        stats["database"] = {
-            "status": "healthy",
-            "latency_ms": round(latency, 2),
-            "engine": "Neon Serverless Postgres"
-        }
-    except Exception as e:
-        stats["database"] = {"status": "unhealthy", "error": str(e)}
-
-    # 2. Check Redis & Rate Limiting
-    try:
-        from backend.api.main import _get_redis_client
-        redis_client = _get_redis_client()
-        if redis_client.ping():
-            stats["redis"] = {
-                "status": "healthy",
-                "keys_count": redis_client.dbsize(),
-                "provider": "Upstash/Redis"
+        return {
+            "status": "operational",
+            "timestamp": now.isoformat(),
+            "infrastructure": {
+                "redis_connected": redis_ok,
+                "database_connected": True
+            },
+            "sync_metrics": {
+                "providers": provider_stats,
+                "tokens_requiring_refresh": expired_count,
             }
-    except Exception as e:
-        stats["redis"] = {"status": "unhealthy", "error": str(e)}
-
-    # 3. Check Arq Background Worker
-    try:
-        from backend.services.bg_tasks import get_task_pool
-        pool = await get_task_pool()
-        # Get queue info, include basic pool status to avoid unused variable under ruff
-        stats["worker"] = {
-            "status": "online",
-            "queue_name": "arq:queue",
-            "pool_status": "connected" if pool else "unavailable"
         }
     except Exception as e:
-        stats["worker"] = {"status": "offline", "error": str(e)}
-
-    return stats
-
-@router.post("/users/{user_id}/upgrade")
-async def upgrade_user_tier(
-    user_id: str,
-    tier: str,
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """Manual administrative upgrade of a user's subscription tier."""
-    if not getattr(current_user, "is_superuser", False):
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    from backend.models.tables import UserTable
-    user = await db.get(UserTable, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    user.tier = tier
-    await db.commit()
-    return {"message": f"User {user_id} upgraded to {tier}"}
-
-@router.get("/email/diagnostic")
-async def email_diagnostic(current_user = Depends(get_current_user)):
-    """スーパーユーザ(Superuser) only tool to verify SMTP settings."""
-    if not getattr(current_user, "is_superuser", False):
-        raise HTTPException(status_code=403, detail="Superuser required")
-    from backend.services.email import verify_smtp_config
-    return verify_smtp_config()
-
-@router.post("/email/test")
-async def send_test_email(email: str, current_user = Depends(get_current_user)):
-    """スーパーユーザ(Superuser) only tool to send a test email message."""
-    if not getattr(current_user, "is_superuser", False):
-        raise HTTPException(status_code=403, detail="Superuser required")
-    
-    from backend.services.email import send_email
-    try:
-        subject = "GraftAI - Platform Diagnostics"
-        html = f"<h3>Diagnostics Success</h3><p>Your SMTP credentials for <b>Google</b> are confirmed and active.</p><p>Triggered by {current_user.email}</p>"
-        await send_email(to_email=email, subject=subject, html_body=html)
-        return {"status": "success", "message": f"Diagnostic email dispatched to {email}"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to fetch sync status")
+        raise HTTPException(status_code=500, detail=f"Monitoring error: {str(e)}")

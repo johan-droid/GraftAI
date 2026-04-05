@@ -42,12 +42,13 @@ exports.getAuthToken = getAuthToken;
 exports.invalidateSessionCache = invalidateSessionCache;
 exports.getCsrfHeaders = getCsrfHeaders;
 function getApiBaseUrl() {
+    if (typeof window !== "undefined") {
+        // Force relative paths in browser so calls go through frontend origin/proxy.
+        return "";
+    }
     var envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
     if (envUrl) {
         return envUrl.replace(/\/+$/g, "");
-    }
-    if (typeof window !== "undefined") {
-        return "";
     }
     return "http://localhost:8000";
 }
@@ -88,13 +89,73 @@ function getToken() {
         return null;
     var value = "; ".concat(document.cookie);
     var parts = value.split("; graftai_access_token=");
-    if (parts.length === 2)
-        return ((_a = parts.pop()) === null || _a === void 0 ? void 0 : _a.split(";").shift()) || null;
-    return null;
+    var token = parts.length === 2
+        ? ((_a = parts.pop()) === null || _a === void 0 ? void 0 : _a.split(";").shift()) || null
+        : null;
+
+    // 2. Try sessionStorage
+    if (!token) {
+        try {
+            if (typeof window !== "undefined" && window.sessionStorage) {
+                token = window.sessionStorage.getItem("graftai_access_token");
+            }
+        }
+        catch (_b) {
+            // ignore
+        }
+    }
+
+    // 3. Try localStorage
+    if (!token) {
+        try {
+            if (typeof window !== "undefined" && window.localStorage) {
+                token = window.localStorage.getItem("graftai_access_token");
+            }
+        }
+        catch (_c) {
+            // ignore
+        }
+    }
+
+    // 4. Try one-time URL token bridge params
+    if (!token && typeof window !== "undefined") {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            token = params.get("token") || params.get("access_token") || null;
+            if (token) {
+                if (window.sessionStorage) {
+                    window.sessionStorage.setItem("graftai_access_token", token);
+                }
+                if (window.localStorage) {
+                    window.localStorage.setItem("graftai_access_token", token);
+                }
+            }
+        }
+        catch (_d) {
+            // ignore malformed URL/search params
+        }
+    }
+
+    // Keep sources in sync for resiliency
+    if (token && typeof window !== "undefined") {
+        try {
+            if (window.sessionStorage && !window.sessionStorage.getItem("graftai_access_token")) {
+                window.sessionStorage.setItem("graftai_access_token", token);
+            }
+            if (window.localStorage && !window.localStorage.getItem("graftai_access_token")) {
+                window.localStorage.setItem("graftai_access_token", token);
+            }
+        }
+        catch (_e) {
+            // ignore storage access errors
+        }
+    }
+
+    return token;
 }
 function getAuthToken() {
     return __awaiter(this, void 0, void 0, function () {
-        var now, session, token, _a;
+        var now, token, session, serverToken, _a;
         var _b, _c, _d;
         return __generator(this, function (_e) {
             switch (_e.label) {
@@ -105,18 +166,24 @@ function getAuthToken() {
                     }
                     _e.label = 1;
                 case 1:
-                    _e.trys.push([1, 3, , 4]);
-                    return [4 /*yield*/, (0, exports.getSessionSafe)()];
+                    _e.trys.push([1, 4, , 5]);
+                    token = getToken();
+                    if (token) {
+                        return [2 /*return*/, token];
+                    }
+                    return [4 /*yield*/, getSessionSafe()];
                 case 2:
                     session = _e.sent();
-                    token = (_d = (_c = (_b = session === null || session === void 0 ? void 0 : session.data) === null || _b === void 0 ? void 0 : _b.session) === null || _c === void 0 ? void 0 : _c.token) !== null && _d !== void 0 ? _d : null;
-                    _cachedToken = token;
+                    serverToken = (_d = (_c = (_b = session === null || session === void 0 ? void 0 : session.data) === null || _b === void 0 ? void 0 : _b.session) === null || _c === void 0 ? void 0 : _c.token) !== null && _d !== void 0 ? _d : null;
+                    _cachedToken = serverToken;
                     _cacheExpiry = now + SESSION_CACHE_TTL_MS;
-                    return [2 /*return*/, token];
+                    return [2 /*return*/, serverToken];
                 case 3:
+                    return [3 /*break*/, 5];
+                case 4:
                     _a = _e.sent();
                     return [2 /*return*/, null];
-                case 4: return [2 /*return*/];
+                case 5: return [2 /*return*/];
             }
         });
     });
@@ -124,6 +191,16 @@ function getAuthToken() {
 function invalidateSessionCache() {
     _cachedToken = null;
     _cacheExpiry = 0;
+    if (typeof window !== "undefined") {
+        try {
+            sessionStorage.removeItem("graftai_access_token");
+            localStorage.removeItem("graftai_access_token");
+            document.cookie = "graftai_access_token=; path=/; max-age=0;";
+        }
+        catch (_a) {
+            // ignore
+        }
+    }
 }
 function getCsrfHeaders() {
     var _a;
@@ -141,21 +218,31 @@ function getCsrfHeaders() {
     };
 }
 var getSessionSafe = function () { return __awaiter(void 0, void 0, void 0, function () {
-    var res, err, data, err_1;
+    var headers, token, res, err, data, err_1;
     return __generator(this, function (_a) {
         switch (_a.label) {
             case 0:
                 _a.trys.push([0, 5, , 6]);
+                headers = {
+                    Accept: "application/json",
+                };
+                token = getToken();
+                if (token) {
+                    headers.Authorization = "Bearer ".concat(token);
+                    headers["X-Authorization"] = "Bearer ".concat(token);
+                }
                 return [4 /*yield*/, fetch(authEndpoint("/auth/check"), {
                         method: "GET",
                         credentials: "include",
-                        headers: {
-                            Accept: "application/json",
-                        },
+                        headers: headers,
                     })];
             case 1:
                 res = _a.sent();
                 if (!!res.ok) return [3 /*break*/, 3];
+                if (res.status === 401) {
+                    console.warn("[AUTH_CLIENT]: 401 Unauthorized from backend. Clearing local session state.");
+                    invalidateSessionCache();
+                }
                 return [4 /*yield*/, parseError(res)];
             case 2:
                 err = _a.sent();

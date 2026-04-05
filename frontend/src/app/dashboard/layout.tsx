@@ -14,237 +14,238 @@ import {
   Activity,
   Puzzle,
   ChevronRight,
-  Sparkles,
+  Bell,
+  Search,
+  Plus,
+  Zap,
+  Command,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthContext } from "@/app/providers/auth-provider";
-import { ToastContainer } from "@/components/ui/Toast";
 
-const NAV = [
-  { name: "Overview", href: "/dashboard", icon: LayoutDashboard, badge: null },
-  { name: "Calendar", href: "/dashboard/calendar", icon: Calendar, badge: null },
-  { name: "AI Copilot", href: "/dashboard/ai", icon: Bot, badge: "new" },
-  { name: "Analytics", href: "/dashboard/analytics", icon: Activity, badge: null },
-  { name: "Plugins", href: "/dashboard/plugins", icon: Puzzle, badge: null },
+const NAV_GROUPS = [
+  {
+    label: "Workspace",
+    links: [
+      { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+      { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
+      { name: "Analytics", href: "/dashboard/analytics", icon: Activity },
+    ],
+  },
+  {
+    label: "Intelligence",
+    links: [
+      { name: "AI Copilot", href: "/dashboard/ai", icon: Bot, badge: "New" },
+      { name: "Plugins", href: "/dashboard/plugins", icon: Puzzle },
+    ],
+  },
+  {
+    label: "Account",
+    links: [
+      { name: "Settings", href: "/dashboard/settings", icon: Settings },
+    ],
+  },
 ];
-
-const SETTINGS_NAV = [
-  { name: "Settings", href: "/dashboard/settings", icon: Settings, badge: null },
-];
-
-function NavItem({
-  link,
-  active,
-  onClick,
-}: {
-  link: (typeof NAV)[0];
-  active: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <Link
-      href={link.href}
-      onClick={onClick}
-      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-300 ${
-        active
-          ? "bg-indigo-500/10 text-indigo-300 shadow-sm shadow-indigo-500/5 ring-1 ring-indigo-500/20"
-          : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
-      }`}
-    >
-      <div className={`flex items-center justify-center ${active ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300 transition-colors"}`}>
-        <link.icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2.5 : 2} />
-      </div>
-      <span className="flex-1">{link.name}</span>
-      {link.badge && (
-        <span className="rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-400 border border-indigo-500/10">
-          {link.badge}
-        </span>
-      )}
-    </Link>
-  );
-}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, logout } = useAuthContext();
-  type DashboardUser = { name?: string; full_name?: string; email?: string } | null;
-  const typedUser = user as DashboardUser;
+  const { logout, user } = useAuthContext();
+  const displayUser = user as { name?: string; email?: string } | null;
 
-  const displayName = typedUser?.full_name || typedUser?.name || typedUser?.email?.split("@")[0] || "User";
-  const displayEmail = typedUser?.email || "";
-  const initials = displayName.slice(0, 2).toUpperCase();
+  const userInitials = displayUser?.name
+    ? displayUser.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    : displayUser?.email?.[0]?.toUpperCase() ?? "U";
 
-  return (
-    <div className="flex h-[100dvh] w-full overflow-hidden bg-[#070711] text-slate-200 font-sans selection:bg-indigo-500/30">
-      {/* ── Immersive background ── */}
-      <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute top-0 right-1/4 h-[800px] w-[800px] rounded-full bg-indigo-600/5 blur-[120px]" />
-        <div className="absolute -bottom-32 -left-32 h-[600px] w-[600px] rounded-full bg-violet-600/4 blur-[100px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[800px] w-[800px] rounded-full bg-blue-600/3 blur-[120px]" />
-        <div 
-          className="absolute inset-0 opacity-[0.02]" 
-          style={{ 
-            backgroundImage: "linear-gradient(rgba(148,163,184,1) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,1) 1px, transparent 1px)", 
-            backgroundSize: "60px 60px" 
-          }} 
-        />
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="px-5 py-5 flex items-center gap-3 border-b border-white/5">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+          <Zap className="w-4 h-4 text-white fill-white" />
+        </div>
+        <span className="font-semibold text-white tracking-tight text-[15px]">GraftAI</span>
+        <div className="ml-auto">
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 tracking-wide">
+            PRO
+          </span>
+        </div>
       </div>
 
-      {/* ── Desktop sidebar ── */}
-      <aside className="relative z-20 flex w-[260px] flex-col bg-slate-900/40 backdrop-blur-2xl border-r border-white/[0.05] shadow-2xl shrink-0 max-lg:hidden">
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-6 h-16 shrink-0 mt-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20">
-            <span className="text-sm font-black text-white leading-none">G</span>
+      {/* Search */}
+      <div className="px-4 pt-4 pb-2">
+        <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/5 border border-white/8 text-slate-400 text-sm hover:bg-white/8 transition-colors group">
+          <Search className="w-3.5 h-3.5" />
+          <span className="flex-1 text-left text-[13px]">Search…</span>
+          <div className="flex items-center gap-0.5 opacity-60">
+            <kbd className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">⌘</kbd>
+            <kbd className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">K</kbd>
           </div>
-          <span className="text-[15px] font-bold tracking-tight text-white drop-shadow-sm" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>GraftAI</span>
-        </div>
+        </button>
+      </div>
 
-        {/* Scrollable Nav */}
-        <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 py-6 scrollbar-hide">
-          <p className="mb-3 px-2 text-[10px] font-bold uppercase tracking-widest text-slate-500/70">
-            Platform
-          </p>
-          {NAV.map((link) => (
-            <NavItem key={link.href} link={link} active={pathname === link.href} />
-          ))}
+      {/* Quick Create */}
+      <div className="px-4 pb-3">
+        <Link
+          href="/dashboard/calendar"
+          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[13px] font-semibold transition-all shadow-lg shadow-indigo-600/20"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          New Event
+        </Link>
+      </div>
 
-          <div className="my-6 border-t border-white/[0.05]" />
-
-          {SETTINGS_NAV.map((link) => (
-            <NavItem key={link.href} link={link} active={pathname === link.href} />
-          ))}
-        </nav>
-
-        {/* User Card */}
-        <div className="p-4 shrink-0">
-          <div className="flex items-center gap-3 rounded-2xl p-2.5 hover:bg-white/[0.04] transition-colors border border-transparent hover:border-white/[0.05] cursor-pointer group">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 text-[13px] font-bold text-indigo-300 ring-1 ring-indigo-500/30 group-hover:ring-indigo-500/50 transition-all">
-              {initials}
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-2 space-y-5 overflow-y-auto">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label}>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em] px-2 mb-1.5">{group.label}</p>
+            <div className="space-y-0.5">
+              {group.links.map((link) => {
+                const isActive = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all ${
+                      isActive
+                        ? "bg-indigo-600/15 text-indigo-300"
+                        : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="nav-indicator"
+                        className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-400 rounded-full"
+                      />
+                    )}
+                    <link.icon className={`w-4 h-4 shrink-0 ${isActive ? "text-indigo-400" : ""}`} />
+                    <span>{link.name}</span>
+                    {"badge" in link && link.badge && (
+                      <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/20">
+                        {link.badge}
+                      </span>
+                    )}
+                    {isActive && <ChevronRight className="w-3.5 h-3.5 ml-auto text-indigo-400/60" />}
+                  </Link>
+                );
+              })}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold text-slate-200 group-hover:text-white transition-colors">{displayName}</p>
-              <p className="truncate text-[11px] text-slate-500 group-hover:text-slate-400 transition-colors">{displayEmail}</p>
-            </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); logout(); }}
-              title="Sign out"
-              className="rounded-lg p-2 text-slate-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-white/10 hover:text-rose-400 focus:opacity-100"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
           </div>
+        ))}
+      </nav>
+
+      {/* Booking Link Banner */}
+      <div className="mx-3 mb-3 p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5">
+        <p className="text-[11px] font-bold text-indigo-300 mb-1">Your booking page</p>
+        <p className="text-[11px] text-slate-400 font-mono truncate">graftai.app/{displayUser?.email?.split("@")[0] ?? "you"}</p>
+      </div>
+
+      {/* User Profile */}
+      <div className="border-t border-white/5 p-3">
+        <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            {userInitials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-white truncate">{displayUser?.name ?? displayUser?.email?.split("@")[0] ?? "User"}</p>
+            <p className="text-[11px] text-slate-500 truncate">{displayUser?.email ?? ""}</p>
+          </div>
+          <button
+            onClick={logout}
+            className="p-1.5 rounded-md text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all opacity-0 group-hover:opacity-100"
+            title="Sign out"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
         </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex h-screen bg-[#030712] overflow-hidden">
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute top-0 left-64 w-[600px] h-[400px] bg-indigo-600/5 rounded-full blur-[100px]" />
+        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-violet-600/5 rounded-full blur-[100px]" />
+      </div>
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex w-[220px] xl:w-[240px] flex-col shrink-0 border-r border-white/[0.06] bg-[#040a18]/60 backdrop-blur-xl z-20 relative">
+        <SidebarContent />
       </aside>
 
-      {/* ── Mobile functionality ── */}
+      {/* Mobile Overlay */}
       <AnimatePresence>
         {mobileOpen && (
           <>
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden pointer-events-auto"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden"
               onClick={() => setMobileOpen(false)}
             />
             <motion.aside
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-white/[0.08] bg-[#070711]/95 backdrop-blur-2xl shadow-2xl lg:hidden pointer-events-auto"
+              initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 280 }}
+              className="fixed inset-y-0 left-0 w-[260px] bg-[#040a18] border-r border-white/[0.06] z-50 lg:hidden"
             >
-              <div className="flex items-center justify-between px-6 h-16 shrink-0 border-b border-white/[0.05]">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20">
-                    <span className="text-sm font-black text-white">G</span>
-                  </div>
-                  <span className="text-[15px] font-bold text-white drop-shadow-sm" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>GraftAI</span>
-                </div>
-                <button
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 py-6">
-                {[...NAV, ...SETTINGS_NAV].map((link) => (
-                  <NavItem
-                    key={link.href}
-                    link={link}
-                    active={pathname === link.href}
-                    onClick={() => setMobileOpen(false)}
-                  />
-                ))}
-              </nav>
-
-              <div className="p-4 border-t border-white/[0.05]">
-                <div className="flex items-center justify-between rounded-2xl p-3 bg-white/[0.03] border border-white/[0.05]">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 text-[13px] font-bold text-indigo-300 ring-1 ring-indigo-500/30">
-                      {initials}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-slate-200">{displayName}</p>
-                      <p className="truncate text-[11px] text-slate-500">{displayEmail}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={logout}
-                    className="rounded-xl p-2 text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 transition-colors shrink-0"
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
+              <SidebarContent />
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      {/* ── Main content area ── */}
-      <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
-        {/* Mobile top bar */}
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/[0.05] bg-[#070711]/60 px-4 backdrop-blur-xl lg:hidden pointer-events-auto">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="rounded-xl p-2 text-slate-300 hover:bg-white/10 transition-colors"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm shadow-indigo-500/20">
-                <span className="text-[12px] font-black text-white">G</span>
-              </div>
-            </div>
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0 z-10">
+        {/* Topbar */}
+        <header className="flex items-center gap-4 px-5 py-3 border-b border-white/[0.06] bg-[#040a18]/40 backdrop-blur-md sticky top-0 z-30">
+          <button
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open navigation menu"
+            className="lg:hidden p-1.5 rounded-lg bg-white/5 text-slate-400"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* Breadcrumb */}
+          <div className="hidden md:flex items-center gap-1.5 text-sm text-slate-500">
+            <span>GraftAI</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="text-slate-300 font-medium capitalize">
+              {pathname.split("/").filter(Boolean).pop()?.replace("-", " ") ?? "Dashboard"}
+            </span>
           </div>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-[11px] font-bold text-indigo-300">
-            {initials}
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              aria-label="View notifications"
+              className="p-2 rounded-lg bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8 transition-all relative"
+            >
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+            </button>
+            <button className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8 transition-all text-[12px] font-medium">
+              <Command className="w-3.5 h-3.5" />
+              <span>Command</span>
+            </button>
           </div>
         </header>
 
-        {/* Scrollable Workspace container */}
-        <main className="flex-1 overflow-y-auto relative scrollbar-hide">
-          <div className="h-full mx-auto w-full max-w-6xl">
-            <motion.div
-              key={pathname}
-              initial={{ opacity: 0, y: 15, scale: 0.99 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="h-full min-h-full"
-            >
-              {children}
-            </motion.div>
-          </div>
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto">
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className="h-full"
+          >
+            {children}
+          </motion.div>
         </main>
       </div>
-
-      <ToastContainer />
     </div>
   );
 }

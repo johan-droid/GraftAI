@@ -493,7 +493,16 @@ async def sso_callback(
                 f"{bridge_url}?token={quote(tokens['access_token'])}"
                 f"&refresh_token={quote(tokens['refresh_token'])}"
             )
-            return RedirectResponse(url=final_target, status_code=303)
+
+            # Dual-path handoff:
+            # 1) Keep token bridge query params for frontend-owned first-party storage.
+            # 2) Also set backend-domain HttpOnly cookies as a fallback so /auth/check can
+            #    still authenticate when frontend token persistence fails.
+            response = RedirectResponse(url=final_target, status_code=303)
+            _attach_jwt_cookies(response, tokens, request)
+            response.headers["Cache-Control"] = "no-store"
+            logger.warning("[AUTH_DIAGNOSTIC]: Token Bridge response now includes backend fallback cookies.")
+            return response
 
         # Standard Same-Site flow: Set HttpOnly cookies directly
         logger.warning(f"[AUTH_DIAGNOSTIC]: Using standard HttpOnly cookie flow. Target: {target_url}")

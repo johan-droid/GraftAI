@@ -113,6 +113,52 @@ def test_auth_refresh_rotates_token(client):
     assert refresh_response.json().get("message") == "Token refreshed successfully"
 
 
+def test_auth_check_accepts_query_access_token(client):
+    unique_email = f"testuserq+{uuid.uuid4().hex[:8]}@example.com"
+
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": unique_email, "password": "StrongPassw0rd!", "full_name": "Query Token User"},
+    )
+
+    response = client.post(
+        "/api/v1/auth/token",
+        data={"username": unique_email, "password": "StrongPassw0rd!"},
+    )
+    assert response.status_code == 200
+
+    access_token = response.cookies.get("graftai_access_token")
+    assert access_token
+
+    check_response = client.get(f"/api/v1/auth/check?token={access_token}")
+    assert check_response.status_code == 200
+    assert check_response.json().get("authenticated") is True
+
+
+def test_auth_check_rejects_refresh_token_as_bearer(client):
+    unique_email = f"testrt+{uuid.uuid4().hex[:8]}@example.com"
+
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": unique_email, "password": "StrongPassw0rd!", "full_name": "Refresh Token User"},
+    )
+
+    response = client.post(
+        "/api/v1/auth/token",
+        data={"username": unique_email, "password": "StrongPassw0rd!"},
+    )
+    assert response.status_code == 200
+
+    refresh_token = response.cookies.get("graftai_refresh_token")
+    assert refresh_token
+
+    check_response = client.get(
+        "/api/v1/auth/check",
+        headers={"Authorization": f"Bearer {refresh_token}"},
+    )
+    assert check_response.status_code == 401
+
+
 def test_auth_check_without_token_returns_401(client):
     response = client.get("/api/v1/auth/check")
     assert response.status_code == 401

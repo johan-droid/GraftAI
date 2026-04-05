@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Send, Sparkles, Loader2, MoreHorizontal, Maximize2, Paperclip } from "lucide-react";
+import { Bot, Send, Sparkles, User as UserIcon, Loader2, Zap, Clock, Calendar, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sendAiChat } from "@/lib/api";
 
@@ -10,85 +10,151 @@ interface Message {
   id: string;
   role: "user" | "ai";
   content: string;
+  timestamp: Date;
 }
+
+const QUICK_PROMPTS = [
+  { icon: Calendar, text: "Find the best time for a team meeting next week" },
+  { icon: Globe, text: "Schedule a call with someone in Tokyo and New York" },
+  { icon: Clock, text: "Block focus time every morning for deep work" },
+  { icon: Zap, text: "Analyze my busiest days and suggest optimizations" },
+];
 
 export default function AICopilotPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
       role: "ai",
-      content: "Hi. I'm GraftAI Copilot. How can I help orchestrate your schedule today?"
-    }
+      content:
+        "Hi! I'm your GraftAI Copilot. I can help you schedule meetings, find optimal time slots, coordinate across timezones, and manage your calendar intelligently. What would you like to do?",
+      timestamp: new Date(),
+    },
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    scrollToBottom();
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const send = async (text: string) => {
+    if (!text.trim()) return;
 
-    const userMessage: Message = {
+    const userMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: input,
+      content: text,
+      timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsTyping(true);
 
     try {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const data = await sendAiChat(userMessage.content, undefined, timezone);
-      
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "ai",
-        content: data.result || "I'm sorry, I couldn't process that request.",
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (error) {
-      console.error(error);
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "ai",
-        content: "Network exception: Unable to connect to Copilot core.",
-      };
-      setMessages((prev) => [...prev, aiMessage]);
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const data = await sendAiChat(text, undefined, tz);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content: data.result || "I couldn't process that. Please try again.",
+          timestamp: new Date(),
+        },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content: "Connection issue. Please check your API configuration and try again.",
+          timestamp: new Date(),
+        },
+      ]);
     } finally {
       setIsTyping(false);
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    send(input);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send(input);
+    }
+  };
+
+  const formatTime = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
   return (
-    <div className="flex flex-col h-full bg-[#070711] sm:bg-transparent font-sans">
-      
-      {/* ── Main Chat Area ── */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-12 pt-6 pb-40 scrollbar-hide">
-        <div className="max-w-3xl mx-auto space-y-10">
-          <AnimatePresence initial={false}>
-            {messages.map((msg, i) => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                className={cn(
-                  "flex items-start gap-4 sm:gap-6 group",
-                  msg.role === "user" ? "flex-row-reverse" : "flex-row"
-                )}
+    <div className="flex flex-col h-[calc(100vh-53px)]">
+      {/* Header */}
+      <div className="flex items-center gap-4 px-5 py-3.5 border-b border-white/[0.06] bg-[#040a18]/40 shrink-0">
+        <div className="relative">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <Bot className="w-4.5 h-4.5 text-white" />
+          </div>
+          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[#030712]" />
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-white">GraftAI Copilot</h2>
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+            <span className="text-[11px] text-slate-500">Active · Ready to schedule</span>
+          </div>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/8 text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+            <Sparkles className="w-3 h-3 text-indigo-400" /> AI Orchestration Active
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-5">
+        {/* Quick prompts - show only when minimal messages */}
+        {messages.length <= 1 && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl mx-auto mb-4"
+          >
+            {QUICK_PROMPTS.map((p) => (
+              <button
+                key={p.text}
+                onClick={() => send(p.text)}
+                className="flex items-start gap-3 p-3.5 rounded-xl border border-white/[0.07] bg-white/[0.025] hover:border-indigo-500/30 hover:bg-indigo-500/5 text-left transition-all group"
               >
+                <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                  <p.icon className="w-3.5 h-3.5 text-indigo-400" />
+                </div>
+                <span className="text-[12px] text-slate-400 group-hover:text-slate-200 leading-relaxed transition-colors">{p.text}</span>
+              </button>
+            ))}
+          </motion.div>
+        )}
+
+        <AnimatePresence initial={false}>
+          {messages.map((msg) => (
+            <motion.div
+              key={msg.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className={cn(
+                "flex max-w-[85%] md:max-w-[70%]",
+                msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
+              )}
+            >
+              <div className={cn("flex gap-3", msg.role === "user" ? "flex-row-reverse" : "flex-row")}>
                 {/* Avatar */}
                 <div className="flex-shrink-0 mt-1">
                   {msg.role === "user" ? (
@@ -101,98 +167,88 @@ export default function AICopilotPage() {
                     </div>
                   )}
                 </div>
-                
+
                 {/* Message Content */}
                 <div className={cn(
-                  "flex flex-col text-[14.5px] leading-relaxed max-w-[85%] sm:max-w-[75%]",
+                  "flex flex-col gap-1",
                   msg.role === "user" ? "items-end" : "items-start"
                 )}>
-                  {msg.role === "user" ? (
-                    <div className="px-5 py-3.5 rounded-3xl bg-slate-800/80 text-white shadow-xl ring-1 ring-white/5 rounded-tr-sm backdrop-blur-xl">
-                      {msg.content}
-                    </div>
-                  ) : (
-                    <div className="px-1 py-2 text-slate-200">
-                      {msg.content}
-                    </div>
-                  )}
-                  
-                  {/* AI Actions (Copy, Edit, etc) mapping subtly on hover */}
-                  {msg.role === "ai" && (
-                    <div className="mt-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1 px-2 text-[11px] text-slate-500 bg-white/[0.04] hover:bg-white/[0.08] hover:text-slate-300 rounded-lg transition-colors border border-white/[0.05]">
-                        Sources (2)
-                      </button>
-                      <button className="p-1 px-2 text-[11px] text-slate-500 bg-white/[0.04] hover:bg-white/[0.08] hover:text-slate-300 rounded-lg transition-colors border border-white/[0.05]">
-                        <Bot className="w-3 h-3 inline-block mr-1" /> Suggest time
-                      </button>
-                    </div>
-                  )}
+                  <div className={cn(
+                    "px-4 py-3 rounded-2xl text-sm leading-relaxed",
+                    msg.role === "user"
+                      ? "bg-indigo-600 text-white rounded-tr-sm shadow-lg shadow-indigo-600/15"
+                      : "bg-white/[0.05] border border-white/[0.07] text-slate-200 rounded-tl-sm"
+                  )}>
+                    {msg.content}
+                  </div>
+                  <span className="text-[10px] text-slate-600 px-1">{formatTime(msg.timestamp)}</span>
                 </div>
-              </motion.div>
-            ))}
+              </div>
+            </motion.div>
+          ))}
 
-            {isTyping && (
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-start gap-4 sm:gap-6"
-              >
-                <div className="flex-shrink-0 mt-1 w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500/20 to-violet-600/20 border border-indigo-500/30 flex items-center justify-center">
+          {isTyping && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex mr-auto"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500/20 to-violet-600/20 border border-indigo-500/30 flex items-center justify-center">
                   <Bot className="w-4 h-4 text-indigo-400 animate-pulse" />
                 </div>
-                <div className="px-1 py-3 text-slate-400 flex items-center gap-1.5 h-8">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/50 animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/50 animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/50 animate-bounce" />
+                <div className="flex gap-1.5 px-4 py-3 bg-white/5 border border-white/8 rounded-2xl rounded-tl-sm">
+                  {[0, 1, 2].map((i) => (
+                    <motion.span
+                      key={i}
+                      className="w-1.5 h-1.5 rounded-full bg-indigo-400/60"
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.15 }}
+                    />
+                  ))}
                 </div>
-              </motion.div>
-            )}
-            <div ref={messagesEndRef} className="h-4" />
-          </AnimatePresence>
-        </div>
+              </div>
+            </motion.div>
+          )}
+          <div ref={endRef} className="h-4" />
+        </AnimatePresence>
       </div>
 
-      {/* ── Floating Command Input ── */}
-      <div className="absolute bottom-6 left-0 right-0 px-4 sm:px-6 pointer-events-none flex justify-center z-20">
+      {/* Input */}
+      <div className="absolute bottom-6 left-0 right-0 px-4 md:px-8 pointer-events-none flex justify-center z-20">
         <div className="w-full max-w-3xl pointer-events-auto">
           {/* Action pills above input */}
           <div className="flex items-center justify-center gap-2 mb-3">
-             <button className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 backdrop-blur-xl border border-white/[0.08] rounded-full text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shadow-lg">
-                <Sparkles className="w-3 h-3 text-amber-400" /> Deep Seek R1
-             </button>
+            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 backdrop-blur-xl border border-white/[0.08] rounded-full text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shadow-lg">
+              <Sparkles className="w-3 h-3 text-amber-400" /> Deep Seek R1
+            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="relative group">
-            {/* Ethereal Glow */}
             <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 via-violet-500/20 to-indigo-500/20 rounded-[24px] blur-md opacity-50 group-focus-within:opacity-100 transition-opacity duration-500" />
-            
             <div className="relative flex items-end gap-2 p-2 bg-slate-900/80 backdrop-blur-3xl border border-white/[0.1] rounded-[24px] shadow-2xl">
-              <button 
-                type="button"
-                className="p-3 text-slate-400 hover:text-indigo-400 hover:bg-white/[0.05] rounded-full transition-colors flex-shrink-0 mb-0.5"
+              <button
+                type="button"                aria-label="Attach file"
+                title="Attach file"                className="p-3 text-slate-400 hover:text-indigo-400 hover:bg-white/[0.05] rounded-full transition-colors flex-shrink-0"
               >
                 <Paperclip className="w-[18px] h-[18px]" strokeWidth={2.5} />
               </button>
 
               <textarea
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if(input.trim() && !isTyping) handleSubmit(e);
-                  }
-                }}
+                onKeyDown={handleKeyDown}
                 placeholder="Ask Copilot anything..."
                 rows={1}
-                className="w-full bg-transparent text-[14.5px] text-slate-200 placeholder-slate-500 focus:outline-none resize-none pt-3.5 pb-3 max-h-[150px] scrollbar-hide leading-relaxed"
-                style={{ minHeight: '52px' }}
+                className="w-full min-h-[52px] bg-transparent text-[14.5px] text-slate-200 placeholder-slate-500 focus:outline-none resize-none pt-3.5 pb-3 max-h-[150px] scrollbar-hide leading-relaxed"
               />
 
               <div className="flex items-center gap-1 mb-0.5 mr-0.5 shrink-0">
-                <button 
+                <button
                   type="submit"
+                  aria-label="Send message"
+                  title="Send message"
                   disabled={!input.trim() || isTyping}
                   className="p-2.5 rounded-full bg-white text-slate-900 hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-white transition-all flex items-center justify-center shrink-0 shadow-sm"
                 >
@@ -200,12 +256,11 @@ export default function AICopilotPage() {
                 </button>
               </div>
             </div>
-          </form>
 
-          {/* Footer Text */}
-          <div className="text-center mt-3 text-[10.5px] text-slate-500 font-medium">
-            AI can make mistakes. Consider verifying calendar changes before finalizing.
-          </div>
+            <div className="text-center mt-3 text-[10.5px] text-slate-500 font-medium">
+              Press <kbd className="font-mono bg-white/5 px-1 rounded">Enter</kbd> to send · <kbd className="font-mono bg-white/5 px-1 rounded">Shift+Enter</kbd> for new line
+            </div>
+          </form>
         </div>
       </div>
     </div>

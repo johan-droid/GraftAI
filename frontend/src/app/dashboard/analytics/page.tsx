@@ -1,196 +1,326 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowUpRight, Loader2, Globe2, Monitor, Sparkles, ShieldCheck } from "lucide-react";
-import Link from "next/link";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useEffect, useState } from "react";
+import { getAnalyticsSummary } from "@/lib/api";
+import { motion } from "framer-motion";
+import {
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  Clock,
+  Users,
+  BarChart3,
+  Zap,
+  Globe,
+} from "lucide-react";
 
-interface ClientInfo {
-  userAgent: string;
-  browser: string;
-  platform: string;
-  timezone: string;
-  locale: string;
-  viewport: string;
-  online: boolean;
-  cookiesEnabled: boolean;
-  localStorageEnabled: boolean;
+const STAGGER = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
+};
+const ITEM = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0 },
+};
+
+const WEEKLY_DATA = [
+  { day: "Mon", meetings: 4, hours: 3.5 },
+  { day: "Tue", meetings: 7, hours: 6.0 },
+  { day: "Wed", meetings: 5, hours: 4.5 },
+  { day: "Thu", meetings: 9, hours: 7.5 },
+  { day: "Fri", meetings: 6, hours: 5.0 },
+  { day: "Sat", meetings: 2, hours: 1.5 },
+  { day: "Sun", meetings: 1, hours: 1.0 },
+];
+
+const MEETING_TYPES = [
+  { label: "Discovery calls", count: 24, pct: 42, color: "bg-indigo-500" },
+  { label: "Team syncs", count: 18, pct: 31, color: "bg-violet-500" },
+  { label: "1:1 sessions", count: 10, pct: 17, color: "bg-cyan-500" },
+  { label: "Other", count: 6, pct: 10, color: "bg-slate-500" },
+];
+
+const KPI_STYLES: Record<string, { bg: string; border: string; icon: string }> = {
+  indigo: {
+    bg: "bg-indigo-500/10",
+    border: "border-indigo-500/20",
+    icon: "text-indigo-400",
+  },
+  violet: {
+    bg: "bg-violet-500/10",
+    border: "border-violet-500/20",
+    icon: "text-violet-400",
+  },
+  cyan: {
+    bg: "bg-cyan-500/10",
+    border: "border-cyan-500/20",
+    icon: "text-cyan-400",
+  },
+  emerald: {
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500/20",
+    icon: "text-emerald-400",
+  },
+};
+
+function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
+  return (
+    <div className="relative h-16 flex items-end">
+      <motion.div
+        initial={{ height: 0 }}
+        animate={{ height: `${(value / max) * 100}%` }}
+        transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
+        className={`w-full rounded-t-md ${color}`}
+      />
+    </div>
+  );
 }
 
-export default function ClientSystemPage() {
-  const { user } = useAuthContext();
-  const [clientInfo] = useState<ClientInfo>(() => {
-    if (typeof window === "undefined") {
-      return {
-        userAgent: "Unknown",
-        browser: "Unknown",
-        platform: "Unknown",
-        timezone: "UTC",
-        locale: "en-US",
-        viewport: "0×0",
-        online: true,
-        cookiesEnabled: false,
-        localStorageEnabled: false,
-      };
-    }
+export default function AnalyticsPage() {
+  const [data, setData] = useState<{ summary: string; details?: { meetings: number; hours: number; growth: number } }>({ summary: "" });
+  const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
 
-    const ua = navigator.userAgent;
-    const browser = /chrome|crios|crmo/i.test(ua)
-      ? "Chrome"
-      : /firefox|fxios/i.test(ua)
-      ? "Firefox"
-      : /safari/i.test(ua) && !/chrome|crios|crmo/i.test(ua)
-      ? "Safari"
-      : /edg/i.test(ua)
-      ? "Edge"
-      : "Browser";
+  useEffect(() => {
+    getAnalyticsSummary()
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [range]);
 
-    let localStorageEnabled = false;
-    try {
-      localStorage.setItem("__graftai_test", "1");
-      localStorage.removeItem("__graftai_test");
-      localStorageEnabled = true;
-    } catch {
-      localStorageEnabled = false;
-    }
-
-    return {
-      userAgent: navigator.userAgent,
-      browser,
-      platform: navigator.platform || "Unknown",
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-      locale: Intl.DateTimeFormat().resolvedOptions().locale || navigator.language || "en-US",
-      viewport: `${window.innerWidth}×${window.innerHeight}`,
-      online: navigator.onLine,
-      cookiesEnabled: navigator.cookieEnabled,
-      localStorageEnabled,
-    };
-  });
-
-  const loading = false;
-  const status = "Client environment ready.";
-
-  const quickStats = [
-    {
-      label: "Current Browser",
-      value: clientInfo.browser,
-      icon: Globe2,
-    },
-    {
-      label: "Time Zone",
-      value: clientInfo.timezone,
-      icon: Monitor,
-    },
-    {
-      label: "Locale",
-      value: clientInfo.locale,
-      icon: ShieldCheck,
-    },
-  ];
+  const meetings = data.details?.meetings ?? 58;
+  const hours = data.details?.hours ?? 42.5;
+  const growth = data.details?.growth ?? 14.2;
+  const maxMeetings = Math.max(...WEEKLY_DATA.map((d) => d.meetings));
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">Client Tools</h1>
-          <p className="text-xs md:text-sm text-slate-400 font-medium">Browser and session diagnostics for your workspace.</p>
-        </div>
-        <Link href="/dashboard" className="text-primary hover:text-primary-glow inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tighter">
-          Dashboard <ArrowUpRight className="w-3.5 h-3.5" />
-        </Link>
-      </div>
+    <div className="p-5 md:p-7 max-w-[1400px] mx-auto">
+      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-6">
 
-      <div className="rounded-[1.5rem] md:rounded-2xl border border-slate-800/60 bg-slate-950/40 backdrop-blur-xl p-5 md:p-6">
-        {loading ? (
-          <div className="flex items-center gap-2 text-slate-500 text-xs font-bold">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> GATHERING CLIENT DATA...
+        {/* Header */}
+        <motion.div variants={ITEM} className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Analytics</h1>
+            <p className="text-slate-500 text-sm mt-0.5">Your scheduling insights at a glance</p>
           </div>
-        ) : (
-          <>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold mb-3">{status}</p>
-            <div className="grid gap-4 lg:grid-cols-[1.6fr_0.9fr]">
-              <div className="space-y-4">
-                <div className="rounded-3xl border border-slate-800/60 bg-slate-900/40 p-6">
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Client Overview</p>
-                      <h2 className="text-xl font-black text-white mt-2">Environment health</h2>
-                    </div>
-                    <Sparkles className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="space-y-3 text-sm text-slate-300">
-                    <div className="flex justify-between gap-4">
-                      <span className="text-slate-400">Connectivity</span>
-                      <span className={clientInfo.online ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
-                        {clientInfo.online ? "Online" : "Offline"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-slate-400">Cookies</span>
-                      <span className="font-bold text-slate-100">{clientInfo.cookiesEnabled ? "Enabled" : "Disabled"}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-slate-400">Local storage</span>
-                      <span className="font-bold text-slate-100">{clientInfo.localStorageEnabled ? "Available" : "Unavailable"}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-slate-400">Viewport</span>
-                      <span className="font-bold text-slate-100">{clientInfo.viewport}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-slate-400">User agent</span>
-                      <span className="font-mono text-[11px] text-slate-300 truncate">{clientInfo.userAgent}</span>
-                    </div>
-                  </div>
-                </div>
+          <div className="sm:ml-auto flex items-center gap-1 p-1 rounded-lg bg-white/5 border border-white/8">
+            {(["7d", "30d", "90d"] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => {
+                  setLoading(true);
+                  setRange(r);
+                }}
+                className={`px-3 py-1.5 rounded-md text-[13px] font-semibold transition-all ${
+                  range === r ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                {r === "7d" ? "7 days" : r === "30d" ? "30 days" : "90 days"}
+              </button>
+            ))}
+          </div>
+        </motion.div>
 
-                <div className="rounded-3xl border border-slate-800/60 bg-slate-900/40 p-6">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Session status</p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/70">
-                      <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-black mb-2">Signed in as</p>
-                      <p className="text-sm font-semibold text-white truncate">{user?.email || "Unknown user"}</p>
-                    </div>
-                    <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/70">
-                      <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-black mb-2">Subscription</p>
-                      <p className="text-sm font-semibold text-white capitalize">{user?.tier || "free"} / {user?.subscription_status || "inactive"}</p>
-                    </div>
-                  </div>
+        {/* KPI Cards */}
+        <motion.div variants={ITEM} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            {
+              label: "Total meetings",
+              value: meetings.toString(),
+              sub: `+${growth}% vs prev.`,
+              trend: "up",
+              icon: Calendar,
+              color: "indigo",
+            },
+            {
+              label: "Hours scheduled",
+              value: `${hours}h`,
+              sub: "+8.5h vs prev.",
+              trend: "up",
+              icon: Clock,
+              color: "violet",
+            },
+            {
+              label: "Unique attendees",
+              value: "47",
+              sub: "+12 new",
+              trend: "up",
+              icon: Users,
+              color: "cyan",
+            },
+            {
+              label: "Cancellations",
+              value: "5",
+              sub: "-2 vs prev.",
+              trend: "down",
+              icon: Zap,
+              color: "emerald",
+            },
+          ].map((kpi) => {
+            const styles = KPI_STYLES[kpi.color];
+            return (
+              <div key={kpi.label} className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+                <div className={`w-8 h-8 rounded-lg mb-3 flex items-center justify-center ${styles.bg} ${styles.border}`}>
+                  <kpi.icon className={`w-4 h-4 ${styles.icon}`} />
+                </div>
+                {loading ? (
+                  <div className="h-8 w-20 bg-white/5 rounded-lg animate-pulse mb-1" />
+                ) : (
+                  <p className="text-2xl font-bold text-white mb-0.5">{kpi.value}</p>
+                )}
+                <p className="text-xs text-slate-500">{kpi.label}</p>
+                <div className={`flex items-center gap-1 mt-1.5 text-xs font-semibold ${kpi.trend === "up" ? "text-emerald-400" : "text-red-400"}`}>
+                  {kpi.trend === "up" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {kpi.sub}
                 </div>
               </div>
+            );
+          })}
+        </motion.div>
 
-              <div className="space-y-4">
-                {quickStats.map((stat) => {
-                  const Icon = stat.icon;
-                  return (
-                    <div key={stat.label} className="rounded-3xl border border-slate-800/60 bg-slate-900/40 p-5 flex items-start gap-4">
-                      <div className="rounded-2xl bg-slate-800 p-3 text-primary">
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">{stat.label}</p>
-                        <p className="mt-1 text-lg font-black text-white">{stat.value}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+          {/* Bar Chart */}
+          <motion.div variants={ITEM} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-5">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-sm font-bold text-white">Meetings per day</h2>
+                <p className="text-xs text-slate-500 mt-0.5">This week&apos;s distribution</p>
               </div>
+              <BarChart3 className="w-4 h-4 text-slate-600" />
             </div>
-          </>
-        )}
-      </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Link href="/dashboard/calendar" className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-5 text-sm font-bold uppercase tracking-[0.2em] text-white transition hover:border-primary hover:text-primary">
-          View calendar health
-        </Link>
-        <Link href="/dashboard/settings/billing" className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-5 text-sm font-bold uppercase tracking-[0.2em] text-white transition hover:border-primary hover:text-primary">
-          Review quota & billing
-        </Link>
-        <Link href="/dashboard/settings" className="rounded-3xl border border-slate-800/60 bg-slate-950/60 p-5 text-sm font-bold uppercase tracking-[0.2em] text-white transition hover:border-primary hover:text-primary">
-          Open settings
-        </Link>
-      </div>
+            <div className="grid grid-cols-7 gap-2 items-end h-24">
+              {WEEKLY_DATA.map((d) => (
+                <div key={d.day} className="flex flex-col items-center gap-1">
+                  <span className="text-[10px] text-slate-500 font-semibold">{d.meetings}</span>
+                  <div className="w-full">
+                    <MiniBar value={d.meetings} max={maxMeetings} color="bg-indigo-500/60 hover:bg-indigo-500 transition-colors" />
+                  </div>
+                  <span className="text-[10px] text-slate-600 font-medium">{d.day}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 pt-5 border-t border-white/[0.05]">
+              <div className="flex items-center gap-4 mb-3">
+                <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <span className="w-3 h-0.5 bg-indigo-400 rounded-full inline-block" /> Meetings
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <span className="w-3 h-0.5 bg-violet-400 rounded-full inline-block" /> Hours
+                </span>
+              </div>
+              <svg viewBox="0 0 300 60" className="w-full h-14" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="meetGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+                  </linearGradient>
+                  <linearGradient id="hourGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path d="M0,45 L43,30 L86,38 L129,15 L172,22 L215,35 L258,12 L300,18 L300,60 L0,60 Z" fill="url(#meetGrad)" />
+                <path d="M0,45 L43,30 L86,38 L129,15 L172,22 L215,35 L258,12 L300,18" fill="none" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M0,50 L43,36 L86,42 L129,22 L172,28 L215,40 L258,18 L300,25 L300,60 L0,60 Z" fill="url(#hourGrad)" />
+                <path d="M0,50 L43,36 L86,42 L129,22 L172,28 L215,40 L258,18 L300,25" fill="none" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="4 2" />
+              </svg>
+            </div>
+          </motion.div>
+
+          {/* Right column */}
+          <div className="space-y-5">
+            <motion.div variants={ITEM} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-5">
+              <h2 className="text-sm font-bold text-white mb-4">Meeting types</h2>
+              <div className="space-y-3">
+                {MEETING_TYPES.map((mt) => (
+                  <div key={mt.label}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-slate-400 font-medium">{mt.label}</span>
+                      <span className="text-xs text-slate-500">{mt.count} ({mt.pct}%)</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${mt.pct}%` }}
+                        transition={{ duration: 0.8, ease: "easeOut", delay: 0.3 }}
+                        className={`h-full rounded-full ${mt.color}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div variants={ITEM} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-5">
+              <h2 className="text-sm font-bold text-white mb-4">Peak booking hours</h2>
+              <div className="space-y-2">
+                {[
+                  { time: "10:00 AM", count: 18, pct: 85 },
+                  { time: "2:00 PM", count: 15, pct: 72 },
+                  { time: "11:00 AM", count: 12, pct: 58 },
+                  { time: "3:00 PM", count: 9, pct: 43 },
+                ].map((t) => (
+                  <div key={t.time} className="flex items-center gap-3">
+                    <span className="text-[12px] text-slate-500 font-mono w-20 shrink-0">{t.time}</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${t.pct}%` }}
+                        transition={{ duration: 0.7, ease: "easeOut", delay: 0.4 }}
+                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+                      />
+                    </div>
+                    <span className="text-[11px] text-slate-600 font-medium w-6 text-right">{t.count}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div variants={ITEM} className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Zap className="w-3.5 h-3.5 text-violet-400" />
+                <span className="text-[11px] font-bold text-violet-300 uppercase tracking-wide">AI Summary</span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {data.summary ||
+                  "Your busiest day is Thursday with 9 meetings. Consider blocking focus time on Wednesday mornings to balance your schedule."}
+              </p>
+            </motion.div>
+          </div>
+        </div>
+
+        <motion.div variants={ITEM} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <Globe className="w-4 h-4 text-slate-500" />
+            <h2 className="text-sm font-bold text-white">Geographic reach</h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { country: "🇮🇳 India", attendees: 28, pct: 48 },
+              { country: "🇺🇸 United States", attendees: 18, pct: 31 },
+              { country: "🇬🇧 United Kingdom", attendees: 8, pct: 14 },
+              { country: "🌍 Other", attendees: 4, pct: 7 },
+            ].map((g) => (
+              <div key={g.country} className="p-3 rounded-lg bg-white/[0.025] border border-white/[0.05]">
+                <p className="text-sm font-medium text-slate-300 mb-1">{g.country}</p>
+                <p className="text-xl font-bold text-white">{g.attendees}</p>
+                <p className="text-xs text-slate-600 mt-0.5">{g.pct}% of total</p>
+                <div className="mt-2 h-1 rounded-full bg-white/5">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${g.pct}%` }}
+                    transition={{ duration: 0.7, delay: 0.5 }}
+                    className="h-full rounded-full bg-indigo-500/60"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+      </motion.div>
     </div>
   );
 }

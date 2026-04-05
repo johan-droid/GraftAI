@@ -238,7 +238,6 @@ async def get_current_user(
             token = (
                 request.query_params.get("token")
                 or request.query_params.get("access_token")
-                or request.query_params.get("refresh_token")
             )
             if token:
                 logger.info(f"[AUTH_DEBUG]: Found token in query params: {token[:10]}...")
@@ -262,9 +261,11 @@ async def get_current_user(
         # DIAGNOSTIC DUMP: Help identify if Vercel/Render proxy is stripping headers/cookies
         header_keys = list(request.headers.keys())
         cookie_keys = list(request.cookies.keys())
+        query_keys = list(request.query_params.keys())
         logger.warning(f"[AUTH_DIAGNOSTIC]: Authentication failed. No token found.")
         logger.warning(f"[AUTH_DIAGNOSTIC]: Available Headers: {header_keys}")
         logger.warning(f"[AUTH_DIAGNOSTIC]: Available Cookies: {cookie_keys}")
+        logger.warning(f"[AUTH_DIAGNOSTIC]: Available Query Params: {query_keys}")
         logger.warning(f"[AUTH_DIAGNOSTIC]: Origin: {request.headers.get('origin')}, Host: {request.headers.get('host')}")
         
         raise HTTPException(
@@ -306,6 +307,15 @@ async def get_current_user(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Ensure only access tokens can authenticate protected endpoints.
+        if payload.get("type") != "access":
+            logger.warning(f"[AUTH_DEBUG]: Rejected non-access token type: {payload.get('type')}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 

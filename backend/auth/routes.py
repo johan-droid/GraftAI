@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 from backend.utils.redis_singleton import get_redis
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, and_
 
 # Services and models
 from backend.services import (
@@ -479,7 +479,6 @@ async def sso_callback(
         # This addresses user request: 'record store in database... so it not ask about permission repeatedly'
         try:
             from backend.models.user_token import UserTokenTable
-            from sqlalchemy import select
             
             provider = sso_data.get("provider", "google").lower()
             token_info = sso_data.get("token", {})

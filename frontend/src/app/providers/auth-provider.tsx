@@ -151,6 +151,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("oauth_in_progress");
       sessionStorage.removeItem("oauth_redirect_to");
+      sessionStorage.setItem("graftai_access_token", _token);
+      try {
+        window.localStorage.setItem("graftai_access_token", _token);
+      } catch (error) {
+        console.debug("Failed to persist access token in localStorage", error);
+      }
     }
     await refreshFn();
   };

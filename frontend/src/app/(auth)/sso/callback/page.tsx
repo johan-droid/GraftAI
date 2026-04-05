@@ -25,10 +25,9 @@ function SSOCallbackContent() {
       try {
         // Set cookies locally for the current domain (graftai.tech)
         // This makes them FIRST-PARTY cookies, which browsers allow.
-        
         const isProd = window.location.hostname !== "localhost";
         const secureFlag = isProd ? "secure;" : "";
-        const cookieBase = `path=/; samesite=lax; ${secureFlag}`;
+        const cookieBase = `path=/; samesite=None; ${secureFlag}`;
         
         // Access Token (1 hour)
         document.cookie = `graftai_access_token=${token}; max-age=3600; ${cookieBase}`;
@@ -42,10 +41,20 @@ function SSOCallbackContent() {
         const xsrfToken = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
         document.cookie = `xsrf-token=${xsrfToken}; max-age=86400; ${cookieBase}`;
 
-        if (typeof window !== "undefined" && window.sessionStorage) {
-          window.sessionStorage.setItem("graftai_access_token", token);
-          if (refreshToken) {
-            window.sessionStorage.setItem("graftai_refresh_token", refreshToken);
+        if (typeof window !== "undefined") {
+          if (window.sessionStorage) {
+            window.sessionStorage.setItem("graftai_access_token", token);
+            if (refreshToken) {
+              window.sessionStorage.setItem("graftai_refresh_token", refreshToken);
+            }
+          }
+          try {
+            window.localStorage.setItem("graftai_access_token", token);
+            if (refreshToken) {
+              window.localStorage.setItem("graftai_refresh_token", refreshToken);
+            }
+          } catch (err) {
+            console.debug("Failed to persist tokens in localStorage", err);
           }
         }
 

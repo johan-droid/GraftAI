@@ -92,7 +92,7 @@ def get_provider_config(provider: str) -> dict | None:
             "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
             "token_url": "https://oauth2.googleapis.com/token",
             "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
-            "scope": "openid profile email https://www.googleapis.com/auth/calendar.events",
+            "scope": "openid profile email https://www.googleapis.com/auth/calendar.events.owned https://www.googleapis.com/auth/gmail.readonly",
             "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
             "revoke_url": "https://oauth2.googleapis.com/revoke",
             "access_type": "offline",

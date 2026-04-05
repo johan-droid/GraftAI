@@ -62,3 +62,16 @@ build/
 tmp/
 uploads/
 
+# Local JSON Configs (Excluding Secrets)
+*.local.json
+secrets.json
+config.dev.json
+config.prod.json
+!graftai_manifest.json
+!package.json
+!package-lock.json
+!render.yaml
+!docker-compose.yml
+!vercel.yml
+!PROJECT_TECHNICAL_SPEC.md
+

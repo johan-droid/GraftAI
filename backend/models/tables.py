@@ -40,6 +40,11 @@ class UserTable(Base):
     is_superuser = Column(Boolean, default=False, nullable=False)
     hashed_password = Column(String(512))
     tenant_id = Column(Integer, index=True)
+    
+    # RBAC & Security (Phase 1)
+    role = Column(String(20), default="member", nullable=False) # admin, member, service_account
+    mfa_enabled = Column(Boolean, default=False, nullable=False)
+    mfa_secret = Column(String(128)) # Encrypted TOTP secret
 
     # User Profile Detailing
     bio = Column(Text)

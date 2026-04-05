@@ -71,7 +71,9 @@ async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "
     """
     Pushes local changes back to the external provider if the event is synced.
     """
-    if not event.external_id or not event.source or event.source == "local":
+    if not event.source or event.source == "local":
+        return
+    if action != "create" and not event.external_id:
         return
 
     try:
@@ -263,27 +265,45 @@ async def sync_event_to_ai(event_id: int, user_id: str, action: str = "upsert"):
     logger.info(f"📤 Queued background AI context sync for event {event_id} (Action: {action})")
 
 
-async def _safe_notify(action: str, user_email: str, user_id: Optional[str], title: str, event_id: int = -1) -> None:
+async def _safe_notify(action: str, user_email: str, user_id: Optional[str], event: EventTable = None) -> None:
     try:
+        if not event:
+            return
+
+        # Build list of recipient emails
+        emails = [user_email]
+        if event.attendees and isinstance(event.attendees, list):
+            for attendee in event.attendees:
+                email = None
+                if isinstance(attendee, str):
+                    email = attendee
+                elif isinstance(attendee, dict):
+                    email = attendee.get("email")
+                if email and email not in emails:
+                    emails.append(email)
+
+        start_time_str = event.start_time.strftime("%A, %B %d, %Y at %I:%M %p") if event.start_time else ""
+        end_time_str = event.end_time.strftime("%I:%M %p %Z") if hasattr(event.end_time, 'strftime') else ""
+
         event_data = {
-            "title": title,
-            "id": event_id,
+            "title": event.title,
+            "id": event.id,
             "user_id": user_id,
-            "start_time": "",
-            "end_time": "",
-            "is_meeting": False,
-            "meeting_link": None,
-            "meeting_platform": None,
+            "start_time": start_time_str,
+            "end_time": end_time_str,
+            "is_meeting": event.is_meeting,
+            "meeting_link": event.meeting_link,
+            "meeting_platform": event.meeting_platform,
         }
 
         if action == "created":
-            await notify_event_created(user_email, [], event_data)
+            await notify_event_created(emails, [], event_data)
         elif action == "updated":
-            await notify_event_updated(user_email, [], event_data)
+            await notify_event_updated(emails, [], event_data)
         elif action == "deleted":
-            await notify_event_deleted(user_email, [], event_data)
+            await notify_event_deleted(emails, [], event_data)
     except Exception as exc:
-        logger.warning(f"Email notify skipped ({type(exc).__name__})")
+        logger.warning(f"Email notify skipped ({type(exc).__name__}): {exc}")
 
 
 async def create_event(
@@ -358,16 +378,14 @@ async def create_event(
                 "created",
                 target_user.email,
                 str(new_event.user_id),
-                new_event.title,
-                new_event.id,
+                new_event,
             )
         else:
             await _safe_notify(
                 "created",
                 target_user.email,
                 str(new_event.user_id),
-                new_event.title,
-                new_event.id,
+                new_event,
             )
 
         # Persist an in-app notification for the user
@@ -466,16 +484,14 @@ async def update_event(
                 "updated",
                 target_user.email,
                 str(user_id),
-                event.title,
-                event.id,
+                event,
             )
         else:
             await _safe_notify(
                 "updated",
                 target_user.email,
                 str(user_id),
-                event.title,
-                event.id,
+                event,
             )
 
         # Persist an in-app notification for the user about update
@@ -535,16 +551,14 @@ async def delete_event(
                 "deleted",
                 target_user.email,
                 str(user_id),
-                event.title,
-                event.id,
+                event,
             )
         else:
             await _safe_notify(
                 "deleted",
                 target_user.email,
                 str(user_id),
-                event.title,
-                event.id,
+                event,
             )
 
         # Persist an in-app notification for the user about deletion

@@ -188,6 +188,8 @@ v1 = APIRouter(prefix="/api/v1")
 app.include_router(auth_router)
 v1.include_router(auth_router)
 
+from backend.api.mfa import router as mfa_router
+
 v1.include_router(users_router)
 v1.include_router(uploads_router)
 v1.include_router(calendar_router)
@@ -198,6 +200,7 @@ v1.include_router(analytics_router)
 v1.include_router(consent_router)
 v1.include_router(upgrade_router)
 v1.include_router(plugin_router)
+v1.include_router(mfa_router)
 
 app.include_router(v1)
 

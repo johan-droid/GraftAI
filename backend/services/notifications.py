@@ -75,7 +75,7 @@ def _build_event_templates(notification_type: str, event_data: dict) -> tuple[st
     return subject, html_body, text_body
 
 
-async def _send_notification(user_email: str, user_player_ids: list[str], content_type: str, event_data: dict):
+async def _send_notification(recipient_emails: list[str], user_player_ids: list[str], content_type: str, event_data: dict):
     # We only treat this as event notification if event id is present and not placeholder.
     event_id = event_data.get("id")
     if event_id is None or (isinstance(event_id, int) and event_id < 0):
@@ -86,8 +86,9 @@ async def _send_notification(user_email: str, user_player_ids: list[str], conten
 
     # Email
     try:
-        await send_email(user_email, subject, html_body, text_body)
-        logger.info("Email notification queued")
+        for email in recipient_emails:
+            await send_email(email, subject, html_body, text_body)
+        logger.info(f"Email notification queued for {len(recipient_emails)} recipients")
     except Exception as e:
         logger.warning(f"Email notification failed: {e}")
 
@@ -134,20 +135,20 @@ async def _send_notification(user_email: str, user_player_ids: list[str], conten
         logger.warning(f"Failed to persist in-app notification: {e}")
 
 
-async def notify_event_created(user_email: str, user_player_ids: list[str], event_data: dict):
-    await _send_notification(user_email, user_player_ids, "created", event_data)
+async def notify_event_created(recipient_emails: list[str], user_player_ids: list[str], event_data: dict):
+    await _send_notification(recipient_emails, user_player_ids, "created", event_data)
 
 
-async def notify_event_updated(user_email: str, user_player_ids: list[str], event_data: dict):
-    await _send_notification(user_email, user_player_ids, "updated", event_data)
+async def notify_event_updated(recipient_emails: list[str], user_player_ids: list[str], event_data: dict):
+    await _send_notification(recipient_emails, user_player_ids, "updated", event_data)
 
 
-async def notify_event_deleted(user_email: str, user_player_ids: list[str], event_data: dict):
-    await _send_notification(user_email, user_player_ids, "deleted", event_data)
+async def notify_event_deleted(recipient_emails: list[str], user_player_ids: list[str], event_data: dict):
+    await _send_notification(recipient_emails, user_player_ids, "deleted", event_data)
 
 
-async def notify_event_reminder(user_email: str, user_player_ids: list[str], event_data: dict):
-    await _send_notification(user_email, user_player_ids, "reminder", event_data)
+async def notify_event_reminder(recipient_emails: list[str], user_player_ids: list[str], event_data: dict):
+    await _send_notification(recipient_emails, user_player_ids, "reminder", event_data)
 
 
 async def send_custom_notification(

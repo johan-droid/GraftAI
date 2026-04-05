@@ -19,11 +19,14 @@ import {
   Plus,
   Zap,
   Command,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthContext } from "@/app/providers/auth-provider";
 import { syncUserTimezone, updateUserProfile } from "@/lib/api";
+import { DashboardProvider, useDashboard } from "@/providers/dashboard-provider";
 
 const NAV_GROUPS = [
   {
@@ -49,7 +52,28 @@ const NAV_GROUPS = [
   },
 ];
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+const cn = (...classes: any[]) => classes.filter(Boolean).join(" ");
+
+function PrivacyToggle() {
+  const { isPrivacyMode, togglePrivacyMode } = useDashboard();
+  return (
+    <button
+      onClick={togglePrivacyMode}
+      className={cn(
+        "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[12px] font-medium",
+        isPrivacyMode 
+          ? "bg-indigo-500/20 border-indigo-500/30 text-indigo-300" 
+          : "bg-white/5 border-white/8 text-slate-400 hover:text-white"
+      )}
+      title={isPrivacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}
+    >
+      {isPrivacyMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+      <span className="hidden sm:inline">{isPrivacyMode ? "Private" : "Privacy"}</span>
+    </button>
+  );
+}
+
+function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { logout, user } = useAuthContext();
@@ -77,7 +101,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      {/* Logo */}
       <div className="px-5 py-5 flex items-center gap-3 border-b border-white/5">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
           <Zap className="w-4 h-4 text-white fill-white" />
@@ -90,7 +113,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </div>
 
-      {/* Search */}
       <div className="px-4 pt-4 pb-2">
         <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/5 border border-white/8 text-slate-400 text-sm hover:bg-white/8 transition-colors group">
           <Search className="w-3.5 h-3.5" />
@@ -102,7 +124,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </button>
       </div>
 
-      {/* Quick Create */}
       <div className="px-4 pb-3">
         <Link
           href="/dashboard/calendar"
@@ -113,7 +134,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </Link>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-5 overflow-y-auto">
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
@@ -154,7 +174,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ))}
       </nav>
 
-      {/* User Profile */}
       <div className="border-t border-white/5 p-3">
         <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -178,18 +197,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen bg-[#030712] overflow-hidden">
-      {/* Ambient background */}
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute top-0 left-64 w-[600px] h-[400px] bg-indigo-600/5 rounded-full blur-[100px]" />
         <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-violet-600/5 rounded-full blur-[100px]" />
       </div>
 
-      {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-[220px] xl:w-[240px] flex-col shrink-0 border-r border-white/[0.06] bg-[#040a18]/60 backdrop-blur-xl z-20 relative">
         <SidebarContent />
       </aside>
 
-      {/* Mobile Overlay */}
       <AnimatePresence>
         {mobileOpen && (
           <>
@@ -209,9 +225,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       </AnimatePresence>
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 z-10">
-        {/* Topbar */}
         <header className="flex items-center gap-4 px-5 py-3 border-b border-white/[0.06] bg-[#040a18]/40 backdrop-blur-md sticky top-0 z-30">
           <button
             onClick={() => setMobileOpen(true)}
@@ -221,7 +235,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Breadcrumb */}
           <div className="hidden md:flex items-center gap-1.5 text-sm text-slate-500">
             <span>GraftAI</span>
             <ChevronRight className="w-3.5 h-3.5" />
@@ -231,6 +244,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <PrivacyToggle />
             <NotificationCenter />
             <button className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8 transition-all text-[12px] font-medium">
               <Command className="w-3.5 h-3.5" />
@@ -239,7 +253,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        {/* Page Content */}
         <main className="flex-1 overflow-y-auto">
           <motion.div
             key={pathname}
@@ -253,5 +266,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
     </div>
+  );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <DashboardProvider>
+      <DashboardContent>{children}</DashboardContent>
+    </DashboardProvider>
   );
 }

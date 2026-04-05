@@ -242,8 +242,12 @@ def get_current_user_id(current_user: dict = Depends(get_current_user)) -> str:
     return str(user_id)
 
 
-def is_admin_user(user_id: str = Depends(get_current_user_id)) -> str:
-    if not check_user_role(user_id, "admin"):
+async def is_admin_user(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id)
+) -> str:
+    from backend.services.access_control import check_user_role
+    if not await check_user_role(db, user_id, "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Administrative privileges required",

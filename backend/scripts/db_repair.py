@@ -48,6 +48,19 @@ async def repair_database():
                     await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_type};"))
                     logger.info(f"✅ [REPAIR] 'users' table successfully updated with '{col}' column.")
 
+            # 3. Phase 1: Security & RBAC Columns
+            security_cols = {
+                "role": "VARCHAR(20) DEFAULT 'member' NOT NULL",
+                "mfa_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
+                "mfa_secret": "VARCHAR(128)"
+            }
+            for col, col_data in security_cols.items():
+                res = await conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"))
+                if res.fetchone() is None:
+                    logger.info(f"🔧 [REPAIR] Security Column '{col}' missing in 'users' table. Patching...")
+                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_data};"))
+                    logger.info(f"✅ [REPAIR] 'users' table successfully updated with security column '{col}'.")
+
     except Exception as e:
         logger.error(f"❌ [REPAIR] Database repair failed: {e}", exc_info=True)
 

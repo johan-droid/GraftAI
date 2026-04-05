@@ -1,36 +1,22 @@
-"""
-RBAC/ABAC (roles/attributes) implementation with Redis-backed storage.
-"""
+from sqlalchemy.ext.asyncio import AsyncSession
+from backend.models.tables import UserTable
 
-import json
-from backend.utils.redis_singleton import safe_get, safe_set
-
-
-def _ensure_defaults(user_id: str | int) -> None:
-    uid = str(user_id)
-    if safe_get(f"roles:{uid}") is None:
-        if uid in ("1", "2"):
-            roles = ["admin"] if uid == "1" else ["user"]
-            attrs = (
-                {"tier": "enterprise", "region": "us-east"}
-                if uid == "1"
-                else {"tier": "starter", "region": "us-west"}
-            )
-            safe_set(f"roles:{uid}", json.dumps(roles))
-            safe_set(f"attrs:{uid}", json.dumps(attrs))
-
-
-def check_user_role(user_id: str | int, role: str) -> bool:
-    _ensure_defaults(user_id)
-    raw = safe_get(f"roles:{user_id}")
-    if not raw:
+async def check_user_role(db: AsyncSession, user_id: str, role: str) -> bool:
+    """
+    Checks if a user has a specific role using the database.
+    Source of truth for Phase 1 RBAC.
+    """
+    user = await db.get(UserTable, user_id)
+    if not user:
         return False
-    return role in json.loads(raw)
+    
+    # Superusers always have admin access
+    if user.is_superuser:
+        return True
+        
+    return user.role == role
 
-
-def check_user_attribute(user_id: str | int, attribute: str, value: str) -> bool:
-    _ensure_defaults(user_id)
-    raw = safe_get(f"attrs:{user_id}")
-    if not raw:
-        return False
-    return json.loads(raw).get(attribute) == value
+async def get_user_role(db: AsyncSession, user_id: str) -> str:
+    """Retrieves the primary role of a user."""
+    user = await db.get(UserTable, user_id)
+    return user.role if user else "member"

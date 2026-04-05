@@ -54,5 +54,5 @@ jinja2==3.1.4
 
 # Payment
 stripe==11.0.0
-razorpay==1.5.0
+razorpay==1.4.2
 aiosqlite==0.20.0

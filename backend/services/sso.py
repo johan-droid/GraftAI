@@ -81,32 +81,34 @@ def _delete_oauth_state(state: str):
     safe_delete(f"oauth:state:{state}")
 
 
-# Multi-provider configuration
-PROVIDERS = {
-    "google": {
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-        "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
-        "token_url": "https://oauth2.googleapis.com/token",
-        "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
-        # Scopes: login + calendar events (Meet)
-        "scope": "openid profile email https://www.googleapis.com/auth/calendar.events",
-        "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
-        "revoke_url": "https://oauth2.googleapis.com/revoke",
-        "access_type": "offline",  # Keep refresh token available in backend
-        "prompt": "select_account",  # Use select_account to avoid forced consent each login
-    },
-    "microsoft": {
-        "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
-        "client_secret": os.getenv("MICROSOFT_CLIENT_SECRET"),
-        "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-        "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-        "userinfo_url": "https://graph.microsoft.com/v1.0/me",
-        # Scopes: login + Teams + Calendar
-        "scope": "openid profile email User.Read Calendars.ReadWrite OnlineMeetings.ReadWrite",
-        "redirect_uri": os.getenv("MICROSOFT_REDIRECT_URI"),
-    },
-}
+def get_provider_config(provider: str) -> dict | None:
+    """Get provider configuration dynamically, allowing for late env loading."""
+    provider = provider.lower()
+    
+    if provider == "google":
+        return {
+            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+            "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+            "token_url": "https://oauth2.googleapis.com/token",
+            "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
+            "scope": "openid profile email https://www.googleapis.com/auth/calendar.events",
+            "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
+            "revoke_url": "https://oauth2.googleapis.com/revoke",
+            "access_type": "offline",
+            "prompt": "select_account",
+        }
+    elif provider == "microsoft":
+        return {
+            "client_id": os.getenv("MICROSOFT_CLIENT_ID"),
+            "client_secret": os.getenv("MICROSOFT_CLIENT_SECRET"),
+            "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+            "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+            "userinfo_url": "https://graph.microsoft.com/v1.0/me",
+            "scope": "openid profile email User.Read Calendars.ReadWrite OnlineMeetings.ReadWrite",
+            "redirect_uri": os.getenv("MICROSOFT_REDIRECT_URI"),
+        }
+    return None
 
 
 # During OAuth2 login the provider should return to the frontend callback endpoint.
@@ -118,7 +120,7 @@ OAUTH2_REDIRECT_URI = os.getenv(
 
 
 def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboard"):
-    config = PROVIDERS.get(provider.lower())
+    config = get_provider_config(provider)
     if not config:
         raise HTTPException(
             status_code=400, detail=f"Provider {provider} not supported"
@@ -128,9 +130,13 @@ def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboar
     client_secret = config["client_secret"]
 
     if not all([client_id, client_secret]):
+        missing = []
+        if not client_id: missing.append("client_id")
+        if not client_secret: missing.append("client_secret")
+        logger.error(f"SSO provider '{provider}' missing: {', '.join(missing)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"SSO provider '{provider}' is currently unavailable",
+            detail=f"SSO provider '{provider}' is currently unavailable (missing configuration)",
         )
 
     # Using sync discovery/init; create_authorization_url is local computation
@@ -206,7 +212,7 @@ async def complete_oauth2_flow(request: Request, code: str, state: str):
         raise RuntimeError("OAuth2 state expired")
 
     provider_name = data.get("provider", "google")
-    config = PROVIDERS.get(provider_name)
+    config = get_provider_config(provider_name)
     if not config:
         raise RuntimeError(f"Provider config for {provider_name} not found")
 
@@ -318,7 +324,7 @@ async def revoke_provider_token(provider: str, token: dict):
     Revoke access on the provider's side (Google, GitHub, etc.)
     This ensures that the next login will require a fresh consent screen.
     """
-    config = PROVIDERS.get(provider.lower())
+    config = get_provider_config(provider)
     if not config or not config.get("revoke_url"):
         logger.info(f"No revocation URL for provider {provider}")
         return False

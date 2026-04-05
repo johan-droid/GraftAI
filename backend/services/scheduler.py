@@ -383,6 +383,7 @@ async def create_event(
             await db.commit()
         except Exception as e:
             logger.warning(f"Failed to persist notification: {e}")
+            await db.rollback() # Ensure session is clean for subsequent usage tracking
 
     return new_event
 
@@ -490,6 +491,7 @@ async def update_event(
             await db.commit()
         except Exception as e:
             logger.warning(f"Failed to persist notification (update): {e}")
+            await db.rollback()
 
     return event
 
@@ -558,5 +560,6 @@ async def delete_event(
             await db.commit()
         except Exception as e:
             logger.warning(f"Failed to persist notification (delete): {e}")
+            await db.rollback()
 
     return True

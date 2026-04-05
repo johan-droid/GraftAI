@@ -1,12 +1,14 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.models.tables import NotificationTable
+from backend.services.notifications import send_custom_notification
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -87,15 +89,6 @@ async def delete_notification(
     await db.delete(notif)
     await db.commit()
     return {"status": "ok"}
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr
-from typing import Optional
-
-from backend.auth.schemes import get_current_user_id
-from backend.services.notifications import send_custom_notification
-
-router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 class NotificationTestRequest(BaseModel):

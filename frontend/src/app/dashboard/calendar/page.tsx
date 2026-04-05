@@ -197,28 +197,28 @@ export default function CalendarPage() {
   });
 
   return (
-    <div className="flex h-[calc(100vh-53px)] overflow-hidden">
+    <div className="flex h-[calc(100vh-53px)] overflow-hidden bg-[#030712]/50">
       {/* Main Calendar Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/5 blur-[120px] rounded-full" />
+        </div>
+
         {/* Calendar Toolbar */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-white/[0.06] shrink-0">
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-white/5 border border-white/8">
+        <div className="flex items-center gap-4 px-6 py-4 border-b border-white/[0.06] bg-[#040a18]/40 backdrop-blur-xl shrink-0 z-10">
+          <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
             <button
               onClick={() => navigate("prev")}
-              aria-label="Previous month"
-              title="Previous month"
-              className="p-1.5 rounded-md hover:bg-white/8 text-slate-400 hover:text-white transition-all"
+              className="p-2 rounded-lg hover:bg-white/8 text-slate-400 hover:text-white transition-all active:scale-90"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button className="px-3 py-1 text-sm font-semibold text-slate-200 hover:text-white min-w-[180px] text-center">
+            <button className="px-4 py-1 text-[15px] font-bold text-white min-w-[200px] tracking-tight">
               {monthLabel}
             </button>
             <button
               onClick={() => navigate("next")}
-              aria-label="Next month"
-              title="Next month"
-              className="p-1.5 rounded-md hover:bg-white/8 text-slate-400 hover:text-white transition-all"
+              className="p-2 rounded-lg hover:bg-white/8 text-slate-400 hover:text-white transition-all active:scale-90"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -226,29 +226,29 @@ export default function CalendarPage() {
 
           <button
             onClick={() => setCurrentDate(new Date())}
-            className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-slate-400 hover:text-white text-sm font-medium transition-all"
+            className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/8 text-[13px] font-bold transition-all shadow-sm"
           >
             Today
           </button>
 
-          <div className="ml-auto flex items-center gap-1 p-1 rounded-lg bg-white/5 border border-white/8">
+          <div className="ml-auto flex items-center gap-1.5 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
             {(["month", "week", "list"] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-all capitalize",
-                  viewMode === mode ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-bold transition-all capitalize",
+                  viewMode === mode ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 {mode === "month" ? (
-                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <LayoutGrid className="w-4 h-4" />
                 ) : mode === "list" ? (
-                  <List className="w-3.5 h-3.5" />
+                  <List className="w-4 h-4" />
                 ) : (
-                  <Calendar className="w-3.5 h-3.5" />
+                  <Calendar className="w-4 h-4" />
                 )}
-                <span className="hidden sm:inline">{mode}</span>
+                <span className="hidden lg:inline">{mode}</span>
               </button>
             ))}
           </div>

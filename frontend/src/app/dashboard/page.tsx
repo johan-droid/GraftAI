@@ -166,48 +166,51 @@ export default function Dashboard() {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="p-5 md:p-7 max-w-[1400px] mx-auto">
-      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-6">
-        <motion.div variants={ITEM} className="flex flex-col md:flex-row md:items-center gap-4 pb-1">
+    <div className="p-6 md:p-10 max-w-7xl mx-auto">
+      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-8">
+        <motion.div variants={ITEM} className="flex flex-col md:flex-row md:items-center gap-6 pb-2">
           <div>
-            <p className="text-slate-500 text-sm font-medium mb-0.5">{greeting} 👋</p>
-            <h1 className="text-2xl font-bold text-white tracking-tight">{profileName}&apos;s workspace</h1>
+            <p className="text-indigo-400 text-sm font-bold uppercase tracking-[0.2em] mb-1">{greeting} 👋</p>
+            <h1 className="text-3xl font-bold text-white tracking-tight">{profileName}&apos;s workspace</h1>
           </div>
-          <div className="md:ml-auto flex items-center gap-2">
+          <div className="md:ml-auto flex items-center gap-3">
             <Link
               href="/dashboard/calendar"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-600/20"
+              className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[13px] font-bold transition-all shadow-lg shadow-indigo-600/25 active:scale-95"
             >
               <Calendar className="w-4 h-4" />
-              New booking
+              New event
             </Link>
           </div>
         </motion.div>
 
-        <motion.div variants={ITEM} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <motion.div variants={ITEM} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { label: "Upcoming meetings (30d)", value: stats.meetings, sub: "Current + future only", icon: Calendar, color: "indigo" },
-            { label: "Hours scheduled", value: `${stats.hours}h`, sub: "Total booked duration", icon: Clock, color: "violet" },
-            { label: "Cancellations (30d)", value: stats.cancellations, sub: "Canceled upcoming events", icon: TrendingUp, color: "emerald" },
-            { label: "Upcoming (14 days)", value: upcomingMeetings.length, sub: "Live events window", icon: Activity, color: "cyan" },
+            { label: "Total Meetings", value: stats.meetings, sub: "Last 30 days", icon: Calendar, color: "indigo" },
+            { label: "Scheduled Hours", value: `${stats.hours}h`, sub: "Active workload", icon: Clock, color: "violet" },
+            { label: "Cancellations", value: stats.cancellations, sub: "Avoided conflicts", icon: TrendingUp, color: "emerald" },
+            { label: "Active Window", value: upcomingMeetings.length, sub: "Next 14 days", icon: Activity, color: "cyan" },
           ].map((stat) => (
-            <div key={stat.label} className="relative overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.03] p-4 hover:bg-white/[0.05] transition-colors">
-              <div className={`${STAT_COLOR_CLASSES[stat.color]} w-8 h-8 rounded-lg mb-3 flex items-center justify-center`}>
-                <stat.icon className="w-4 h-4 text-current" />
+            <div key={stat.label} className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d1424]/40 p-5 hover:bg-[#0d1424]/60 transition-all hover:border-white/15">
+              <div className={`${STAT_COLOR_CLASSES[stat.color]} w-9 h-9 rounded-xl mb-4 flex items-center justify-center border transition-transform group-hover:scale-110`}>
+                <stat.icon className="w-4.5 h-4.5 text-current" />
               </div>
-              <p className="text-2xl font-bold text-white mb-1">{stat.value}</p>
-              <p className="text-xs text-slate-500 font-medium">{stat.label}</p>
-              <p className="text-xs text-emerald-400 font-medium mt-1">{stat.sub}</p>
+              <p className="text-3xl font-bold text-white tracking-tighter mb-1.5">{stat.value}</p>
+              <p className="text-[13px] text-slate-400 font-semibold">{stat.label}</p>
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{stat.sub}</p>
+              </div>
             </div>
           ))}
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 items-start">
           <motion.div variants={ITEM}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-white">Upcoming meetings</h2>
-              <Link href="/dashboard/calendar" className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1">
-                View calendar <ChevronRight className="w-3.5 h-3.5" />
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-white tracking-tight">Upcoming meetings</h2>
+              <Link href="/dashboard/calendar" className="group text-xs text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1.5 transition-colors">
+                View full calendar <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </Link>
             </div>
 

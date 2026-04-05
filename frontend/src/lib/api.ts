@@ -46,8 +46,23 @@ export async function deleteAccount() {
   return apiClient.delete<{ message: string }>("/auth/account");
 }
 
-export async function updateUserProfile(data: { full_name?: string; timezone?: string }) {
-  return apiClient.patch<{ id: string; email: string; full_name?: string; timezone?: string }>("/users/me", data);
+export async function updateUserProfile(data: { 
+  full_name?: string; 
+  timezone?: string;
+  bio?: string;
+  job_title?: string;
+  location?: string;
+}) {
+  return apiClient.patch<{ 
+    id: string; 
+    email: string; 
+    full_name?: string; 
+    timezone?: string;
+    bio?: string;
+    job_title?: string;
+    location?: string;
+    created_at?: string;
+  }>("/users/me", data);
 }
 
 // ──────────────────────────────────────
@@ -315,4 +330,20 @@ export async function mfaVerify(userId: number, code: string) {
 
 export async function manualSync() {
   return apiClient.post<{ status: string; message: string; synced_user: string }>("/calendar/sync");
+}
+
+export async function getEmailDiagnostic() {
+  return apiClient.get<{
+    status: string;
+    message: string;
+    error_type?: string;
+    hint?: string;
+    config_preview?: Record<string, any>;
+  }>("/admin/email/diagnostic");
+}
+
+export async function sendTestEmail(email: string) {
+  return apiClient.post<{ status: string; message: string }>("/admin/email/test", null, {
+    params: { email }
+  });
 }

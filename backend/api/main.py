@@ -33,6 +33,7 @@ from backend.services.plugin_api import router as plugin_router
 
 from backend.utils import db as db_utils
 from backend.models.tables import Base as ModelsBase
+from backend.scripts.db_repair import repair_database
 
 
 # ── Rate Limiting — in-process sliding window ─────────────────────────────────
@@ -114,8 +115,12 @@ async def lifespan(app: FastAPI):
             async with db_utils.engine.begin() as conn:
                 await conn.run_sync(ModelsBase.metadata.create_all)
             logger.info("Database tables verified.")
+            
+            # Application-level schema repairs (e.g. missing columns from legacy deploys)
+            await repair_database()
+            
         except Exception as exc:
-            logger.error(f"DB table creation error: {type(exc).__name__}")
+            logger.error(f"DB initialization/repair error: {type(exc).__name__}")
 
     # Password self-test
     try:

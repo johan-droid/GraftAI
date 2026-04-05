@@ -84,67 +84,77 @@ export default function AnalyticsPage() {
   };
 
   return (
-    <div className="p-5 md:p-7 max-w-[1300px] mx-auto">
-      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-6">
-        <motion.div variants={ITEM} className="flex flex-col sm:flex-row sm:items-center gap-4">
+    <div className="p-6 md:p-10 max-w-7xl mx-auto">
+      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-8">
+        <motion.div variants={ITEM} className="flex flex-col sm:flex-row sm:items-center gap-6">
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Analytics</h1>
-            <p className="text-slate-500 text-sm mt-0.5">Current and upcoming scheduling metrics from your calendar records</p>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Analytics</h1>
+            <p className="text-slate-500 text-[15px] mt-1.5 leading-relaxed">Advanced scheduling intelligence and workspace metrics.</p>
           </div>
-          <div className="sm:ml-auto flex items-center gap-1 p-1 rounded-lg bg-white/5 border border-white/8">
+          <div className="sm:ml-auto flex items-center gap-1.5 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
             {(["7d", "30d", "90d"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => handleRangeChange(r)}
-                className={`px-3 py-1.5 rounded-md text-[13px] font-semibold transition-all ${
-                  range === r ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+                className={`px-4 py-2 rounded-lg text-[13px] font-bold transition-all ${
+                  range === r ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                 }`}
               >
-                {r === "7d" ? "Next 7 days" : r === "30d" ? "Next 30 days" : "Next 90 days"}
+                {r === "7d" ? "7 Days" : r === "30d" ? "30 Days" : "90 Days"}
               </button>
             ))}
           </div>
         </motion.div>
 
         {error && (
-          <motion.div variants={ITEM} className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <motion.div variants={ITEM} className="rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200 backdrop-blur-sm">
             {error}
           </motion.div>
         )}
 
-        <motion.div variants={ITEM} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <motion.div variants={ITEM} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { label: "Upcoming meetings", value: totals.meetings.toString(), icon: Calendar, color: "indigo", sub: "Current + future window only" },
-            { label: "Hours scheduled", value: `${totals.hours}h`, icon: Clock, color: "violet", sub: "Computed from event durations" },
-            { label: "Unique attendees", value: totals.unique_attendees.toString(), icon: Users, color: "cyan", sub: "Distinct attendee emails" },
-            { label: "Cancellations", value: totals.cancellations.toString(), icon: Zap, color: "emerald", sub: "Canceled events in range" },
+            { label: "Upcoming meetings", value: totals.meetings.toString(), icon: Calendar, color: "indigo", sub: "Live queue window" },
+            { label: "Hours scheduled", value: `${totals.hours}h`, icon: Clock, color: "violet", sub: "Total duration" },
+            { label: "Unique attendees", value: totals.unique_attendees.toString(), icon: Users, color: "cyan", sub: "Network reach" },
+            { label: "Cancellations", value: totals.cancellations.toString(), icon: Zap, color: "emerald", sub: "Churn rate" },
           ].map((kpi) => {
             const styles = KPI_STYLES[kpi.color];
             return (
-              <div key={kpi.label} className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
-                <div className={`w-8 h-8 rounded-lg mb-3 flex items-center justify-center ${styles.bg} ${styles.border}`}>
-                  <kpi.icon className={`w-4 h-4 ${styles.icon}`} />
+              <div key={kpi.label} className="relative group overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d1424]/40 p-5 transition-all hover:bg-[#0d1424]/60 hover:border-white/15">
+                {/* Subtle Glow */}
+                <div className={`absolute -right-10 -top-10 w-24 h-24 blur-[60px] opacity-20 group-hover:opacity-40 transition-opacity bg-current ${styles.icon.replace('text-', 'bg-')}`} />
+                
+                <div className={`w-10 h-10 rounded-xl mb-4 flex items-center justify-center bg-white/5 border border-white/10 group-hover:scale-110 transition-transform`}>
+                  <kpi.icon className={`w-5 h-5 ${styles.icon}`} />
                 </div>
+                
                 {loading ? (
-                  <div className="h-7 w-20 rounded bg-white/10 animate-pulse" />
+                  <div className="h-8 w-24 rounded-lg bg-white/10 animate-pulse" />
                 ) : (
-                  <p className="text-2xl font-bold text-white mb-0.5">{kpi.value}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-bold text-white tracking-tighter">{kpi.value}</p>
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded leading-none">Live</span>
+                  </div>
                 )}
-                <p className="text-xs text-slate-500">{kpi.label}</p>
-                <p className="text-[11px] text-slate-500 mt-1">{kpi.sub}</p>
+                <p className="text-[13px] font-semibold text-slate-400 mt-2">{kpi.label}</p>
+                <p className="text-[11px] text-slate-500/80 mt-1 uppercase tracking-widest font-bold">{kpi.sub}</p>
               </div>
             );
           })}
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 items-start">
-          <motion.div variants={ITEM} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-5 overflow-hidden">
-            <div className="flex items-center justify-between mb-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+          <motion.div variants={ITEM} className="rounded-2xl border border-white/[0.08] bg-[#0d1424]/40 p-6 backdrop-blur-md relative overflow-hidden group">
+            <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-sm font-bold text-white">Meetings timeline</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Daily buckets for current and upcoming sessions</p>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-indigo-400" />
+                  Meetings timeline
+                </h2>
+                <p className="text-[12px] text-slate-500 mt-1">Daily distribution across sectors</p>
               </div>
-              <BarChart3 className="w-4 h-4 text-slate-600" />
+              <div className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] font-bold text-slate-500 uppercase">Realtime</div>
             </div>
 
             {loading ? (

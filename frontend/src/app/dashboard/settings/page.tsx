@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/app/providers/auth-provider";
-import { deleteAccount, getIntegrationStatus, setConsent, syncUserTimezone, updateUserProfile } from "@/lib/api";
+import { deleteAccount, getIntegrationStatus, setConsent, syncUserTimezone, updateUserProfile, getEmailDiagnostic, sendTestEmail } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
   User,
@@ -106,15 +106,40 @@ export default function SettingsPage() {
     microsoft: false,
   });
   const [loadingIntegrations, setLoadingIntegrations] = useState(true);
+  
+  // Profile Detail State
   const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState(typedUser?.name || "");
+  const [editingBio, setEditingBio] = useState(false);
+  const [editingJob, setEditingJob] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(false);
+
+  const [nameDraft, setNameDraft] = useState("");
+  const [bioDraft, setBioDraft] = useState("");
+  const [jobDraft, setJobDraft] = useState("");
+  const [locationDraft, setLocationDraft] = useState("");
+
   const [profileSaving, setProfileSaving] = useState(false);
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
 
+  // Diagnostics State
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [emailStatus, setEmailStatus] = useState<any>(null);
+  const [testingEmail, setTestingEmail] = useState(false);
+
   useEffect(() => {
-    setNameDraft(typedUser?.name || "");
-  }, [typedUser?.name]);
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (typedUser) {
+      setNameDraft(typedUser.name || "");
+      setBioDraft((typedUser as any).bio || "");
+      setJobDraft((typedUser as any).job_title || "");
+      setLocationDraft((typedUser as any).location || "");
+    }
+  }, [typedUser]);
 
   useEffect(() => {
     let alive = true;
@@ -154,12 +179,22 @@ export default function SettingsPage() {
     }
   };
 
-  const saveProfileName = async () => {
-    if (!nameDraft.trim()) return;
+  const saveProfileField = async (field: "name" | "bio" | "job_title" | "location") => {
     setProfileSaving(true);
     try {
-      await updateUserProfile({ full_name: nameDraft.trim() });
+      const data: any = {};
+      if (field === "name") data.full_name = nameDraft.trim();
+      if (field === "bio") data.bio = bioDraft.trim();
+      if (field === "job_title") data.job_title = jobDraft.trim();
+      if (field === "location") data.location = locationDraft.trim();
+
+      await updateUserProfile(data);
+      
       setEditingName(false);
+      setEditingBio(false);
+      setEditingJob(false);
+      setEditingLocation(false);
+      
       router.refresh();
     } finally {
       setProfileSaving(false);
@@ -175,6 +210,31 @@ export default function SettingsPage() {
       router.refresh();
     } finally {
       setTimezoneSaving(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    if (!typedUser?.email) return;
+    setTestingEmail(true);
+    try {
+      const res = await sendTestEmail(typedUser.email);
+      setEmailStatus(res);
+    } catch (err: any) {
+      setEmailStatus({ status: "error", message: err.message });
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
+  const handleRunDiagnostics = async () => {
+    setTestingEmail(true);
+    try {
+      const res = await getEmailDiagnostic();
+      setEmailStatus(res);
+    } catch (err: any) {
+      setEmailStatus({ status: "error", message: err.message });
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -195,52 +255,75 @@ export default function SettingsPage() {
     ? typedUser.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : typedUser?.email?.[0]?.toUpperCase() ?? "U";
 
+  const joinDate = (typedUser as any)?.created_at 
+    ? new Date((typedUser as any).created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    : "Recently joined";
+
   return (
-    <div className="p-5 md:p-7 max-w-[900px] mx-auto">
-      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-6">
+    <div className="p-6 md:p-10 max-w-4xl mx-auto">
+      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-8">
 
         <motion.div variants={ITEM}>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Settings</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Manage your account, availability and integrations</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Settings</h1>
+          <p className="text-slate-500 text-[15px] mt-1.5">Configure your workspace identity and operational parameters.</p>
         </motion.div>
 
         <motion.div variants={ITEM}>
-          <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-6 md:p-8 shadow-2xl relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 pointer-events-none" />
-            <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/20 rounded-full blur-[100px] animate-pulse" />
-            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-violet-600/10 rounded-full blur-[100px] animate-pulse delay-700" />
+          <div className="rounded-[2.5rem] border border-white/[0.08] bg-[#0d1424]/40 p-8 md:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-xl">
+            {/* Ambient Background Glows */}
+            <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 blur-[120px] rounded-full -mr-20 -mt-20 opacity-40" />
+            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-violet-600/10 blur-[120px] rounded-full -ml-20 -mb-20 opacity-40" />
 
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-12 relative z-10">
-              <div className="relative">
-                <motion.div whileHover={{ scale: 1.05, rotate: 2 }} className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] bg-gradient-to-br from-primary to-violet-600 p-1 shadow-[0_0_40px_rgba(79,70,229,0.4)]">
-                  <div className="w-full h-full rounded-[1.8rem] md:rounded-[2.3rem] bg-slate-950 flex items-center justify-center overflow-hidden relative">
-                    <span className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-white/40 tracking-tighter">
+            <div className="flex flex-col md:flex-row items-center md:items-start gap-10 relative z-10">
+              <div className="relative shrink-0">
+                <motion.div 
+                  whileHover={{ scale: 1.02 }} 
+                  className="w-32 h-32 md:w-36 md:h-36 rounded-[2.5rem] bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 p-1 shadow-2xl shadow-indigo-600/20"
+                >
+                  <div className="w-full h-full rounded-[2.3rem] bg-[#070b14] flex items-center justify-center overflow-hidden relative">
+                    <span className="text-4xl md:text-5xl font-black text-white hover:scale-110 transition-transform cursor-default">
                       {userInitials}
                     </span>
-                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                   </div>
                 </motion.div>
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-950 border-2 border-slate-900 p-1 flex items-center justify-center">
-                  <div className="w-full h-full rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)] animate-pulse" />
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#070b14] border-4 border-[#0d1424] p-1.5 flex items-center justify-center">
+                  <div className="w-full h-full rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse" />
                 </div>
               </div>
 
-              <div className="flex-1 text-center md:text-left">
-                <div className="mb-6">
-                  <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">{typedUser?.name || "Sovereign User"}</h2>
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-3">
-                    <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] md:text-xs font-bold text-primary uppercase tracking-widest">Direct Access</span>
-                    <span className="px-3 py-1 rounded-full bg-slate-900/60 border border-slate-800 text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">Personal Instance</span>
+              <div className="flex-1 text-center md:text-left min-w-0">
+                <div className="mb-8">
+                  <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-4 truncate">
+                    {typedUser?.name || "Anonymous User"}
+                  </h2>
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                    <span className="px-4 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-bold text-indigo-400 uppercase tracking-[0.15em] flex items-center gap-2">
+                       <Zap className="w-3 h-3" /> {(typedUser as any)?.tier?.toUpperCase() || "FREE"} TIER
+                    </span>
+                    <span className="px-4 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2">
+                       <Clock className="w-3 h-3" /> {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 hover:bg-slate-900/60 hover:border-primary/20 transition-all group/stat">
-                    <p className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold mb-2 flex items-center gap-2"><Shield className="w-3 h-3 text-primary/60" /> Primary Node (Email)</p>
-                    <p className="text-xs md:text-sm text-slate-200 font-bold truncate group-hover/stat:text-white transition-colors">{typedUser?.email || "root@graftai.tech"}</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="p-5 rounded-[1.5rem] bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.05] hover:border-white/20 transition-all group/node relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover/node:opacity-100 transition-opacity" />
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black mb-3 flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-indigo-400/70" /> Node Identifier
+                    </p>
+                    <p className="text-[14px] text-white font-bold truncate relative z-10">{typedUser?.email}</p>
                   </div>
-                  <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 hover:bg-slate-900/60 hover:border-violet-500/20 transition-all group/stat">
-                    <p className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold mb-2 flex items-center gap-2"><Eye className="w-3 h-3 text-violet-500/60" /> Data Jurisdiction</p>
-                    <p className="text-xs md:text-sm text-slate-200 font-bold group-hover/stat:text-white transition-colors uppercase">{typedUser?.email?.split("@")[1] || "graftai.tech"}</p>
+                  
+                  <div className="p-5 rounded-[1.5rem] bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.05] hover:border-white/20 transition-all group/juris relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover/juris:opacity-100 transition-opacity" />
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black mb-3 flex items-center gap-2">
+                      <Globe className="w-3.5 h-3.5 text-violet-400/70" /> Jurisdiction
+                    </p>
+                    <p className="text-[14px] text-white font-bold uppercase relative z-10">
+                      {typedUser?.email?.split("@")[1] || "GraftAI.Tech"}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -251,52 +334,165 @@ export default function SettingsPage() {
         <motion.div variants={ITEM}>
           <Section title="Profile" description="Your public-facing identity on GraftAI">
             <SettingRow label="Avatar" description="Used across your workspace">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-indigo-600/20">
                 {userInitials}
               </div>
             </SettingRow>
+
             <SettingRow icon={User} label="Full name" description="Displayed to invitees">
               {editingName ? (
                 <div className="flex items-center gap-2">
                   <input
                     value={nameDraft}
                     onChange={(e) => setNameDraft(e.target.value)}
-                    aria-label="Full name"
-                    title="Full name"
-                    placeholder="Enter full name"
-                    className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200"
+                    className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 w-full max-w-[200px]"
                   />
-                  <button
-                    onClick={saveProfileName}
-                    disabled={profileSaving}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 font-medium"
-                  >
-                    {profileSaving ? "Saving..." : "Save"}
-                  </button>
-                  <button
-                    onClick={() => setEditingName(false)}
-                    className="text-xs text-slate-400 hover:text-slate-200 font-medium"
-                  >
-                    Cancel
-                  </button>
+                  <button onClick={() => saveProfileField("name")} disabled={profileSaving} className="text-xs text-indigo-400 font-bold">Save</button>
+                  <button onClick={() => setEditingName(false)} className="text-xs text-slate-500">Cancel</button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-300">{typedUser?.name ?? "Not set"}</span>
-                  <button onClick={() => setEditingName(true)} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">Edit</button>
+                  <span className="text-sm text-slate-300 font-medium">{typedUser?.name ?? "Not set"}</span>
+                  <button onClick={() => setEditingName(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
                 </div>
               )}
             </SettingRow>
-            <SettingRow icon={Globe} label="Timezone" description="Used for all scheduling">
+
+            <SettingRow icon={Zap} label="Job title" description="Your role or specialization">
+              {editingJob ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    value={jobDraft}
+                    onChange={(e) => setJobDraft(e.target.value)}
+                    className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 w-full max-w-[200px]"
+                  />
+                  <button onClick={() => saveProfileField("job_title")} disabled={profileSaving} className="text-xs text-indigo-400 font-bold">Save</button>
+                  <button onClick={() => setEditingJob(false)} className="text-xs text-slate-500">Cancel</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-300 font-medium">{jobDraft || "Not set"}</span>
+                  <button onClick={() => setEditingJob(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
+                </div>
+              )}
+            </SettingRow>
+
+            <SettingRow icon={Globe} label="Location" description="City, Country">
+              {editingLocation ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    value={locationDraft}
+                    onChange={(e) => setLocationDraft(e.target.value)}
+                    className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 w-full max-w-[200px]"
+                  />
+                  <button onClick={() => saveProfileField("location")} disabled={profileSaving} className="text-xs text-indigo-400 font-bold">Save</button>
+                  <button onClick={() => setEditingLocation(false)} className="text-xs text-slate-500">Cancel</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-300 font-medium">{locationDraft || "Not set"}</span>
+                  <button onClick={() => setEditingLocation(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
+                </div>
+              )}
+            </SettingRow>
+
+            <SettingRow icon={Shield} label="Professional Bio" description="A short summary about yourself">
+              {editingBio ? (
+                <div className="w-full mt-2">
+                  <textarea
+                    value={bioDraft}
+                    onChange={(e) => setBioDraft(e.target.value)}
+                    rows={3}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 mb-3 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                    placeholder="Tell us about yourself..."
+                  />
+                  <div className="flex gap-3">
+                    <button onClick={() => saveProfileField("bio")} disabled={profileSaving} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold">Save Bio</button>
+                    <button onClick={() => setEditingBio(false)} className="px-3 py-1.5 rounded-lg bg-white/5 text-slate-500 text-xs font-bold">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full">
+                  <p className="text-sm text-slate-400 mb-2 leading-relaxed italic">{bioDraft || "No bio set yet."}</p>
+                  <button onClick={() => setEditingBio(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit Bio</button>
+                </div>
+              )}
+            </SettingRow>
+
+            <SettingRow icon={Clock} label="Timezone" description="Global scheduling reference">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-300">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
-                <button onClick={updateTimezoneToBrowser} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">
+                <span className="text-sm text-slate-300 font-medium">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+                <button onClick={updateTimezoneToBrowser} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">
                   {timezoneSaving ? "Syncing..." : "Sync"}
                 </button>
               </div>
             </SettingRow>
           </Section>
         </motion.div>
+
+        {typedUser && (typedUser as any).is_superuser && (
+          <motion.div variants={ITEM} className="mt-8">
+            <div className="rounded-[2.5rem] border border-white/[0.08] bg-[#0d1424]/40 p-8 md:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-xl">
+              <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 blur-[120px] rounded-full -mr-20 -mt-20 opacity-40" />
+              
+              <div className="flex flex-col md:flex-row items-start gap-8 relative z-10">
+                <div className="w-16 h-16 rounded-[1.5rem] bg-indigo-500/10 flex items-center justify-center shrink-0 border border-indigo-500/20">
+                  <Bell className="w-8 h-8 text-indigo-400" />
+                </div>
+                
+                <div className="flex-1">
+                  <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">Email System Diagnostics</h3>
+                  <p className="text-slate-400 text-sm leading-relaxed mb-6 max-w-2xl">
+                    Verify that your <code className="text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded">SMTP_PASSWORD</code> is a 
+                    <span className="text-white font-medium"> 16-character Google App Password</span>. Standard account passwords will be blocked by Google Security.
+                  </p>
+
+                  <div className="flex flex-wrap gap-4">
+                    <button
+                      onClick={handleRunDiagnostics}
+                      disabled={testingEmail}
+                      className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-white hover:bg-white/10 transition-all flex items-center gap-2"
+                    >
+                      {testingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                      Verify Connection
+                    </button>
+                    <button
+                      onClick={handleTestEmail}
+                      disabled={testingEmail}
+                      className="px-6 py-2.5 rounded-xl bg-indigo-600 text-xs font-bold text-white hover:bg-indigo-500 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+                    >
+                      <Zap className="w-4 h-4" /> Send Test Email
+                    </button>
+                  </div>
+
+                  {emailStatus && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }} 
+                      animate={{ opacity: 1, height: "auto" }}
+                      className={cn(
+                        "mt-8 p-6 rounded-[1.5rem] border text-[13px] font-mono relative overflow-hidden",
+                        emailStatus.status === "success" 
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                          : "bg-red-500/10 border-red-500/20 text-red-400"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className={cn("w-2 h-2 rounded-full animate-pulse", emailStatus.status === "success" ? "bg-emerald-400" : "bg-red-400")} />
+                        <span className="font-bold uppercase tracking-widest text-[10px]">Diagnostics Result</span>
+                      </div>
+                      <p className="leading-relaxed opacity-90">{emailStatus.message}</p>
+                      {emailStatus.hint && (
+                        <div className="mt-4 p-3 rounded-lg bg-black/20 border border-white/5 text-white/70 italic flex items-start gap-2">
+                           <span className="shrink-0 text-amber-400">💡</span> {emailStatus.hint}
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         <motion.div variants={ITEM}>
           <Section title="Availability" description="When you're open for bookings">

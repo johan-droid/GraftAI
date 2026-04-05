@@ -15,6 +15,9 @@ router = APIRouter(prefix="/users", tags=["users"])
 class UserProfileUpdateRequest(BaseModel):
     full_name: Optional[str] = None
     timezone: Optional[str] = None
+    bio: Optional[str] = None
+    job_title: Optional[str] = None
+    location: Optional[str] = None
 
 
 @router.get("/me")
@@ -38,6 +41,12 @@ async def update_current_user_profile(
         user.full_name = payload.full_name.strip() or user.full_name
     if payload.timezone is not None:
         user.timezone = payload.timezone.strip() or user.timezone
+    if payload.bio is not None:
+        user.bio = payload.bio.strip()
+    if payload.job_title is not None:
+        user.job_title = payload.job_title.strip()
+    if payload.location is not None:
+        user.location = payload.location.strip()
 
     await db.commit()
     await db.refresh(user)
@@ -47,6 +56,10 @@ async def update_current_user_profile(
         "email": user.email,
         "full_name": user.full_name,
         "timezone": user.timezone,
+        "bio": user.bio,
+        "job_title": user.job_title,
+        "location": user.location,
+        "created_at": user.created_at,
     }
 
 

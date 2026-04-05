@@ -88,20 +88,25 @@ def _build_message(
 
 def _send_via_smtp(msg: EmailMessage) -> None:
     cfg = _get_smtp_config()
-
-    if cfg["use_tls"]:
-        with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
-            server.ehlo()
-            server.starttls(context=ssl.create_default_context())
-            server.ehlo()
-            if cfg["user"] and cfg["password"]:
-                server.login(cfg["user"], cfg["password"])
-            server.send_message(msg)
-    else:
-        with smtplib.SMTP_SSL(cfg["host"], cfg["port"]) as server:
-            if cfg["user"] and cfg["password"]:
-                server.login(cfg["user"], cfg["password"])
-            server.send_message(msg)
+    try:
+        timeout = 15 # 15 seconds for Render network constraints
+        if cfg["use_tls"]:
+            with smtplib.SMTP(cfg["host"], cfg["port"], timeout=timeout) as server:
+                server.ehlo()
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
+                if cfg["user"] and cfg["password"]:
+                    server.login(cfg["user"], cfg["password"])
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=timeout) as server:
+                if cfg["user"] and cfg["password"]:
+                    server.login(cfg["user"], cfg["password"])
+                server.send_message(msg)
+    except (smtplib.SMTPException, OSError) as e:
+        logger.error(f"❌ [SMTP ERROR] Failed to connect to {cfg['host']}:{cfg['port']} - {type(e).__name__}: {e}")
+        # Re-raise so the background task knows it failed
+        raise
 
 
 def _send_via_sendgrid(
@@ -169,4 +174,43 @@ async def send_email(
     await asyncio.to_thread(_send_email_provider, to_email, subject, html_body, text_body)
 
 
-__all__ = ["send_email"]
+def verify_smtp_config() -> dict[str, Any]:
+    """
+    Diagnostic tool to verify SMTP connectivity and credentials.
+    Returns a dict with 'status', 'error', and 'details'.
+    """
+    cfg = _get_smtp_config()
+    try:
+        timeout = 10
+        if cfg["use_tls"]:
+            with smtplib.SMTP(cfg["host"], cfg["port"], timeout=timeout) as server:
+                server.ehlo()
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
+                if cfg["user"] and cfg["password"]:
+                    server.login(cfg["user"], cfg["password"])
+        else:
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=timeout) as server:
+                if cfg["user"] and cfg["password"]:
+                    server.login(cfg["user"], cfg["password"])
+        
+        return {
+            "status": "success",
+            "message": f"Successfully connected to {cfg['host']}:{cfg['port']}",
+            "config_preview": {
+                "host": cfg["host"],
+                "port": cfg["port"],
+                "user": cfg["user"],
+                "use_tls": cfg["use_tls"]
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error_type": type(e).__name__,
+            "message": str(e),
+            "hint": "Check SMTP_USER and SMTP_PASSWORD. For Gmail, use an App Password." if "Authentication" in str(e) or "login" in str(e).lower() else "Check host/port and firewall settings."
+        }
+
+
+__all__ = ["send_email", "verify_smtp_config"]

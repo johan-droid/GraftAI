@@ -41,6 +41,11 @@ class UserTable(Base):
     hashed_password = Column(String(512))
     tenant_id = Column(Integer, index=True)
 
+    # User Profile Detailing
+    bio = Column(Text)
+    job_title = Column(String(255))
+    location = Column(String(255))
+
     # SaaS & Billing
     tier = Column(String(20), default=UserTier.FREE, nullable=False)
     stripe_customer_id = Column(String(255), index=True)

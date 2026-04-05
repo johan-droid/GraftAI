@@ -65,13 +65,18 @@ export default function AISchedulerAssistantPage() {
           timestamp: new Date(),
         },
       ]);
-    } catch {
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      const displayMessage = detail 
+        ? `${detail}`
+        : "I'm having trouble connecting to the assistant. Please try again or check your schedule manually.";
+
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: "ai",
-          content: "Assistant is temporarily offline. I can still handle list, schedule, update, and delete calendar requests once connection resumes.",
+          content: displayMessage,
           timestamp: new Date(),
         },
       ]);
@@ -113,7 +118,7 @@ export default function AISchedulerAssistantPage() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/8 text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-            <Sparkles className="w-3 h-3 text-indigo-400" /> AI Orchestration Active
+            <cite className="not-italic flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-indigo-400" /> AI Orchestration Active</cite>
           </div>
         </div>
       </div>

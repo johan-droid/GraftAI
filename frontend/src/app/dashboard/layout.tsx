@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Calendar,
@@ -23,6 +23,7 @@ import {
 import NotificationCenter from "@/components/NotificationCenter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthContext } from "@/app/providers/auth-provider";
+import { syncUserTimezone, updateUserProfile } from "@/lib/api";
 
 const NAV_GROUPS = [
   {
@@ -52,7 +53,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { logout, user } = useAuthContext();
-  const displayUser = user as { name?: string; email?: string } | null;
+  const displayUser = user as { name?: string; email?: string; timezone?: string } | null;
+
+  // Active Timezone Detection & Sync
+  useEffect(() => {
+    if (displayUser && typeof window !== "undefined") {
+      const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const storedTimezone = displayUser.timezone;
+
+      if (browserTimezone && browserTimezone !== storedTimezone) {
+        // Silent background sync
+        Promise.all([
+          syncUserTimezone(browserTimezone),
+          updateUserProfile({ timezone: browserTimezone })
+        ]).catch(err => console.error("[Timezone] Sync failed", err));
+      }
+    }
+  }, [displayUser]);
 
   const userInitials = displayUser?.name
     ? displayUser.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()

@@ -94,3 +94,26 @@ async def upgrade_user_tier(
     user.tier = tier
     await db.commit()
     return {"message": f"User {user_id} upgraded to {tier}"}
+
+@router.get("/email/diagnostic")
+async def email_diagnostic(current_user = Depends(get_current_user)):
+    """スーパーユーザ(Superuser) only tool to verify SMTP settings."""
+    if not getattr(current_user, "is_superuser", False):
+        raise HTTPException(status_code=403, detail="Superuser required")
+    from backend.services.email import verify_smtp_config
+    return verify_smtp_config()
+
+@router.post("/email/test")
+async def send_test_email(email: str, current_user = Depends(get_current_user)):
+    """スーパーユーザ(Superuser) only tool to send a test email message."""
+    if not getattr(current_user, "is_superuser", False):
+        raise HTTPException(status_code=403, detail="Superuser required")
+    
+    from backend.services.email import send_email
+    try:
+        subject = "GraftAI - Platform Diagnostics"
+        html = f"<h3>Diagnostics Success</h3><p>Your SMTP credentials for <b>Google</b> are confirmed and active.</p><p>Triggered by {current_user.email}</p>"
+        await send_email(to_email=email, subject=subject, html_body=html)
+        return {"status": "success", "message": f"Diagnostic email dispatched to {email}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

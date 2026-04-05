@@ -63,6 +63,21 @@ export function getToken(): string | null {
     } catch (e) { /* ignore */ }
   }
 
+  // 4. Try URL query params for one-time SSO handoff token bridge
+  if (!token && typeof window !== "undefined") {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      token = params.get("token") || params.get("access_token") || null;
+      if (token && typeof window !== "undefined") {
+        // Persist token into storage so future requests don't need URL fallback.
+        window.sessionStorage?.setItem("graftai_access_token", token);
+        window.localStorage?.setItem("graftai_access_token", token);
+      }
+    } catch (e) {
+      /* ignore malformed URLs */
+    }
+  }
+
   // ROBUSTNESS: If we found a token in any source, sync it to others for redundancy
   if (token && typeof window !== "undefined") {
     try {

@@ -233,6 +233,16 @@ async def get_current_user(
                 token = x_auth[7:].strip() if x_auth.lower().startswith("bearer ") else x_auth.strip()
                 logger.info(f"[AUTH_DEBUG]: Found token in X-Authorization header: {token[:10]}...")
 
+        # Query parameter fallback (e.g. frontend token bridge / one-time handoff)
+        if not token:
+            token = (
+                request.query_params.get("token")
+                or request.query_params.get("access_token")
+                or request.query_params.get("refresh_token")
+            )
+            if token:
+                logger.info(f"[AUTH_DEBUG]: Found token in query params: {token[:10]}...")
+
         # Cookie fallback
         if not token:
             token = (

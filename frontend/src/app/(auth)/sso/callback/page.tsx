@@ -50,8 +50,13 @@ function SSOCallbackContent() {
         }
 
         console.log("[SSO_CALLBACK]: Session established. Syncing context...");
+
+        // Clear token params from the URL to avoid token leakage in browser history.
+        if (typeof window !== "undefined" && window.history?.replaceState) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
         
-        // Force the AuthProvider to refresh its session from the newly set cookies
+        // Force the AuthProvider to refresh its session from the newly set cookies/localStorage
         login(token).then(() => {
           setTimeout(() => {
             router.replace("/dashboard");

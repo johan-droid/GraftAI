@@ -17,6 +17,21 @@ from backend.models.tables import EventTable, UserTable
 from backend.services.notifications import notify_welcome_email, notify_event_reminder
 from backend.services.sync_engine import sync_user_calendar
 
+async def task_notify_welcome(ctx, user_email: str, full_name: str):
+    """
+    Worker task to send a welcome email to a new user.
+    """
+    logger.info(f"[WORKER] ✉️ Sending welcome email to {user_email}")
+    await notify_welcome_email(user_email, full_name)
+
+async def task_sync_calendar(ctx, user_id: str):
+    """
+    Worker task to perform an initial or periodic calendar sync.
+    """
+    logger.info(f"[WORKER] 🗓 Syncing calendar for user {user_id}")
+    async with ctx['db_session_factory']() as db:
+        await sync_user_calendar(db, user_id)
+
 async def task_process_event_reminders(ctx):
     """
     Periodic task to check for upcoming events and send reminders with 'Pinpoint Accuracy'.

@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signUp, signIn } from "@/lib/auth-client";
-import { motion } from "framer-motion";
-import { Mail, Lock, User, ArrowRight, Loader2, Globe, ShieldCheck, Eye, EyeOff, Zap, CheckCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Mail, Lock, User, ArrowRight, Loader2, Globe, ShieldCheck, Eye, EyeOff, Zap, CheckCircle, Shield } from "lucide-react";
 import Link from "next/link";
 
 const PERKS = [
@@ -49,6 +49,20 @@ export default function RegisterPage() {
     } catch (err) {
       setError((err as Error).message ?? "Registration failed");
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOAuth = async (provider: "google" | "microsoft") => {
+    setError("");
+    setLoading(true);
+    try {
+      const { error: socialError } = await signIn.social(provider);
+      if (socialError) {
+        throw new Error(socialError.message || "Social sign-in failed.");
+      }
+    } catch (err) {
+      setError((err as Error).message || "Social sign-in failed.");
       setLoading(false);
     }
   };
@@ -205,6 +219,33 @@ export default function RegisterPage() {
                   <>Get started free <ArrowRight className="w-4 h-4" /></>
                 )}
               </button>
+
+              <div className="relative py-2 flex items-center gap-4">
+                <div className="flex-1 h-px bg-white/5" />
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">or</span>
+                <div className="flex-1 h-px bg-white/5" />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleOAuth("google")}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-3 w-full py-2.5 rounded-xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.06] text-[13px] font-semibold text-slate-200 transition-all disabled:opacity-50"
+                >
+                  <Mail className="w-4 h-4 text-indigo-400" />
+                  Continue with Google
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOAuth("microsoft")}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-3 w-full py-2.5 rounded-xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.06] text-[13px] font-semibold text-slate-200 transition-all disabled:opacity-50"
+                >
+                  <Shield className="w-4 h-4 text-violet-400" />
+                  Continue with Microsoft
+                </button>
+              </div>
 
               <p className="text-[11px] text-center text-slate-600 leading-relaxed">
                 By signing up you agree to our {" "}

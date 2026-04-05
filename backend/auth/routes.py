@@ -461,8 +461,75 @@ async def sso_callback(
             await db.commit()
             await db.refresh(user)
             logger.info(f"Created new SSO user: {email} ({sso_data.get('provider')})")
+
+            # 3.1 Trigger welcome email for the FIRST social signup
+            try:
+                from backend.services.bg_tasks import enqueue_welcome_email
+                await enqueue_welcome_email(
+                    user_email=email,
+                    full_name=name or email.split("@")[0],
+                )
+                logger.info(f"[AUTH]: Enqueued welcome email for new SSO user {email}")
+            except Exception as e:
+                logger.warning(f"Failed to enqueue welcome email in SSO callback: {e}")
         else:
             logger.info(f"SSO login for existing user: {email}")
+
+        # 3.2 PERSIST SSO TOKENS for background integrations (Calendar Sync, etc.)
+        # This addresses user request: 'record store in database... so it not ask about permission repeatedly'
+        try:
+            from backend.models.user_token import UserTokenTable
+            from sqlalchemy import select
+            
+            provider = sso_data.get("provider", "google").lower()
+            token_info = sso_data.get("token", {})
+            
+            # Check for existing token record
+            token_stmt = select(UserTokenTable).where(
+                and_(UserTokenTable.user_id == str(user.id), UserTokenTable.provider == provider)
+            )
+            token_res = await db.execute(token_stmt)
+            user_token_rec = token_res.scalars().first()
+            
+            expires_in = token_info.get("expires_in") or token_info.get("expires_at")
+            expires_dt = None
+            if expires_in:
+                if isinstance(expires_in, (int, float)) and expires_in < 1000000000: # offset in seconds
+                    expires_dt = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+                elif isinstance(expires_in, (int, float)): # unix timestamp
+                    expires_dt = datetime.fromtimestamp(expires_in, tz=timezone.utc)
+            
+            if user_token_rec:
+                # Update existing record
+                user_token_rec.access_token = token_info.get("access_token")
+                if token_info.get("refresh_token"):
+                    user_token_rec.refresh_token = token_info.get("refresh_token")
+                if expires_dt:
+                    user_token_rec.expires_at = expires_dt
+                user_token_rec.scopes = json.dumps(token_info.get("scope", "").split(" ")) if token_info.get("scope") else user_token_rec.scopes
+                user_token_rec.is_active = True
+                user_token_rec.updated_at = datetime.now(timezone.utc)
+            else:
+                # Create new token record
+                new_token_rec = UserTokenTable(
+                    user_id=str(user.id),
+                    provider=provider,
+                    access_token=token_info.get("access_token"),
+                    refresh_token=token_info.get("refresh_token"),
+                    expires_at=expires_dt,
+                    scopes=json.dumps(token_info.get("scope", "").split(" ")) if token_info.get("scope") else None,
+                    is_active=True,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                )
+                db.add(new_token_rec)
+            
+            await db.commit()
+            logger.info(f"[AUTH]: Successfully persisted {provider} tokens for user {user.id}")
+        except Exception as e:
+            logger.error(f"[AUTH]: Critical failure persisting SSO tokens: {e}")
+            # we keep going as the user is still logged in locally, but some integrations will be unavailable.
+            pass
             
         # 4. Issue local JWT session tokens
         tokens = _create_jwt_token(str(user.id), email=user.email)

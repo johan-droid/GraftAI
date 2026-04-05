@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.api.deps import get_db
+from backend.utils.db import get_db
 from backend.services.access_control import check_user_role
 from backend.utils.redis_singleton import safe_get, safe_set, safe_delete
 

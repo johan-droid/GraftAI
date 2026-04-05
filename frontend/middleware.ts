@@ -6,8 +6,9 @@ export async function middleware(request: NextRequest) {
 
   if (isDashboardRoute) {
     const accessToken = request.cookies.get("graftai_access_token")?.value;
+    const refreshToken = request.cookies.get("graftai_refresh_token")?.value;
 
-    if (!accessToken) {
+    if (!accessToken && !refreshToken) {
       const loginUrl = new URL("/login", request.url);
       return NextResponse.redirect(loginUrl);
     }

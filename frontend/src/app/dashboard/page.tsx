@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/app/providers/auth-provider";
 import { motion } from "framer-motion";
 import {
   Calendar,
-  Copy,
-  Check,
   ArrowUpRight,
   Clock,
   Video,
@@ -17,9 +15,7 @@ import {
   Sparkles,
   TrendingUp,
   MoreHorizontal,
-  ExternalLink,
   ChevronRight,
-  Zap,
   Globe,
   Activity,
 } from "lucide-react";
@@ -105,13 +101,11 @@ export default function Dashboard() {
   const typedUser = user as { name?: string; email?: string } | null;
 
   const profileName = typedUser?.name?.split(" ")[0] ?? typedUser?.email?.split("@")[0] ?? "there";
-  const bookingSlug = typedUser?.email?.split("@")[0] ?? "you";
 
-  const [stats, setStats] = useState({ meetings: 0, hours: 0, growth: 0 });
+  const [stats, setStats] = useState({ meetings: 0, hours: 0, cancellations: 0 });
   const [upcomingMeetings, setUpcomingMeetings] = useState<CalendarEvent[]>([]);
   const [activityItems, setActivityItems] = useState<DashboardActivityItem[]>([]);
   const [aiSuggestion, setAiSuggestion] = useState("");
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace("/login");
@@ -138,7 +132,7 @@ export default function Dashboard() {
         setStats({
           meetings: Number(details?.meetings || 0),
           hours: Number(details?.hours || 0),
-          growth: Number(details?.growth || 0),
+          cancellations: Number(details?.cancellations || 0),
         });
         setActivityItems(details?.recent_events || []);
       }
@@ -159,19 +153,6 @@ export default function Dashboard() {
       alive = false;
     };
   }, [isAuthenticated]);
-
-  const bookingUrl = useMemo(() => {
-    if (typeof window !== "undefined") {
-      return `${window.location.origin}/${bookingSlug}`;
-    }
-    return `https://graftai.app/${bookingSlug}`;
-  }, [bookingSlug]);
-
-  const copyBookingLink = async () => {
-    await navigator.clipboard.writeText(bookingUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   if (loading || !isAuthenticated) {
     return (
@@ -203,44 +184,11 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        <motion.div variants={ITEM} className="relative overflow-hidden rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-600/10 via-violet-600/5 to-transparent p-5">
-          <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-indigo-500/5 to-transparent pointer-events-none" />
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
-                <Zap className="w-5 h-5 text-indigo-300" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-indigo-300 mb-0.5">Your booking page</p>
-                <p className="text-white font-mono text-sm font-medium">{bookingUrl.replace(/^https?:\/\//, "")}</p>
-              </div>
-            </div>
-            <div className="sm:ml-auto flex items-center gap-2">
-              <button
-                onClick={copyBookingLink}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/8 border border-white/10 text-slate-300 hover:text-white hover:bg-white/12 text-[13px] font-medium transition-all"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? "Copied!" : "Copy link"}
-              </button>
-              <a
-                href={bookingUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600/30 text-[13px] font-medium transition-all"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                View page
-              </a>
-            </div>
-          </div>
-        </motion.div>
-
         <motion.div variants={ITEM} className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Meetings (30d)", value: stats.meetings, sub: "From your calendar data", icon: Calendar, color: "indigo" },
+            { label: "Upcoming meetings (30d)", value: stats.meetings, sub: "Current + future only", icon: Calendar, color: "indigo" },
             { label: "Hours scheduled", value: `${stats.hours}h`, sub: "Total booked duration", icon: Clock, color: "violet" },
-            { label: "Growth vs prior period", value: `${stats.growth}%`, sub: "Derived from analytics engine", icon: TrendingUp, color: "emerald" },
+            { label: "Cancellations (30d)", value: stats.cancellations, sub: "Canceled upcoming events", icon: TrendingUp, color: "emerald" },
             { label: "Upcoming (14 days)", value: upcomingMeetings.length, sub: "Live events window", icon: Activity, color: "cyan" },
           ].map((stat) => (
             <div key={stat.label} className="relative overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.03] p-4 hover:bg-white/[0.05] transition-colors">
@@ -331,7 +279,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold text-slate-200">{ql.label}</p>
-                      <p className="text-[11px] text-slate-500 font-mono">/{bookingSlug}/{ql.slug}</p>
+                      <p className="text-[11px] text-slate-500 font-mono">Calendar event template</p>
                     </div>
                     <button
                       onClick={() => router.push("/dashboard/calendar")}

@@ -42,6 +42,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const transientAuthFailuresRef = React.useRef(0);
+  const retryTimerRef = React.useRef<number | null>(null);
 
   const isLikelyNetworkError = React.useCallback((error: unknown) => {
     if (!error || typeof error !== "object") return false;
@@ -70,12 +72,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!active) return;
 
         if (response?.data) {
+          transientAuthFailuresRef.current = 0;
           setSession(response.data);
         } else if (response?.error) {
           if (isLikelyNetworkError(response.error)) {
             console.debug("Session check encountered a network glitch; retrying without kicking user out.");
           } else {
-            setSession(null);
+            transientAuthFailuresRef.current += 1;
+            if (transientAuthFailuresRef.current >= 2) {
+              setSession(null);
+            } else {
+              console.debug("Transient auth failure detected; retaining session and retrying shortly.");
+              if (typeof window !== "undefined") {
+                if (retryTimerRef.current) {
+                  window.clearTimeout(retryTimerRef.current);
+                }
+                retryTimerRef.current = window.setTimeout(() => {
+                  void loadSession();
+                }, 1200);
+              }
+            }
           }
         } else {
           setSession(null);
@@ -94,6 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
       clearInterval(interval);
+      if (typeof window !== "undefined" && retryTimerRef.current) {
+        window.clearTimeout(retryTimerRef.current);
+      }
     };
   }, [isLikelyNetworkError]);
 
@@ -134,9 +153,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshFn = async () => {
     const sessionResult = await getSessionSafe();
     if (sessionResult?.data) {
+      transientAuthFailuresRef.current = 0;
       setSession(sessionResult.data);
     } else {
-      setSession(null);
+      transientAuthFailuresRef.current += 1;
+      if (transientAuthFailuresRef.current >= 2) {
+        setSession(null);
+      }
     }
     return;
   };

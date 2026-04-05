@@ -16,10 +16,8 @@ import {
   LogOut,
   Clock,
   Globe,
-  Link2,
   ChevronRight,
   Zap,
-  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -91,7 +89,6 @@ export default function SettingsPage() {
   const router = useRouter();
   const { user, logout } = useAuthContext();
   const typedUser = user as { name?: string; email?: string } | null;
-  const bookingSlug = typedUser?.email?.split("@")[0] ?? "you";
 
   const [activeSection] = useState("Profile");
   const [consents, setConsents] = useState({ analytics: true, notifications: true, ai_training: false });
@@ -253,7 +250,7 @@ export default function SettingsPage() {
 
         <motion.div variants={ITEM}>
           <Section title="Profile" description="Your public-facing identity on GraftAI">
-            <SettingRow label="Avatar" description="Used on your booking page">
+            <SettingRow label="Avatar" description="Used across your workspace">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold">
                 {userInitials}
               </div>
@@ -264,6 +261,9 @@ export default function SettingsPage() {
                   <input
                     value={nameDraft}
                     onChange={(e) => setNameDraft(e.target.value)}
+                    aria-label="Full name"
+                    title="Full name"
+                    placeholder="Enter full name"
                     className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200"
                   />
                   <button
@@ -286,19 +286,6 @@ export default function SettingsPage() {
                   <button onClick={() => setEditingName(true)} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">Edit</button>
                 </div>
               )}
-            </SettingRow>
-            <SettingRow icon={Link2} label="Booking page URL" description="Your personal scheduling link">
-              <div className="flex items-center gap-2">
-                <code className="text-xs text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-md font-mono">/{bookingSlug}</code>
-                <button
-                  onClick={() => window.open(`/${bookingSlug}`, "_blank")}
-                  className="text-xs text-slate-500 hover:text-slate-300"
-                  aria-label="View booking page"
-                  title="View booking page"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </SettingRow>
             <SettingRow icon={Globe} label="Timezone" description="Used for all scheduling">
               <div className="flex items-center gap-2">

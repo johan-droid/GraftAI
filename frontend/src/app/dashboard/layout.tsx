@@ -136,12 +136,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ))}
       </nav>
 
-      {/* Booking Link Banner */}
-      <div className="mx-3 mb-3 p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5">
-        <p className="text-[11px] font-bold text-indigo-300 mb-1">Your booking page</p>
-        <p className="text-[11px] text-slate-400 font-mono truncate">graftai.app/{displayUser?.email?.split("@")[0] ?? "you"}</p>
-      </div>
-
       {/* User Profile */}
       <div className="border-t border-white/5 p-3">
         <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group">

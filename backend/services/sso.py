@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import os
 import json
 from typing import Any
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, status
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from backend.utils.redis_singleton import safe_delete, safe_get, safe_set
 import hmac
@@ -128,7 +128,10 @@ def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboar
     client_secret = config["client_secret"]
 
     if not all([client_id, client_secret]):
-        raise RuntimeError(f"OAuth2 credentials for {provider} are not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"SSO provider '{provider}' is currently unavailable",
+        )
 
     # Using sync discovery/init; create_authorization_url is local computation
     from authlib.integrations.requests_client import OAuth2Session

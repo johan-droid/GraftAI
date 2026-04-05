@@ -83,6 +83,7 @@ export async function getAnalyticsSummary(range: string = "7d") {
       meetings: number;
       hours: number;
       growth: number;
+      cancellations?: number;
       recent_events?: {
         id: number;
         title: string;

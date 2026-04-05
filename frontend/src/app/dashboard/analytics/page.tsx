@@ -88,7 +88,7 @@ export default function AnalyticsPage() {
         <motion.div variants={ITEM} className="flex flex-col sm:flex-row sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Analytics</h1>
-            <p className="text-slate-500 text-sm mt-0.5">Real-time scheduling metrics from your calendar records</p>
+            <p className="text-slate-500 text-sm mt-0.5">Current and upcoming scheduling metrics from your calendar records</p>
           </div>
           <div className="sm:ml-auto flex items-center gap-1 p-1 rounded-lg bg-white/5 border border-white/8">
             {(["7d", "30d", "90d"] as const).map((r) => (
@@ -99,7 +99,7 @@ export default function AnalyticsPage() {
                   range === r ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
                 }`}
               >
-                {r === "7d" ? "7 days" : r === "30d" ? "30 days" : "90 days"}
+                {r === "7d" ? "Next 7 days" : r === "30d" ? "Next 30 days" : "Next 90 days"}
               </button>
             ))}
           </div>
@@ -113,7 +113,7 @@ export default function AnalyticsPage() {
 
         <motion.div variants={ITEM} className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Total meetings", value: totals.meetings.toString(), icon: Calendar, color: "indigo", sub: `${totals.growth}% growth` },
+            { label: "Upcoming meetings", value: totals.meetings.toString(), icon: Calendar, color: "indigo", sub: "Current + future window only" },
             { label: "Hours scheduled", value: `${totals.hours}h`, icon: Clock, color: "violet", sub: "Computed from event durations" },
             { label: "Unique attendees", value: totals.unique_attendees.toString(), icon: Users, color: "cyan", sub: "Distinct attendee emails" },
             { label: "Cancellations", value: totals.cancellations.toString(), icon: Zap, color: "emerald", sub: "Canceled events in range" },
@@ -141,7 +141,7 @@ export default function AnalyticsPage() {
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="text-sm font-bold text-white">Meetings timeline</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Live daily buckets from backend aggregation</p>
+                <p className="text-xs text-slate-500 mt-0.5">Daily buckets for current and upcoming sessions</p>
               </div>
               <BarChart3 className="w-4 h-4 text-slate-600" />
             </div>

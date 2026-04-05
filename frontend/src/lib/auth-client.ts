@@ -36,6 +36,9 @@ async function parseError(res: Response): Promise<AuthError> {
 let _cachedToken: string | null = null;
 let _cacheExpiry = 0;
 const SESSION_CACHE_TTL_MS = 30_000;
+let _refreshInFlight: Promise<boolean> | null = null;
+let _providerAvailabilityCache: { providers: string[]; fetchedAt: number } | null = null;
+const PROVIDER_CACHE_TTL_MS = 60_000;
 
 export function getToken(): string | null {
   if (typeof document === "undefined") return null;
@@ -139,18 +142,76 @@ export function getCsrfHeaders(): Record<string, string> {
   };
 }
 
-async function tryRefreshSession(): Promise<boolean> {
+function getRefreshTokenFromClientStorage(): string | null {
+  if (typeof window === "undefined") return null;
   try {
-    const res = await fetch(authEndpoint("/auth/refresh"), {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-    return res.ok;
+    const sessionToken = window.sessionStorage?.getItem("graftai_refresh_token");
+    if (sessionToken) return sessionToken;
   } catch {
-    return false;
+    // ignore
+  }
+  try {
+    const localToken = window.localStorage?.getItem("graftai_refresh_token");
+    if (localToken) return localToken;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+async function tryRefreshSession(): Promise<boolean> {
+  if (_refreshInFlight) {
+    return _refreshInFlight;
+  }
+
+  _refreshInFlight = (async () => {
+    try {
+      const refreshToken = getRefreshTokenFromClientStorage();
+      const hasBodyToken = typeof refreshToken === "string" && refreshToken.trim().length > 0;
+
+      const res = await fetch(authEndpoint("/auth/refresh"), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          ...(hasBodyToken ? { "Content-Type": "application/json" } : {}),
+        },
+        body: hasBodyToken ? JSON.stringify({ refresh_token: refreshToken }) : undefined,
+      });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      _refreshInFlight = null;
+    }
+  })();
+
+  return _refreshInFlight;
+}
+
+async function getAvailableSocialProviders(): Promise<string[]> {
+  const now = Date.now();
+  if (_providerAvailabilityCache && now - _providerAvailabilityCache.fetchedAt < PROVIDER_CACHE_TTL_MS) {
+    return _providerAvailabilityCache.providers;
+  }
+
+  try {
+    const res = await fetch("/api/auth/providers", {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = (await res.json().catch(() => ({}))) as { providers?: string[] };
+    const providers = Array.isArray(data.providers) ? data.providers : [];
+    _providerAvailabilityCache = { providers, fetchedAt: now };
+    return providers;
+  } catch {
+    return [];
   }
 }
 
@@ -181,7 +242,10 @@ export const getSessionSafe = async (allowRefreshRetry = true) => {
           if (refreshed) {
             return await getSessionSafe(false);
           }
+          const err = await parseError(res);
+          return { data: null, error: err };
         }
+        // Only clear local state after a failed post-refresh re-check.
         console.warn("[AUTH_CLIENT]: 401 Unauthorized from backend. Clearing local session state.");
         invalidateSessionCache();
       }
@@ -269,6 +333,17 @@ export const signIn = {
     }
 
     try {
+      const availableProviders = await getAvailableSocialProviders();
+      if (!availableProviders.includes(provider)) {
+        return {
+          data: null,
+          error: { message: `${provider} SSO is not available right now. Please use another sign-in method.` },
+        };
+      }
+
+      sessionStorage.setItem("oauth_in_progress", "true");
+      sessionStorage.setItem("oauth_redirect_to", "/dashboard");
+
       // Build the absolute URL to the backend's SSO initiation route
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || window.location.origin;
       const url = new URL("/api/v1/auth/sso/start", baseUrl);

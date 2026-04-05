@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "@/lib/auth-client";
+import { getSessionSafe, signIn } from "@/lib/auth-client";
 import { AnimatePresence, motion } from "framer-motion";
 import { Mail, Lock, ArrowRight, Loader2, Shield, Fingerprint, Eye, EyeOff } from "lucide-react";
 
@@ -17,6 +17,17 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const waitForSessionReady = async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const sessionResult = await getSessionSafe();
+      if (sessionResult?.data?.authenticated) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return false;
+  };
 
   const handleCredentialLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -34,6 +45,12 @@ export default function LoginPage() {
       if (authError) {
         throw new Error(authError.message || "Unable to sign in.");
       }
+
+      const sessionReady = await waitForSessionReady();
+      if (!sessionReady) {
+        throw new Error("Login succeeded but session is not ready yet. Please retry.");
+      }
+
       router.replace("/dashboard");
     } catch (err) {
       setError((err as Error).message || "Unable to sign in.");
@@ -46,7 +63,10 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await signIn.social(provider);
+      const { error: socialError } = await signIn.social(provider);
+      if (socialError) {
+        throw new Error(socialError.message || "OAuth failed.");
+      }
     } catch (err) {
       setError((err as Error).message || "OAuth failed.");
       setLoading(false);

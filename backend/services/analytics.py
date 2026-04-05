@@ -112,7 +112,6 @@ async def _fetch_events_for_range(
 
 def _build_analytics_payload(
     events: List[EventTable],
-    previous_meetings_count: int,
     start_date: datetime,
     end_date: datetime,
     now: datetime,
@@ -135,16 +134,16 @@ def _build_analytics_payload(
         per_day_hours[key] = 0.0
         cursor += timedelta(days=1)
 
-    recent_events = sorted(
+    upcoming_events = sorted(
         events,
         key=lambda x: _as_utc(getattr(x, "start_time")),
-        reverse=True,
-    )[:5]
+    )
+
+    recent_events = upcoming_events[:5]
 
     next_event = None
-    upcoming_events = [evt for evt in events if _as_utc(getattr(evt, "start_time")) >= now]
     if upcoming_events:
-        candidate = min(upcoming_events, key=lambda x: _as_utc(getattr(x, "start_time")))
+        candidate = upcoming_events[0]
         next_event = {
             "id": int(getattr(candidate, "id")),
             "title": str(getattr(candidate, "title")),
@@ -173,10 +172,6 @@ def _build_analytics_payload(
             per_day_hours[day_key] += duration_hours
 
     growth = 0
-    if previous_meetings_count > 0:
-        growth = int(((meeting_count - previous_meetings_count) / previous_meetings_count) * 100)
-    elif meeting_count > 0:
-        growth = 100
 
     total_days = max(1, (end_date.date() - start_date.date()).days + 1)
     use_short_label = total_days <= 14
@@ -223,11 +218,11 @@ def _build_analytics_payload(
     ]
 
     if meeting_count == 0:
-        summary = "No meetings found in this range. Your schedule is open."
+        summary = "No current or upcoming meetings found in this window."
     else:
         summary = (
-            f"{meeting_count} meetings across {round(total_hours, 1)}h in this window. "
-            f"Growth is {growth}% compared with the previous period."
+            f"{meeting_count} current/upcoming meetings across {round(total_hours, 1)}h "
+            f"in the next {max(1, (end_date.date() - start_date.date()).days + 1)} days."
         )
 
     return {
@@ -256,18 +251,16 @@ async def analytics_summary(
     """Real-time summary metrics backed directly by current event records."""
     now = datetime.now(timezone.utc)
     days = _resolve_range_days(range)
-    start_date = now - timedelta(days=days)
-    prev_start = start_date - timedelta(days=days)
+    start_date = now
+    end_date = now + timedelta(days=days)
 
     try:
-        events = await _fetch_events_for_range(db, user_id, start_date, now)
-        previous_events = await _fetch_events_for_range(db, user_id, prev_start, start_date)
+        events = await _fetch_events_for_range(db, user_id, start_date, end_date)
 
         payload = _build_analytics_payload(
             events=events,
-            previous_meetings_count=len(previous_events),
             start_date=start_date,
-            end_date=now,
+            end_date=end_date,
             now=now,
         )
 
@@ -295,18 +288,16 @@ async def analytics_realtime(
     """Returns graph-ready real-time analytics for dashboard charts."""
     now = datetime.now(timezone.utc)
     days = _resolve_range_days(range)
-    start_date = now - timedelta(days=days)
-    prev_start = start_date - timedelta(days=days)
+    start_date = now
+    end_date = now + timedelta(days=days)
 
     try:
-        events = await _fetch_events_for_range(db, user_id, start_date, now)
-        previous_events = await _fetch_events_for_range(db, user_id, prev_start, start_date)
+        events = await _fetch_events_for_range(db, user_id, start_date, end_date)
 
         payload = _build_analytics_payload(
             events=events,
-            previous_meetings_count=len(previous_events),
             start_date=start_date,
-            end_date=now,
+            end_date=end_date,
             now=now,
         )
 

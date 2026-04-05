@@ -217,6 +217,16 @@ def root():
     }
 
 
+@app.head("/")
+def root_head():
+    return Response(status_code=200)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.head("/health")
+def health_head():
+    return Response(status_code=200)

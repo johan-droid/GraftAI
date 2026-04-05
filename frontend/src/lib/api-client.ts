@@ -43,10 +43,6 @@ class ApiError extends Error {
   }
 }
 
-function isProtectedClientRoute(pathname: string): boolean {
-  return pathname.startsWith("/dashboard");
-}
-
 /**
  * Hardened Fetch Wrapper with Network Timeout and Interceptor capabilities.
  */
@@ -156,14 +152,9 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
         }
       }
 
-      // If refresh fails, only force login from protected routes.
-      // Public pages may call endpoints opportunistically and should not be hard-redirected.
-      if (typeof window !== "undefined") {
-        const currentPath = window.location.pathname || "";
-        if (isProtectedClientRoute(currentPath)) {
-          window.location.assign("/login");
-        }
-      }
+      // Do not force navigation here.
+      // A single endpoint returning 401 should not globally log out the user.
+      // AuthProvider + explicit /auth/check flow governs session transitions.
       throw new ApiError("Session expired", response.status);
     }
 

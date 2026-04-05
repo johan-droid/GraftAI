@@ -36,8 +36,35 @@ const PROVIDERS = [
 
 export default function IntegrationsPage() {
   const [connections, setConnections] = useState<Record<string, boolean>>({});
+  const [availableProviders, setAvailableProviders] = useState<Record<string, boolean>>({
+    google: false,
+    microsoft: false,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+
+    fetch("/api/auth/providers", { credentials: "include" })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { providers?: string[] };
+        const providers = Array.isArray(data.providers) ? data.providers : [];
+        if (!alive) return;
+        setAvailableProviders({
+          google: providers.includes("google"),
+          microsoft: providers.includes("microsoft"),
+        });
+      })
+      .catch(() => {
+        if (!alive) return;
+        setAvailableProviders({ google: false, microsoft: false });
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -67,6 +94,11 @@ export default function IntegrationsPage() {
   }, []);
 
   const handleConnect = (providerId: string) => {
+    if (!availableProviders[providerId]) {
+      setError(`${providerId} SSO is not configured right now.`);
+      return;
+    }
+
     const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
     const callbackPath = currentPath || "/dashboard/settings/integrations";
     const base = composeEndpoint("/auth/sso/start", true);
@@ -153,14 +185,21 @@ export default function IntegrationsPage() {
 
                 <button 
                   onClick={() => handleConnect(provider.id)}
+                  disabled={!availableProviders[provider.id]}
                   className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                    connections[provider.id]
+                    !availableProviders[provider.id]
+                      ? "bg-slate-900/70 text-slate-500 border border-slate-800 cursor-not-allowed"
+                      : connections[provider.id]
                       ? "bg-slate-900 text-white border border-slate-800 hover:bg-slate-800"
                       : "bg-primary text-white shadow-lg shadow-primary/20 hover:bg-primary/90"
                   }`}
                 >
-                  {connections[provider.id] ? "Manage Link" : "Connect Account"}
-                  {!connections[provider.id] && <ExternalLink className="w-3.5 h-3.5" />}
+                  {!availableProviders[provider.id]
+                    ? "Unavailable"
+                    : connections[provider.id]
+                    ? "Manage Link"
+                    : "Connect Account"}
+                  {availableProviders[provider.id] && !connections[provider.id] && <ExternalLink className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </motion.div>

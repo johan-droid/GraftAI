@@ -384,7 +384,9 @@ async def sso_start(provider: str = "microsoft", redirect_to: str = "/dashboard"
         result = sso.start_oauth2_flow(provider, redirect_to)
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=result["authorization_url"], status_code=302)
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code >= 500:
+            logger.warning(f"SSO start blocked for provider '{provider}': {exc.detail}")
         raise
     except Exception as e:
         logger.error(f"SSO start failed: {e}")

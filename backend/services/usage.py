@@ -120,13 +120,19 @@ def check_usage_limit(feature: str):
 
 async def increment_usage(db: AsyncSession, user_id: str, feature: str):
     """Increment the daily usage counter for a specific feature."""
-    async with db.begin():
-        result = await db.execute(select(UserTable).where(UserTable.id == user_id))
-        scalars = await unwrap_result(result.scalars())
-        user = await unwrap_result(scalars.first())
-        if user:
-            if feature == "ai_messages":
-                user.daily_ai_count += 1
-            elif feature == "calendar_syncs":
-                user.daily_sync_count += 1
-            logger.info(f"📈 Incremented {feature} for user {user_id}")
+    result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+    scalars = await unwrap_result(result.scalars())
+    user = await unwrap_result(scalars.first())
+    if not user:
+        return
+
+    if feature == "ai_messages":
+        user.daily_ai_count = (user.daily_ai_count or 0) + 1
+    elif feature == "calendar_syncs":
+        user.daily_sync_count = (user.daily_sync_count or 0) + 1
+    else:
+        logger.warning(f"Unknown usage feature '{feature}' for user {user_id}")
+        return
+
+    await db.commit()
+    logger.info(f"📈 Incremented {feature} for user {user_id}")

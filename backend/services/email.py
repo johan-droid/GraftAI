@@ -14,6 +14,7 @@ Environment variables used (add to backend/.env or .env.example):
 - SMTP_USE_TLS (true/false, default true)
 - EMAIL_PROVIDER (smtp/sendgrid, default is automatically sendgrid when SENDGRID_API_KEY is set)
 - SENDGRID_API_KEY (required when EMAIL_PROVIDER=sendgrid)
+- SENDGRID_ALLOW_SMTP_FALLBACK (true/false, default false)
 """
 
 import os
@@ -30,6 +31,15 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 # Initialize logger
 logger = logging.getLogger(__name__)
+
+
+class SendGridDeliveryError(RuntimeError):
+    """Raised when SendGrid rejects a delivery request."""
+
+    def __init__(self, status_code: int, response_text: str):
+        super().__init__(f"SendGrid API error {status_code}: {response_text}")
+        self.status_code = status_code
+        self.response_text = response_text
 
 # Ensure .env from project root is loaded (backend/.env)
 
@@ -73,6 +83,7 @@ def _get_smtp_config() -> dict:
         "from_name": os.getenv("SMTP_FROM_NAME", "GraftAI"),
         "sendgrid_from_email": os.getenv("SENDGRID_FROM_EMAIL"),
         "sendgrid_from_name": os.getenv("SENDGRID_FROM_NAME", os.getenv("SMTP_FROM_NAME", "GraftAI")),
+        "sendgrid_allow_smtp_fallback": os.getenv("SENDGRID_ALLOW_SMTP_FALLBACK", "false").lower() in ("1", "true", "yes"),
         "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes"),
         "provider": provider,
     }
@@ -155,9 +166,7 @@ def _send_via_sendgrid(
 
     response = httpx.post("https://api.sendgrid.com/v3/mail/send", json=payload, headers=headers, timeout=10)
     if response.status_code not in (200, 202):
-        raise RuntimeError(
-            f"SendGrid API error {response.status_code}: {response.text}"
-        )
+        raise SendGridDeliveryError(response.status_code, response.text)
 
 
 def _send_email_provider(
@@ -172,6 +181,7 @@ def _send_email_provider(
     provider = cfg.get("provider", "smtp")
     from_email = cfg.get("from_email") or cfg.get("user") or "no-reply@example.com"
     from_name = cfg.get("from_name", "GraftAI")
+    allow_smtp_fallback = cfg.get("sendgrid_allow_smtp_fallback", False)
 
     if provider == "sendgrid":
         sendgrid_from_email = cfg.get("sendgrid_from_email") or from_email
@@ -180,7 +190,21 @@ def _send_email_provider(
         try:
             _send_via_sendgrid(to_email, subject, html_body, text_body, sendgrid_from_email, sendgrid_from_name)
             return
+        except SendGridDeliveryError as e:
+            # 4xx are generally configuration/content issues; SMTP fallback won't fix those.
+            if 400 <= e.status_code < 500:
+                logger.error(f"SendGrid delivery rejected ({e.status_code}); skipping SMTP fallback: {e.response_text}")
+                raise
+
+            if not allow_smtp_fallback:
+                logger.error(f"SendGrid delivery failed ({e.status_code}) and SMTP fallback is disabled")
+                raise
+
+            logger.warning(f"SendGrid delivery failed ({e.status_code}), falling back to SMTP")
         except Exception as e:
+            if not allow_smtp_fallback:
+                logger.error(f"SendGrid delivery failed and SMTP fallback is disabled: {e}")
+                raise
             logger.warning(f"SendGrid delivery failed, falling back to SMTP: {e}")
 
     # Default: SMTP (or fallback path)

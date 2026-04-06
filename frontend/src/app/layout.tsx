@@ -47,12 +47,16 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#070711",
-  colorScheme: "dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f6fc" },
+    { media: "(prefers-color-scheme: dark)", color: "#070711" },
+  ],
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   maximumScale: 1,
   userScalable: false,
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({
@@ -63,12 +67,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${dmSans.variable} ${dmSerif.variable} dark`}
+      className={`${dmSans.variable} ${dmSerif.variable}`}
       suppressHydrationWarning
     >
       <body
-        className="min-h-dvh bg-[#070711] text-slate-200 antialiased"
-        style={{ fontFamily: "var(--font-dm-sans), system-ui, sans-serif" }}
+        className="min-h-dvh antialiased"
         suppressHydrationWarning
       >
         <NotificationProvider>

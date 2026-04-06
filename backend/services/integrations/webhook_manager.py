@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from backend.models.tables import WebhookSubscriptionTable, AccountTable
+from backend.models.tables import WebhookSubscriptionTable
 from backend.models.user_token import UserTokenTable
 from backend.services.integrations.google_calendar import get_google_service
 from backend.services.integrations.ms_graph import get_ms_graph_client
@@ -73,8 +73,9 @@ async def _subscribe_google(db: AsyncSession, user_id: str, token: UserTokenTabl
     except Exception as e:
         logger.error(f"❌ Google Webhook registration failed for {user_id}: {e}")
 
-async def _subscribe_microsoft(db: AsyncSession, user_id: str, account: AccountTable):
+async def _subscribe_microsoft(db: AsyncSession, user_id: str, token: UserTokenTable):
     """Subscribes to Microsoft Graph event changes."""
+    client = None
     try:
         client = await get_ms_graph_client(db, user_id)
         if not client:
@@ -112,6 +113,9 @@ async def _subscribe_microsoft(db: AsyncSession, user_id: str, account: AccountT
         
     except Exception as e:
         logger.error(f"❌ MS Webhook registration failed for {user_id}: {e}")
+    finally:
+        if client is not None:
+            await client.aclose()
 
 async def renew_all_expiring_subscriptions(db: AsyncSession):
     """

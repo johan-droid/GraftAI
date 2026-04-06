@@ -5,8 +5,8 @@ import { useState, useEffect, useRef } from "react";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import {
   Bot, Sparkles, Globe, Zap, Lock, ChevronRight, ArrowRight,
-  CheckCircle2, Clock, Star, Menu, X, Shield, Crown, Calendar,
-  TrendingUp, Users, Activity, Plus, ChevronDown,
+  CheckCircle2, Clock, Star, Menu, X, Shield, Crown,
+  TrendingUp, Users, Activity, ChevronDown,
 } from "lucide-react";
 
 // ─── Data ──────────────────────────────────────────────────────
@@ -174,12 +174,24 @@ const FAQS = [
   { q: "What AI model powers the scheduling?", a: "GraftAI uses a fine-tuned scheduling model built on top of frontier LLMs, optimized specifically for calendar context, time reasoning, and multi-party coordination." },
 ];
 
-const NOISE_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E")`;
+const MOBILE_TAB_LINKS = [
+  { id: "home", label: "Home", href: "#top", icon: Zap },
+  { id: "features", label: "Features", href: "#features", icon: Sparkles },
+  { id: "pricing", label: "Pricing", href: "#pricing", icon: Crown },
+  { id: "faq", label: "FAQ", href: "#faq", icon: Shield },
+];
+
+const MOBILE_SHEET_LINKS = [
+  { label: "Features", href: "#features" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "FAQ", href: "#faq" },
+];
 
 // ─── Component ─────────────────────────────────────────────────
 export default function Home() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState("home");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
@@ -187,23 +199,40 @@ export default function Home() {
   const heroOpacity = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 20);
+      const triggerY = window.scrollY + window.innerHeight * 0.38;
+      const order = ["faq", "pricing", "features"];
+      const active = order.find((id) => {
+        const el = document.getElementById(id);
+        return el ? triggerY >= el.offsetTop : false;
+      });
+      setActiveMobileTab(active ?? "home");
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
+
   return (
-    <div className="min-h-screen bg-[#070711] text-slate-200 overflow-x-hidden selection:bg-indigo-500/30">
+    <div id="top" className="min-h-screen overflow-x-hidden bg-[#070711] pb-[calc(86px+env(safe-area-inset-bottom))] text-slate-200 selection:bg-indigo-500/30 md:pb-0">
       {/* Ambient BG */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="absolute -top-[20%] left-[5%] h-[700px] w-[700px] rounded-full bg-indigo-600/8 blur-[140px]" />
         <div className="absolute top-[50%] right-[-5%] h-[500px] w-[500px] rounded-full bg-violet-600/6 blur-[120px]" />
         <div className="absolute bottom-[10%] left-[35%] h-[400px] w-[400px] rounded-full bg-blue-600/5 blur-[100px]" />
-        <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: NOISE_SVG, backgroundRepeat: "repeat" }} />
-        <div className="absolute inset-0 opacity-[0.025]" style={{
-          backgroundImage: "linear-gradient(rgba(148,163,184,1) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,1) 1px, transparent 1px)",
-          backgroundSize: "72px 72px",
-        }} />
+        <div className="home-noise-layer absolute inset-0 opacity-[0.035]" />
+        <div className="home-grid-layer absolute inset-0 opacity-[0.025]" />
       </div>
 
       {/* ── Nav ─────────────────────────────────────── */}
@@ -215,7 +244,7 @@ export default function Home() {
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/25 transition-shadow group-hover:shadow-indigo-500/50">
               <Zap className="w-4 h-4 text-white fill-white" />
             </div>
-            <span className="text-[15px] font-bold tracking-tight text-white" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+            <span className="font-serif text-[15px] font-bold tracking-tight text-white">
               GraftAI
             </span>
           </Link>
@@ -243,53 +272,116 @@ export default function Home() {
           </div>
 
           <button
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white md:hidden"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-200 md:hidden"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open menu"
           >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            <Menu className="h-5 w-5" />
           </button>
         </nav>
 
         <AnimatePresence>
           {mobileOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden border-t border-white/[0.06] bg-[#070711]/98 backdrop-blur-2xl md:hidden"
-            >
-              <div className="flex flex-col gap-1 p-4">
-                {[
-                  { label: "Features", href: "#features" },
-                  { label: "Pricing", href: "#pricing" },
-                  { label: "FAQ", href: "#faq" },
-                ].map((item) => (
-                  <Link
-                    key={item.label}
-                    href={item.href}
+            <>
+              <motion.button
+                aria-label="Close mobile menu"
+                onClick={() => setMobileOpen(false)}
+                className="fixed inset-0 z-[60] bg-black/55 md:hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              />
+
+              <motion.aside
+                className="touch-pan-y fixed inset-y-0 right-0 z-[61] w-[min(90vw,380px)] overflow-y-auto border-l border-white/10 bg-[#050919]/95 px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-[calc(16px+env(safe-area-inset-top))] backdrop-blur-2xl md:hidden"
+                initial={{ x: "100%", opacity: 0.9 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: "100%", opacity: 0.95 }}
+                transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
+              >
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Navigate</p>
+                    <h2 className="mt-1 text-base font-semibold text-white">GraftAI Mobile</h2>
+                  </div>
+                  <button
                     onClick={() => setMobileOpen(false)}
-                    className="rounded-xl px-4 py-3 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-200"
+                    aria-label="Close menu"
                   >
-                    {item.label}
-                  </Link>
-                ))}
-                <div className="mt-3 flex flex-col gap-2 border-t border-white/[0.06] pt-3">
-                  <Link href="/login" onClick={() => setMobileOpen(false)} className="rounded-xl border border-white/10 px-4 py-3 text-center text-sm font-semibold text-slate-300 transition-colors hover:bg-white/5">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-1.5">
+                  {MOBILE_SHEET_LINKS.map((item) => (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5 text-sm font-medium text-slate-200"
+                    >
+                      <span>{item.label}</span>
+                      <ChevronRight className="h-4 w-4 text-slate-500" />
+                    </Link>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex flex-col gap-2 border-t border-white/[0.08] pt-5">
+                  <Link href="/login" onClick={() => setMobileOpen(false)} className="rounded-xl border border-white/10 px-4 py-3 text-center text-sm font-semibold text-slate-200">
                     Sign in
                   </Link>
                   <Link href="/register" onClick={() => setMobileOpen(false)} className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-3 text-center text-sm font-bold text-white shadow-lg shadow-indigo-500/20">
                     Get started free
                   </Link>
                 </div>
-              </div>
-            </motion.div>
+              </motion.aside>
+            </>
           )}
         </AnimatePresence>
       </header>
 
-      <main className="relative z-10">
+      <div className="mobile-safe-bottom fixed inset-x-0 bottom-0 z-50 px-3 pb-2 md:hidden">
+        <nav className="mx-auto flex h-[68px] max-w-md items-center rounded-[24px] border border-white/[0.14] bg-[#040915]/85 px-1.5 backdrop-blur-2xl shadow-2xl shadow-black/45">
+          {MOBILE_TAB_LINKS.map((tab) => {
+            const isActive = activeMobileTab === tab.id;
+            return (
+              <Link
+                key={tab.id}
+                href={tab.href}
+                onClick={() => setActiveMobileTab(tab.id)}
+                className={`relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide ${
+                  isActive ? "text-indigo-300" : "text-slate-400"
+                }`}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="home-mobile-tab"
+                    className="absolute inset-1 -z-10 rounded-2xl border border-indigo-400/25 bg-indigo-500/18"
+                  />
+                )}
+                <tab.icon className="h-[19px] w-[19px]" />
+                <span>{tab.label}</span>
+              </Link>
+            );
+          })}
+
+          <button
+            onClick={() => setMobileOpen(true)}
+            aria-expanded={mobileOpen ? "true" : "false"}
+            aria-label="Open quick menu"
+            className={`relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide ${
+              mobileOpen ? "text-indigo-300" : "text-slate-400"
+            }`}
+          >
+            {mobileOpen && <span className="absolute inset-1 -z-10 rounded-2xl border border-indigo-400/25 bg-indigo-500/18" />}
+            <Menu className="h-[19px] w-[19px]" />
+            <span>Menu</span>
+          </button>
+        </nav>
+      </div>
+
+      <main className="touch-pan-y relative z-10 overscroll-y-contain">
         {/* ── Hero ──────────────────────────────────── */}
         <section ref={heroRef} className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-5 pb-20 pt-28 sm:pt-32">
           <motion.div style={{ y: heroY, opacity: heroOpacity }} className="flex flex-col items-center text-center max-w-5xl mx-auto">
@@ -308,8 +400,7 @@ export default function Home() {
             <motion.h1
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-[2.8rem] font-black leading-[1.04] tracking-[-0.04em] text-white sm:text-6xl lg:text-[5rem]"
-              style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}
+              className="font-serif text-[2.8rem] font-black leading-[1.04] tracking-[-0.04em] text-white sm:text-6xl lg:text-[5rem]"
             >
               Your calendar,{" "}
               <span className="relative inline-block">
@@ -463,12 +554,14 @@ export default function Home() {
           <p className="text-center text-[11px] font-bold uppercase tracking-[0.2em] text-slate-600 mb-7">
             Trusted by teams at
           </p>
-          <div className="flex gap-10 items-center justify-center flex-wrap px-6">
+          <div className="touch-pan-x -mx-5 overflow-x-auto px-5 md:mx-0 md:overflow-visible md:px-6">
+            <div className="mx-auto flex w-max min-w-full items-center justify-start gap-8 px-1 md:w-auto md:min-w-0 md:flex-wrap md:justify-center md:gap-10 md:px-0">
             {LOGOS.map((logo) => (
-              <span key={logo} className="text-slate-600 font-bold text-sm tracking-wide hover:text-slate-400 transition-colors cursor-default">
+              <span key={logo} className="snap-start shrink-0 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2 text-sm font-bold tracking-wide text-slate-600 transition-colors hover:text-slate-400 md:border-0 md:bg-transparent md:px-0 md:py-0">
                 {logo}
               </span>
             ))}
+            </div>
           </div>
         </section>
 
@@ -487,7 +580,7 @@ export default function Home() {
                 <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/15 transition-colors">
                   {s.icon}
                 </div>
-                <span className="text-3xl font-black text-white sm:text-4xl" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+                <span className="font-serif text-3xl font-black text-white sm:text-4xl">
                   {s.value}
                 </span>
                 <span className="text-xs font-medium text-slate-500">{s.label}</span>
@@ -505,7 +598,7 @@ export default function Home() {
             className="mb-14 max-w-xl"
           >
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">What you get</p>
-            <h2 className="text-4xl font-black text-white sm:text-5xl leading-tight" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+            <h2 className="font-serif text-4xl font-black leading-tight text-white sm:text-5xl">
               Built around how people actually work
             </h2>
             <p className="mt-4 text-base leading-relaxed text-slate-400">
@@ -546,7 +639,7 @@ export default function Home() {
               viewport={{ once: true }} className="mb-14 text-center"
             >
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">In their own words</p>
-              <h2 className="text-3xl font-black text-white sm:text-4xl" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+              <h2 className="font-serif text-3xl font-black text-white sm:text-4xl">
                 People seem to like it
               </h2>
             </motion.div>
@@ -584,11 +677,11 @@ export default function Home() {
         <section id="pricing" className="mx-auto max-w-6xl px-5 py-28">
           <div className="mb-16 text-center">
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">Pricing</p>
-            <h2 className="text-4xl font-black text-white sm:text-5xl" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+            <h2 className="font-serif text-4xl font-black text-white sm:text-5xl">
               Simple, transparent pricing.
             </h2>
             <p className="mt-4 text-base text-slate-400 max-w-xl mx-auto">
-              Start free. Upgrade when you're ready. No hidden fees, ever.
+              Start free. Upgrade when you&apos;re ready. No hidden fees, ever.
             </p>
           </div>
 
@@ -660,7 +753,7 @@ export default function Home() {
             viewport={{ once: true }} className="mb-12 text-center"
           >
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">FAQ</p>
-            <h2 className="text-3xl font-black text-white sm:text-4xl" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+            <h2 className="font-serif text-3xl font-black text-white sm:text-4xl">
               Common questions
             </h2>
           </motion.div>
@@ -711,7 +804,7 @@ export default function Home() {
             </div>
             <div className="relative">
               <p className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">Get access</p>
-              <h2 className="mb-5 text-4xl font-black text-white sm:text-5xl" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+              <h2 className="font-serif mb-5 text-4xl font-black text-white sm:text-5xl">
                 Ready to reclaim your time?
               </h2>
               <p className="mx-auto mb-9 max-w-md text-base leading-relaxed text-slate-400">
@@ -755,7 +848,7 @@ export default function Home() {
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-indigo-500/20">
                   <Zap className="w-3.5 h-3.5 text-white fill-white" />
                 </div>
-                <span className="text-sm font-bold text-slate-300" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+                <span className="font-serif text-sm font-bold text-slate-300">
                   GraftAI
                 </span>
               </Link>

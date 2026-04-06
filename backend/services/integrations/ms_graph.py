@@ -4,6 +4,10 @@ import httpx
 from typing import Optional
 from msal import ConfidentialClientApplication
 from datetime import datetime
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.models.user_token import UserTokenTable
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -12,6 +16,36 @@ MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
 MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
 # Common tenant for multi-tenant apps
 MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/common"
+
+
+async def get_ms_graph_client(db: AsyncSession, user_id: str) -> Optional[httpx.AsyncClient]:
+    """Returns an authenticated Microsoft Graph client for the given user."""
+    stmt = select(UserTokenTable).where(
+        (UserTokenTable.user_id == user_id)
+        & (UserTokenTable.provider == "microsoft")
+        & (UserTokenTable.is_active == True)
+    )
+    result = await db.execute(stmt)
+    token = result.scalars().first()
+    if not token:
+        logger.info(f"No active Microsoft token found for user {user_id}")
+        return None
+
+    access_token = get_ms_graph_token(
+        {
+            "refresh_token": token.refresh_token,
+            "scopes": token.scopes or "",
+        }
+    )
+
+    return httpx.AsyncClient(
+        base_url="https://graph.microsoft.com/v1.0",
+        timeout=15.0,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+    )
 
 def get_ms_graph_token(token_data: dict) -> str:
     """Refreshes and returns a Microsoft Graph access token."""

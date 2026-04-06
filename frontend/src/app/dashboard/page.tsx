@@ -356,28 +356,27 @@ export default function Dashboard() {
           <div className="space-y-5 min-h-[120px]">
             <motion.div variants={ITEM}>
               <h2 className="text-base font-bold text-white mb-3">Event types</h2>
-              <div className="space-y-2">
+              <div className="touch-pan-x -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-2 md:mx-0 md:grid md:grid-cols-1 md:gap-2 md:overflow-visible md:px-0 md:pb-0">
                 {QUICK_LINKS.map((ql) => (
-                  <div key={ql.slug} className="group flex items-center gap-3 p-3 rounded-xl border border-white/[0.06] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/10 transition-all cursor-pointer">
-                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${ql.color} flex items-center justify-center shrink-0`}>
-                      <ql.icon className="w-4 h-4 text-white" />
+                  <button
+                    key={ql.slug}
+                    onClick={() => router.push("/dashboard/calendar")}
+                    className="group flex min-w-[220px] snap-start items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] p-3 text-left transition-all hover:border-white/10 hover:bg-white/[0.05] md:min-w-0"
+                    aria-label={`Create ${ql.label}`}
+                  >
+                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${ql.color}`}>
+                      <ql.icon className="h-4 w-4 text-white" />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-semibold text-slate-200">{ql.label}</p>
-                      <p className="text-[11px] text-slate-500 font-mono">Calendar event template</p>
+                      <p className="font-mono text-[11px] text-slate-500">Calendar event template</p>
                     </div>
-                    <button
-                      onClick={() => router.push("/dashboard/calendar")}
-                      className="p-1.5 rounded-md text-slate-600 hover:text-slate-300 transition-all opacity-0 group-hover:opacity-100"
-                      aria-label="Open event type"
-                    >
-                      <ArrowUpRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                    <ArrowUpRight className="h-3.5 w-3.5 text-slate-600 transition-colors group-hover:text-slate-300" />
+                  </button>
                 ))}
                 <Link
                   href="/dashboard/calendar"
-                  className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20 text-[13px] font-medium transition-all"
+                  className="flex min-w-[220px] snap-start items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 p-3 text-[13px] font-medium text-slate-500 transition-all hover:border-white/20 hover:text-slate-300 md:min-w-0"
                 >
                   + New event type
                 </Link>

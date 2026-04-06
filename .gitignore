@@ -101,6 +101,7 @@ backend/pytest_smoke_output.txt
 backend/*_output.txt
 backend/orig_*.txt
 backend/tmp_*.py
+backend/audit_test.py
 frontend/build_log*.txt
 frontend/lint_output*.txt
 

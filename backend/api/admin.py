@@ -8,7 +8,7 @@ from backend.api.deps import get_db
 from backend.models.user_token import UserTokenTable
 from backend.utils.redis_singleton import get_redis
 from backend.auth.schemes import get_current_user_id
-from backend.services.access_control import check_user_role
+from backend.services import access_control
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ async def get_sync_status(
     Administrative overview of synchronization health.
     Requires admin privileges.
     """
-    if not check_user_role(current_user_id, "admin"):
+    if not await access_control.check_user_role(db, current_user_id, "admin"):
         raise HTTPException(status_code=403, detail="Admin privileges required")
 
     try:

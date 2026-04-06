@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -21,7 +22,7 @@ class NotificationResponse(BaseModel):
     body: str | None = None
     data: dict | None = None
     is_read: bool
-    created_at: str
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -43,6 +44,17 @@ async def list_notifications(
     return rows
 
 
+@router.patch("/mark_all_read")
+async def mark_all_read(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    stmt = update(NotificationTable).where(NotificationTable.user_id == user_id, NotificationTable.is_read == False).values(is_read=True)
+    await db.execute(stmt)
+    await db.commit()
+    return {"status": "ok"}
+
+
 @router.patch("/{notification_id}")
 async def mark_notification(
     notification_id: int,
@@ -61,17 +73,6 @@ async def mark_notification(
     await db.commit()
     await db.refresh(notif)
     return {"status": "ok", "id": notif.id, "is_read": notif.is_read}
-
-
-@router.patch("/mark_all_read")
-async def mark_all_read(
-    db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id),
-):
-    stmt = update(NotificationTable).where(NotificationTable.user_id == user_id, NotificationTable.is_read == False).values(is_read=True)
-    await db.execute(stmt)
-    await db.commit()
-    return {"status": "ok"}
 
 
 @router.delete("/{notification_id}")

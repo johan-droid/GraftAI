@@ -264,3 +264,5 @@ class NotificationTable(Base):
 
     # Relationship (Audit: Back-populates for clean cascaded delete)
     user = relationship("UserTable", back_populates="notifications")
+
+from .user_token import UserTokenTable

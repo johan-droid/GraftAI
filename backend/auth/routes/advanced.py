@@ -76,14 +76,21 @@ def _did_verify(payload: DIDVerifyRequest, user_id: str = Depends(get_current_us
     return {"status": "valid"}
 
 @router.get("/access-control/check-role")
-def check_role(role: str, user_id: str = Depends(get_current_user_id)):
-    return {"allowed": access_control.check_user_role(user_id, role)}
+async def check_role(
+    role: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    return {"allowed": await access_control.check_user_role(db, user_id, role)}
 
 @router.get("/access-control/check-attribute")
-def check_attribute(
-    attribute: str, value: str, user_id: str = Depends(get_current_user_id)
+async def check_attribute(
+    attribute: str,
+    value: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
-    return {"allowed": access_control.check_user_attribute(user_id, attribute, value)}
+    return {"allowed": await access_control.check_user_attribute(db, user_id, attribute, value)}
 
 @router.delete("/account")
 async def delete_account(

@@ -8,7 +8,6 @@ import {
   Plus,
   X,
   Clock,
-  MapPin,
   Trash2,
   Edit3,
   CheckCircle2,
@@ -26,7 +25,6 @@ import {
   updateEvent,
   deleteEvent,
   getAvailableSlots,
-  manualSync,
   CalendarEvent as Event,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -74,7 +72,6 @@ export default function CalendarPage() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [slots, setSlots] = useState<{
     start: string;
     end: string;
@@ -145,19 +142,6 @@ export default function CalendarPage() {
     }
   };
 
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      await manualSync();
-      const refreshed = await getEvents(startDate.toISOString(), endDate.toISOString());
-      setEvents(refreshed);
-    } catch (e) {
-      console.error("Calendar sync failed", e);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingEvent) return;
@@ -209,6 +193,8 @@ export default function CalendarPage() {
           <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
             <button
               onClick={() => navigate("prev")}
+              aria-label="Previous month"
+              title="Previous month"
               className="p-2 rounded-lg hover:bg-white/8 text-slate-400 hover:text-white transition-all active:scale-90"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -218,6 +204,8 @@ export default function CalendarPage() {
             </button>
             <button
               onClick={() => navigate("next")}
+              aria-label="Next month"
+              title="Next month"
               className="p-2 rounded-lg hover:bg-white/8 text-slate-400 hover:text-white transition-all active:scale-90"
             >
               <ChevronRight className="w-4 h-4" />

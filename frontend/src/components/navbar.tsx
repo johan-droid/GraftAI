@@ -17,7 +17,7 @@ const NAV_ITEMS = [
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, isAuthenticated } = useAuthContext();
+  const { isAuthenticated } = useAuthContext();
   const { activePing } = useNotificationContext();
   const isAuthPage = pathname === "/login" || pathname === "/register" || pathname === "/auth-callback";
 

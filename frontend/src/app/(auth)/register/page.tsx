@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signUp, signIn } from "@/lib/auth-client";
-import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, User, ArrowRight, Loader2, Globe, ShieldCheck, Eye, EyeOff, Zap, CheckCircle, Shield } from "lucide-react";
+import { motion } from "framer-motion";
+import { Mail, Lock, User, ArrowRight, Loader2, Eye, EyeOff, Zap, CheckCircle, Shield } from "lucide-react";
 import Link from "next/link";
 
 const PERKS = [

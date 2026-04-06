@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState } from "react";
 
 interface DashboardContextType {
   isPrivacyMode: boolean;
@@ -10,13 +10,10 @@ interface DashboardContextType {
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
-  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
-
-  // Persistence
-  useEffect(() => {
-    const saved = localStorage.getItem("graftai_privacy_mode");
-    if (saved === "true") setIsPrivacyMode(true);
-  }, []);
+  const [isPrivacyMode, setIsPrivacyMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("graftai_privacy_mode") === "true";
+  });
 
   const togglePrivacyMode = () => {
     setIsPrivacyMode((prev) => {

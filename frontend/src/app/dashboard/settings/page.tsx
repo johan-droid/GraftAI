@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/app/providers/auth-provider";
-import { deleteAccount, getIntegrationStatus, setConsent, syncUserTimezone, updateUserProfile, getEmailDiagnostic, sendTestEmail } from "@/lib/api";
+import { deleteAccount, setConsent, syncUserTimezone, updateUserProfile, getEmailDiagnostic, sendTestEmail } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
   User,
@@ -12,7 +12,6 @@ import {
   Bell,
   Eye,
   Loader2,
-  Check,
   LogOut,
   Clock,
   Globe,
@@ -23,6 +22,31 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+interface UserProfile {
+  name?: string;
+  email?: string;
+  bio?: string;
+  job_title?: string;
+  location?: string;
+  timezone?: string;
+  tier?: string;
+  created_at?: string;
+  is_superuser?: boolean;
+}
+
+type EmailDiagnosticStatus =
+  | { status: "success"; message: string; hint?: string }
+  | { status: "error"; message: string; hint?: string }
+  | null;
+
+function normalizeEmailStatus(res: { status: string; message: string; hint?: string }): Exclude<EmailDiagnosticStatus, null> {
+  return {
+    status: res.status === "success" ? "success" : "error",
+    message: res.message,
+    hint: res.hint,
+  };
+}
+
 const STAGGER = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
@@ -31,8 +55,6 @@ const ITEM = {
   hidden: { opacity: 0, y: 14 },
   visible: { opacity: 1, y: 0 },
 };
-
-const NAV_SECTIONS = ["Profile", "Availability", "Integrations", "Privacy", "Notifications", "Danger zone"];
 
 function Toggle({ on, onChange, loading }: { on: boolean; onChange: () => void; loading?: boolean }) {
   return (
@@ -90,12 +112,10 @@ function SettingRow({ icon: Icon, label, description, children }: {
 export default function SettingsPage() {
   const router = useRouter();
   const { user, logout } = useAuthContext();
-  const typedUser = user as { name?: string; email?: string } | null;
+  const typedUser = user as UserProfile | null;
 
-  const [activeSection] = useState("Profile");
   const [consents, setConsents] = useState({ analytics: true, notifications: true, ai_training: false });
   const [saving, setSaving] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
   const [availability, setAvailability] = useState({
     weekdays: true,
     saturday: false,
@@ -103,11 +123,6 @@ export default function SettingsPage() {
     startHour: "09:00",
     endHour: "18:00",
   });
-  const [integrationStatus, setIntegrationStatus] = useState<Record<string, boolean>>({
-    google: false,
-    microsoft: false,
-  });
-  const [loadingIntegrations, setLoadingIntegrations] = useState(true);
   
   // Profile Detail State
   const [editingName, setEditingName] = useState(false);
@@ -129,7 +144,7 @@ export default function SettingsPage() {
 
   // Diagnostics State
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [emailStatus, setEmailStatus] = useState<any>(null);
+  const [emailStatus, setEmailStatus] = useState<EmailDiagnosticStatus>(null);
   const [testingEmail, setTestingEmail] = useState(false);
 
   useEffect(() => {
@@ -140,34 +155,11 @@ export default function SettingsPage() {
   useEffect(() => {
     if (typedUser) {
       setNameDraft(typedUser.name || "");
-      setBioDraft((typedUser as any).bio || "");
-      setJobDraft((typedUser as any).job_title || "");
-      setLocationDraft((typedUser as any).location || "");
+      setBioDraft(typedUser?.bio || "");
+      setJobDraft(typedUser?.job_title || "");
+      setLocationDraft(typedUser?.location || "");
     }
   }, [typedUser]);
-
-  useEffect(() => {
-    let alive = true;
-    getIntegrationStatus()
-      .then((data) => {
-        if (!alive) return;
-        setIntegrationStatus({
-          google: Boolean(data.connections?.google),
-          microsoft: Boolean(data.connections?.microsoft),
-        });
-      })
-      .catch(() => {
-        if (!alive) return;
-        setIntegrationStatus({ google: false, microsoft: false });
-      })
-      .finally(() => {
-        if (alive) setLoadingIntegrations(false);
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   const toggleConsent = async (key: keyof typeof consents) => {
     const next = !consents[key];
@@ -175,8 +167,6 @@ export default function SettingsPage() {
     try {
       await setConsent(key, next);
       setConsents((p) => ({ ...p, [key]: next }));
-      setSaved(key);
-      setTimeout(() => setSaved(null), 2000);
     } catch {
       // empty
     } finally {
@@ -187,7 +177,7 @@ export default function SettingsPage() {
   const saveProfileField = async (field: "name" | "bio" | "job_title" | "location") => {
     setProfileSaving(true);
     try {
-      const data: any = {};
+      const data: Record<string, string> = {};
       if (field === "name") data.full_name = nameDraft.trim();
       if (field === "bio") data.bio = bioDraft.trim();
       if (field === "job_title") data.job_title = jobDraft.trim();
@@ -223,9 +213,9 @@ export default function SettingsPage() {
     setTestingEmail(true);
     try {
       const res = await sendTestEmail(typedUser.email);
-      setEmailStatus(res);
-    } catch (err: any) {
-      setEmailStatus({ status: "error", message: err.message });
+      setEmailStatus(normalizeEmailStatus(res));
+    } catch (err: unknown) {
+      setEmailStatus({ status: "error", message: err instanceof Error ? err.message : String(err) });
     } finally {
       setTestingEmail(false);
     }
@@ -235,9 +225,9 @@ export default function SettingsPage() {
     setTestingEmail(true);
     try {
       const res = await getEmailDiagnostic();
-      setEmailStatus(res);
-    } catch (err: any) {
-      setEmailStatus({ status: "error", message: err.message });
+      setEmailStatus(normalizeEmailStatus(res));
+    } catch (err: unknown) {
+      setEmailStatus({ status: "error", message: err instanceof Error ? err.message : String(err) });
     } finally {
       setTestingEmail(false);
     }
@@ -273,9 +263,6 @@ export default function SettingsPage() {
     ? typedUser.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : typedUser?.email?.[0]?.toUpperCase() ?? "U";
 
-  const joinDate = (typedUser as any)?.created_at 
-    ? new Date((typedUser as any).created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-    : "Recently joined";
 
   return (
     <div className="p-6 md:p-10 max-w-4xl mx-auto">
@@ -317,7 +304,7 @@ export default function SettingsPage() {
                   </h2>
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
                     <span className="px-4 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-bold text-indigo-400 uppercase tracking-[0.15em] flex items-center gap-2">
-                       <Zap className="w-3 h-3" /> {(typedUser as any)?.tier?.toUpperCase() || "FREE"} TIER
+                       <Zap className="w-3 h-3" /> {typedUser?.tier?.toUpperCase() || "FREE"} TIER
                     </span>
                     <span className="px-4 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2">
                        <Clock className="w-3 h-3" /> {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -451,7 +438,7 @@ export default function SettingsPage() {
           </Section>
         </motion.div>
 
-        {typedUser && (typedUser as any).is_superuser && (
+        {typedUser && typedUser.is_superuser && (
           <motion.div variants={ITEM} className="mt-8">
             <div className="rounded-[2.5rem] border border-white/[0.08] bg-[#0d1424]/40 p-8 md:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-xl">
               <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 blur-[120px] rounded-full -mr-20 -mt-20 opacity-40" />

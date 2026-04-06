@@ -10,7 +10,7 @@ export interface Notification {
   priority: NotificationPriority;
   duration?: number; // ms
   createdAt: Date;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 export type PingStatus = "idle" | "syncing" | "completed" | "error";

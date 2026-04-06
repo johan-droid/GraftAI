@@ -5,18 +5,27 @@ import { Bell, X, Trash2 } from "lucide-react";
 import { getNotifications, markNotification, markAllNotificationsRead, deleteNotification } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
+interface NotificationItem {
+  id: number;
+  title: string;
+  body?: string;
+  is_read: boolean;
+  created_at: string;
+  data?: { event_id?: number };
+}
+
 export default function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<NotificationItem[]>([]);
   const ref = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
   const unreadCount = items.filter((i) => !i.is_read).length;
 
   useEffect(() => {
-    function onDoc(e: any) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     if (open) {
       document.addEventListener("click", onDoc);
@@ -64,10 +73,9 @@ export default function NotificationCenter() {
     }
   }
 
-  function openNotification(it: any) {
+  function openNotification(it: NotificationItem) {
     // mark read and navigate to calendar
     handleMarkRead(it.id);
-    // if event id present, go to calendar and include event id as query
     const eventId = it.data?.event_id;
     if (eventId) router.push(`/dashboard/calendar`);
     setOpen(false);

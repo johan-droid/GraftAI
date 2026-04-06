@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { getAnalyticsRealtime, type AnalyticsRealtimeResponse } from "@/lib/api";
 import TimelineLineChart from "@/components/TimelineLineChart";
+import { cn } from "@/lib/utils";
 
 const STAGGER = {
   hidden: { opacity: 0 },
@@ -29,12 +30,6 @@ const KPI_STYLES: Record<string, { bg: string; border: string; icon: string }> =
   cyan: { bg: "bg-cyan-500/10", border: "border-cyan-500/20", icon: "text-cyan-400" },
   emerald: { bg: "bg-emerald-500/10", border: "border-emerald-500/20", icon: "text-emerald-400" },
 };
-
-function Bar({ value, max }: { value: number; max: number }) {
-  const levels = ["h-2", "h-3", "h-4", "h-6", "h-8", "h-10", "h-12", "h-14", "h-16", "h-20"];
-  const idx = max > 0 ? Math.min(levels.length - 1, Math.max(0, Math.round((value / max) * (levels.length - 1)))) : 0;
-  return <div className={`w-full rounded-t-md bg-indigo-500/70 ${levels[idx]}`} />;
-}
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
@@ -70,11 +65,6 @@ export default function AnalyticsPage() {
   }, [range]);
 
   const series = useMemo(() => data?.series ?? [], [data]);
-  const maxMeetings = useMemo(
-    () => (series.length ? Math.max(...series.map((point) => point.meetings)) : 1),
-    [series]
-  );
-
   const totals = data?.totals || {
     meetings: 0,
     hours: 0,
@@ -168,16 +158,16 @@ export default function AnalyticsPage() {
                 <div className="mt-3 flex flex-wrap gap-3 items-center">
                   {((data?.meeting_types) || []).map((t) => {
                     const colorMap: Record<string, string> = {
-                      meeting: "#7c3aed",
-                      event: "#06b6d4",
-                      birthday: "#f97316",
-                      task: "#10b981",
-                      other: "#94a3b8",
+                      meeting: "bg-violet-600",
+                      event: "bg-cyan-500",
+                      birthday: "bg-orange-500",
+                      task: "bg-emerald-500",
+                      other: "bg-slate-400",
                     };
                     const color = colorMap[t.label] ?? colorMap.other;
                     return (
                       <div key={t.label} className="flex items-center gap-2 text-xs text-slate-400">
-                        <span className="w-3 h-3 rounded" style={{ background: color }} />
+                        <span className={cn("w-3 h-3 rounded", color)} />
                         <span className="capitalize">{t.label}</span>
                         <span className="text-[11px] text-slate-500">{t.pct}%</span>
                       </div>

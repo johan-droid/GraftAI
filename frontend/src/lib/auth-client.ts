@@ -54,7 +54,7 @@ export function getToken(): string | null {
       if (typeof window !== "undefined" && window.sessionStorage) {
         token = window.sessionStorage.getItem("graftai_access_token");
       }
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }
 
   // 3. Try LocalStorage (Persistence Fallback)
@@ -63,7 +63,7 @@ export function getToken(): string | null {
       if (typeof window !== "undefined" && window.localStorage) {
         token = window.localStorage.getItem("graftai_access_token");
       }
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }
 
   // 4. Try URL query params for one-time SSO handoff token bridge
@@ -87,9 +87,7 @@ export function getToken(): string | null {
         window.sessionStorage?.setItem("graftai_refresh_token", refreshToken);
         window.localStorage?.setItem("graftai_refresh_token", refreshToken);
       }
-    } catch (e) {
-      /* ignore malformed URLs */
-    }
+    } catch { /* ignore malformed URLs */ }
   }
 
   // ROBUSTNESS: If we found a token in any source, sync it to others for redundancy
@@ -101,7 +99,7 @@ export function getToken(): string | null {
       if (window.localStorage && !window.localStorage.getItem("graftai_access_token")) {
         window.localStorage.setItem("graftai_access_token", token);
       }
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }
 
   return token;
@@ -137,7 +135,7 @@ export function invalidateSessionCache(): void {
       localStorage.removeItem("graftai_access_token");
       // Expire cookie
       document.cookie = "graftai_access_token=; path=/; max-age=0;";
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }
 }
 

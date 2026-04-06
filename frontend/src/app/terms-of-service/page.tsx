@@ -8,7 +8,7 @@ export default function TermsOfServicePage() {
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white transition-colors mb-8">
           <ArrowLeft className="w-4 h-4" /> Back to Home
         </Link>
-        <h1 className="text-4xl font-black text-white mb-4" style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
+        <h1 className="text-4xl font-black text-white mb-4 font-serif">
           Terms of Service
         </h1>
         <p className="text-slate-400 text-sm mb-12">Last Updated: April 2026</p>
@@ -23,7 +23,7 @@ export default function TermsOfServicePage() {
 
           <h3>2. Description of Service</h3>
           <p>
-            GraftAI is a web application designed to showcase integrating AI language models with calendar orchestration. The service is provided "as-is" and "as-available" without warranties of any kind. There are no guarantees regarding uptime, data persistence, or algorithmic accuracy.
+            GraftAI is a web application designed to showcase integrating AI language models with calendar orchestration. The service is provided &quot;as-is&quot; and &quot;as-available&quot; without warranties of any kind. There are no guarantees regarding uptime, data persistence, or algorithmic accuracy.
           </p>
 
           <h3>3. Intellectual Property Rights</h3>

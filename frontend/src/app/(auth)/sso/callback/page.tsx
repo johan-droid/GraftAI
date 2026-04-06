@@ -85,7 +85,7 @@ function SSOCallbackContent() {
       console.warn("[SSO_CALLBACK]: No token found in URL.");
       router.replace("/login");
     }
-  }, [searchParams, router]);
+  }, [login, searchParams, router]);
 
   const error = searchParams.get("error");
 

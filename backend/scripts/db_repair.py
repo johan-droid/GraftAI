@@ -49,6 +49,50 @@ async def repair_database():
             else:
                 logger.info("✅ [REPAIR] 'notifications' table schema verified (data column exists).")
 
+            # 1c. Check for 'is_read' column in 'notifications' table
+            check_is_read_sql = text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'notifications' AND column_name = 'is_read';
+            """)
+            result = await conn.execute(check_is_read_sql)
+            if result.fetchone() is None:
+                logger.info("🔧 [REPAIR] Column 'is_read' missing in 'notifications' table. Patching...")
+                await conn.execute(text("ALTER TABLE notifications ADD COLUMN is_read BOOLEAN DEFAULT FALSE NOT NULL;"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);"))
+                logger.info("✅ [REPAIR] 'notifications' table successfully updated with 'is_read' column.")
+            else:
+                logger.info("✅ [REPAIR] 'notifications' table schema verified (is_read column exists).")
+
+            # 1d. Check for 'recipient' column in 'notifications' table
+            check_recipient_sql = text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'notifications' AND column_name = 'recipient';
+            """)
+            result = await conn.execute(check_recipient_sql)
+            if result.fetchone() is None:
+                logger.info("🔧 [REPAIR] Column 'recipient' missing in 'notifications' table. Patching...")
+                await conn.execute(text("ALTER TABLE notifications ADD COLUMN recipient VARCHAR(255) DEFAULT '' NOT NULL;"))
+                await conn.execute(text("""
+                    UPDATE notifications n
+                    SET recipient = u.email
+                    FROM users u
+                    WHERE n.user_id = u.id AND (n.recipient = '' OR n.recipient IS NULL);
+                """))
+                logger.info("✅ [REPAIR] 'notifications' table successfully updated with 'recipient' column.")
+            else:
+                # Hardening for legacy schemas where recipient exists but lacks default/not-null consistency.
+                await conn.execute(text("""
+                    UPDATE notifications n
+                    SET recipient = u.email
+                    FROM users u
+                    WHERE n.user_id = u.id AND (n.recipient = '' OR n.recipient IS NULL);
+                """))
+                await conn.execute(text("UPDATE notifications SET recipient = '' WHERE recipient IS NULL;"))
+                await conn.execute(text("ALTER TABLE notifications ALTER COLUMN recipient SET DEFAULT '';"))
+                await conn.execute(text("ALTER TABLE notifications ALTER COLUMN recipient SET NOT NULL;"))
+                logger.info("✅ [REPAIR] 'notifications' table schema verified (recipient column exists).")
 
             # 2. Check for user profile detailing columns in the 'users' table
             user_columns = ["bio", "job_title", "location"]

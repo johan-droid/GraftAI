@@ -20,3 +20,16 @@ async def get_user_role(db: AsyncSession, user_id: str) -> str:
     """Retrieves the primary role of a user."""
     user = await db.get(UserTable, user_id)
     return user.role if user else "member"
+
+async def check_user_attribute(
+    db: AsyncSession, user_id: str, attribute: str, value: str
+) -> bool:
+    """Checks whether a user attribute matches the requested value."""
+    user = await db.get(UserTable, user_id)
+    if not user:
+        return False
+
+    attr_value = getattr(user, attribute, None)
+    if attr_value is None:
+        return False
+    return str(attr_value).lower() == str(value).lower()

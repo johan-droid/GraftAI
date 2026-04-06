@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Notification, NotificationType, NotificationPriority, PingStatus } from "@/types/notifications";
+import React, { createContext, useContext, useState, useCallback } from "react";
+import { Notification, PingStatus } from "@/types/notifications";
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -16,6 +16,10 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activePing, setActivePing] = useState<PingStatus>("idle");
+
+  const removeNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
 
   const addNotification = useCallback((title: string, options?: Partial<Notification>) => {
     const id = crypto.randomUUID();
@@ -37,11 +41,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         removeNotification(id);
       }, newNotification.duration);
     }
-  }, []);
-
-  const removeNotification = useCallback((id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  }, []);
+  }, [removeNotification]);
 
   const setPingStatus = useCallback((status: PingStatus) => {
     setActivePing(status);

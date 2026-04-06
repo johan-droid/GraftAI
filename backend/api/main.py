@@ -36,6 +36,7 @@ from backend.services.plugin_api import router as plugin_router
 
 from backend.utils import db as db_utils
 from backend.scripts.db_repair import repair_database
+from backend.services.migrations import run_migrations
 
 
 # ── Rate Limiting — in-process sliding window ─────────────────────────────────
@@ -119,8 +120,16 @@ async def lifespan(app: FastAPI):
         logger.critical("❌ [STARTUP] DATABASE_URL is missing. Platform is INOPERABLE.")
     else:
         try:
+            skip_db_migrations = os.getenv("SKIP_DB_MIGRATIONS", "false").lower() in {"1", "true", "yes"}
+            db_migration_timeout = float(os.getenv("DB_MIGRATION_TIMEOUT_SECONDS", "60"))
             skip_db_repair = os.getenv("SKIP_DB_REPAIR", "false").lower() in {"1", "true", "yes"}
             db_repair_timeout = float(os.getenv("DB_REPAIR_TIMEOUT_SECONDS", "20"))
+
+            if skip_db_migrations:
+                logger.warning("⚠️ [STARTUP] SKIP_DB_MIGRATIONS enabled. Skipping ordered migrations.")
+            else:
+                await asyncio.wait_for(asyncio.to_thread(run_migrations), timeout=db_migration_timeout)
+                logger.info("✅ [STARTUP] Ordered migrations complete.")
 
             if skip_db_repair:
                 logger.warning("⚠️ [STARTUP] SKIP_DB_REPAIR enabled. Skipping startup schema repair.")
@@ -228,6 +237,8 @@ v1 = APIRouter(prefix="/api/v1")
 app.include_router(auth_router)
 v1.include_router(auth_router)
 
+from backend.api.billing import router as billing_router
+from backend.api.webhooks import router as webhooks_router
 from backend.api.mfa import router as mfa_router
 
 v1.include_router(users_router)
@@ -240,6 +251,8 @@ v1.include_router(analytics_router)
 v1.include_router(consent_router)
 v1.include_router(upgrade_router)
 v1.include_router(plugin_router)
+v1.include_router(billing_router)
+v1.include_router(webhooks_router)
 v1.include_router(mfa_router)
 v1.include_router(admin_router)
 

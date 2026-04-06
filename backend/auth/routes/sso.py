@@ -61,14 +61,17 @@ async def sso_callback(
         stmt = select(UserTable).where(UserTable.email == email)
         result = await db.execute(stmt)
         user = result.scalars().first()
+        display_name = sso_data.get("full_name", email.split("@")[0])
+        picture = sso_data.get("picture")
 
         if not user:
             user = UserTable(
                 email=email,
-                full_name=sso_data.get("full_name", email.split("@")[0]),
-                profile_image=sso_data.get("picture"),
+                full_name=display_name,
+                name=display_name,
+                image=picture,
                 is_active=True,
-                auth_provider=sso_data.get("provider", "google")
+                email_verified=True,
             )
             db.add(user)
             await db.flush() # Get ID
@@ -86,9 +89,11 @@ async def sso_callback(
                 logger.warning(f"Failed to enqueue onboarding tasks for {email}: {e}")
         else:
             # Update profile info if changed
-            user.full_name = sso_data.get("full_name", user.full_name)
-            user.profile_image = sso_data.get("picture", user.profile_image)
-            user.auth_provider = sso_data.get("provider", user.auth_provider)
+            user.full_name = display_name or user.full_name
+            user.name = display_name or user.name
+            if picture:
+                user.image = picture
+            user.email_verified = True
             
             # Also trigger a re-sync for existing users to ensure data is fresh
             try:
@@ -148,4 +153,4 @@ async def sso_callback(
 
     except Exception as e:
         logger.error(f"[AUTH]: SSO Callback unhandled error: {e}")
-        return RedirectResponse(url="/auth/login?error=server_error")
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=server_error")

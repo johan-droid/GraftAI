@@ -90,6 +90,40 @@ async def repair_database():
                     await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_def};"))
                     logger.info(f"✅ [REPAIR] 'users' table successfully updated with '{col}' column.")
 
+            # 5. Comprehensive users table compatibility patch
+            # Keeps legacy databases aligned with current ORM expectations.
+            users_compat_cols = {
+                "name": "VARCHAR(255)",
+                "email_verified": "BOOLEAN DEFAULT FALSE",
+                "image": "VARCHAR(1024)",
+                "full_name": "VARCHAR(255)",
+                "is_active": "BOOLEAN DEFAULT TRUE NOT NULL",
+                "is_superuser": "BOOLEAN DEFAULT FALSE NOT NULL",
+                "hashed_password": "VARCHAR(512)",
+                "tenant_id": "INTEGER",
+                "tier": "VARCHAR(20) DEFAULT 'free' NOT NULL",
+                "stripe_customer_id": "VARCHAR(255)",
+                "razorpay_customer_id": "VARCHAR(255)",
+                "razorpay_subscription_id": "VARCHAR(255)",
+                "subscription_status": "VARCHAR(50) DEFAULT 'inactive'",
+                "daily_ai_count": "INTEGER DEFAULT 0 NOT NULL",
+                "daily_sync_count": "INTEGER DEFAULT 0 NOT NULL",
+                "last_usage_reset": "TIMESTAMP WITH TIME ZONE DEFAULT now()",
+                "timezone": "VARCHAR(50) DEFAULT 'UTC' NOT NULL",
+                "consent_analytics": "BOOLEAN DEFAULT TRUE NOT NULL",
+                "consent_notifications": "BOOLEAN DEFAULT TRUE NOT NULL",
+                "consent_ai_training": "BOOLEAN DEFAULT FALSE NOT NULL",
+                "created_at": "TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL",
+                "deleted_at": "TIMESTAMP WITH TIME ZONE",
+                "updated_at": "TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL",
+            }
+            for col, col_def in users_compat_cols.items():
+                res = await conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"))
+                if res.fetchone() is None:
+                    logger.info(f"🔧 [REPAIR] Compatibility column '{col}' missing in 'users' table. Patching...")
+                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_def};"))
+                    logger.info(f"✅ [REPAIR] 'users' compatibility column '{col}' added.")
+
     except Exception as e:
         logger.error(f"❌ [REPAIR] Database repair failed: {e}", exc_info=True)
 

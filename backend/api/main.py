@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import logging
+import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -118,9 +119,17 @@ async def lifespan(app: FastAPI):
         logger.critical("❌ [STARTUP] DATABASE_URL is missing. Platform is INOPERABLE.")
     else:
         try:
-            # Run schema repairs immediately
-            await repair_database()
-            logger.info("✅ [STARTUP] Database schema verified.")
+            skip_db_repair = os.getenv("SKIP_DB_REPAIR", "false").lower() in {"1", "true", "yes"}
+            db_repair_timeout = float(os.getenv("DB_REPAIR_TIMEOUT_SECONDS", "20"))
+
+            if skip_db_repair:
+                logger.warning("⚠️ [STARTUP] SKIP_DB_REPAIR enabled. Skipping startup schema repair.")
+            else:
+                # Prevent startup stalls from blocking port binding on managed platforms.
+                await asyncio.wait_for(repair_database(), timeout=db_repair_timeout)
+                logger.info("✅ [STARTUP] Database schema verified.")
+        except asyncio.TimeoutError:
+            logger.error("❌ [STARTUP] Database verification timed out; continuing startup.")
         except Exception as e:
             logger.error(f"❌ [STARTUP] Database verification failed: {e}")
 

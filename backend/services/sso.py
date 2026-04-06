@@ -190,6 +190,11 @@ def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboar
     }
 
 
+async def get_authorization_url(provider: str = "microsoft", redirect_to: str = "/dashboard"):
+    result = start_oauth2_flow(provider, redirect_to)
+    return result["authorization_url"], result["state"]
+
+
 async def complete_oauth2_flow(request: Request, code: str, state: str):
     # Verify HMAC signature first
     original_state = _verify_state(state)

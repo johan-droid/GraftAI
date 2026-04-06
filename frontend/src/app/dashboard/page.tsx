@@ -223,7 +223,7 @@ export default function Dashboard() {
   const timezoneString = Intl.DateTimeFormat().resolvedOptions().timeZone.split("/").pop()?.replace("_", " ") || "Local";
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 md:p-10 max-w-7xl mx-auto">
       <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-5 sm:space-y-8">
         <motion.div variants={ITEM} className="flex flex-col md:flex-row md:items-center gap-4 sm:gap-6 pb-1 sm:pb-2">
           <div className="flex items-start gap-4">
@@ -252,7 +252,7 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        <motion.div variants={ITEM} className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+        <motion.div variants={ITEM} className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-5">
           {[
             { label: "Total Meetings", value: stats.meetings, sub: "Last 30 days", icon: Calendar, color: "indigo" },
             { label: "Scheduled Hours", value: `${stats.hours}h`, sub: "Active workload", icon: Clock, color: "violet" },
@@ -342,7 +342,7 @@ export default function Dashboard() {
 
                     <button
                       onClick={() => router.push("/dashboard/calendar")}
-                      className="absolute top-3 right-3 sm:static p-1.5 rounded-md text-slate-600 hover:text-slate-300 hover:bg-white/8 transition-all sm:opacity-0 group-hover:opacity-100"
+                      className="absolute top-2 right-2 sm:static flex items-center justify-center w-9 h-9 min-w-[44px] min-h-[44px] rounded-lg text-slate-600 hover:text-slate-300 hover:bg-white/8 transition-all sm:opacity-0 group-hover:opacity-100"
                       aria-label="More options"
                     >
                       <MoreHorizontal className="w-4 h-4" />
@@ -356,7 +356,7 @@ export default function Dashboard() {
           <div className="space-y-5 min-h-[120px]">
             <motion.div variants={ITEM}>
               <h2 className="text-base font-bold text-white mb-3">Event types</h2>
-              <div className="touch-pan-x -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-2 md:mx-0 md:grid md:grid-cols-1 md:gap-2 md:overflow-visible md:px-0 md:pb-0">
+              <div className="touch-pan-x -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth px-1 pb-2 md:mx-0 md:grid md:grid-cols-1 md:gap-2 md:overflow-visible md:px-0 md:pb-0 scrollbar-hide">
                 {QUICK_LINKS.map((ql) => (
                   <button
                     key={ql.slug}

@@ -263,7 +263,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       {/* Mobile Drawer Navigation Removed for Native Bottom Nav */}
 
       <div className="z-10 flex min-w-0 flex-1 flex-col pb-[calc(86px+env(safe-area-inset-bottom))] lg:pb-0">
-        <header className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-4 border-b border-white/[0.06] bg-[#040a18]/80 backdrop-blur-xl sticky top-0 z-30">
+        <header className="flex items-center gap-3 h-14 px-4 sm:px-5 border-b border-white/[0.06] bg-[#040a18]/85 backdrop-blur-2xl sticky top-0 z-30">
           <div className="flex items-center gap-1.5 text-sm text-slate-500">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex lg:hidden items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 mr-1.5">
               <Zap className="w-4 h-4 text-white fill-white" />
@@ -278,13 +278,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="inline-flex lg:hidden items-center justify-center h-11 w-11 rounded-xl border border-white/10 bg-white/5 text-slate-200"
-              aria-label="Open navigation menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
             <PrivacyToggle />
             <NotificationCenter />
             <button className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8 transition-all text-[12px] font-medium">
@@ -373,7 +366,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         )}
 
         <div className="mobile-safe-bottom fixed inset-x-0 bottom-0 z-50 px-3 pb-2 lg:hidden">
-          <nav className="mx-auto flex h-[68px] max-w-md items-center rounded-[24px] border border-white/[0.14] bg-[#040a18]/85 px-1.5 backdrop-blur-2xl shadow-2xl shadow-black/45">
+          <nav className="mx-auto flex h-[68px] max-w-md items-center rounded-[24px] border border-white/[0.14] bg-[#040a18]/85 px-1.5 backdrop-blur-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.35)]">
             {BOTTOM_NAV_LINKS.map((link) => {
               const isActive = pathname === link.href;
               return (
@@ -382,7 +375,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                   href={link.href}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide",
+                    "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide active:scale-95 transition-transform",
                     isActive ? "text-indigo-300" : "text-slate-400"
                   )}
                 >
@@ -392,7 +385,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                       className="absolute inset-1 -z-10 rounded-2xl border border-indigo-400/25 bg-indigo-500/18"
                     />
                   )}
-                  <link.icon className={cn("h-[20px] w-[20px]", isActive && "drop-shadow-[0_0_10px_rgba(99,102,241,0.4)]")} />
+                  <link.icon className={cn("h-[22px] w-[22px]", isActive && "drop-shadow-[0_0_10px_rgba(99,102,241,0.4)]")} />
                   <span>{link.name}</span>
                 </Link>
               );
@@ -401,14 +394,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             <button
               onClick={() => setMobileMenuOpen(true)}
               className={cn(
-                "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide",
+                "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide active:scale-95 transition-transform",
                 mobileMenuOpen ? "text-indigo-300" : "text-slate-400"
               )}
               aria-expanded={mobileMenuOpen ? "true" : "false"}
               aria-label="Open more navigation options"
             >
               {mobileMenuOpen && <span className="absolute inset-1 -z-10 rounded-2xl border border-indigo-400/25 bg-indigo-500/18" />}
-              <Menu className="h-[20px] w-[20px]" />
+              <Menu className="h-[22px] w-[22px]" />
               <span>More</span>
             </button>
           </nav>
@@ -427,12 +420,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
               />
 
               <motion.aside
-                className="touch-pan-y fixed inset-y-0 right-0 z-[61] w-[min(90vw,380px)] overflow-y-auto border-l border-white/10 bg-[#050b1e]/95 px-4 pb-[calc(100px+env(safe-area-inset-bottom))] pt-[calc(16px+env(safe-area-inset-top))] backdrop-blur-2xl lg:hidden"
+                className="touch-pan-y fixed inset-y-0 right-0 z-[61] flex w-[min(90vw,380px)] flex-col overflow-y-auto border-l border-white/10 bg-[#050b1e]/95 px-4 pb-[calc(100px+env(safe-area-inset-bottom))] pt-[calc(16px+env(safe-area-inset-top))] backdrop-blur-2xl lg:hidden"
                 initial={{ x: "100%", opacity: 0.9 }}
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: "100%", opacity: 0.95 }}
                 transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
               >
+                {/* Drag Handle */}
+                <div className="drag-handle" />
+
                 <div className="mb-5 flex items-center justify-between">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Navigation</p>
@@ -455,7 +451,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                   New Event
                 </Link>
 
-                <div className="space-y-6">
+                <div className="flex-1 space-y-6">
                   {NAV_GROUPS.map((group) => (
                     <section key={group.label}>
                       <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{group.label}</p>
@@ -486,12 +482,25 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                   ))}
                 </div>
 
+                {/* User Profile Card at Bottom */}
+                <div className="mt-auto border-t border-white/[0.06] pt-4">
+                  <div className="flex items-center gap-3 rounded-2xl bg-white/[0.03] p-3">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                      {userInitials}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold text-white truncate">{displayUser?.name ?? displayUser?.email?.split("@")[0] ?? "User"}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{displayUser?.email ?? ""}</p>
+                    </div>
+                  </div>
+                </div>
+
                 <button
                   onClick={() => {
                     setMobileMenuOpen(false);
                     setLogoutModalOpen(true);
                   }}
-                  className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3.5 text-sm font-semibold text-rose-300"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3.5 text-sm font-semibold text-rose-300"
                 >
                   <LogOut className="h-4 w-4" />
                   Sign out

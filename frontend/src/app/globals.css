@@ -295,3 +295,98 @@ a,
   filter: blur(4px);
   opacity: 0.9;
 }
+
+/* ── Mobile Composer ── */
+.mobile-composer {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(4, 10, 24, 0.75);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  backdrop-filter: blur(28px) saturate(1.6);
+  border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Shimmer Typing Indicator ── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-bar {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(99, 102, 241, 0.08) 25%,
+    rgba(99, 102, 241, 0.22) 50%,
+    rgba(99, 102, 241, 0.08) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+.shimmer-bar-sm {
+  height: 10px;
+  width: 60%;
+  margin-top: 6px;
+}
+
+/* ── Drag Handle (Side Sheet) ── */
+.drag-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(148, 163, 184, 0.35);
+  margin: 0 auto 12px;
+}
+
+/* ── Frosted Glass ── */
+.frosted-glass {
+  background: rgba(4, 10, 24, 0.65);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ── Enhanced touch scrolling ── */
+@media (pointer: coarse) {
+  .scroll-container {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  main {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ── PWA Standalone Mode ── */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Hide any remaining browser UI hints */
+  .browser-only {
+    display: none !important;
+  }
+
+  /* Extra top padding for status bar clearance */
+  .standalone-safe-top {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  }
+}
+
+/* ── Suggestion chip press feedback ── */
+@media (hover: none) and (pointer: coarse) {
+  .suggestion-chip:active {
+    transform: scale(0.95);
+    transition: transform 80ms ease-out;
+  }
+}

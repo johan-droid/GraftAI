@@ -111,24 +111,28 @@ export default function AnalyticsPage() {
           ].map((kpi) => {
             const styles = KPI_STYLES[kpi.color];
             return (
-              <div key={kpi.label} className="relative group overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d1424]/40 p-5 transition-all hover:bg-[#0d1424]/60 hover:border-white/15">
+              <div key={kpi.label} className="relative flex flex-col justify-between aspect-auto sm:aspect-square lg:aspect-square overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0d1424]/60 p-6 transition-all hover:bg-[#0d1424]/80 hover:border-white/20">
                 {/* Subtle Glow */}
-                <div className={`absolute -right-10 -top-10 w-24 h-24 blur-[60px] opacity-20 group-hover:opacity-40 transition-opacity bg-current ${styles.icon.replace('text-', 'bg-')}`} />
+                <div className={`absolute -right-8 -top-8 w-28 h-28 blur-[50px] opacity-20 group-hover:opacity-40 transition-opacity bg-current ${styles.icon.replace('text-', 'bg-')}`} />
                 
-                <div className={`w-10 h-10 rounded-xl mb-4 flex items-center justify-center bg-white/5 border border-white/10 group-hover:scale-110 transition-transform`}>
-                  <kpi.icon className={`w-5 h-5 ${styles.icon}`} />
+                <div className="flex items-start justify-between">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10 group-hover:scale-110 transition-transform`}>
+                    <kpi.icon className={`w-6 h-6 ${styles.icon}`} />
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-full leading-none tracking-wide">Healthy</span>
                 </div>
                 
-                {loading ? (
-                  <div className="h-8 w-24 rounded-lg bg-white/10 animate-pulse" />
-                ) : (
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-bold text-white tracking-tighter">{kpi.value}</p>
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded leading-none">Healthy</span>
-                  </div>
-                )}
-                <p className="text-[13px] font-semibold text-slate-400 mt-2">{kpi.label}</p>
-                <p className="text-[11px] text-slate-500/80 mt-1 uppercase tracking-widest font-bold">{kpi.sub}</p>
+                <div className="mt-6 md:mt-auto">
+                  {loading ? (
+                    <div className="h-10 w-24 rounded-lg bg-white/10 animate-pulse mb-2" />
+                  ) : (
+                    <div className="flex items-baseline gap-2 mb-1">
+                      <p className="text-4xl font-extrabold text-white tracking-tighter">{kpi.value}</p>
+                    </div>
+                  )}
+                  <p className="text-[14px] font-bold text-slate-300">{kpi.label}</p>
+                  <p className="text-[11px] text-slate-500 mt-1 uppercase tracking-widest font-bold">{kpi.sub}</p>
+                </div>
               </div>
             );
           })}

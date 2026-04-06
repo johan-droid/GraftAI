@@ -357,16 +357,33 @@ async def _offline_assistant_response(
         if not event_id:
             # Compatibility fallback for prompts resolved through legacy ACTION payloads.
             try:
-                action_hint = await _generate_with_groq(
-                    "Extract update action only. Output format: ACTION:UPDATE_MEETING:{\"event_id\": number, \"new_start_time\": \"ISO-8601\"}",
-                    prompt,
+                system_instruction = (
+                    "Extract update action only from the user's message. "
+                    "You must output a strictly valid JSON object with exactly these keys: "
+                    "'event_id' (integer representing the ID) and 'new_start_time' (ISO-8601 string). "
+                    "Do not wrap in markdown or add textual commentary."
                 )
-                hinted_event_id, hinted_start = _parse_update_action_payload(action_hint or "", user_timezone)
-                if hinted_event_id:
-                    event_id = hinted_event_id
-                if hinted_start:
-                    new_start_override = hinted_start
-            except Exception:
+                action_hint = await _generate_with_groq(
+                    system_instruction,
+                    prompt,
+                    json_mode=True
+                )
+                
+                import json
+                payload = json.loads(action_hint)
+                
+                hinted_event_id = payload.get("event_id")
+                if hinted_event_id is not None:
+                    event_id = int(hinted_event_id)
+                    
+                hinted_start_raw = payload.get("new_start_time")
+                if hinted_start_raw:
+                    parsed = datetime.fromisoformat(hinted_start_raw.strip())
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=_safe_zoneinfo(user_timezone))
+                    new_start_override = parsed.astimezone(timezone.utc)
+            except Exception as e:
+                logger.warning(f"Failed to extract JSON format for action update: {e}")
                 pass
 
         if not event_id:
@@ -429,7 +446,7 @@ async def _offline_assistant_response(
     )
 
 
-async def _generate_with_groq(system_prompt: str, user_input: str) -> str:
+async def _generate_with_groq(system_prompt: str, user_input: str, json_mode: bool = False) -> str:
     if AsyncGroq is None:
         raise RuntimeError("Groq SDK not installed")
 
@@ -438,14 +455,20 @@ async def _generate_with_groq(system_prompt: str, user_input: str) -> str:
         raise RuntimeError("GROQ_API_KEY not configured")
 
     client = AsyncGroq(api_key=api_key)
-    response = await client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
+    
+    kwargs = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input},
         ],
-        temperature=0.2,
-    )
+        "temperature": 0.2,
+    }
+    
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    response = await client.chat.completions.create(**kwargs)
     return (response.choices[0].message.content or "").strip()
 
 

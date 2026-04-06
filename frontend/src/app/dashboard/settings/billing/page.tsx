@@ -54,15 +54,11 @@ export default function BillingPage() {
         window.location.reload();
         return;
       }
-
-      const res = await fetch("/api/v1/billing/portal-session", { method: "POST" });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      // Without a portal, "Manage Billing" for non-Razorpay users just means upgrading.
+      window.location.assign("/pricing");
     } catch (err) {
       console.error("Portal redirect failed:", err);
-      setBillingMessage("Could not open billing management. Please contact support if this persists.");
+      setBillingMessage("Could not process request. Please contact support if this persists.");
     } finally {
       setActionLoading(null);
     }
@@ -73,11 +69,7 @@ export default function BillingPage() {
   };
 
 
-  const aiProgress = stats ? (stats.daily_ai_count / stats.daily_ai_limit) * 100 : 0;
-  const syncProgress = stats ? (stats.daily_sync_count / stats.daily_sync_limit) * 100 : 0;
-  const aiQuotaPercent = stats ? Math.min(100, Math.round((stats.daily_ai_count / Math.max(1, stats.daily_ai_limit)) * 100)) : 0;
-  const syncQuotaPercent = stats ? Math.min(100, Math.round((stats.daily_sync_count / Math.max(1, stats.daily_sync_limit)) * 100)) : 0;
-  const isQuotaWarning = stats?.tier === 'free' && (aiQuotaPercent >= 80 || syncQuotaPercent >= 80);
+
 
   return (
     <div className="max-w-4xl space-y-5 sm:space-y-8 px-1 sm:px-0">
@@ -148,50 +140,6 @@ export default function BillingPage() {
                 {billingMessage}
               </div>
             )}
-            {isQuotaWarning && (
-              <div className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl border border-amber-400/20 bg-amber-500/5 p-3 sm:p-4 text-xs sm:text-sm text-amber-100">
-                <p className="font-semibold">Quota pressure detected</p>
-                <p>
-                  Your free tier usage is approaching capacity. You have used {aiQuotaPercent}% of AI messages and {syncQuotaPercent}% of syncs today.
-                  Upgrade now to avoid hitting the hard daily cap.
-                </p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-               <div className="p-3 sm:p-4 rounded-xl bg-slate-900/50 border border-slate-800/40">
-                  <div className="flex justify-between items-end mb-2">
-                    <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-tighter flex items-center gap-1.5">
-                      <Sparkles className="w-3 h-3 text-primary" /> AI Copilot Messages
-                    </span>
-                    <span className="text-xs font-black text-white">{stats?.daily_ai_count} / {stats?.daily_ai_limit}</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${aiProgress}%` }}
-                      className={`h-full ${aiProgress > 80 ? 'bg-amber-500' : 'bg-primary'}`}
-                    />
-                  </div>
-               </div>
-
-               <div className="p-3 sm:p-4 rounded-xl bg-slate-900/50 border border-slate-800/40">
-                  <div className="flex justify-between items-end mb-2">
-                    <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-tighter flex items-center gap-1.5">
-                      <BarChart3 className="w-3 h-3 text-primary" /> Calendar Syncs
-                    </span>
-                    <span className="text-xs font-black text-white">{stats?.daily_sync_count} / {stats?.daily_sync_limit}</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${syncProgress}%` }}
-                      className={`h-full ${syncProgress > 80 ? 'bg-amber-500' : 'bg-primary'}`}
-                    />
-                  </div>
-               </div>
-            </div>
-
             <div className="mt-5 sm:mt-8 rounded-2xl sm:rounded-3xl border border-slate-800/60 bg-slate-950/60 p-4 sm:p-6">
               <h3 className="text-xs sm:text-sm font-bold uppercase tracking-[0.2em] sm:tracking-[0.24em] text-slate-400 mb-3">Billing Cycle</h3>
               <ul className="space-y-2.5 sm:space-y-3 text-xs sm:text-sm text-slate-300 leading-5 sm:leading-6">
@@ -249,15 +197,7 @@ export default function BillingPage() {
         </div>
       </div>
 
-      <div className="p-3 sm:p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-start sm:items-center gap-2.5 sm:gap-3">
-        <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-        <p className="text-[10px] sm:text-[11px] font-medium text-amber-200/60 leading-relaxed">
-          Daily usage counters reset at midnight UTC.
-          {stats?.quota_reset_at ? (
-            <> Next reset: {new Date(stats.quota_reset_at).toLocaleString('en-US', { timeZone: 'UTC', hour12: false })} UTC.</>
-          ) : null}
-        </p>
-      </div>
+
     </div>
   );
 }

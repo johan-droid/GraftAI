@@ -126,19 +126,7 @@ export default function SettingsPage() {
     endHour: "18:00",
   });
   
-  // Profile Detail State
-  const [editingName, setEditingName] = useState(false);
-  const [editingBio, setEditingBio] = useState(false);
-  const [editingJob, setEditingJob] = useState(false);
-  const [editingLocation, setEditingLocation] = useState(false);
 
-  const [nameDraft, setNameDraft] = useState("");
-  const [bioDraft, setBioDraft] = useState("");
-  const [jobDraft, setJobDraft] = useState("");
-  const [locationDraft, setLocationDraft] = useState("");
-
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
@@ -154,14 +142,7 @@ export default function SettingsPage() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (typedUser) {
-      setNameDraft(typedUser.name || "");
-      setBioDraft(typedUser?.bio || "");
-      setJobDraft(typedUser?.job_title || "");
-      setLocationDraft(typedUser?.location || "");
-    }
-  }, [typedUser]);
+
 
   const toggleConsent = async (key: keyof typeof consents) => {
     const next = !consents[key];
@@ -176,39 +157,7 @@ export default function SettingsPage() {
     }
   };
 
-  const saveProfileField = async (field: "name" | "bio" | "job_title" | "location") => {
-    setProfileSaving(true);
-    try {
-      const data: Record<string, string> = {};
-      if (field === "name") data.full_name = nameDraft.trim();
-      if (field === "bio") data.bio = bioDraft.trim();
-      if (field === "job_title") data.job_title = jobDraft.trim();
-      if (field === "location") data.location = locationDraft.trim();
 
-      await updateUserProfile(data);
-      
-      setEditingName(false);
-      setEditingBio(false);
-      setEditingJob(false);
-      setEditingLocation(false);
-      
-      router.refresh();
-    } finally {
-      setProfileSaving(false);
-    }
-  };
-
-  const updateTimezoneToBrowser = async () => {
-    setTimezoneSaving(true);
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await syncUserTimezone(tz);
-      await updateUserProfile({ timezone: tz });
-      router.refresh();
-    } finally {
-      setTimezoneSaving(false);
-    }
-  };
 
   const handleTestEmail = async () => {
     if (!typedUser?.email) return;
@@ -338,107 +287,7 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        <motion.div variants={ITEM}>
-          <Section title="Profile" description="Your public-facing identity on GraftAI">
-            <SettingRow label="Avatar" description="Used across your workspace">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-indigo-600/20">
-                {userInitials}
-              </div>
-            </SettingRow>
 
-            <SettingRow icon={User} label="Full name" description="Displayed to invitees">
-              {editingName ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    aria-label="Full name"
-                    value={nameDraft}
-                    onChange={(e) => setNameDraft(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 w-full max-w-[200px]"
-                  />
-                  <button onClick={() => saveProfileField("name")} disabled={profileSaving} className="text-xs text-indigo-400 font-bold">Save</button>
-                  <button onClick={() => setEditingName(false)} className="text-xs text-slate-500">Cancel</button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-300 font-medium">{typedUser?.name ?? "Not set"}</span>
-                  <button onClick={() => setEditingName(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
-                </div>
-              )}
-            </SettingRow>
-
-            <SettingRow icon={Zap} label="Job title" description="Your role or specialization">
-              {editingJob ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    aria-label="Job title"
-                    value={jobDraft}
-                    onChange={(e) => setJobDraft(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 w-full max-w-[200px]"
-                  />
-                  <button onClick={() => saveProfileField("job_title")} disabled={profileSaving} className="text-xs text-indigo-400 font-bold">Save</button>
-                  <button onClick={() => setEditingJob(false)} className="text-xs text-slate-500">Cancel</button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-300 font-medium">{jobDraft || "Not set"}</span>
-                  <button onClick={() => setEditingJob(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
-                </div>
-              )}
-            </SettingRow>
-
-            <SettingRow icon={Globe} label="Location" description="City, Country">
-              {editingLocation ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    aria-label="Location"
-                    value={locationDraft}
-                    onChange={(e) => setLocationDraft(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 w-full max-w-[200px]"
-                  />
-                  <button onClick={() => saveProfileField("location")} disabled={profileSaving} className="text-xs text-indigo-400 font-bold">Save</button>
-                  <button onClick={() => setEditingLocation(false)} className="text-xs text-slate-500">Cancel</button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-300 font-medium">{locationDraft || "Not set"}</span>
-                  <button onClick={() => setEditingLocation(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
-                </div>
-              )}
-            </SettingRow>
-
-            <SettingRow icon={Shield} label="Professional Bio" description="A short summary about yourself">
-              {editingBio ? (
-                <div className="w-full mt-2">
-                  <textarea
-                    value={bioDraft}
-                    onChange={(e) => setBioDraft(e.target.value)}
-                    rows={3}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 mb-3 focus:outline-none focus:border-indigo-500/50 transition-colors"
-                    placeholder="Tell us about yourself..."
-                  />
-                  <div className="flex gap-3">
-                    <button onClick={() => saveProfileField("bio")} disabled={profileSaving} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold">Save Bio</button>
-                    <button onClick={() => setEditingBio(false)} className="px-3 py-1.5 rounded-lg bg-white/5 text-slate-500 text-xs font-bold">Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="w-full">
-                  <p className="text-sm text-slate-400 mb-2 leading-relaxed italic">{bioDraft || "No bio set yet."}</p>
-                  <button onClick={() => setEditingBio(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit Bio</button>
-                </div>
-              )}
-            </SettingRow>
-
-            <SettingRow icon={Clock} label="Timezone" description="Global scheduling reference">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-300 font-medium">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
-                <button onClick={updateTimezoneToBrowser} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">
-                  {timezoneSaving ? "Syncing..." : "Sync"}
-                </button>
-              </div>
-            </SettingRow>
-          </Section>
-        </motion.div>
 
         {typedUser && typedUser.is_superuser && (
           <motion.div variants={ITEM} className="mt-8">

@@ -191,9 +191,10 @@ export default function AICopilotChat() {
       const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-      let greeting = "Good evening";
-      if (hour < 12) greeting = "Good morning";
-      else if (hour < 17) greeting = "Good afternoon";
+      let greeting = "Good night";
+      if (hour >= 5 && hour < 12) greeting = "Good morning";
+      else if (hour >= 12 && hour < 17) greeting = "Good afternoon";
+      else if (hour >= 17 && hour < 22) greeting = "Good evening";
 
       setEnvironmentalContext({
         time: timeStr,

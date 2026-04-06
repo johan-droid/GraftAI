@@ -135,6 +135,35 @@ async def task_purge_expired_accounts(ctx):
         else:
             logger.info("✅ [WORKER] Retention audit complete. No accounts eligible for purge.")
 
+async def task_purge_old_events(ctx):
+    """
+    7-Day Mandate Content Purge: Deletes past events older than 7 days.
+    Prevents database memory bloat and keeps context relevant.
+    """
+    logger.info("[WORKER] 🧹 Scrubbing events older than 7 days...")
+    from sqlalchemy import delete
+    
+    async with ctx['db_session_factory']() as db:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        stmt = delete(EventTable).where(EventTable.end_time < cutoff)
+        result = await db.execute(stmt)
+        await db.commit()
+        logger.info(f"✅ [WORKER] Purged {result.rowcount} old calendar events.")
+
+async def task_sync_all_calendars(ctx):
+    """Periodic job to ensure all active users get synchronized calendars directly."""
+    from backend.models.user_token import UserTokenTable
+    logger.info("[WORKER] 🔄 Running daily proactive calendar sync for all active integrations...")
+    async with ctx['db_session_factory']() as db:
+        stmt = select(UserTokenTable.user_id).where(UserTokenTable.is_active == True).distinct()
+        result = await db.execute(stmt)
+        user_ids = result.scalars().all()
+        for uid in user_ids:
+            try:
+                await sync_user_calendar(db, uid)
+            except Exception as e:
+                logger.error(f"[WORKER] Failed background sync for {uid}: {e}")
+
 async def task_renew_webhooks(ctx):
     """Periodic task to renew Google and Microsoft push notification subscriptions."""
     from backend.services.integrations.webhook_manager import renew_all_expiring_subscriptions
@@ -163,12 +192,16 @@ class WorkerSettings:
         task_background_ai_sync,
         task_renew_webhooks,
         task_notify_event,
-        task_purge_expired_accounts
+        task_purge_expired_accounts,
+        task_purge_old_events,
+        task_sync_all_calendars
     ]
     cron_jobs = [
         {'function': task_process_event_reminders, 'minute': '*', 'run_at_startup': True},
         {'function': task_renew_webhooks, 'hour': {0, 12}, 'minute': 0},
-        {'function': task_purge_expired_accounts, 'hour': 0, 'minute': 0} # Daily Midnight Purge
+        {'function': task_purge_expired_accounts, 'hour': 0, 'minute': 0}, # Daily Midnight Purge
+        {'function': task_purge_old_events, 'hour': 1, 'minute': 0}, # Run at 1 AM
+        {'function': task_sync_all_calendars, 'hour': {3, 9, 15, 21}, 'minute': 0} # 4 times a day
     ]
     on_startup = startup
     on_shutdown = shutdown

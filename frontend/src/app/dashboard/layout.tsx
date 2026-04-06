@@ -20,6 +20,8 @@ import {
   Command,
   Eye,
   EyeOff,
+  User,
+  PieChart
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
 import { AnimatePresence, motion } from "framer-motion";
@@ -46,6 +48,8 @@ const NAV_GROUPS = [
   {
     label: "Account",
     links: [
+      { name: "Profile", href: "/dashboard/profile", icon: User },
+      { name: "Quota & Usage", href: "/dashboard/quota", icon: PieChart },
       { name: "Settings", href: "/dashboard/settings", icon: Settings },
     ],
   },
@@ -53,8 +57,8 @@ const NAV_GROUPS = [
 
 const BOTTOM_NAV_LINKS = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
   { name: "AI", href: "/dashboard/ai", icon: Bot },
+  { name: "Profile", href: "/dashboard/profile", icon: User },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -163,7 +167,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         <span className="font-semibold text-white tracking-tight text-[15px]">GraftAI</span>
         <div className="ml-auto">
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 tracking-wide">
-            PRO
+            {(user as any)?.trial_active ? "TRIAL" : ((user as any)?.tier?.toUpperCase() || "FREE")}
           </span>
         </div>
       </div>
@@ -292,7 +296,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           <motion.div
-            key={pathname}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}

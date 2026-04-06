@@ -70,7 +70,7 @@ if DATABASE_URL:
  
             _connect_args = {
                 "command_timeout": 30,
-                "timeout": float(os.getenv("DB_CONNECT_TIMEOUT", "10")),
+                "timeout": float(os.getenv("DB_CONNECT_TIMEOUT", "30")),
                 "server_settings": {"application_name": "GraftAI-Production"}
             }
             if _needs_ssl:

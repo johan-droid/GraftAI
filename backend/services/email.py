@@ -12,6 +12,8 @@ Environment variables used (add to backend/.env or .env.example):
 - SMTP_FROM_EMAIL (optional override for From header)
 - SMTP_FROM_NAME (optional display name)
 - SMTP_USE_TLS (true/false, default true)
+- EMAIL_PROVIDER (smtp/sendgrid, default is automatically sendgrid when SENDGRID_API_KEY is set)
+- SENDGRID_API_KEY (required when EMAIL_PROVIDER=sendgrid)
 """
 
 import os
@@ -56,6 +58,12 @@ def render_template(template_name: str, context: dict[str, Any]) -> str:
 
 
 def _get_smtp_config() -> dict:
+    configured_provider = os.getenv("EMAIL_PROVIDER")
+    if configured_provider:
+        provider = configured_provider.lower()
+    else:
+        provider = "sendgrid" if os.getenv("SENDGRID_API_KEY") else "smtp"
+
     return {
         "host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
         "port": int(os.getenv("SMTP_PORT", "587")),
@@ -64,7 +72,7 @@ def _get_smtp_config() -> dict:
         "from_email": os.getenv("SMTP_FROM_EMAIL", os.getenv("SMTP_USER", "no-reply@example.com")),
         "from_name": os.getenv("SMTP_FROM_NAME", "GraftAI"),
         "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes"),
-        "provider": os.getenv("EMAIL_PROVIDER", "smtp").lower(),
+        "provider": provider,
     }
 
 
@@ -212,11 +220,18 @@ def verify_smtp_config() -> dict[str, Any]:
             }
         }
     except Exception as e:
+        message = str(e)
+        hint = "Check SMTP_USER and SMTP_PASSWORD. For Gmail, use an App Password." if "Authentication" in message or "login" in message.lower() else "Check host/port and firewall settings."
+        if "Network is unreachable" in message or "network is unreachable" in message.lower():
+            hint = (
+                "Outbound SMTP appears blocked. On Render, direct SMTP may be restricted. "
+                "Use EMAIL_PROVIDER=sendgrid with SENDGRID_API_KEY or another HTTP-based email service."
+            )
         return {
             "status": "error",
             "error_type": type(e).__name__,
-            "message": str(e),
-            "hint": "Check SMTP_USER and SMTP_PASSWORD. For Gmail, use an App Password." if "Authentication" in str(e) or "login" in str(e).lower() else "Check host/port and firewall settings."
+            "message": message,
+            "hint": hint,
         }
 
 

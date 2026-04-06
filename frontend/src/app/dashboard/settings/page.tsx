@@ -98,13 +98,15 @@ function SettingRow({ icon: Icon, label, description, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-4 px-6 py-4">
-      {Icon && <Icon className="w-4 h-4 text-slate-500 shrink-0" />}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-200">{label}</p>
-        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 px-4 sm:px-6 py-4">
+      <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1">
+        {Icon && <Icon className="w-4 h-4 text-slate-500 shrink-0 mt-0.5 sm:mt-0" />}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-200">{label}</p>
+          {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+        </div>
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="shrink-0 sm:mt-0 mt-1 pl-7 sm:pl-0 flex">{children}</div>
     </div>
   );
 }
@@ -274,7 +276,7 @@ export default function SettingsPage() {
         </motion.div>
 
         <motion.div variants={ITEM}>
-          <div className="rounded-[2.5rem] border border-white/[0.08] bg-[#0d1424]/40 p-8 md:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-xl">
+          <div className="rounded-[1.5rem] sm:rounded-[2.5rem] border border-white/[0.08] bg-[#0d1424]/40 p-5 sm:p-8 md:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-xl">
             {/* Ambient Background Glows */}
             <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 blur-[120px] rounded-full -mr-20 -mt-20 opacity-40" />
             <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-violet-600/10 blur-[120px] rounded-full -ml-20 -mb-20 opacity-40" />
@@ -283,10 +285,10 @@ export default function SettingsPage() {
               <div className="relative shrink-0">
                 <motion.div 
                   whileHover={{ scale: 1.02 }} 
-                  className="w-32 h-32 md:w-36 md:h-36 rounded-[2.5rem] bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 p-1 shadow-2xl shadow-indigo-600/20"
+                  className="w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-[2rem] sm:rounded-[2.5rem] bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 p-1 shadow-2xl shadow-indigo-600/20"
                 >
-                  <div className="w-full h-full rounded-[2.3rem] bg-[#070b14] flex items-center justify-center overflow-hidden relative">
-                    <span className="text-4xl md:text-5xl font-black text-white hover:scale-110 transition-transform cursor-default">
+                  <div className="w-full h-full rounded-[1.8rem] sm:rounded-[2.3rem] bg-[#070b14] flex items-center justify-center overflow-hidden relative">
+                    <span className="text-3xl sm:text-4xl md:text-5xl font-black text-white hover:scale-110 transition-transform cursor-default">
                       {userInitials}
                     </span>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
@@ -298,8 +300,8 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex-1 text-center md:text-left min-w-0">
-                <div className="mb-8">
-                  <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-4 truncate">
+                <div className="mb-6 sm:mb-8 w-full">
+                  <h2 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter mb-3 sm:mb-4 truncate">
                     {typedUser?.name || "Anonymous User"}
                   </h2>
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
@@ -600,7 +602,7 @@ export default function SettingsPage() {
             <div className="px-6 py-4 border-b border-red-500/10">
               <h2 className="text-sm font-bold text-red-400">Danger zone</h2>
             </div>
-            <div className="px-6 py-4 flex items-center justify-between gap-4">
+            <div className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-slate-300">Sign out of all sessions</p>
                 <p className="text-xs text-slate-500 mt-0.5">You will be redirected to the login page</p>
@@ -612,7 +614,7 @@ export default function SettingsPage() {
                 <LogOut className="w-3.5 h-3.5" /> Sign out
               </button>
             </div>
-            <div className="px-6 py-4 border-t border-red-500/10 flex items-center justify-between gap-4">
+            <div className="px-4 sm:px-6 py-4 border-t border-red-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-slate-300">Delete account</p>
                 <p className="text-xs text-slate-500 mt-0.5">Permanently delete your account and all data</p>
@@ -620,7 +622,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleDeleteAccount}
                 disabled={deletingAccount}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition-all disabled:opacity-60"
+                className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition-all disabled:opacity-60"
               >
                 {deletingAccount ? "Deleting..." : "Delete account"}
               </button>

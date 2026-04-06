@@ -39,6 +39,11 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "GraftAI — Scheduling, handled.",
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "GraftAI",
+  },
 };
 
 export const viewport: Viewport = {
@@ -47,6 +52,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

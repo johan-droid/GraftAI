@@ -32,6 +32,7 @@ html {
   scroll-behavior: smooth;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
 }
 
 body {
@@ -44,6 +45,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  overscroll-behavior-y: none;
+}
+
+/* Permit text selection in inputs and explicit elements */
+input, textarea, p, h1, h2, h3, h4, [contenteditable="true"] {
+  user-select: text;
 }
 
 /* ── Selection ────────────────────────────────────────────── */
@@ -143,6 +151,7 @@ body {
 .text-gradient {
   background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 

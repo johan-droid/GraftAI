@@ -8,7 +8,6 @@ import {
   Calendar,
   Settings,
   Bot,
-  Menu,
   X,
   LogOut,
   Activity,
@@ -22,7 +21,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAuthContext } from "@/app/providers/auth-provider";
 import { syncUserTimezone, updateUserProfile, submitLogoutFeedback } from "@/lib/api";
 import { DashboardProvider, useDashboard } from "@/providers/dashboard-provider";
@@ -51,6 +50,13 @@ const NAV_GROUPS = [
   },
 ];
 
+const BOTTOM_NAV_LINKS = [
+  { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
+  { name: "AI", href: "/dashboard/ai", icon: Bot },
+  { name: "Settings", href: "/dashboard/settings", icon: Settings },
+];
+
 type ClassValue = string | boolean | null | undefined;
 const cn = (...classes: ClassValue[]) => classes.filter(Boolean).join(" ");
 
@@ -75,7 +81,6 @@ function PrivacyToggle() {
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [logoutReason, setLogoutReason] = useState("");
   const [logoutDetails, setLogoutDetails] = useState("");
@@ -179,7 +184,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                   <Link
                     key={link.href}
                     href={link.href}
-                    onClick={() => setMobileOpen(false)}
                     className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all ${
                       isActive
                         ? "bg-indigo-600/15 text-indigo-300"
@@ -240,39 +244,19 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         <SidebarContent />
       </aside>
 
-      <AnimatePresence>
-        {mobileOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden"
-              onClick={() => setMobileOpen(false)}
-            />
-            <motion.aside
-              initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 280 }}
-              className="fixed inset-y-0 left-0 w-[260px] bg-[#040a18] border-r border-white/[0.06] z-50 lg:hidden"
-            >
-              <SidebarContent />
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Mobile Drawer Navigation Removed for Native Bottom Nav */}
 
-      <div className="flex-1 flex flex-col min-w-0 z-10">
-        <header className="flex items-center gap-3 sm:gap-4 px-3 sm:px-5 py-2.5 sm:py-3 border-b border-white/[0.06] bg-[#040a18]/40 backdrop-blur-md sticky top-0 z-30">
-          <button
-            onClick={() => setMobileOpen(true)}
-            aria-label="Open navigation menu"
-            className="lg:hidden min-h-11 min-w-11 p-2 rounded-lg bg-white/5 text-slate-400"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
-          <div className="hidden md:flex items-center gap-1.5 text-sm text-slate-500">
-            <span>GraftAI</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-            <span className="text-slate-300 font-medium capitalize">
+      <div className="flex-1 flex flex-col min-w-0 z-10 pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0">
+        <header className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-4 border-b border-white/[0.06] bg-[#040a18]/80 backdrop-blur-xl sticky top-0 z-30">
+          <div className="flex items-center gap-1.5 text-sm text-slate-500">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex lg:hidden items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 mr-1.5">
+              <Zap className="w-4 h-4 text-white fill-white" />
+            </div>
+            <span className="font-semibold text-white tracking-tight lg:hidden">GraftAI</span>
+            
+            <span className="hidden lg:inline">GraftAI</span>
+            <ChevronRight className="hidden lg:block w-3.5 h-3.5" />
+            <span className="hidden lg:block text-slate-300 font-medium capitalize">
               {pathname.split("/").filter(Boolean).pop()?.replace("-", " ") ?? "Dashboard"}
             </span>
           </div>
@@ -364,6 +348,26 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         )}
+
+        {/* Dynamic Mobile Bottom Navigation */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom)] h-[64px] bg-[#040a18]/90 backdrop-blur-2xl border-t border-white/[0.08] lg:hidden">
+          {BOTTOM_NAV_LINKS.map((link) => {
+            const isActive = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "flex flex-col items-center justify-center w-full h-full gap-1 transition-all active:scale-95",
+                  isActive ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+                )}
+              >
+                <link.icon className={cn("w-[22px] h-[22px]", isActive && "drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]")} />
+                <span className="text-[10px] font-medium tracking-wide">{link.name}</span>
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );

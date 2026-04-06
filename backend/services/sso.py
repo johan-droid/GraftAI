@@ -318,9 +318,14 @@ async def complete_oauth2_flow(request: Request, code: str, state: str):
             "id": user_id,
             "name": name,
             "email": email,
+            "picture": profile.get("picture"),
         },
+        "email": email,
+        "full_name": name,
+        "picture": profile.get("picture"),
         "token": token,
         "redirect_to": redirect_to,
+        "original_redirect": redirect_to,
         "oauth_state": original_state,
     }
 

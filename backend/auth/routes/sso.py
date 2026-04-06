@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 # SameSite=None + Secure=True for cross-domain SSO callback handoff (Render -> SPA)
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN") # e.g. .graftai.tech
 SECURE_COOKIES = os.getenv("RENDER_EXTERNAL_URL", "").startswith("https")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 @router.get("/sso/start")
 async def sso_start(provider: str, redirect_to: str = "/dashboard"):
@@ -50,11 +51,11 @@ async def sso_callback(
         # Complete OAuth flow (exchanges code for tokens + gets user profile)
         sso_data = await sso.complete_oauth2_flow(request, code, state)
         if not sso_data:
-            return RedirectResponse(url="/auth/login?error=sso_failed")
+            return RedirectResponse(url=f"{FRONTEND_URL}/login?error=sso_failed")
 
         email = sso_data.get("email")
         if not email:
-            return RedirectResponse(url="/auth/login?error=email_missing")
+            return RedirectResponse(url=f"{FRONTEND_URL}/login?error=email_missing")
 
         # 1. UPSERT User
         stmt = select(UserTable).where(UserTable.email == email)
@@ -135,7 +136,7 @@ async def sso_callback(
         refresh_token = logic.create_refresh_token(data={"sub": str(user.id)})
 
         # 4. Redirect with Handoff
-        target_path = sso_data.get("original_redirect", "/dashboard")
+        target_path = sso_data.get("redirect_to", sso_data.get("original_redirect", "/dashboard"))
         
         # If Token Bridge is enabled, we use a middle-man redirect to ensure token transfer
         bridge_url = logic.get_token_bridge_url(access_token, refresh_token, target_path)

@@ -364,7 +364,7 @@ export default function AICopilotChat() {
   };
 
   return (
-    <div className="relative flex h-[calc(100dvh-4rem)] flex-col bg-transparent sm:h-[calc(100dvh-2rem)]">
+    <div className="relative flex flex-col bg-transparent" style={{ height: "calc(100dvh - 3.5rem - env(safe-area-inset-bottom, 0px))" }}>
       
       {/* Top Header — Minimal on mobile */}
       <div className="flex h-14 shrink-0 items-center justify-between px-3 sm:px-6 pb-2">
@@ -563,7 +563,7 @@ export default function AICopilotChat() {
            CONVERSATION VIEW
            ═══════════════════════════════════════════════════════ */
         <div className="flex flex-1 flex-col overflow-hidden w-full">
-          <div ref={chatContainerRef} className="flex-1 overflow-y-auto w-full scroll-container">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto w-full" style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
              <div className="mx-auto max-w-3xl py-6 h-full px-3 sm:px-4">
                 <AnimatePresence initial={false}>
                   {messages.map((msg) => (

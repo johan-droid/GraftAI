@@ -175,4 +175,4 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str):
                     await db.commit()
                     logger.info(f"📣 Sent quota warning for {feature} to user {user_id}")
                 except Exception as e:
-                    logger.warning(f"Failed to send quota warning for {feature} to user {user_id}: {e}")
+                    logger.warning(f"Failed to send quota warning email for {feature} / user {user_id}: {e}")

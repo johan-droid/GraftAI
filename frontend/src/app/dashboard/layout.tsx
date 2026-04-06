@@ -287,12 +287,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="touch-pan-y flex-1 overflow-y-auto overscroll-y-contain">
+        <main
+          className="touch-pan-y flex-1 overflow-y-auto"
+          style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+        >
           <motion.div
             key={pathname}
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.2 }}
             className="h-full"
           >
             {children}

@@ -204,6 +204,7 @@ export default function BillingPage() {
               </ul>
             </div>
           </div>
+        </div>
 
         {/* Info Sidebar */}
         <div className="space-y-6">

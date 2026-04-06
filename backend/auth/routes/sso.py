@@ -72,6 +72,9 @@ async def sso_callback(
                 image=picture,
                 is_active=True,
                 email_verified=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                timezone="UTC",
             )
             db.add(user)
             await db.flush() # Get ID

@@ -164,6 +164,8 @@ def _send_email_provider(
     html_body: str,
     text_body: Optional[str] = None,
 ) -> None:
+    if not to_email or not isinstance(to_email, str) or not to_email.strip():
+        raise ValueError("Recipient email address is required")
     cfg = _get_smtp_config()
     provider = cfg.get("provider", "smtp")
     from_email = cfg.get("from_email")

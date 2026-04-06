@@ -253,7 +253,11 @@ async def delete_account(
         raise HTTPException(status_code=500, detail="Failed to delete account")
     try:
         from backend.services.notifications import notify_account_deleted_email
-        await notify_account_deleted_email(user_email=email, full_name=user.full_name or full_name)
+        to_email = user.email or email
+        if to_email:
+            await notify_account_deleted_email(user_email=to_email, full_name=user.full_name or full_name)
+        else:
+            logger.warning(f"Farewell email skipped because no email address found for user {user_id}")
     except Exception as e:
         logger.warning(f"Farewell email failed for {email}: {e}")
     response = JSONResponse(content={"message": "Account deleted successfully"})

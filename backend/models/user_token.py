@@ -21,8 +21,8 @@ class UserTokenTable(Base):
     
     # Sync Positioning
     sync_token = Column(Text) # google nextSyncToken or MS odata.deltaLink
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
         Index("idx_user_provider_active", "user_id", "provider", "is_active"),

@@ -7,6 +7,7 @@ from backend.api.deps import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.services import scheduler
 from backend.services.sync_engine import sync_user_calendar
+from backend.services.usage import increment_usage
 from backend.utils.sanitization import sanitize_recursive
 import logging
 
@@ -23,8 +24,10 @@ class EventBase(BaseModel):
     start_time: datetime
     end_time: datetime
     metadata_payload: dict = {}
-    is_remote: bool = True
+    is_remote: bool = False
     status: str = "confirmed"
+    meeting_platform: Optional[str] = None
+    attendees: Optional[list[str]] = []
 
 
 class EventCreate(EventBase):
@@ -45,6 +48,9 @@ class EventUpdate(BaseModel):
 class EventResponse(EventBase):
     id: int
     user_id: str
+    meeting_platform: Optional[str] = None
+    attendees: Optional[list[str]] = []
+    meeting_link: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -132,6 +138,7 @@ async def manual_calendar_sync(
 ):
     """Trigger real-time synchronization for all active calendar integrations."""
     await sync_user_calendar(db, user_id)
+    await increment_usage(db, user_id, "calendar_syncs")
 
     return {
         "status": "ok",

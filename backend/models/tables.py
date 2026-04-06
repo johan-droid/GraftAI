@@ -63,6 +63,11 @@ class UserTable(Base):
     last_usage_reset = Column(DateTime(timezone=True), server_default=func.now())
     timezone = Column(String(50), default="UTC", nullable=False)
 
+    # Quota Alert State
+    ai_quota_warning_sent = Column(Boolean, default=False, nullable=False)
+    sync_quota_warning_sent = Column(Boolean, default=False, nullable=False)
+    last_quota_warning_at = Column(DateTime(timezone=True))
+
     # Consent Preferences
     consent_analytics = Column(Boolean, default=True, nullable=False)
     consent_notifications = Column(Boolean, default=True, nullable=False)
@@ -256,6 +261,7 @@ class NotificationTable(Base):
     type = Column(String(50), default="event", index=True)  # event, reminder, system
     title = Column(String(255), nullable=False)
     body = Column(Text)
+    recipient = Column(String(255), default="", nullable=False)
     data = Column(JSONB().with_variant(JSON, "sqlite"), default={}, nullable=False)
     is_read = Column(Boolean, default=False, nullable=False, index=True)
 

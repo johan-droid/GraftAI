@@ -29,6 +29,8 @@ interface RazorpayOptions {
   };
 }
 
+"use client";
+
 interface RazorpayGlobal {
   new (options: RazorpayOptions): RazorpayInstance;
 }
@@ -40,6 +42,7 @@ declare global {
 }
 
 import { useState, useEffect } from "react";
+import { useAuthContext } from "@/app/providers/auth-provider";
 import { motion } from "framer-motion";
 import { 
   Check, 
@@ -109,7 +112,9 @@ const TIERS = [
 
 export default function PricingPage() {
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
+  const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [region, setRegion] = useState<"US" | "IN">("US"); // Default to Global
+  const { user } = useAuthContext();
 
   // IP-based Region Detection
   useEffect(() => {
@@ -137,54 +142,71 @@ export default function PricingPage() {
 
   const handleSelectTier = async (tierId: string) => {
     if (tierId === 'free') {
-       window.location.href = "/dashboard";
-       return;
+      window.location.href = "/dashboard";
+      return;
     }
-    
+
+    if (tierId === 'elite') {
+      setBillingMessage("Elite plan onboarding is handled by our sales team. Please contact support for enterprise activation.");
+      return;
+    }
+
     setLoadingTier(tierId);
+    setBillingMessage(null);
+
     try {
-      if (region === 'IN') {
-        // Initialize Razorpay
-        const publicKeyResponse = await fetch("/api/v1/billing/razorpay/public-key");
-        const publicKeyPayload = await publicKeyResponse.json();
-        const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || publicKeyPayload?.key_id;
-
-        if (!razorpayKey) {
-          throw new Error("Razorpay key isn't configured. Please set NEXT_PUBLIC_RAZORPAY_KEY_ID or RAZORPAY_KEY_ID on the server.");
-        }
-
-        const res = await fetch("/api/v1/billing/razorpay/create-subscription?tier=" + tierId, { method: "POST" });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(`Razorpay subscription create failed: ${err.detail || res.statusText}`);
-        }
-
-        const subscription = await res.json();
-        
-        const options = {
-          key: razorpayKey,
-          subscription_id: subscription.id,
-          name: "GraftAI",
-          description: `${tierId.toUpperCase()} Edition Subscription`,
-          handler: function (response: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) {
-            console.log("RZP Payment Successful:", response);
-            window.location.assign("/dashboard/settings/billing?success=true");
-          },
-          prefill: {
-            name: "GraftAI User",
-          },
-          theme: {
-            color: "#4f46e5",
-          },
-        };
-        const rzp = new window.Razorpay(options);
-        rzp.open();
-      } else {
-        // Stripe Path
-        console.log(`Starting Stripe checkout for ${tierId}...`);
+      const publicKeyResponse = await fetch("/api/v1/billing/razorpay/public-key");
+      if (!publicKeyResponse.ok) {
+        const err = await publicKeyResponse.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to load Razorpay public key");
       }
+
+      const publicKeyPayload = await publicKeyResponse.json();
+      const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || publicKeyPayload?.key_id;
+
+      if (!razorpayKey) {
+        throw new Error("Razorpay key isn't configured. Please set NEXT_PUBLIC_RAZORPAY_KEY_ID or RAZORPAY_KEY_ID on the server.");
+      }
+
+      const res = await fetch(`/api/v1/billing/razorpay/create-subscription?tier=${tierId}`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`Razorpay subscription create failed: ${err.detail || res.statusText}`);
+      }
+
+      const subscription = await res.json();
+      if (!subscription?.id) {
+        throw new Error("Invalid Razorpay subscription response.");
+      }
+
+      if (!window.Razorpay) {
+        throw new Error("Razorpay checkout library failed to load.");
+      }
+
+      const options: RazorpayOptions = {
+        key: razorpayKey,
+        subscription_id: subscription.id,
+        name: "GraftAI",
+        description: `${tierId.toUpperCase()} Edition Subscription`,
+        handler: function (response) {
+          console.log("RZP payment successful:", response);
+          window.location.assign("/dashboard/settings/billing?success=true");
+        },
+        prefill: {
+          name: user?.name || user?.full_name || "",
+          email: user?.email || "",
+          contact: ""
+        },
+        theme: {
+          color: "#4f46e5",
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
     } catch (err) {
       console.error("Checkout failed:", err);
+      setBillingMessage(typeof err === "string" ? err : (err as Error).message || "Checkout failed.");
     } finally {
       setLoadingTier(null);
     }
@@ -240,6 +262,15 @@ export default function PricingPage() {
           >
             Simple, transparent pricing for power users. {region === 'IN' ? 'Optimized for the Indian market.' : 'No organizations, no seat minimums.'} Just pure productivity.
           </motion.p>
+          {billingMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mx-auto mt-8 max-w-2xl rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4 text-sm text-amber-100"
+            >
+              {billingMessage}
+            </motion.div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24">

@@ -20,6 +20,14 @@ class UserProfileUpdateRequest(BaseModel):
     location: Optional[str] = None
 
 
+class UserRoleResponse(BaseModel):
+    user_id: str
+    role: str
+    is_superuser: bool
+    has_admin_access: bool
+    allowed_roles: list[str]
+
+
 @router.get("/me")
 async def read_current_user(current_user=Depends(get_current_user)):
     return current_user
@@ -61,6 +69,34 @@ async def update_current_user_profile(
         "location": user.location,
         "created_at": user.created_at,
     }
+
+
+@router.get("/me/role", response_model=UserRoleResponse)
+async def read_current_user_role(
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Postman-friendly RBAC endpoint to inspect the caller's effective role."""
+    user_id = str(current_user.get("sub"))
+    result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    role = user.role or "member"
+    allowed_roles = ["member"]
+    if role == "service_account":
+        allowed_roles.append("service_account")
+    if role == "admin" or user.is_superuser:
+        allowed_roles.append("admin")
+
+    return UserRoleResponse(
+        user_id=user.id,
+        role=role,
+        is_superuser=bool(user.is_superuser),
+        has_admin_access=bool(user.is_superuser or role == "admin"),
+        allowed_roles=allowed_roles,
+    )
 
 
 # Additional user endpoints can be added here

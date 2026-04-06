@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { createContext, useContext } from "react";
+import { useRouter } from "next/navigation";
 import { getSessionSafe, signOut } from "@/lib/auth-client";
 import { invalidateSessionCache } from "@/lib/api";
 
@@ -40,6 +41,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [session, setSession] = React.useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = React.useState(true);
   const transientAuthFailuresRef = React.useRef(0);
@@ -57,11 +59,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const redirectToLogin = React.useCallback(() => {
-    if (typeof window !== "undefined") {
-      // For maximal security and to clear browser history of dashboard pages, use replace to the login screen
-      window.location.replace("/login");
-    }
-  }, []);
+    router.replace("/login");
+  }, [router]);
 
   React.useEffect(() => {
     let active = true;
@@ -196,9 +195,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined") {
       localStorage.clear();
       sessionStorage.clear();
-      // Ensure all cookies are invalidated by refreshing the page to the landing route
       setSession(null);
-      window.location.replace("/");
+      router.replace("/");
     }
   };
 

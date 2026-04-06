@@ -22,13 +22,20 @@ def get_google_credentials(token_data: dict) -> Credentials:
         logger.error("❌ CRITICAL: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment.")
         # We try to proceed but expect refresh failure if credentials are not specified
         
+    scopes = token_data.get("scopes", [])
+    if isinstance(scopes, str):
+        try:
+            scopes = json.loads(scopes)
+        except json.JSONDecodeError:
+            scopes = [scope.strip() for scope in scopes.replace(",", " ").split() if scope.strip()]
+
     creds = Credentials(
         token=token_data.get("access_token"),
         refresh_token=token_data.get("refresh_token"),
         token_uri="https://oauth2.googleapis.com/token",
         client_id=client_id,
         client_secret=client_secret,
-        scopes=token_data.get("scopes", "").split(",") if isinstance(token_data.get("scopes"), str) else token_data.get("scopes", [])
+        scopes=scopes,
     )
     
     # Refresh if expired and we have what we need
@@ -119,10 +126,22 @@ async def create_google_event(token_data: dict, event_details: dict) -> dict:
             "attendees": [{"email": e} for e in event_details.get("attendees", [])],
         }
 
-        created_event = service.events().insert(
-            calendarId="primary",
-            body=event
-        ).execute()
+        if event_details.get("is_meeting"):
+            event["conferenceData"] = {
+                "createRequest": {
+                    "requestId": f"graftai-{datetime.now().timestamp()}",
+                    "conferenceSolutionKey": {"type": "hangoutsMeet"},
+                }
+            }
+
+        insert_args = {
+            "calendarId": "primary",
+            "body": event,
+        }
+        if event_details.get("is_meeting"):
+            insert_args["conferenceDataVersion"] = 1
+
+        created_event = service.events().insert(**insert_args).execute()
 
         logger.info(f"✅ Google Event created: {created_event.get('id')}")
         return created_event

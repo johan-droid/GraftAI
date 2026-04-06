@@ -25,6 +25,7 @@ import {
   updateEvent,
   deleteEvent,
   getAvailableSlots,
+  manualSync,
   CalendarEvent as Event,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -69,9 +70,21 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [draftEvent, setDraftEvent] = useState({
+    title: "",
+    description: "",
+    category: "meeting" as Cat,
+    start_time_local: "",
+    end_time_local: "",
+    is_remote: false,
+    status: "confirmed",
+    meeting_platform: "",
+    attendees: "",
+  });
   const [slots, setSlots] = useState<{
     start: string;
     end: string;
@@ -106,10 +119,52 @@ export default function CalendarPage() {
   }, [startDate, endDate]);
 
   useEffect(() => {
+    const syncCalendar = async () => {
+      setIsSyncing(true);
+      try {
+        await manualSync();
+        const syncedEvents = await getEvents(startDate.toISOString(), endDate.toISOString());
+        setEvents(syncedEvents);
+      } catch (error) {
+        console.error("Calendar sync failed:", error);
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+
+    syncCalendar();
+  }, []);
+
+  useEffect(() => {
     getAvailableSlots(currentDate.toISOString(), 60, targetTz)
       .then((d) => setSlots(d.slice(0, 4)))
       .catch(console.error);
   }, [currentDate, targetTz]);
+
+  useEffect(() => {
+    if (!showModal || !selectedDate) return;
+
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const formatLocal = (date: Date) =>
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+
+    const defaultStart = new Date(selectedDate);
+    defaultStart.setHours(9, 0, 0, 0);
+    const defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
+
+    setDraftEvent((prev) => ({
+      ...prev,
+      title: "",
+      description: "",
+      category: "meeting",
+      start_time_local: formatLocal(defaultStart),
+      end_time_local: formatLocal(defaultEnd),
+      is_remote: false,
+      status: "confirmed",
+      meeting_platform: "",
+      attendees: "",
+    }));
+  }, [showModal, selectedDate]);
 
   const getEventsForDay = (d: Date) =>
     events.filter((e) => {
@@ -121,20 +176,32 @@ export default function CalendarPage() {
       );
     });
 
-  const handleCreate = async () => {
+  const handleCreate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!selectedDate) return;
     setCreating(true);
     try {
+      const start = new Date(draftEvent.start_time_local);
+      const end = new Date(draftEvent.end_time_local);
+      const attendees = draftEvent.attendees
+        .split(",")
+        .map((email) => email.trim())
+        .filter((email) => email.length > 0);
+
       const created = await createEvent({
-        title: "New Meeting",
-        description: "Created via GraftAI calendar",
-        category: "meeting",
-        start_time: selectedDate.toISOString(),
-        end_time: new Date(selectedDate.getTime() + 3600000).toISOString(),
-        is_remote: true,
-        status: "confirmed",
+        title: draftEvent.title || "New Event",
+        description: draftEvent.description,
+        category: draftEvent.category,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        is_remote: draftEvent.is_remote,
+        status: draftEvent.status,
+        meeting_platform: draftEvent.meeting_platform || undefined,
+        attendees,
       });
       setEvents((prev) => [...prev, created]);
+      setShowModal(false);
+      setSelectedDate(null);
     } catch (e) {
       console.error(e);
     } finally {
@@ -220,6 +287,9 @@ export default function CalendarPage() {
           </button>
 
           <div className="ml-auto flex items-center gap-1.5 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
+            {isSyncing ? (
+              <span className="text-[13px] font-medium text-slate-300">Syncing Google Calendar...</span>
+            ) : null}
             {(["month", "week", "list"] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
@@ -444,7 +514,92 @@ export default function CalendarPage() {
                 </button>
               </div>
 
-              <div className="p-4 max-h-[60vh] overflow-y-auto space-y-2">
+              <div className="p-4 max-h-[60vh] overflow-y-auto space-y-4">
+                <form onSubmit={handleCreate} className="space-y-4">
+                  <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <h4 className="text-sm font-semibold text-white">Create event</h4>
+                    <div className="grid gap-3">
+                      <input
+                        value={draftEvent.title}
+                        onChange={(e) => setDraftEvent({ ...draftEvent, title: e.target.value })}
+                        placeholder="Event title"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60"
+                      />
+                      <textarea
+                        rows={3}
+                        value={draftEvent.description}
+                        onChange={(e) => setDraftEvent({ ...draftEvent, description: e.target.value })}
+                        placeholder="Agenda / description"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60 resize-none"
+                      />
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        <label className="space-y-1 text-[11px] text-slate-400">
+                          Start time
+                          <input
+                            type="datetime-local"
+                            value={draftEvent.start_time_local}
+                            onChange={(e) => setDraftEvent({ ...draftEvent, start_time_local: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60"
+                          />
+                        </label>
+                        <label className="space-y-1 text-[11px] text-slate-400">
+                          End time
+                          <input
+                            type="datetime-local"
+                            value={draftEvent.end_time_local}
+                            onChange={(e) => setDraftEvent({ ...draftEvent, end_time_local: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60"
+                          />
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        <label className="space-y-1 text-[11px] text-slate-400">
+                          Category
+                          <select
+                            value={draftEvent.category}
+                            onChange={(e) => setDraftEvent({ ...draftEvent, category: e.target.value as Cat })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60 appearance-none"
+                          >
+                            {Object.keys(CATEGORIES).map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="space-y-1 text-[11px] text-slate-400">
+                          Meeting platform
+                          <select
+                            value={draftEvent.meeting_platform}
+                            onChange={(e) => setDraftEvent({ ...draftEvent, meeting_platform: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60 appearance-none"
+                          >
+                            <option value="">None</option>
+                            <option value="google">Google Meet</option>
+                            <option value="microsoft">Microsoft Teams</option>
+                            <option value="zoom">Zoom</option>
+                          </select>
+                        </label>
+                      </div>
+                      <input
+                        value={draftEvent.attendees}
+                        onChange={(e) => setDraftEvent({ ...draftEvent, attendees: e.target.value })}
+                        placeholder="Attendees (comma separated emails)"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60"
+                      />
+                      <label className="inline-flex items-center gap-2 text-sm text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={draftEvent.is_remote}
+                          onChange={(e) => setDraftEvent({ ...draftEvent, is_remote: e.target.checked })}
+                          className="h-4 w-4 rounded border-white/10 bg-white/5 text-indigo-500 focus:ring-indigo-500"
+                        />
+                        Remote meeting
+                      </label>
+                    </div>
+                  </div>
+                </form>
+
                 {getEventsForDay(selectedDate).length === 0 ? (
                   <div className="text-center py-10">
                     <Calendar className="w-10 h-10 text-slate-700 mx-auto mb-3" />

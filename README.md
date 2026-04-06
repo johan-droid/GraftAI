@@ -117,7 +117,25 @@ OPENAI_API_KEY=sk_...
 # Identity (Production URLs)
 FRONTEND_BASE_URL=https://graft-ai-two.vercel.app
 APP_BASE_URL=https://graftai.onrender.com
+
+# Billing / Razorpay
+RAZORPAY_KEY_ID=rzp_test_...
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=...
+RAZORPAY_PLAN_PRO_ID=plan_...
+RAZORPAY_PLAN_ELITE_ID=plan_...
 ```
+
+### 2. Razorpay Billing Flow
+1. User selects a paid plan on the pricing page.
+2. The frontend requests a Razorpay subscription from `/api/v1/billing/razorpay/create-subscription`.
+3. The backend creates or reuses a Razorpay customer, then creates a subscription and stores the subscription ID.
+4. The frontend opens Razorpay Checkout with the returned subscription ID.
+5. Razorpay delivers recurring payment status via webhook to `/api/v1/billing/razorpay/webhook`.
+6. The backend updates the user’s `subscription_status` and `tier` in the database.
+7. Users can cancel directly from the dashboard, which calls `/api/v1/billing/razorpay/cancel-subscription`.
+
+---
 
 ### 2. Backend Orchestrator
 ```bash

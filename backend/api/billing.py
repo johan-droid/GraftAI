@@ -68,6 +68,24 @@ async def rzp_public_key(
         raise HTTPException(status_code=500, detail="Razorpay public key is not configured")
     return {"key_id": key_id}
 
+@router.get("/razorpay/subscription-status")
+async def rzp_subscription_status(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    """Fetch the current Razorpay subscription status for the logged-in user."""
+    status = await razorpay_service.get_subscription_status(db, user_id)
+    return status or {"status": "inactive"}
+
+@router.post("/razorpay/cancel-subscription")
+async def rzp_cancel_subscription(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    """Cancel the active Razorpay subscription for the logged-in user."""
+    response = await razorpay_service.cancel_subscription(db, user_id)
+    return response
+
 @router.post("/razorpay/webhook")
 async def rzp_webhook(
     request: Request,

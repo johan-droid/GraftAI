@@ -223,9 +223,9 @@ export default function Dashboard() {
   const timezoneString = Intl.DateTimeFormat().resolvedOptions().timeZone.split("/").pop()?.replace("_", " ") || "Local";
 
   return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto">
-      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-8">
-        <motion.div variants={ITEM} className="flex flex-col md:flex-row md:items-center gap-6 pb-2">
+    <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto">
+      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-5 sm:space-y-8">
+        <motion.div variants={ITEM} className="flex flex-col md:flex-row md:items-center gap-4 sm:gap-6 pb-1 sm:pb-2">
           <div className="flex items-start gap-4">
              <div className="hidden sm:flex h-14 w-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 items-center justify-center shrink-0">
                 <Clock className="w-7 h-7 text-indigo-400 animate-pulse" />
@@ -238,13 +238,13 @@ export default function Dashboard() {
                    {timeString} <span className="opacity-50">•</span> {timezoneString}
                  </p>
                </div>
-               <h1 className="text-3xl font-bold text-white tracking-tight uppercase">{profileName}&apos;s workspace</h1>
+               <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight uppercase">{profileName}&apos;s workspace</h1>
              </div>
           </div>
           <div className="md:ml-auto flex items-center gap-3">
             <Link
               href="/dashboard/calendar"
-              className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[13px] font-bold transition-all shadow-lg shadow-indigo-600/25 active:scale-95"
+              className="inline-flex min-h-11 items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[12px] sm:text-[13px] font-bold transition-all shadow-lg shadow-indigo-600/25 active:scale-95"
             >
               <Calendar className="w-4 h-4" />
               New event
@@ -252,28 +252,28 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        <motion.div variants={ITEM} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <motion.div variants={ITEM} className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
           {[
             { label: "Total Meetings", value: stats.meetings, sub: "Last 30 days", icon: Calendar, color: "indigo" },
             { label: "Scheduled Hours", value: `${stats.hours}h`, sub: "Active workload", icon: Clock, color: "violet" },
             { label: "Cancellations", value: stats.cancellations, sub: "Avoided conflicts", icon: TrendingUp, color: "emerald" },
             { label: "Active Window", value: upcomingMeetings.length, sub: "Next 14 days", icon: Activity, color: "cyan" },
           ].map((stat) => (
-            <div key={stat.label} className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d1424]/40 p-5 hover:bg-[#0d1424]/60 transition-all hover:border-white/15">
-              <div className={`${STAT_COLOR_CLASSES[stat.color]} w-9 h-9 rounded-xl mb-4 flex items-center justify-center border transition-transform group-hover:scale-110`}>
+            <div key={stat.label} className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#0d1424]/40 p-3 sm:p-5 hover:bg-[#0d1424]/60 transition-all hover:border-white/15">
+              <div className={`${STAT_COLOR_CLASSES[stat.color]} w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl mb-2 sm:mb-4 flex items-center justify-center border transition-transform group-hover:scale-110`}>
                 <stat.icon className="w-4.5 h-4.5 text-current" />
               </div>
-              <p className="text-3xl font-bold text-white tracking-tighter mb-1.5">{stat.value}</p>
-              <p className="text-[13px] text-slate-400 font-semibold">{stat.label}</p>
-              <div className="flex items-center gap-1.5 mt-2">
+              <p className="text-xl sm:text-3xl font-bold text-white tracking-tighter mb-0.5 sm:mb-1.5">{stat.value}</p>
+              <p className="text-[11px] sm:text-[13px] text-slate-400 font-semibold leading-tight">{stat.label}</p>
+              <div className="flex items-center gap-1.5 mt-1 sm:mt-2">
                 <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{stat.sub}</p>
+                <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">{stat.sub}</p>
               </div>
             </div>
           ))}
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 sm:gap-8 items-start">
           <motion.div variants={ITEM}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-white tracking-tight">Upcoming meetings</h2>

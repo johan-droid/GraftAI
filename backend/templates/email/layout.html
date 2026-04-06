@@ -7,7 +7,7 @@
     <title>GraftAI Notification</title>
     <style>
         /* Base styles for Outlook/Office 365 */
-        body, table, td, a { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+        body, table, td, a { }
         table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
         img { -ms-interpolation-mode: bicubic; }
 
@@ -122,6 +122,25 @@
         .badge-success { background-color: #10b98120; color: #34d399; border: 1px solid #10b98140; }
         .badge-alert { background-color: #ef444420; color: #f87171; border: 1px solid #ef444440; }
 
+        .footer-link-primary {
+            color: #6366f1;
+            text-decoration: none;
+        }
+
+        .footer-link-muted {
+            color: #64748b;
+            text-decoration: none;
+        }
+
+        .mb-24 {
+            margin-bottom: 24px;
+        }
+
+        .muted-small {
+            color: #cbd5e1;
+            font-size: 13px;
+        }
+
         @media screen and (max-width: 600px) {
             .card { padding: 24px; }
             h1 { font-size: 20px; }
@@ -139,7 +158,7 @@
                         <p>&copy; 2026 GraftAI Technologies Inc. All rights reserved.</p>
                         <p>You received this email because you are registered with GraftAI.<br>
                         Autonomous Intelligence for the Sovereign Individual.</p>
-                        <p><a href="{{ frontend_url }}/dashboard/settings" style="color: #6366f1; text-decoration: none;">Preference Center</a> • <a href="{{ frontend_url }}/privacy" style="color: #64748b; text-decoration: none;">Privacy Policy</a></p>
+                        <p><a href="{{ frontend_url }}/dashboard/settings" class="footer-link-primary">Preference Center</a> • <a href="{{ frontend_url }}/privacy" class="footer-link-muted">Privacy Policy</a></p>
                     </td>
                 </tr>
             </table>

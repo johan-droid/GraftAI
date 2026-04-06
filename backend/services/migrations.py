@@ -32,14 +32,23 @@ def _canonical_migration_plan() -> list[Path]:
     explicit_plan = [
         root / "backend" / "scripts" / "users_compat_patch.sql",
         root / "backend" / "models" / "migrations" / "add_tenant_id.sql",
-        root / "backend" / "models" / "migrations" / "2026_04_06_add_notifications_is_read.sql",
+        root / "backend" / "models" / "migrations" / "2026_04_06_add_notifications_is_read.pgsql",
+        root / "backend" / "models" / "migrations" / "2026_04_07_add_quota_warning_columns.pgsql",
     ]
 
-    discovered = [
+    discovered_pgsql = [
+        p
+        for p in sorted((root / "backend" / "models" / "migrations").glob("*.pgsql"))
+    ]
+
+    discovered_sql = [
         p
         for p in sorted((root / "backend" / "models" / "migrations").glob("*.sql"))
         if p.name not in manual_only
     ]
+
+    discovered = discovered_pgsql + discovered_sql
+
     planned_set = {p.resolve() for p in explicit_plan}
     extras = [p for p in discovered if p.resolve() not in planned_set]
 

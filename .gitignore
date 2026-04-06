@@ -97,4 +97,20 @@ config.prod.json
 !AUTH_RECONSTRUCTION_PLAN.md
 
 # Local dev/test outputs
+backend/pytest_smoke_output.txt
+backend/*_output.txt
+backend/orig_*.txt
+backend/tmp_*.py
+frontend/build_log*.txt
+frontend/lint_output*.txt
+
+# Patch and merge leftovers
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+
+# Editor-generated SQL scratch variants
+backend/models/migrations/*.pgsql.sql
 

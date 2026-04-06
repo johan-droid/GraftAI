@@ -98,11 +98,13 @@ async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "
             "description": event.description,
             "start_time": event.start_time,
             "end_time": event.end_time,
+            "is_meeting": bool(event.is_meeting or event.is_remote),
+            "attendees": event.attendees if isinstance(event.attendees, list) else [],
+            "timezone": "UTC",
         }
 
         if event.source == "google":
             if action == "create":
-                # Ensure we request conference data version to get Meet links if enabled by default
                 result = await create_google_event(token_data, event_details)
                 ext_id = result.get("id")
                 # Extract meeting link if Google created one automatically
@@ -189,78 +191,79 @@ async def find_available_slots(
     user_tz = pytz.UTC  # Default to UTC, should be passed from frontend
     guest_tz = pytz.timezone(target_timezone) if target_timezone else None
 
-    # 2. Define User's Day Boundaries (Normalized to UTC for DB queries)
-    date_utc = to_utc(date)
-    day_start = date_utc.replace(hour=working_start, minute=0, second=0, microsecond=0)
-    day_end = date_utc.replace(hour=working_end, minute=0, second=0, microsecond=0)
-
-    # 3. Intersection Logic (If Guest TZ is provided)
-    if guest_tz:
-        # We need to find the window that is 9-6 in BOTH timezones
-        guest_local_date = date.astimezone(guest_tz) if date.tzinfo else guest_tz.localize(date)
-        guest_day_start = to_utc(
-            guest_local_date.replace(hour=working_start, minute=0, second=0, microsecond=0)
-        )
-        guest_day_end = to_utc(
-            guest_local_date.replace(hour=working_end, minute=0, second=0, microsecond=0)
-        )
-
-        # Intersection: Max of starts, Min of ends
-        day_start = max(day_start, guest_day_start)
-        day_end = min(day_end, guest_day_end)
-
-        # If they don't overlap at all (e.g. SF vs Tokyo), return empty or shifted suggestion
-        if day_start >= day_end:
-            logger.warning(
-                f"No business hour overlap found between UTC and {target_timezone}"
-            )
-            return []
-
-    # Ensure naive datetime for DB consistency if needed, but here we work with UTC
-    # 4. Fetch existing events for the day
-    existing_events = await get_events_for_range(db, user_id, day_start, day_end)
-
+    now_utc = datetime.now(pytz.UTC)
     available_slots = []
-    current_time = day_start
 
-    while current_time + timedelta(minutes=duration_minutes) <= day_end:
-        potential_end = current_time + timedelta(minutes=duration_minutes)
+    # Search up to the next 3 business days for available windows.
+    for day_offset in range(3):
+        date_utc = to_utc(date) + timedelta(days=day_offset)
+        day_start = date_utc.replace(hour=working_start, minute=0, second=0, microsecond=0)
+        day_end = date_utc.replace(hour=working_end, minute=0, second=0, microsecond=0)
 
-        # Check for overlap
-        has_overlap = False
-        for event in existing_events:
-            # Normalize event times to UTC comparison
-            ev_start = (
-                event.start_time.replace(tzinfo=pytz.UTC)
-                if event.start_time.tzinfo is None
-                else event.start_time
+        if day_offset == 0 and day_start < now_utc:
+            day_start = max(day_start, now_utc.replace(second=0, microsecond=0))
+        elif day_start < now_utc:
+            day_start = day_start
+
+        if guest_tz:
+            guest_local_date = (date.astimezone(guest_tz) if date.tzinfo else guest_tz.localize(date)) + timedelta(days=day_offset)
+            guest_day_start = to_utc(
+                guest_local_date.replace(hour=working_start, minute=0, second=0, microsecond=0)
             )
-            ev_end = (
-                event.end_time.replace(tzinfo=pytz.UTC)
-                if event.end_time.tzinfo is None
-                else event.end_time
+            guest_day_end = to_utc(
+                guest_local_date.replace(hour=working_end, minute=0, second=0, microsecond=0)
             )
 
-            if not (potential_end <= ev_start or current_time >= ev_end):
-                has_overlap = True
-                current_time = ev_end
-                break
+            day_start = max(day_start, guest_day_start)
+            day_end = min(day_end, guest_day_end)
 
-        if not has_overlap:
-            # We add human-friendly labels for the frontend dual-view
-            slot_data = {
-                "start": current_time.isoformat(),
-                "end": potential_end.isoformat(),
-                "local_label": current_time.strftime("%I:%M %p"),
-            }
-            if guest_tz:
-                # Calculate what time this is in the guest's timezone
-                guest_time = current_time.astimezone(guest_tz)
-                slot_data["guest_label"] = guest_time.strftime("%I:%M %p")
-                slot_data["guest_tz_name"] = target_timezone
+            if day_start >= day_end:
+                continue
 
-            available_slots.append(slot_data)
-            current_time = potential_end
+        if day_start >= day_end:
+            continue
+
+        existing_events = await get_events_for_range(db, user_id, day_start, day_end)
+
+        current_time = day_start
+        while current_time + timedelta(minutes=duration_minutes) <= day_end and len(available_slots) < 6:
+            potential_end = current_time + timedelta(minutes=duration_minutes)
+            has_overlap = False
+            for event in existing_events:
+                ev_start = (
+                    event.start_time.replace(tzinfo=pytz.UTC)
+                    if event.start_time.tzinfo is None
+                    else event.start_time
+                )
+                ev_end = (
+                    event.end_time.replace(tzinfo=pytz.UTC)
+                    if event.end_time.tzinfo is None
+                    else event.end_time
+                )
+
+                if not (potential_end <= ev_start or current_time >= ev_end):
+                    has_overlap = True
+                    current_time = ev_end
+                    break
+
+            if not has_overlap:
+                slot_data = {
+                    "start": current_time.isoformat(),
+                    "end": potential_end.isoformat(),
+                    "local_label": current_time.strftime("%I:%M %p"),
+                }
+                if guest_tz:
+                    guest_time = current_time.astimezone(guest_tz)
+                    slot_data["guest_label"] = guest_time.strftime("%I:%M %p")
+                    slot_data["guest_tz_name"] = target_timezone
+
+                available_slots.append(slot_data)
+                current_time = potential_end
+            else:
+                continue
+
+        if available_slots:
+            break
 
     return available_slots
 
@@ -281,8 +284,11 @@ async def _safe_notify(action: str, user_email: str, user_id: Optional[str], eve
         if not event:
             return
 
-        # Build list of recipient emails
-        emails = [user_email]
+        # Build list of recipient emails: owner + attendees
+        recipient_emails = []
+        if isinstance(user_email, str) and user_email:
+            recipient_emails.append(user_email)
+
         if event.attendees and isinstance(event.attendees, list):
             for attendee in event.attendees:
                 email = None
@@ -290,8 +296,13 @@ async def _safe_notify(action: str, user_email: str, user_id: Optional[str], eve
                     email = attendee
                 elif isinstance(attendee, dict):
                     email = attendee.get("email")
-                if email and email not in emails:
-                    emails.append(email)
+                if email:
+                    normalized = email.strip().lower()
+                    if normalized and normalized not in [e.lower() for e in recipient_emails]:
+                        recipient_emails.append(normalized)
+
+        if not recipient_emails:
+            return
 
         start_time_str = event.start_time.strftime("%A, %B %d, %Y at %I:%M %p") if event.start_time else ""
         end_time_str = event.end_time.strftime("%I:%M %p %Z") if hasattr(event.end_time, 'strftime') else ""
@@ -308,11 +319,11 @@ async def _safe_notify(action: str, user_email: str, user_id: Optional[str], eve
         }
 
         if action == "created":
-            await notify_event_created(emails, [], event_data)
+            await notify_event_created(recipient_emails, [], event_data)
         elif action == "updated":
-            await notify_event_updated(emails, [], event_data)
+            await notify_event_updated(recipient_emails, [], event_data)
         elif action == "deleted":
-            await notify_event_deleted(emails, [], event_data)
+            await notify_event_deleted(recipient_emails, [], event_data)
     except Exception as exc:
         logger.warning(f"Email notify skipped ({type(exc).__name__}): {exc}")
 
@@ -369,18 +380,32 @@ async def create_event(
         )
 
     # 3. Check for active integrations to sync to external (bi-directional sync)
-    # If no source is specified, we default to Google if active
+    # Only sync to an external provider when the event explicitly requests a meeting platform.
     if not new_event.source or new_event.source == "local":
-        stmt = select(UserTokenTable).where(
-            and_(
-                UserTokenTable.user_id == new_event.user_id,
-                UserTokenTable.provider == "google",
-                UserTokenTable.is_active == True
-            )
-        )
-        res = await db.execute(stmt)
-        if res.scalars().first():
-            new_event.source = "google"
+        if new_event.meeting_platform:
+            provider = None
+            if "google" in new_event.meeting_platform.lower() or "meet" in new_event.meeting_platform.lower():
+                provider = "google"
+            elif "team" in new_event.meeting_platform.lower() or "microsoft" in new_event.meeting_platform.lower():
+                provider = "microsoft"
+            elif "zoom" in new_event.meeting_platform.lower():
+                provider = "zoom"
+
+            if provider:
+                stmt = select(UserTokenTable).where(
+                    and_(
+                        UserTokenTable.user_id == new_event.user_id,
+                        UserTokenTable.provider == provider,
+                        UserTokenTable.is_active == True
+                    )
+                )
+                res = await db.execute(stmt)
+                if res.scalars().first():
+                    new_event.source = provider
+                else:
+                    new_event.source = "local"
+        else:
+            new_event.source = "local"
 
     db.add(new_event)
     await db.flush()

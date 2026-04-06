@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card">
+    <span class="badge badge-alert">Quota Alert</span>
+    <h1>Heads up, {{ full_name }}.</h1>
+    <p>You are at <strong>{{ usage_percent }}%</strong> of your daily {{ feature_label }} quota.</p>
+    <p><strong>{{ current_count }} / {{ limit }}</strong> used today. Free users are capped at {{ limit }} {{ feature_label.lower() }} per UTC day.</p>
+    <p>To avoid interruptions, upgrade your plan and keep your AI and calendar sync experience seamless.</p>
+    <p class="mb-24">
+        <a class="button" href="{{ billing_url }}">Upgrade Now</a>
+    </p>
+    <p>If you prefer, you can also visit the pricing page for the full plan comparison.</p>
+    <p class="muted-small">This is a transactional usage alert from GraftAI. You are receiving this because you are actively using the service.</p>
+</div>
+{% endblock %}

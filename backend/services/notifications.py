@@ -160,6 +160,69 @@ async def send_custom_notification(
     await send_email(user_email, subject, html_body, text_body)
 
 
+async def notify_quota_warning(
+    user_id: str,
+    user_email: str,
+    full_name: str,
+    feature: str,
+    current_count: int,
+    limit: int,
+):
+    feature_map = {
+        "ai_messages": "AI Copilot Messages",
+        "calendar_syncs": "Calendar Syncs",
+    }
+    feature_label = feature_map.get(feature, feature.replace("_", " ").title())
+    usage_percent = min(100, int((current_count / max(limit, 1)) * 100))
+    subject = f"⚠️ {feature_label} usage is at {usage_percent}% — upgrade to keep going"
+
+    template_context = {
+        "full_name": full_name,
+        "feature_label": feature_label,
+        "current_count": current_count,
+        "limit": limit,
+        "usage_percent": usage_percent,
+        "upgrade_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/") + "/pricing",
+        "billing_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/") + "/dashboard/settings/billing",
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+    }
+
+    html_body = render_template("quota_warning.html", template_context)
+    text_body = (
+        f"Hello {full_name},\n\n"
+        f"You are using {current_count} of {limit} available {feature_label.lower()} today ({usage_percent}%). "
+        "Upgrade to the Pro plan to remove this limit and keep GraftAI working without interruption. "
+        f"Visit {template_context['billing_url']} to upgrade now.\n\n"
+        "Thank you,\nThe GraftAI team"
+    )
+
+    await send_custom_notification(user_email, subject, text_body, html_body, text_body)
+
+    # Persist an in-app quota warning for the user
+    try:
+        async with AsyncSessionLocal() as session:
+            notif = NotificationTable(
+                user_id=user_id,
+                type="quota",
+                title=f"Quota alert: {feature_label} at {usage_percent}%",
+                body=(
+                    f"Your {feature_label} usage is at {current_count}/{limit} today. "
+                    "Upgrade your plan to continue without interruption."
+                ),
+                data={
+                    "feature": feature,
+                    "current_count": current_count,
+                    "limit": limit,
+                    "usage_percent": usage_percent,
+                    "upgrade_url": template_context["upgrade_url"],
+                },
+            )
+            session.add(notif)
+            await session.commit()
+    except Exception as e:
+        logger.warning(f"Failed to persist quota warning notification: {e}")
+
+
 async def notify_welcome_email(user_email: str, full_name: str):
     subject = "🚀 Welcome to GraftAI - Your AI Copilot is Ready!"
     template_context = {

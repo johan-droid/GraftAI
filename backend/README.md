@@ -27,6 +27,8 @@ This folder contains all backend code, services, and configuration for the proje
 2. Install dependencies (requirements.txt/pyproject.toml)
 3. Configure environment variables (.env)
 4. Run database migrations
+   - `python backend/scripts/update_schema.py`
+   - or start the app with `SKIP_DB_MIGRATIONS=false` so `backend/services/migrations.py` applies new SQL migrations automatically
 5. Start FastAPI server
 
 ---

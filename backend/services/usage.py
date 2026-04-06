@@ -45,9 +45,23 @@ async def _reset_usage_if_needed(user: UserTable, db: AsyncSession):
     if not last_reset or last_reset < _start_of_utc_day(now):
         user.daily_ai_count = 0
         user.daily_sync_count = 0
+        user.ai_quota_warning_sent = False
+        user.sync_quota_warning_sent = False
+        user.last_quota_warning_at = None
         user.last_usage_reset = now
         await db.commit()
         logger.info(f"📅 Reset daily usage for user {user.id}")
+
+
+def _quota_warning_threshold() -> float:
+    return 0.90
+
+
+def _feature_label(feature: str) -> str:
+    return {
+        "ai_messages": "AI Copilot messages",
+        "calendar_syncs": "calendar syncs",
+    }.get(feature, feature.replace("_", " "))
 
 
 def get_tier_usage_limits(tier: UserTier):
@@ -136,3 +150,29 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str):
 
     await db.commit()
     logger.info(f"📈 Incremented {feature} for user {user_id}")
+
+    # SaaS-grade quota warning: free tier users get a refill prompt when they hit 90%.
+    tier = user.tier or UserTier.FREE
+    if tier == UserTier.FREE:
+        limit = TIER_LIMITS[tier].get(feature)
+        current_count = user.daily_ai_count if feature == "ai_messages" else user.daily_sync_count
+        if limit and current_count >= int(limit * _quota_warning_threshold()):
+            warn_attr = "ai_quota_warning_sent" if feature == "ai_messages" else "sync_quota_warning_sent"
+            if not getattr(user, warn_attr, False):
+                try:
+                    from backend.services.notifications import notify_quota_warning
+
+                    await notify_quota_warning(
+                        user_id=user.id,
+                        user_email=user.email,
+                        full_name=user.full_name or user.name or user.email,
+                        feature=feature,
+                        current_count=current_count,
+                        limit=limit,
+                    )
+                    setattr(user, warn_attr, True)
+                    user.last_quota_warning_at = datetime.now(timezone.utc)
+                    await db.commit()
+                    logger.info(f"📣 Sent quota warning for {feature} to user {user_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to send quota warning for {feature} to user {user_id}: {e}")

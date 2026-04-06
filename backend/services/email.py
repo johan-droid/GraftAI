@@ -71,6 +71,8 @@ def _get_smtp_config() -> dict:
         "password": os.getenv("SMTP_PASSWORD", ""),
         "from_email": os.getenv("SMTP_FROM_EMAIL", os.getenv("SMTP_USER", "no-reply@example.com")),
         "from_name": os.getenv("SMTP_FROM_NAME", "GraftAI"),
+        "sendgrid_from_email": os.getenv("SENDGRID_FROM_EMAIL"),
+        "sendgrid_from_name": os.getenv("SENDGRID_FROM_NAME", os.getenv("SMTP_FROM_NAME", "GraftAI")),
         "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes"),
         "provider": provider,
     }
@@ -168,16 +170,18 @@ def _send_email_provider(
         raise ValueError("Recipient email address is required")
     cfg = _get_smtp_config()
     provider = cfg.get("provider", "smtp")
-    from_email = cfg.get("from_email")
-    from_name = cfg.get("from_name")
+    from_email = cfg.get("from_email") or cfg.get("user") or "no-reply@example.com"
+    from_name = cfg.get("from_name", "GraftAI")
 
     if provider == "sendgrid":
+        sendgrid_from_email = cfg.get("sendgrid_from_email") or from_email
+        sendgrid_from_name = cfg.get("sendgrid_from_name") or from_name
+
         try:
-            _send_via_sendgrid(to_email, subject, html_body, text_body, from_email, from_name)
+            _send_via_sendgrid(to_email, subject, html_body, text_body, sendgrid_from_email, sendgrid_from_name)
             return
         except Exception as e:
-            # fallback to SMTP if sendgrid fails
-            print(f"SendGrid delivery failed, falling back to SMTP: {e}")
+            logger.warning(f"SendGrid delivery failed, falling back to SMTP: {e}")
 
     # Default: SMTP (or fallback path)
     msg = _build_message(to_email, subject, html_body, text_body)

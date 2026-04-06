@@ -260,11 +260,11 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       <div className="flex-1 flex flex-col min-w-0 z-10">
-        <header className="flex items-center gap-4 px-5 py-3 border-b border-white/[0.06] bg-[#040a18]/40 backdrop-blur-md sticky top-0 z-30">
+        <header className="flex items-center gap-3 sm:gap-4 px-3 sm:px-5 py-2.5 sm:py-3 border-b border-white/[0.06] bg-[#040a18]/40 backdrop-blur-md sticky top-0 z-30">
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation menu"
-            className="lg:hidden p-1.5 rounded-lg bg-white/5 text-slate-400"
+            className="lg:hidden min-h-11 min-w-11 p-2 rounded-lg bg-white/5 text-slate-400"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -277,7 +277,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             </span>
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <PrivacyToggle />
             <NotificationCenter />
             <button className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8 transition-all text-[12px] font-medium">

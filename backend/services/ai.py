@@ -184,12 +184,50 @@ def _extract_datetime(prompt: str, user_timezone: str) -> datetime:
 def _detect_intent(prompt: str) -> str:
     lower = prompt.lower()
 
+    list_phrases = [
+        "what do i have",
+        "what's my schedule",
+        "what is my schedule",
+        "show my schedule",
+        "show me my schedule",
+        "my schedule",
+        "today's schedule",
+        "this week's schedule",
+        "this week",
+        "show my week",
+        "upcoming events",
+        "what am i doing",
+        "agenda",
+        "list my schedule",
+        "what is on my calendar",
+        "do i have any",
+    ]
+
+    if any(phrase in lower for phrase in list_phrases):
+        return "list"
+
     if any(k in lower for k in ["delete", "remove", "cancel"]):
         return "delete"
     if any(k in lower for k in ["reschedule", "move", "update", "change time"]):
         return "update"
-    if any(k in lower for k in ["schedule", "book", "add meeting", "create meeting", "create event", "add event"]):
+
+    schedule_phrases = [
+        ("schedule", ["meeting", "call", "event", "appointment", "session", "slot"]),
+        ("book", ["meeting", "call", "event", "appointment", "session"]),
+        ("create", ["meeting", "event", "appointment", "call", "session"]),
+        ("add", ["meeting", "event", "appointment", "call", "session"]),
+        ("set up", ["meeting", "call", "event", "appointment", "session"]),
+    ]
+
+    for verb, terms in schedule_phrases:
+        if verb in lower and any(term in lower for term in terms):
+            return "schedule"
+
+    if any(k in lower for k in ["schedule", "book", "create", "add"]) and any(
+        term in lower for term in ["meeting", "event", "call", "appointment", "session"]
+    ):
         return "schedule"
+
     if any(k in lower for k in ["list", "show", "upcoming", "what do i have", "agenda", "calendar today", "calendar this week"]):
         return "list"
 

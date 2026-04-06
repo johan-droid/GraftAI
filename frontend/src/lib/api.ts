@@ -267,6 +267,9 @@ export interface CalendarEvent {
   end_time: string;
   is_remote: boolean;
   status: string;
+  meeting_platform?: string;
+  meeting_link?: string;
+  attendees?: string[];
   metadata_payload?: Record<string, unknown>;
   source?: string; // google, microsoft, zoom, local
   external_id?: string;

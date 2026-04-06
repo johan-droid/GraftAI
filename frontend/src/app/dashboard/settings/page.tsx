@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Zap,
   Puzzle,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -122,6 +123,9 @@ export default function SettingsPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteDetails, setDeleteDetails] = useState("");
 
   // Diagnostics State
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -239,14 +243,18 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    const ok = window.confirm("This will permanently delete your account and data. Continue?");
-    if (!ok) return;
+  const handleDeleteAccount = () => {
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!deleteReason) {
+      return;
+    }
 
     setDeletingAccount(true);
     try {
-      await deleteAccount();
-      // Use full page reload to root to purge history and all memory states
+      await deleteAccount({ reason: deleteReason, details: deleteDetails });
       if (typeof window !== "undefined") {
         localStorage.clear();
         sessionStorage.clear();
@@ -254,10 +262,10 @@ export default function SettingsPage() {
       }
     } catch (err) {
       console.error("Critical failure during account deletion redirect", err);
-      // Fallback to standard logout if redirect fails
       await logout();
     } finally {
       setDeletingAccount(false);
+      setDeleteModalOpen(false);
     }
   };
 
@@ -353,6 +361,7 @@ export default function SettingsPage() {
               {editingName ? (
                 <div className="flex items-center gap-2">
                   <input
+                    aria-label="Full name"
                     value={nameDraft}
                     onChange={(e) => setNameDraft(e.target.value)}
                     className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 w-full max-w-[200px]"
@@ -372,6 +381,7 @@ export default function SettingsPage() {
               {editingJob ? (
                 <div className="flex items-center gap-2">
                   <input
+                    aria-label="Job title"
                     value={jobDraft}
                     onChange={(e) => setJobDraft(e.target.value)}
                     className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 w-full max-w-[200px]"
@@ -391,6 +401,7 @@ export default function SettingsPage() {
               {editingLocation ? (
                 <div className="flex items-center gap-2">
                   <input
+                    aria-label="Location"
                     value={locationDraft}
                     onChange={(e) => setLocationDraft(e.target.value)}
                     className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 w-full max-w-[200px]"
@@ -629,6 +640,70 @@ export default function SettingsPage() {
             </div>
           </div>
         </motion.div>
+        {deleteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#01050e] p-6 shadow-2xl shadow-black/40">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">We value your feedback</h2>
+                  <p className="mt-2 text-sm text-slate-400">Before deleting your account, tell us why you are leaving so we can improve the experience.</p>
+                </div>
+                <button
+                  onClick={() => setDeleteModalOpen(false)}
+                  className="text-slate-400 hover:text-white"
+                  aria-label="Close feedback dialog"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div>
+                  <label htmlFor="delete-account-reason" className="block text-sm font-medium text-slate-200">Reason for deleting your account</label>
+                  <select
+                    id="delete-account-reason"
+                    value={deleteReason}
+                    onChange={(event) => setDeleteReason(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="">Select a reason</option>
+                    <option value="Not using the product enough">Not using the product enough</option>
+                    <option value="Found a better alternative">Found a better alternative</option>
+                    <option value="Too expensive">Too expensive</option>
+                    <option value="Privacy concerns">Privacy concerns</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-200">Additional details</label>
+                  <textarea
+                    rows={4}
+                    value={deleteDetails}
+                    onChange={(event) => setDeleteDetails(event.target.value)}
+                    placeholder="Optional feedback to help us improve"
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setDeleteModalOpen(false)}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:bg-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteAccount}
+                  disabled={!deleteReason || deletingAccount}
+                  className="rounded-2xl bg-red-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-400 transition-colors"
+                >
+                  {deletingAccount ? "Deleting…" : "Submit feedback & delete account"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );

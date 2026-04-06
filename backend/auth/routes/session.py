@@ -40,6 +40,14 @@ class ConsentSyncRequest(BaseModel):
     consent_notifications: Optional[bool] = None
     consent_ai_training: Optional[bool] = None
 
+class LogoutFeedbackRequest(BaseModel):
+    reason: str
+    details: Optional[str] = None
+
+class DeletionFeedbackRequest(BaseModel):
+    reason: Optional[str] = None
+    details: Optional[str] = None
+
 @router.post("/sync-consent")
 async def sync_consent(
     data: ConsentSyncRequest,
@@ -139,6 +147,9 @@ async def check_auth(
         user_data["consent_analytics"] = user.consent_analytics
         user_data["consent_notifications"] = user.consent_notifications
         user_data["consent_ai_training"] = user.consent_ai_training
+        user_data["bio"] = user.bio
+        user_data["job_title"] = user.job_title
+        user_data["location"] = user.location
     
     env_name = (os.getenv("ENV") or os.getenv("NODE_ENV") or "production").lower()
     is_prod = env_name == "production"
@@ -219,8 +230,20 @@ async def refresh_token(request: Request, payload: Optional[RefreshTokenRequest]
     attach_jwt_cookies(response, token_data, request)
     return response
 
+@router.post("/logout-feedback")
+def logout_feedback(
+    payload: LogoutFeedbackRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user.get("sub")
+    email = current_user.get("email")
+    logger.info(
+        f"[USER FEEDBACK] Logout feedback from user={user_id} email={email} reason={payload.reason} details={payload.details}"
+    )
+    return {"status": "success"}
+
 @router.post("/logout")
-def logout(request: Request, current_user=Depends(get_current_user)):
+async def logout(request: Request, current_user=Depends(get_current_user)):
     client = get_redis_client()
     refresh_token = request.cookies.get("graftai_refresh_token")
     if refresh_token:
@@ -232,6 +255,7 @@ def logout(request: Request, current_user=Depends(get_current_user)):
 
 @router.delete("/account")
 async def delete_account(
+    payload: Optional[DeletionFeedbackRequest] = None,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -251,6 +275,12 @@ async def delete_account(
     except Exception as e:
         logger.error(f"Account deletion failed for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete account")
+
+    if payload and (payload.reason or payload.details):
+        logger.info(
+            f"[USER FEEDBACK] Account deletion feedback user={user_id} email={email} reason={payload.reason} details={payload.details}"
+        )
+
     try:
         from backend.services.notifications import notify_account_deleted_email
         to_email = user.email or email

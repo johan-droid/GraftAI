@@ -14,7 +14,6 @@ import {
   Activity,
   Puzzle,
   ChevronRight,
-  Bell,
   Search,
   Plus,
   Zap,
@@ -25,7 +24,7 @@ import {
 import NotificationCenter from "@/components/NotificationCenter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthContext } from "@/app/providers/auth-provider";
-import { syncUserTimezone, updateUserProfile } from "@/lib/api";
+import { syncUserTimezone, updateUserProfile, submitLogoutFeedback } from "@/lib/api";
 import { DashboardProvider, useDashboard } from "@/providers/dashboard-provider";
 
 const NAV_GROUPS = [
@@ -52,7 +51,8 @@ const NAV_GROUPS = [
   },
 ];
 
-const cn = (...classes: any[]) => classes.filter(Boolean).join(" ");
+type ClassValue = string | boolean | null | undefined;
+const cn = (...classes: ClassValue[]) => classes.filter(Boolean).join(" ");
 
 function PrivacyToggle() {
   const { isPrivacyMode, togglePrivacyMode } = useDashboard();
@@ -76,6 +76,10 @@ function PrivacyToggle() {
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [logoutReason, setLogoutReason] = useState("");
+  const [logoutDetails, setLogoutDetails] = useState("");
+  const [logoutSubmitting, setLogoutSubmitting] = useState(false);
   const { logout, user, loading } = useAuthContext();
   const displayUser = user as { name?: string; email?: string; timezone?: string } | null;
 
@@ -112,6 +116,22 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const userInitials = displayUser?.name
     ? displayUser.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : displayUser?.email?.[0]?.toUpperCase() ?? "U";
+
+  const handleLogoutFeedbackSubmit = async () => {
+    if (!logoutReason) {
+      return;
+    }
+    setLogoutSubmitting(true);
+    try {
+      await submitLogoutFeedback({ reason: logoutReason, details: logoutDetails });
+    } catch (err) {
+      console.error("Logout feedback submission failed", err);
+    } finally {
+      setLogoutSubmitting(false);
+      setLogoutModalOpen(false);
+      await logout();
+    }
+  };
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -198,7 +218,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             <p className="text-[11px] text-slate-500 truncate">{displayUser?.email ?? ""}</p>
           </div>
           <button
-            onClick={logout}
+            onClick={() => setLogoutModalOpen(true)}
             className="p-1.5 rounded-md text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all opacity-0 group-hover:opacity-100"
             title="Sign out"
           >
@@ -278,6 +298,72 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             {children}
           </motion.div>
         </main>
+
+        {logoutModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#01050e] p-6 shadow-2xl shadow-black/40">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Before you log out</h2>
+                  <p className="mt-2 text-sm text-slate-400">Let us know why you&apos;re signing out so we can improve the product.</p>
+                </div>
+                <button
+                  onClick={() => setLogoutModalOpen(false)}
+                  className="text-slate-400 hover:text-white"
+                  aria-label="Close feedback dialog"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div>
+                  <label htmlFor="logout-reason" className="block text-sm font-medium text-slate-200">Reason for logging out</label>
+                  <select
+                    id="logout-reason"
+                    value={logoutReason}
+                    onChange={(event) => setLogoutReason(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="">Select a reason</option>
+                    <option value="Finished for now">Finished for now</option>
+                    <option value="Taking a break">Taking a break</option>
+                    <option value="Privacy concerns">Privacy concerns</option>
+                    <option value="Found another tool">Found another tool</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-200">More details</label>
+                  <textarea
+                    rows={3}
+                    value={logoutDetails}
+                    onChange={(event) => setLogoutDetails(event.target.value)}
+                    placeholder="Optional details (what could we improve?)"
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setLogoutModalOpen(false)}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:bg-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleLogoutFeedbackSubmit}
+                  disabled={!logoutReason || logoutSubmitting}
+                  className="rounded-2xl bg-indigo-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-400 transition-colors"
+                >
+                  {logoutSubmitting ? "Sending…" : "Send feedback & log out"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

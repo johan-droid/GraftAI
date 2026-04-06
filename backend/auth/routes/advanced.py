@@ -102,8 +102,11 @@ async def delete_account(
         raise HTTPException(status_code=404, detail="User not found")
     
     # 1. Trigger professional 'Goodbye' email
-    await enqueue_account_deletion(user.email)
-    logger.info(f"📧 Goodbye email enqueued for user {user.email}")
+    if user.email:
+        await enqueue_account_deletion(user.email)
+        logger.info(f"📧 Goodbye email enqueued for user {user.email}")
+    else:
+        logger.warning(f"Goodbye email skipped because user {user_id} has no email address")
     
     # 2. Soft-Delete (30-day Retention Policy)
     # Audit: Set deleted_at timestamp and deactivate account immediately.

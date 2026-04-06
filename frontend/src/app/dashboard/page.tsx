@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/app/providers/auth-provider";
 import { motion } from "framer-motion";
+import { updateUserProfile } from "@/lib/api";
 import {
   Calendar,
   ArrowUpRight,
@@ -18,6 +19,7 @@ import {
   ChevronRight,
   Globe,
   Activity,
+  X,
 } from "lucide-react";
 import { getAnalyticsSummary, getEvents, getProactiveSuggestion, type CalendarEvent } from "@/lib/api";
 
@@ -98,7 +100,7 @@ function getAttendeeCount(payload?: Record<string, unknown>) {
 export default function Dashboard() {
   const router = useRouter();
   const { user, isAuthenticated, loading } = useAuthContext();
-  const typedUser = user as { name?: string; email?: string } | null;
+  const typedUser = user as { name?: string; email?: string; timezone?: string; bio?: string; job_title?: string; location?: string } | null;
 
   const profileName = typedUser?.name?.split(" ")[0] ?? typedUser?.email?.split("@")[0] ?? "there";
 
@@ -106,6 +108,12 @@ export default function Dashboard() {
   const [upcomingMeetings, setUpcomingMeetings] = useState<CalendarEvent[]>([]);
   const [activityItems, setActivityItems] = useState<DashboardActivityItem[]>([]);
   const [aiSuggestion, setAiSuggestion] = useState("");
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [cameFrom, setCameFrom] = useState("");
+  const [useCase, setUseCase] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [onboardingSaving, setOnboardingSaving] = useState(false);
+  const [onboardingError, setOnboardingError] = useState("");
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace("/login");
@@ -113,6 +121,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    const shouldAskOnboarding = !typedUser?.bio || !typedUser?.job_title || !typedUser?.location;
+    const wasDismissed = typeof window !== "undefined" && window.localStorage.getItem("graftai_onboarding_dismissed") === "true";
+    if (shouldAskOnboarding && !wasDismissed) {
+      setShowOnboardingModal(true);
+    }
 
     let alive = true;
     const now = new Date();
@@ -152,7 +166,31 @@ export default function Dashboard() {
     return () => {
       alive = false;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, typedUser?.bio, typedUser?.job_title, typedUser?.location]);
+
+  const handleOnboardingSubmit = async () => {
+    if (!cameFrom || !useCase || !industry) {
+      setOnboardingError("Please answer all of the questions so we can personalize your experience.");
+      return;
+    }
+    setOnboardingSaving(true);
+    setOnboardingError("");
+    try {
+      await updateUserProfile({
+        bio: cameFrom,
+        job_title: useCase,
+        location: industry,
+      });
+      setShowOnboardingModal(false);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("graftai_onboarding_dismissed", "true");
+      }
+    } catch {
+      setOnboardingError("Unable to save onboarding info. Please try again.");
+    } finally {
+      setOnboardingSaving(false);
+    }
+  };
 
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -377,6 +415,96 @@ export default function Dashboard() {
           </div>
         </div>
       </motion.div>
+
+      {showOnboardingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#01050e] p-6 shadow-2xl shadow-black/40">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">Welcome to GraftAI!</h2>
+                <p className="mt-2 text-sm text-slate-400">Quick questions to help us personalize your onboarding experience.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowOnboardingModal(false);
+                  if (typeof window !== "undefined") {
+                    window.localStorage.setItem("graftai_onboarding_dismissed", "true");
+                  }
+                }}
+                className="text-slate-400 hover:text-white"
+                aria-label="Close onboarding prompt"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mt-6 space-y-4">
+              <div>
+                <label htmlFor="onboarding-came-from" className="block text-sm font-medium text-slate-200">How did you hear about us?</label>
+                <select
+                  id="onboarding-came-from"
+                  value={cameFrom}
+                  onChange={(event) => setCameFrom(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                >
+                  <option value="">Choose one</option>
+                  <option value="Search engine">Search engine</option>
+                  <option value="Social media">Social media</option>
+                  <option value="Referral from a friend">Referral from a friend</option>
+                  <option value="Online community or forum">Online community or forum</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="onboarding-use-case" className="block text-sm font-medium text-slate-200">What will you use GraftAI for?</label>
+                <select
+                  id="onboarding-use-case"
+                  value={useCase}
+                  onChange={(event) => setUseCase(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                >
+                  <option value="">Choose one</option>
+                  <option value="Personal scheduling">Personal scheduling</option>
+                  <option value="Team coordination">Team coordination</option>
+                  <option value="Client meetings">Client meetings</option>
+                  <option value="Sales outreach">Sales outreach</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-200">Which industry are you in?</label>
+                <input
+                  type="text"
+                  value={industry}
+                  onChange={(event) => setIndustry(event.target.value)}
+                  placeholder="E.g. SaaS, healthcare, education"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+              {onboardingError && <p className="text-sm text-rose-400">{onboardingError}</p>}
+            </div>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowOnboardingModal(false);
+                  if (typeof window !== "undefined") {
+                    window.localStorage.setItem("graftai_onboarding_dismissed", "true");
+                  }
+                }}
+                className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:bg-white/10 transition-colors"
+              >
+                Later
+              </button>
+              <button
+                onClick={handleOnboardingSubmit}
+                disabled={onboardingSaving}
+                className="rounded-2xl bg-indigo-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-400 transition-colors"
+              >
+                {onboardingSaving ? "Saving…" : "Share feedback & continue"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

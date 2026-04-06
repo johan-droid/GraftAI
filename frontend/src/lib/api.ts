@@ -42,8 +42,16 @@ export async function syncUserConsent(consents: {
 // ──────────────────────────────────────
 // Auth: Account Deletion
 // ──────────────────────────────────────
-export async function deleteAccount() {
-  return apiClient.delete<{ message: string }>("/auth/account");
+export async function deleteAccount(payload?: { reason?: string; details?: string }) {
+  return apiClient.delete<{ message: string }>("/auth/account", { json: payload });
+}
+
+export async function submitLogoutFeedback(payload: { reason: string; details?: string }) {
+  return apiClient.post<{ status: string }>("/auth/logout-feedback", payload);
+}
+
+export async function submitDeletionFeedback(payload: { reason: string; details?: string }) {
+  return apiClient.delete<{ message: string }>("/auth/account", { json: payload });
 }
 
 export async function updateUserProfile(data: { 
@@ -338,7 +346,7 @@ export async function getEmailDiagnostic() {
     message: string;
     error_type?: string;
     hint?: string;
-    config_preview?: Record<string, any>;
+    config_preview?: Record<string, unknown>;
   }>("/admin/email/diagnostic");
 }
 

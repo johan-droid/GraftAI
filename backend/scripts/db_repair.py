@@ -78,6 +78,18 @@ async def repair_database():
                     await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_data};"))
                     logger.info(f"✅ [REPAIR] 'users' table successfully updated with security column '{col}'.")
 
+            # 4. Audit Timestamps (soft-delete + updated timestamp)
+            audit_cols = {
+                "deleted_at": "TIMESTAMP WITH TIME ZONE",
+                "updated_at": "TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL",
+            }
+            for col, col_def in audit_cols.items():
+                res = await conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"))
+                if res.fetchone() is None:
+                    logger.info(f"🔧 [REPAIR] Column '{col}' missing in 'users' table. Patching...")
+                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_def};"))
+                    logger.info(f"✅ [REPAIR] 'users' table successfully updated with '{col}' column.")
+
     except Exception as e:
         logger.error(f"❌ [REPAIR] Database repair failed: {e}", exc_info=True)
 

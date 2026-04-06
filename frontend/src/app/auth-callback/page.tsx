@@ -14,6 +14,9 @@ function AuthCallbackInner() {
 
   const code = searchParams.get("code");
   const state = searchParams.get("state");
+  const accessToken = searchParams.get("at") || searchParams.get("access_token");
+  const refreshToken = searchParams.get("rt") || searchParams.get("refresh_token");
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
 
   const safeReplace = (path: string) => {
     if (typeof window !== "undefined") {
@@ -28,6 +31,27 @@ function AuthCallbackInner() {
       if (hasFetched.current) return;
       hasFetched.current = true;
       try {
+        if (accessToken) {
+          setStatus("Completing SSO login...");
+
+          try {
+            window.sessionStorage.setItem("graftai_access_token", accessToken);
+            window.localStorage.setItem("graftai_access_token", accessToken);
+            if (refreshToken) {
+              window.sessionStorage.setItem("graftai_refresh_token", refreshToken);
+              window.localStorage.setItem("graftai_refresh_token", refreshToken);
+            }
+            await login(accessToken);
+          } catch (err) {
+            console.error("Auth bridge login failed:", err);
+          }
+
+          setStatus("Login successful! Redirecting...");
+          sessionStorage.removeItem("oauth_in_progress");
+          safeReplace(redirectTo);
+          return;
+        }
+
         if (code && state) {
           setStatus("Authenticating with OAuth provider...");
           
@@ -96,7 +120,7 @@ function AuthCallbackInner() {
     };
 
     handleSync();
-  }, [code, state, login]);
+  }, [accessToken, code, login, redirectTo, refreshToken, state]);
 
   return (
     <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">

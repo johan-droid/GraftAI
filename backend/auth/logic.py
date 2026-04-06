@@ -162,8 +162,9 @@ def get_token_bridge_url(access_token: str, refresh_token: str, target: str) -> 
     Constructs a URL for the 'Token Bridge' - a middleman page that transfers
     tokens from the backend domain to the frontend domain via localstorage/cookies.
     """
-    frontend_url = os.getenv("FRONTEND_URL", "https://www.graftai.tech")
-    # Base URL for the frontend dashboard
+    frontend_url = os.getenv("FRONTEND_BASE_URL") or os.getenv("FRONTEND_URL") or "https://www.graftai.tech"
+    frontend_url = frontend_url.rstrip("/")
+
     if target.startswith("/"):
         full_target = f"{frontend_url}{target}"
     else:
@@ -173,11 +174,10 @@ def get_token_bridge_url(access_token: str, refresh_token: str, target: str) -> 
     params = {
         "at": access_token,
         "rt": refresh_token,
-        "redirect": full_target
+        "redirect": full_target,
     }
-    # We use a specific bridge route on the frontend if it exists, otherwise dashboard
-    # The frontend should have a route like /auth/bridge to handle these params
-    return f"{frontend_url}/auth/bridge?{urllib.parse.urlencode(params)}"
+    # The frontend exposes /auth-callback, so bridge tokens can be handled there.
+    return f"{frontend_url}/auth-callback?{urllib.parse.urlencode(params)}"
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str, request: Optional[Request] = None):
     """Alias for attach_jwt_cookies with modern param names."""

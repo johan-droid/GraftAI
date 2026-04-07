@@ -1,7 +1,7 @@
 import msgpack
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 from datetime import datetime
 
 logger = logging.getLogger(__name__)

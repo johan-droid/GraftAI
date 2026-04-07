@@ -2,7 +2,7 @@ import asyncio
 import time
 import enum
 import logging
-from typing import Callable, Any, Optional
+from typing import Callable, Any
 
 logger = logging.getLogger(__name__)
 

@@ -3,14 +3,13 @@ from fastapi import Depends, HTTPException, status, Request
 import hashlib
 import jwt
 from jwt import PyJWTError as JWTError
-from typing import Optional
 import os
 import json
-import httpx
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.utils.db import get_db
 from backend.services.redis_client import get_redis as get_redis_service

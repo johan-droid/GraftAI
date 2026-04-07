@@ -3,7 +3,9 @@ import sys
 import re
 import logging
 import asyncio
+import inspect
 from pathlib import Path
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
@@ -110,7 +112,15 @@ class RateLimitMiddleware:
 
         try:
             redis_client = await get_redis()
-            allowed = await redis_client.eval(_RATE_LIMIT_LUA, 1, key, self.max_requests, self.window)
+            result = redis_client.eval(
+                _RATE_LIMIT_LUA,
+                1,
+                key,
+                str(self.max_requests),
+                str(self.window),
+            )
+            allowed_result = await result if inspect.isawaitable(result) else result
+            allowed = bool(int(allowed_result))
         except Exception as e:
             logger.error(f"Global Rate limiter Redis failure: {e}")
             allowed = True # Fail open

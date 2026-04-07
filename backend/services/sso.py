@@ -3,6 +3,7 @@ SSO (OAuth2, OIDC) authentication implementation with Redis-backed state storage
 """
 
 from datetime import datetime, timedelta, timezone
+import asyncio
 import os
 import json
 from typing import Any
@@ -47,7 +48,7 @@ ALLOWED_SSO_DOMAINS = [
 ]
 
 
-def _store_oauth_state(state: str, data: dict, ttl_seconds: int = 300):
+async def _store_oauth_state(state: str, data: dict, ttl_seconds: int = 300):
     """Store OAuth state in Redis with TTL."""
     # Serialize session object separately - we need to reconstruct it later
     session = data.pop("session", None)
@@ -56,13 +57,13 @@ def _store_oauth_state(state: str, data: dict, ttl_seconds: int = 300):
         "session_state": getattr(session, "state", None),
         "session_scope": getattr(session, "scope", None),
     }
-    safe_set(f"oauth:state:{state}", json.dumps(state_data), ttl_seconds=ttl_seconds)
+    await safe_set(f"oauth:state:{state}", json.dumps(state_data), ttl_seconds=ttl_seconds)
 
 
-def _get_oauth_state(state: str) -> dict | None:
+async def _get_oauth_state(state: str) -> dict | None:
     """Retrieve OAuth state from Redis (no immediate deletion)."""
     key = f"oauth:state:{state}"
-    raw_data = safe_get(key)
+    raw_data = await safe_get(key)
     if not raw_data:
         return None
 
@@ -76,9 +77,9 @@ def _get_oauth_state(state: str) -> dict | None:
     return data
 
 
-def _delete_oauth_state(state: str):
+async def _delete_oauth_state(state: str):
     """Delete OAuth state from Redis after successful login."""
-    safe_delete(f"oauth:state:{state}")
+    await safe_delete(f"oauth:state:{state}")
 
 
 PROVIDERS = {
@@ -120,7 +121,7 @@ OAUTH2_REDIRECT_URI = os.getenv(
 )
 
 
-def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboard"):
+async def _start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboard"):
     config = get_provider_config(provider)
     if not config:
         raise HTTPException(
@@ -169,7 +170,7 @@ def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboar
     signature = _sign_state(state)
     signed_state = f"{state}.{signature}"
 
-    _store_oauth_state(
+    await _store_oauth_state(
         state,
         {
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -190,8 +191,12 @@ def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboar
     }
 
 
+def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboard"):
+    return asyncio.run(_start_oauth2_flow(provider, redirect_to))
+
+
 async def get_authorization_url(provider: str = "microsoft", redirect_to: str = "/dashboard"):
-    result = start_oauth2_flow(provider, redirect_to)
+    result = await _start_oauth2_flow(provider, redirect_to)
     return result["authorization_url"], result["state"]
 
 
@@ -203,13 +208,13 @@ async def complete_oauth2_flow(request: Request, code: str, state: str):
             status_code=403, detail="OAuth state signature verification failed"
         )
 
-    data = _get_oauth_state(original_state)
+    data = await _get_oauth_state(original_state)
     if not data:
         logger.error(f"State not found in Redis for: {original_state}")
         raise RuntimeError("Invalid or expired state")
-    
+
     # Enforce one-time use semantics
-    _delete_oauth_state(original_state)
+    await _delete_oauth_state(original_state)
 
     created_at = datetime.fromisoformat(
         data.get("created_at", datetime.now(timezone.utc).isoformat())
@@ -254,8 +259,6 @@ async def complete_oauth2_flow(request: Request, code: str, state: str):
     finally:
         if hasattr(session, "aclose"):
             await getattr(session, "aclose")()
-
-    import httpx
 
     userinfo_url = config.get("userinfo_url")
 
@@ -340,8 +343,6 @@ async def revoke_provider_token(provider: str, token: dict):
     if not config or not config.get("revoke_url"):
         logger.info(f"No revocation URL for provider {provider}")
         return False
-
-    import httpx
 
     # Google revocation
     if provider.lower() == "google":

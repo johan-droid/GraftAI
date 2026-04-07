@@ -1,5 +1,4 @@
 import logging
-import httpx
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_

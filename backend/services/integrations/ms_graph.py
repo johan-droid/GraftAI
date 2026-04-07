@@ -1,7 +1,5 @@
 import os
 import logging
-import httpx
-from backend.utils.http_client import ClientProxy
 from typing import Optional
 from msal import ConfidentialClientApplication
 from datetime import datetime

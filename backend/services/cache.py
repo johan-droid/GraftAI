@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Any, Optional
+from typing import Any
 from dotenv import load_dotenv
 from backend.utils.redis_singleton import get_redis_binary
 from backend.utils.serialization import serializer

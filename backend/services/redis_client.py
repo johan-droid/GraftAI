@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import time
-from typing import Optional
 
 from backend.utils.redis_singleton import get_redis as get_redis_singleton
 

@@ -16,8 +16,7 @@ from sqlalchemy import select, and_
 from backend.models.tables import EventTable, UserTable
 from backend.services.sync_engine import sync_user_calendar
 from backend.services.mail_service import send_email, render_template
-from backend.utils.serialization import serializer
-from backend.utils.redis_singleton import get_redis_binary
+from backend.services.notifications import notify_welcome_email, notify_event_reminder
 from backend.utils.arq_utils import publish_event
 
 # Registry for automatic discovery
@@ -308,7 +307,7 @@ async def task_persist_usage_to_db(ctx):
         
         await db.commit()
         await redis.srem("usage:flush_queue", *user_ids)
-    logger.info(f"✅ [WORKER] Usage persistence complete.")
+    logger.info("✅ [WORKER] Usage persistence complete.")
 
 async def task_emit_quota_update(ctx, user_id: str, feature: str, count: int):
     """

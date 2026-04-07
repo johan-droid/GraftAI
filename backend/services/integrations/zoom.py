@@ -1,6 +1,6 @@
 import os
 import logging
-from backend.utils.http_client import get_client, ClientProxy
+from backend.utils.http_client import get_client
 
 logger = logging.getLogger(__name__)
 

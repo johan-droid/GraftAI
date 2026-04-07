@@ -1,12 +1,10 @@
 import hashlib
-import json
 import logging
 import os
 from datetime import datetime
 from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import select, and_
 
 from backend.models.tables import EventTable, UserTable
 from backend.models.user_token import UserTokenTable

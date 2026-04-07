@@ -113,3 +113,12 @@ async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
 
+
+async def unwrap_result(value):
+    """Await the value if it is a coroutine, otherwise return it directly."""
+    import inspect
+
+    if inspect.isawaitable(value):
+        return await value
+    return value
+

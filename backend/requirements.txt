@@ -65,3 +65,9 @@ aiosqlite==0.20.0
 # Efficiency & Serialization
 cachetools==5.5.0
 msgpack==1.1.0
+
+# Missing from pyproject.toml
+resend==2.4.0
+python3-saml==1.16.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.0

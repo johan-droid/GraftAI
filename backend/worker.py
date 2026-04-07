@@ -37,7 +37,6 @@ def cron(minute='*', hour='*', run_at_startup=False):
             'hour': hour,
             'run_at_startup': run_at_startup
         })
-        REGISTERED_TASKS.append(func)
         return func
     return decorator
 
@@ -278,7 +277,9 @@ async def task_renew_webhooks(ctx):
         for uid in user_ids:
             await redis.enqueue_job("task_renew_user_webhook", uid)
 
-@cron(minute='*/5')
+USAGE_FLUSH_INTERVAL = os.getenv("USAGE_FLUSH_INTERVAL_MINUTES", "5")
+
+@cron(minute=f"*/{USAGE_FLUSH_INTERVAL}")
 async def task_persist_usage_to_db(ctx):
     """
     Write-Behind Sync Logic:
@@ -309,6 +310,7 @@ async def task_persist_usage_to_db(ctx):
         await redis.srem("usage:flush_queue", *user_ids)
     logger.info("✅ [WORKER] Usage persistence complete.")
 
+@task
 async def task_emit_quota_update(ctx, user_id: str, feature: str, count: int):
     """
     Real-Time Event Publisher:

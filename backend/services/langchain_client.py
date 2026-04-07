@@ -44,6 +44,10 @@ class LocalAssistantModel:
             )
         return SimpleNamespace(content=text)
 
+    async def ainvoke(self, messages: Any, **kwargs: Any) -> Any:
+        """Async wrapper for the local deterministic engine."""
+        return self.invoke(messages, **kwargs)
+
     def __call__(self, messages: Any, **kwargs: Any) -> Any:
         return self.invoke(messages, **kwargs)
 

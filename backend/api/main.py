@@ -36,6 +36,7 @@ from backend.api.admin       import router as admin_router
 from backend.services.ai        import router as ai_router
 from backend.api.sync_stream    import router as sync_stream_router
 
+from backend.auth.routes.saml   import router as saml_router
 from backend.services.analytics import router as analytics_router
 from backend.services.consent   import router as consent_router
 from backend.services.proactive import router as proactive_router
@@ -104,7 +105,7 @@ class RateLimitMiddleware:
             client_ip = client_ip.split(",")[0].strip()
 
         # Skip health checks and static assets from rate limiting
-        if request.url.path in ["/health", "/favicon.ico", "/"]:
+        if request.url.path in ["/health", "/api/v1/health", "/favicon.ico", "/"]:
             await self.app(scope, receive, send)
             return
 
@@ -238,7 +239,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ── Middleware Stack ────────────────────────────────────────────────────────
 
 # 1. GZip Compression (Efficiency: Reduces payload size by up to 80%)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(GZipMiddleware, minimum_size=2000)
 
 # 2. CORS Management
 _extra_origins = [
@@ -322,9 +323,9 @@ v1.include_router(upgrade_router)
 v1.include_router(plugin_router)
 v1.include_router(billing_router)
 v1.include_router(webhooks_router)
-v1.include_router(mfa_router)
 v1.include_router(admin_router)
 v1.include_router(sync_stream_router)
+v1.include_router(saml_router)
 
 app.include_router(v1)
 

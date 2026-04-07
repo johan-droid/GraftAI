@@ -108,12 +108,44 @@ def _build_message(
     return msg
 
 
-def _send_via_smtp(msg: EmailMessage) -> None:
-    """Blocking SMTP send — must be called inside a thread (asyncio.to_thread)."""
-    cfg = _get_smtp_config()
-    host, port = cfg["host"], cfg["port"]
-    timeout = 15  # seconds — generous for Render / cloud network
+import resend
 
+def _send_email_sync(
+    to_email: str,
+    subject: str,
+    html_body: str,
+    text_body: Optional[str] = None,
+) -> None:
+    """Validate inputs then build and dispatch the email using Resend (if configured) or SMTP."""
+    if not to_email or not isinstance(to_email, str) or not to_email.strip():
+        raise ValueError("Recipient email address is required")
+        
+    cfg = _get_smtp_config()
+    
+    # Primary/Fallback: Try Resend first if API key is present
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    if resend_api_key:
+        try:
+            resend.api_key = resend_api_key
+            response = resend.Emails.send({
+                "from": f"{cfg['from_name']} <{cfg['from_email']}>",
+                "to": to_email,
+                "subject": subject,
+                "html": html_body,
+                "text": text_body or ""
+            })
+            logger.info(f"📧 Email sent via Resend → {to_email} | ID: {response.get('id')}")
+            return
+        except Exception as e:
+            logger.warning(f"⚠️ [RESEND] Failed to send via Resend, falling back to SMTP: {e}")
+            # Fall through to SMTP
+
+    msg = _build_message(to_email, subject, html_body, text_body)
+
+    host, port = cfg["host"], cfg["port"]
+    timeout = 15  # seconds
+
+    # Attempt primary SMTP port
     try:
         if cfg["use_tls"]:
             with smtplib.SMTP(host, port, timeout=timeout) as server:
@@ -129,40 +161,25 @@ def _send_via_smtp(msg: EmailMessage) -> None:
                     server.login(cfg["user"], cfg["password"])
                 server.send_message(msg)
 
-        logger.info(f"📧 Email sent → {msg['To']} | subject: {msg['Subject']!r}")
+        logger.info(f"📧 Email sent via SMTP → {msg['To']} | port: {port}")
 
-    except smtplib.SMTPAuthenticationError as e:
-        logger.error(
-            f"❌ [SMTP] Authentication failed for {cfg['user']}. "
-            "Use a Gmail App Password, not your main account password. "
-            f"Error: {e}"
-        )
-        raise
-    except smtplib.SMTPException as e:
-        logger.error(f"❌ [SMTP] Failed to send to {msg['To']}: {e}")
-        raise
-    except OSError as e:
-        hint = ""
-        if "unreachable" in str(e).lower() or "refused" in str(e).lower():
-            hint = (
-                " Outbound SMTP on port 587 may be blocked by your host (common on Render free tier). "
-                "Check Render outbound networking docs."
-            )
-        logger.error(f"❌ [SMTP] Network error connecting to {host}:{port} — {e}.{hint}")
-        raise
-
-
-def _send_email_sync(
-    to_email: str,
-    subject: str,
-    html_body: str,
-    text_body: Optional[str] = None,
-) -> None:
-    """Validate inputs then build and dispatch the SMTP message."""
-    if not to_email or not isinstance(to_email, str) or not to_email.strip():
-        raise ValueError("Recipient email address is required")
-    msg = _build_message(to_email, subject, html_body, text_body)
-    _send_via_smtp(msg)
+    except (OSError, smtplib.SMTPException) as e:
+        # Fallback to port 465 (SMTP_SSL) if port 587 / STARTTLS is blocked
+        if port != 465:
+            logger.warning(f"⚠️ [SMTP] Primary port {port} failed ({e}). Falling back to port 465 (SSL)...")
+            try:
+                with smtplib.SMTP_SSL(host, 465, timeout=timeout) as server:
+                    if cfg["user"] and cfg["password"]:
+                        server.login(cfg["user"], cfg["password"])
+                    server.send_message(msg)
+                logger.info(f"📧 Email sent via SMTP (Fallback Port 465) → {msg['To']}")
+                return
+            except Exception as fallback_e:
+                logger.error(f"❌ [SMTP] Fallback to port 465 also failed: {fallback_e}")
+                raise fallback_e
+        else:
+            logger.error(f"❌ [SMTP] Failed to send to {msg['To']}: {e}")
+            raise e
 
 
 # ── Public async interface ────────────────────────────────────────────────────

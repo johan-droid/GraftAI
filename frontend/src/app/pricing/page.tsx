@@ -214,12 +214,12 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-primary/30">
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" />
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       
       {/* Dynamic Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full" />
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full animate-pulse" style={{ background: "radial-gradient(circle, rgba(79,70,229,0.15) 0%, rgba(0,0,0,0) 70%)" }} />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full" style={{ background: "radial-gradient(circle, rgba(99,102,241,0.1) 0%, rgba(0,0,0,0) 70%)" }} />
       </div>
 
       <div className="page-with-floating-nav relative z-10 max-w-7xl mx-auto px-6 pb-24 lg:pb-32">
@@ -282,7 +282,7 @@ export default function PricingPage() {
               transition={{ delay: 0.1 * idx + 0.3 }}
               className={`relative flex flex-col p-8 rounded-3xl border transition-all duration-500 group ${
                 tier.highlight 
-                ? "bg-slate-900/60 border-primary/40 shadow-2xl shadow-primary/10 scale-105 z-20" 
+                ? "bg-slate-900/60 border-primary/40 shadow-2xl shadow-primary/10 scale-105 z-20 hover:border-primary hover:shadow-primary/30" 
                 : "bg-slate-950/40 border-slate-800/60 hover:border-slate-700 hover:bg-slate-900/40 z-10"
               }`}
             >

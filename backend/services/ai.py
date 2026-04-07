@@ -21,6 +21,8 @@ from backend.services.usage import check_usage_limit, increment_usage
 from backend.utils.db import get_db
 from backend.utils.resilience import get_breaker
 
+from langchain_core.messages import SystemMessage, HumanMessage
+
 try:
     from groq import AsyncGroq
 except ImportError:
@@ -189,20 +191,18 @@ def _extract_datetime(prompt: str, user_timezone: str) -> datetime:
 def _detect_intent(prompt: str) -> str:
     lower = prompt.lower()
     
-    # 1. Structural matching for common phrases
-    match lower:
-        case p if any(k in p for k in ["what do i have", "my schedule", "agenda"]):
-            return "list"
-        case p if any(k in p for k in ["schedule", "book", "create", "add"]):
-            return "schedule"
-        case p if any(k in p for k in ["delete", "remove", "cancel"]):
-            return "delete"
-        case p if any(k in p for k in ["reschedule", "move", "update", "change"]):
-            return "update"
+    # 1. Structural matching for common phrases (optimized order)
+    if any(k in lower for k in ["what do i have", "my schedule", "agenda", "upcoming", "this week"]):
+        return "list"
+    if any(k in lower for k in ["schedule", "book", "create", "add"]):
+        return "schedule"
+    if any(k in lower for k in ["delete", "remove", "cancel"]):
+        return "delete"
+    if any(k in lower for k in ["reschedule", "move", "update", "change"]):
+        return "update"
             
     # 2. Fallback secondary phrase detection
-    list_keys = ["today's schedule", "this week", "upcoming", "what is on my calendar"]
-    if any(k in lower for k in list_keys):
+    if "what is on my calendar" in lower:
         return "list"
         
     return "none"
@@ -402,13 +402,13 @@ async def _offline_assistant_response(
                     if parsed.tzinfo is None:
                         parsed = parsed.replace(tzinfo=_safe_zoneinfo(user_timezone))
                     new_start_override = parsed.astimezone(timezone.utc)
-            except Exception as e:
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
                 parsed_event_id, parsed_start = _parse_update_action_payload(action_hint, user_timezone)
                 if parsed_event_id is not None:
                     event_id = parsed_event_id
                 if parsed_start is not None:
                     new_start_override = parsed_start
-                logger.warning(f"Precision extraction failed for update: {e}")
+                logger.warning(f"Precision extraction fallback for update: {e}")
 
         if not event_id:
             return (
@@ -551,21 +551,23 @@ async def ai_chat(
     compact_context = _format_events_compact(events, request.timezone)
 
     system_prompt = (
-        "You are GraftAI, a premium high-performance scheduler assistant. "
-        "Your mission is to provide surgical precision in calendar management. "
-        "Your UI is built on 'Strong Sync' technology, meaning every action is reflected instantly. "
-        "Do not mention specific third-party model providers. "
-        "Keep answers concise, professional, and actionable.\n\n"
-        "Your Real-Time Schedule (GROUND TRUTH):\n"
-        "AUTHORITATIVE CONTEXT (C-Table Format: ID|Title|Day|TimeRange):\n"
-        f"{compact_context}\n\n"
-        "Strict Rule: If the user asks for a change, focus on confirming the specific event ID and time."
+        "You are GraftAI Sovereign, a premium high-performance scheduler assistant. "
+        "Your personality is professional, concise, and surgical. "
+        "Every response must focus on efficiency and action. "
+        "Do not apologize for limitations; simply provide the best possible path forward. "
+        "You have full visibility into the user's calendar through the AUTHORITATIVE CONTEXT below.\n\n"
+        "STRICT DIRECTIVES:\n"
+        "1. Use event IDs (e.g. #42) when referencing specific meetings.\n"
+        "2. When suggesting times, favor clarity over conversational fluff.\n"
+        "3. If a conflict is detected, highlight it immediately.\n"
+        "4. Never mention third-party AI provider names."
     )
     user_input = (
-        f"User timezone: {request.timezone}\n"
-        f"Upcoming events:\n{compact_context}\n"
-        f"Recent email subjects:\n{email_context}\n"
-        f"User message: {prompt}"
+        f"### AUTHORITATIVE CONTEXT (C-Table: ID|Title|Day|TimeRange)\n{compact_context}\n\n"
+        f"### RECENT EMAIL CONTEXT\n{email_context}\n\n"
+        f"### USER ENVIRONMENT\nTimezone: {request.timezone}\n"
+        f"Current Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+        f"### USER MESSAGE\n{prompt}"
     )
 
     model_used = "graftai-assistant-offline"
@@ -587,13 +589,18 @@ async def ai_chat(
 
     if not result_text:
         try:
-            llm_response = llm.invoke(user_input)
+            # Optimised LangChain fallback with explicit message separation
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_input)
+            ]
+            llm_response = await llm.ainvoke(messages)
             content = getattr(llm_response, "content", str(llm_response))
             result_text = str(content).strip() if content else None
             if result_text:
                 model_used = "graftai-assistant-local"
         except Exception as exc:
-            logger.warning(f"Local assistant engine invoke issue: {exc}")
+            logger.warning(f"Local assistant engine ainvoke issue: {exc}")
 
     if not result_text:
         result_text = (

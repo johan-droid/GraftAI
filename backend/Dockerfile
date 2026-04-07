@@ -18,24 +18,27 @@ RUN uv sync --no-dev --no-install-project
 
 # 2. Production Runner
 FROM python:3.12-slim-bookworm AS runner
+LABEL maintainer="GraftAI Engineering <ops@graftai.tech>"
 WORKDIR /app
 
 # Install runtime dependencies ONLY
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    ca-certificates \
+  && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
 # Security: Dedicated non-root user
-RUN addgroup --system --gid 1001 appuser && \
-    adduser --system --uid 1001 --gid 1001 appuser
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd --system --uid 1001 --gid 1001 -m -s /bin/bash appuser
 
 # Copy virtual environment and app code
 COPY --from=builder /app/.venv /app/.venv
 COPY . /app
 
 # Ensure correct permissions
-RUN chown -R appuser:appuser /app
+RUN chown -R appuser:appgroup /app
 USER appuser
 
 # Environment Configuration
@@ -48,10 +51,9 @@ ENV PORT=8000
 EXPOSE 8000
 
 # Health Check for automated orchestration failover
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
-# Default CMD (Overridden by Render for the Worker instance)
 # Optimized Production Entrypoint:
 # USES WEB_CONCURRENCY if set, else calculates optimized (2*CPU + 1) worker count
-CMD ["sh", "-c", "gunicorn backend.api.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-$((2 * $(nproc) + 1))} --timeout 120 --keep-alive 5 --max-requests 1000 --max-requests-jitter 50"]
+CMD ["sh", "-c", "gunicorn backend.api.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-$((2 * $(nproc) + 1))} --timeout 150 --keep-alive 5 --max-requests 1000 --max-requests-jitter 100"]

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useState } from "react";
@@ -57,6 +57,14 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSAML = async () => {
+    setError("");
+    setLoading(true);
+    // SAML is initiated by a direct GET redirect to the backend
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+    window.location.assign(`${backendUrl}/api/v1/auth/saml/login`);
   };
 
   const handleOAuth = async (provider: "google" | "microsoft") => {
@@ -222,6 +230,19 @@ export default function LoginPage() {
                       <Shield className="h-4 w-4 text-white" />
                     </span>
                     Continue with Microsoft
+                  </button>
+                  <div className="relative my-2 py-4 flex items-center gap-4 before:h-px before:flex-1 before:bg-white/[0.05] after:h-px after:flex-1 after:bg-white/[0.05]">
+                    <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest">Enterprise</span>
+                  </div>
+                  <button
+                    onClick={handleSAML}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-3 rounded-3xl border border-indigo-500/20 bg-indigo-500/5 px-4 py-3 text-sm font-semibold text-indigo-100 transition hover:border-indigo-500/40 hover:bg-indigo-500/10 disabled:opacity-50 group"
+                  >
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-500/20 group-hover:bg-indigo-500/30 transition-colors">
+                      <Shield className="h-4 w-4 text-indigo-400" />
+                    </span>
+                    Sign in with Company SSO
                   </button>
                 </div>
                 <p className="text-center text-xs uppercase tracking-[0.24em] text-slate-500">We’ll redirect you securely.</p>

@@ -43,6 +43,7 @@ async def _ensure_customer(db: AsyncSession, user: UserTable) -> str:
         return user.razorpay_customer_id
     except Exception as e:
         logger.error(f"Razorpay customer creation error: {e}")
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create Razorpay customer")
 
 async def create_subscription(db: AsyncSession, user_id: str, tier: str) -> Dict[str, Any]:
@@ -86,6 +87,7 @@ async def create_subscription(db: AsyncSession, user_id: str, tier: str) -> Dict
         }
     except Exception as e:
         logger.error(f"Razorpay Subscription creation error: {e}")
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create Razorpay subscription")
 
 async def get_subscription_status(db: AsyncSession, user_id: str) -> Dict[str, Any] | None:
@@ -135,6 +137,7 @@ async def cancel_subscription(db: AsyncSession, user_id: str) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"Razorpay subscription cancellation error: {e}")
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to cancel Razorpay subscription")
 
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:

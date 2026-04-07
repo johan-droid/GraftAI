@@ -49,6 +49,8 @@ stripe = ">=11.0.0"
 razorpay = ">=1.4.2"
 cachetools = ">=5.5.0"
 msgpack = ">=1.1.0"
+python3-saml = ">=1.16.0"
+resend = ">=2.4.0"
 uvloop = {version = ">=0.20.0", markers = "sys_platform != 'win32'"}
 
 [tool.poetry.dev-dependencies]

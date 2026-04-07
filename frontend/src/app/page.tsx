@@ -112,8 +112,19 @@ const FEATURES_BENTO = [
     bg: "from-slate-500/8 to-slate-600/4",
     border: "border-slate-500/20",
     title: "Enterprise-ready",
-    desc: "SSO, MFA, RBAC, custom domains. Everything IT needs to say yes.",
-    visual: null,
+    desc: "SAML 2.0 SSO, MFA, and RBAC roles. Everything IT needs to say yes at scale.",
+    visual: (
+      <div className="mt-4 flex items-center gap-2">
+        <div className="flex -space-x-2">
+          {[1,2,3].map(i => (
+            <div key={i} className="h-6 w-6 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center">
+              <Shield className="h-3 w-3 text-indigo-400" />
+            </div>
+          ))}
+        </div>
+        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">SSO Verified</span>
+      </div>
+    ),
   },
 ];
 
@@ -227,18 +238,16 @@ export default function Home() {
   return (
     <div id="top" className="min-h-screen overflow-x-hidden bg-[#070711] pb-[calc(86px+env(safe-area-inset-bottom))] text-slate-200 selection:bg-indigo-500/30 md:pb-0">
 
-      {/* Ambient BG — GPU-composited layers only */}
+      {/* ── Ambient BG ──────────────────────────────── */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute -top-[20%] left-[5%] h-[700px] w-[700px] rounded-full bg-indigo-600/8 blur-[140px]" />
-        <div className="absolute top-[50%] right-[-5%] h-[500px] w-[500px] rounded-full bg-violet-600/6 blur-[120px]" />
-        <div className="absolute bottom-[10%] left-[35%] h-[400px] w-[400px] rounded-full bg-blue-600/5 blur-[100px]" />
-        <div className="home-noise-layer absolute inset-0 opacity-[0.035]" />
-        <div className="home-grid-layer absolute inset-0 opacity-[0.025]" />
+        <div className="absolute -top-[10%] left-[10%] h-[500px] w-[500px] rounded-full bg-indigo-600/5 blur-[120px]" />
+        <div className="absolute bottom-[10%] right-[10%] h-[400px] w-[400px] rounded-full bg-violet-600/4 blur-[100px]" />
+        <div className="home-grid-layer absolute inset-0 opacity-[0.015]" />
       </div>
 
       {/* ── Nav ─────────────────────────────────────── */}
-      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-        scrolled ? "bg-[#070711]/90 backdrop-blur-2xl border-b border-white/[0.06] shadow-xl shadow-black/30" : ""
+      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled ? "bg-[#070711]/80 backdrop-blur-xl border-b border-white/[0.05]" : ""
       }`}>
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5">
           <Link href="/" className="flex items-center gap-2 group">
@@ -260,11 +269,11 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="hidden items-center gap-2 md:flex">
-            <Link href="/login" className="rounded-lg px-4 py-2 text-sm font-medium text-slate-400 transition-all hover:text-white hover:bg-white/5">
+          <div className="hidden items-center gap-4 md:flex">
+            <Link href="/login" className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400 transition-colors hover:text-white">
               Sign in
             </Link>
-            <Link href="/register" className="group relative flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/40 hover:-translate-y-px active:translate-y-0">
+            <Link href="/register" className="group flex items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-xs font-bold text-black transition-all hover:bg-slate-200 active:scale-95">
               Get started
               <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </Link>
@@ -397,30 +406,20 @@ export default function Home() {
               className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-500/25 bg-indigo-500/8 px-3.5 py-1.5 text-[11px] font-semibold text-indigo-300 backdrop-blur-sm"
             >
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
-              Now with autonomous scheduling agents
-              <ChevronRight className="h-3 w-3 text-indigo-400/60" />
+              Now with Enterprise SSO (SAML 2.0)
+              <Shield className="h-3 w-3 text-indigo-400/60" />
             </motion.div>
 
             {/* Headline — clamp for fluid sizing */}
             <motion.h1
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="font-serif font-black leading-[1.04] tracking-[-0.04em] text-white"
-              style={{ fontSize: "clamp(2.2rem, 8vw, 5rem)" }}
+              className="font-serif font-black leading-[1.04] tracking-tight text-white"
+              style={{ fontSize: "clamp(2.5rem, 9vw, 5.5rem)" }}
             >
-              Your calendar,{" "}
-              <span className="relative inline-block">
-                <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-purple-400 bg-clip-text text-transparent">
-                  finally smart.
-                </span>
-                <svg className="absolute -bottom-1 left-0 w-full" viewBox="0 0 300 8" fill="none">
-                  <path d="M2 6 C60 2, 120 7, 180 4 C240 1, 280 5, 298 5" stroke="url(#ug)" strokeWidth="2" strokeLinecap="round" />
-                  <defs>
-                    <linearGradient id="ug" x1="0" y1="0" x2="300" y2="0" gradientUnits="userSpaceOnUse">
-                      <stop stopColor="#818cf8" /><stop offset="1" stopColor="#a78bfa" />
-                    </linearGradient>
-                  </defs>
-                </svg>
+              Master the art of{" "}
+              <span className="bg-gradient-to-br from-white via-white to-white/40 bg-clip-text text-transparent italic">
+                Sovereign Time.
               </span>
             </motion.h1>
 
@@ -442,18 +441,16 @@ export default function Home() {
             >
               <Link
                 href="/register"
-                className="group relative flex items-center justify-center gap-2.5 overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 px-7 py-4 text-sm font-bold text-white shadow-2xl shadow-indigo-500/25 transition-all hover:-translate-y-0.5 hover:shadow-indigo-500/40 active:translate-y-0 active:scale-[0.98]"
+                className="group relative flex items-center justify-center gap-2.5 overflow-hidden rounded-xl bg-white px-8 py-4 text-sm font-bold text-black transition-all hover:bg-slate-200 active:scale-95"
               >
-                <span>Start for free</span>
+                <span>Launch your engine</span>
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
               </Link>
               <Link
                 href="/login"
-                className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-7 py-4 text-sm font-semibold text-slate-300 backdrop-blur-sm transition-all hover:border-white/20 hover:text-white hover:bg-white/8 active:scale-[0.98]"
+                className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-8 py-4 text-sm font-semibold text-slate-300 transition-all hover:bg-white/10 active:scale-95"
               >
-                Sign in to dashboard
-                <ChevronRight className="h-4 w-4 opacity-50" />
+                Sign in
               </Link>
             </motion.div>
 
@@ -489,79 +486,77 @@ export default function Home() {
 
             {/* Desktop: Dashboard mockup — hidden on mobile to prevent LCP/jank */}
             <motion.div
-              initial={{ opacity: 0, y: 60, scale: 0.96 }}
+              initial={{ opacity: 0, y: 40, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.9, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="relative mx-auto mt-12 hidden w-full max-w-3xl px-4 sm:block"
+              transition={{ duration: 0.8, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className="relative mx-auto mt-16 hidden w-full max-w-4xl px-4 sm:block"
             >
-              <div className="relative rounded-2xl border border-white/[0.06] bg-slate-900/60 p-1 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/[0.04]">
+              <div className="relative rounded-2xl border border-white/10 bg-[#0a0a1a]/80 p-1 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.8)] backdrop-blur-3xl ring-1 ring-white/5">
                 {/* Window chrome */}
-                <div className="flex items-center gap-1.5 rounded-xl bg-slate-950/70 px-4 py-2.5">
-                  <div className="h-2.5 w-2.5 rounded-full bg-rose-500/50" />
-                  <div className="h-2.5 w-2.5 rounded-full bg-amber-500/50" />
-                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-500/50" />
-                  <div className="ml-3 h-3.5 flex-1 rounded-full bg-slate-800/60 max-w-[180px]" />
+                <div className="flex items-center gap-1.5 rounded-xl bg-slate-950/40 px-4 py-3">
+                  <div className="flex gap-1.5">
+                    <div className="h-2 w-2 rounded-full bg-white/10" />
+                    <div className="h-2 w-2 rounded-full bg-white/10" />
+                    <div className="h-2 w-2 rounded-full bg-white/10" />
+                  </div>
+                  <div className="ml-4 h-3 flex-1 rounded-full bg-white/5 max-w-[240px]" />
                 </div>
 
-                <div className="mt-1 rounded-xl bg-slate-950/40 p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="h-4 w-24 rounded-md bg-slate-800/70" />
-                    <div className="flex gap-2">
-                      <div className="h-7 w-20 rounded-lg bg-indigo-500/20 border border-indigo-500/30" />
-                      <div className="h-7 w-7 rounded-lg bg-slate-800/60" />
+                <div className="mt-1 flex gap-2 p-2">
+                  {/* Sidebar stub */}
+                  <div className="w-48 rounded-lg bg-white/5 p-3 space-y-4">
+                    <div className="h-4 w-28 rounded bg-white/10" />
+                    <div className="space-y-2">
+                      {[1, 2, 3, 4].map(i => <div key={i} className="h-3 w-full rounded bg-white/[0.03]" />)}
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-7 gap-1 text-center">
-                    {["S","M","T","W","T","F","S"].map((d, i) => (
-                      <div key={i} className="py-1 text-[10px] font-bold text-slate-600">{d}</div>
-                    ))}
-                    {Array.from({ length: 35 }, (_, i) => {
-                      const isEvent = [8, 12, 15, 20, 22].includes(i);
-                      const isToday = i === 14;
-                      const isSelected = i === 12;
-                      return (
-                        <div
-                          key={i}
-                          className={`aspect-square rounded-lg flex items-center justify-center text-[11px] font-medium transition-all ${
-                            isSelected ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/40"
-                            : isToday ? "border border-indigo-500/40 text-indigo-400"
-                            : isEvent ? "bg-slate-800/50 text-slate-300"
-                            : "text-slate-700"
-                          }`}
-                        >
-                          {i > 2 ? i - 2 : ""}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4 flex items-start gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/8 p-3">
-                    <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-indigo-400" />
-                    <div>
-                      <p className="text-[11px] font-bold text-indigo-300">AI suggests Tuesday 2–3 PM</p>
-                      <p className="text-[10px] leading-snug text-slate-500">Best overlap across NYC, London & Singapore</p>
+                  {/* Main content area */}
+                  <div className="flex-1 rounded-lg bg-slate-950/60 p-6">
+                    <div className="mb-6 flex items-center justify-between border-b border-white/5 pb-6">
+                      <div className="h-6 w-32 rounded bg-white/10" />
+                      <div className="flex gap-2">
+                        <div className="h-8 w-8 rounded bg-white/5" />
+                        <div className="h-8 w-24 rounded bg-indigo-500/20 border border-indigo-500/30" />
+                      </div>
+                    </div>
+                    {/* Calendar grid mockups */}
+                    <div className="grid grid-cols-7 gap-1.5 opacity-40">
+                      {Array.from({ length: 21 }, (_, i) => (
+                        <div key={i} className="aspect-video rounded bg-white/[0.02]" />
+                      ))}
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Floating badges — desktop only */}
+              {/* Floating AI Callout (Right) */}
               <motion.div
-                animate={{ y: [-5, 5, -5] }}
-                transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -right-3 -top-4 flex items-center gap-2 rounded-2xl border border-emerald-500/25 bg-[#070711]/90 backdrop-blur-xl px-3.5 py-2.5 shadow-2xl"
+                animate={{ y: [-4, 4, -4] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute -right-6 top-1/4 flex items-center gap-3 rounded-2xl border border-indigo-500/30 bg-[#0f1120]/90 backdrop-blur-xl p-4 shadow-2xl"
               >
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                <span className="text-[11px] font-bold text-emerald-300">No conflicts found</span>
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/20">
+                  <Sparkles className="h-5 w-5 text-indigo-400" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-white">AI Coordinator</p>
+                  <p className="text-[10px] text-slate-500">Scheduled: Team Sync @ 2PM</p>
+                </div>
               </motion.div>
+
+              {/* Floating Stat Badge (Left) */}
               <motion.div
-                animate={{ y: [5, -5, 5] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                className="absolute -left-3 bottom-10 flex items-center gap-2 rounded-2xl border border-violet-500/25 bg-[#070711]/90 backdrop-blur-xl px-3.5 py-2.5 shadow-2xl"
+                animate={{ y: [4, -4, 4] }}
+                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                className="absolute -left-4 bottom-12 flex items-center gap-3 rounded-2xl border border-violet-500/30 bg-[#0f1120]/90 backdrop-blur-xl p-4 shadow-2xl"
               >
-                <Clock className="h-3.5 w-3.5 text-violet-400" />
-                <span className="text-[11px] font-bold text-violet-300">Saved 2.5 hrs this week</span>
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20">
+                  <Clock className="h-5 w-5 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-white">Time Reclaimed</p>
+                  <p className="text-[10px] text-slate-500">2.5 hrs saved this week</p>
+                </div>
               </motion.div>
             </motion.div>
           </div>
@@ -573,9 +568,9 @@ export default function Home() {
             Trusted by teams at
           </p>
           <div className="touch-pan-x -mx-5 overflow-x-auto scrollbar-hide px-5 md:mx-0 md:overflow-visible md:px-6">
-            <div className="mx-auto flex w-max min-w-full items-center justify-start gap-6 px-1 md:w-auto md:min-w-0 md:flex-wrap md:justify-center md:gap-10 md:px-0">
+            <div className="mx-auto flex w-max min-w-full items-center justify-start gap-8 px-1 md:w-auto md:min-w-0 md:flex-wrap md:justify-center md:gap-16 md:px-0">
               {LOGOS.map((logo) => (
-                <span key={logo} className="snap-start shrink-0 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2 text-sm font-bold tracking-wide text-slate-600 transition-colors hover:text-slate-400 whitespace-nowrap md:border-0 md:bg-transparent md:px-0 md:py-0">
+                <span key={logo} className="snap-start shrink-0 text-sm font-black tracking-tighter text-slate-700 transition-colors hover:text-slate-400 grayscale hover:grayscale-0 cursor-default uppercase">
                   {logo}
                 </span>
               ))}

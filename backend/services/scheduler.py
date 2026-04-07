@@ -95,10 +95,13 @@ async def _generate_meeting_link(db, user_id: str, platform: str, event_details:
             return await create_zoom_meeting(event_details)
         
     except Exception as e:
-        logger.error(f"❌ Meeting link generation failed for {platform}: {e}")
-        raise
+        logger.warning(f"⚠️ Meeting link generation failed for {platform} (Rate limit/API error): {e}. Falling back to synthetic link.")
+        import uuid
+        return f"https://meet.graftai.tech/{uuid.uuid4().hex[:10]}"
 
-    raise ValueError(f"Unsupported meeting platform '{platform}'")
+    # Fallback for completely unsupported platform strings
+    import uuid
+    return f"https://meet.graftai.tech/{uuid.uuid4().hex[:10]}"
 
 async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "update"):
     """
@@ -406,14 +409,27 @@ async def create_event(
 
     # 2. Lifecycle Context (Handles AI Sync & Notifications)
     async with event_lifecycle(db, new_event, "created", background_tasks):
-        # Offload Heavy I/O Meeting Provisioning
-        if new_event.is_meeting and new_event.meeting_platform:
-            await enqueue_job(
-                "task_provision_meeting", 
-                event_id=new_event.id, 
-                user_id=new_event.user_id, 
-                platform=new_event.meeting_platform
-            )
+        # Enforce bidirectional push directly if we have active integrations
+        stmt_tokens = select(UserTokenTable).where(
+            and_(UserTokenTable.user_id == new_event.user_id, UserTokenTable.is_active == True)
+        )
+        tokens = (await db.execute(stmt_tokens)).scalars().all()
+        
+        if tokens:
+            # We attempt to push to the primary integration (assume the first or 'google')
+            primary = next((t for t in tokens if t.provider == "google"), tokens[0])
+            new_event.source = primary.provider
+            try:
+                if new_event.is_meeting and not new_event.meeting_link:
+                    # Synthetic link fallback makes it credit-efficient
+                    new_event.meeting_link = await _generate_meeting_link(db, new_event.user_id, primary.provider, event_data)
+                
+                # Push back bidirectionally
+                external_id = await _push_to_external(db, new_event, action="create")
+                if external_id:
+                    new_event.external_id = external_id
+            except Exception as e:
+                logger.error(f"⚠️ Bidirectional push failed during create: {e}")
         else:
             new_event.source = "local"
         

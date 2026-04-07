@@ -92,7 +92,7 @@ async def _generate_meeting_link(db, user_id: str, platform: str, event_details:
         elif platform == "teams" or platform == "microsoft":
             return await create_teams_meeting(token_data, event_details)
         elif platform == "zoom":
-            return await create_zoom_meeting(event_details)
+            return await create_zoom_meeting(token_data, event_details)
         
     except Exception as e:
         logger.warning(f"⚠️ Meeting link generation failed for {platform} (Rate limit/API error): {e}. Falling back to synthetic link.")

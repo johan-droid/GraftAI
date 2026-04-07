@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSessionSafe, signIn } from "@/lib/auth-client";
 import { AnimatePresence, motion } from "framer-motion";
-import { Mail, Lock, ArrowRight, Loader2, Shield, Fingerprint, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, ArrowRight, Loader2, Shield, Fingerprint, Eye, EyeOff, Video } from "lucide-react";
 
 type Tab = "email" | "sso" | "passkey";
 
@@ -67,7 +67,7 @@ export default function LoginPage() {
     window.location.assign(`${backendUrl}/api/v1/auth/saml/login`);
   };
 
-  const handleOAuth = async (provider: "google" | "microsoft") => {
+  const handleOAuth = async (provider: "google" | "microsoft" | "zoom") => {
     setError("");
     setLoading(true);
     try {
@@ -230,6 +230,16 @@ export default function LoginPage() {
                       <Shield className="h-4 w-4 text-white" />
                     </span>
                     Continue with Microsoft
+                  </button>
+                  <button
+                    onClick={() => handleOAuth("zoom")}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-3 rounded-3xl border border-white/[0.08] bg-slate-900/80 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-orange-500/40 hover:bg-slate-800/90 disabled:opacity-50"
+                  >
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
+                      <Video className="h-4 w-4 text-white" />
+                    </span>
+                    Connect Zoom
                   </button>
                   <div className="relative my-2 py-4 flex items-center gap-4 before:h-px before:flex-1 before:bg-white/[0.05] after:h-px after:flex-1 after:bg-white/[0.05]">
                     <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest">Enterprise</span>

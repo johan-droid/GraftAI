@@ -332,16 +332,23 @@ async def _offline_assistant_response(
         start_time = _extract_datetime(prompt, user_timezone)
         duration = _extract_duration_minutes(prompt)
         title = _extract_title(prompt)
+        
+        # Determine meeting platform (Google Meet is default)
+        meeting_platform = "google"
+        if "zoom" in prompt.lower():
+            meeting_platform = "zoom"
+        elif any(k in prompt.lower() for k in ["teams", "microsoft"]):
+            meeting_platform = "microsoft"
 
         event_data = {
             "user_id": user_id,
             "title": title,
-            "description": "Created by GraftAI Scheduler Assistant",
+            "description": "Created by GraftAI Sovereign Assistant",
             "category": "meeting",
             "start_time": start_time,
             "end_time": start_time + timedelta(minutes=duration),
             "is_meeting": True,
-            "meeting_platform": "google", # Default to google for now, scheduler will pick based on integration
+            "meeting_platform": meeting_platform,
             "status": "confirmed",
             "metadata_payload": {"source": "assistant_offline_engine"},
         }
@@ -560,7 +567,9 @@ async def ai_chat(
         "1. Use event IDs (e.g. #42) when referencing specific meetings.\n"
         "2. When suggesting times, favor clarity over conversational fluff.\n"
         "3. If a conflict is detected, highlight it immediately.\n"
-        "4. Never mention third-party AI provider names."
+        "4. Identify the user's meeting platform preference (Zoom, Google Meet, or MS Teams) from the prompt. "
+        "   If they ask for a 'Zoom' meeting, explicitly mention it will be scheduled as such.\n"
+        "5. Never mention third-party AI provider names."
     )
     user_input = (
         f"### AUTHORITATIVE CONTEXT (C-Table: ID|Title|Day|TimeRange)\n{compact_context}\n\n"

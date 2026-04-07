@@ -44,6 +44,7 @@ def _verify_state(signed_state: str) -> str | None:
 ALLOWED_SSO_DOMAINS = [
     "www.googleapis.com",
     "graph.microsoft.com",
+    "api.zoom.us",
 ]
 
 
@@ -103,6 +104,16 @@ PROVIDERS = {
         # Unified broad scope for MS (Calendar + Teams)
         "scope": "openid profile email offline_access User.Read Calendars.ReadWrite OnlineMeetings.ReadWrite",
         "redirect_uri": os.getenv("MICROSOFT_REDIRECT_URI"),
+    },
+    "zoom": {
+        "client_id": os.getenv("ZOOM_CLIENT_ID"),
+        "client_secret": os.getenv("ZOOM_CLIENT_SECRET"),
+        "auth_url": "https://zoom.us/oauth/authorize",
+        "token_url": "https://zoom.us/oauth/token",
+        "userinfo_url": "https://api.zoom.us/v2/users/me",
+        # Use scopes from env or fallback to sane defaults
+        "scope": os.getenv("ZOOM_SCOPES", "user:read:user meeting:write:meeting meeting:read:meeting"),
+        "redirect_uri": os.getenv("ZOOM_REDIRECT_URI"),
     },
 }
 
@@ -278,33 +289,17 @@ async def complete_oauth2_flow(request: Request, code: str, state: str):
         userinfo_resp.raise_for_status()
         profile = userinfo_resp.json()
     else:
-        # Apple Sign In: user info is embedded in the ID token
-        id_token = token.get("id_token", "")
-        if id_token:
-            try:
-                # Decode without verification for extracting claims
-                # (token was already validated by Apple during exchange)
-                import base64
-                import json as _json
-
-                parts = id_token.split(".")
-                payload_b64 = parts[1] + "==" if len(parts) > 1 else ""
-                profile = _json.loads(base64.urlsafe_b64decode(payload_b64))
-            except Exception:
-                profile = {}
-        else:
-            profile = {}
+        profile = {}
 
     redirect_to = data.get("redirect_to", "/dashboard")
 
     # Normalize user profile across providers
     user_id = profile.get("id") or profile.get("sub")
-    # Microsoft Graph returns displayName; Apple uses given_name
+    # Microsoft Graph returns displayName
     name = (
         profile.get("name")
         or profile.get("displayName")
         or profile.get("login")
-        or profile.get("given_name")
     )
     # Microsoft Graph returns mail or userPrincipalName
     email = (
@@ -363,10 +358,5 @@ async def revoke_provider_token(provider: str, token: dict):
         except Exception as e:
             logger.error(f"Failed to revoke Google token: {e}")
             return False
-
-    # GitHub revocation (requires Basic Auth with client_id/secret)
-    # Note: GitHub typically requires revoking the entire grant via API, 
-    # which is more complex as it requires an admin token or a user delete.
-    # For now, we focus on Google as per user request.
 
     return False

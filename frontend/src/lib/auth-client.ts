@@ -389,7 +389,7 @@ export const signIn = {
     }
   },
 
-  social: async (provider: "google" | "microsoft"): Promise<AuthResult> => {
+  social: async (provider: "google" | "microsoft" | "zoom"): Promise<AuthResult> => {
     if (typeof window === "undefined") {
       return { data: null, error: { message: "Client-side only operation" } };
     }

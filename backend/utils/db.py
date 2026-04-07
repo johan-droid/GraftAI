@@ -113,3 +113,13 @@ async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
 
+async def unwrap_result(value):
+    """
+    Unwrap a scalar result from an async DB query if necessary.
+    """
+    import inspect
+    if inspect.iscoroutine(value):
+        return await value
+    return value
+
+

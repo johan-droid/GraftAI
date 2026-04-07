@@ -270,10 +270,11 @@ async def complete_oauth2_flow(request: Request, code: str, state: str):
 
         # Standard OAuth2/OIDC: fetch user info via ASYNC client
         headers = {"Authorization": f"Bearer {token.get('access_token')}"}
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            userinfo_resp = await client.get(userinfo_url, headers=headers)
-            userinfo_resp.raise_for_status()
-            profile = userinfo_resp.json()
+        from backend.utils.http_client import get_client
+        client = await get_client()
+        userinfo_resp = await client.get(userinfo_url, headers=headers)
+        userinfo_resp.raise_for_status()
+        profile = userinfo_resp.json()
     else:
         # Apple Sign In: user info is embedded in the ID token
         id_token = token.get("id_token", "")
@@ -348,18 +349,20 @@ async def revoke_provider_token(provider: str, token: dict):
         if not revoke_token:
             return False
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
-                # Google revocation endpoint
-                resp = await client.post(
-                    config["revoke_url"], params={"token": revoke_token}
-                )
-                if resp.status_code == 200:
-                    logger.info(f"Successfully revoked Google token for {provider}")
-                    return True
-            except Exception as e:
-                logger.error(f"Failed to revoke Google token: {e}")
-                return False
+        from backend.utils.http_client import get_client
+        client = await get_client()
+
+        try:
+            # Google revocation endpoint
+            resp = await client.post(
+                config["revoke_url"], params={"token": revoke_token}
+            )
+            if resp.status_code == 200:
+                logger.info(f"Successfully revoked Google token for {provider}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to revoke Google token: {e}")
+            return False
 
     # GitHub revocation (requires Basic Auth with client_id/secret)
     # Note: GitHub typically requires revoking the entire grant via API, 

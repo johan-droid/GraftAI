@@ -1,8 +1,9 @@
 import os
-import json
 import logging
+from typing import Any, Optional
 from dotenv import load_dotenv
-from backend.utils.redis_singleton import get_redis
+from backend.utils.redis_singleton import get_redis_binary
+from backend.utils.serialization import serializer
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -11,50 +12,46 @@ logger = logging.getLogger(__name__)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 _redis = None
-_fallback_cache: dict[str, str] = {}
+_fallback_cache: dict[str, bytes] = {}
 
 
-def _get_redis():
+async def _get_redis():
     global _redis
     if _redis is not None:
         return _redis
 
     try:
-        client = get_redis()
+        client = await get_redis_binary()
         _redis = client
         return _redis
-    except Exception:
-        pass
-
-    logger.warning("⚠ Redis singleton unavailable — using in-memory cache fallback")
-    return None
+    except Exception as exc:
+        logger.warning(f"⚠ Binary Redis unavailable — using in-memory cache fallback: {exc}")
+        return None
 
 
-def set_cache(key: str, value, expire_seconds: int = 300):
-    stored = value
-    if not isinstance(value, (str, bytes, int, float, bool)):
-        stored = json.dumps(value)
+async def set_cache(key: str, value: Any, expire_seconds: int = 300):
+    payload = serializer.pack_for_cache(value)
 
-    r = _get_redis()
+    r = await _get_redis()
     if r:
         try:
             if expire_seconds and int(expire_seconds) > 0:
-                r.set(key, stored, ex=int(expire_seconds))
+                await r.setex(key, int(expire_seconds), payload)
             else:
-                r.set(key, stored)
+                await r.set(key, payload)
             return
         except Exception:
             pass
 
     # In-memory fallback
-    _fallback_cache[key] = stored
+    _fallback_cache[key] = payload
 
 
-def get_cache(key: str):
-    r = _get_redis()
+async def get_cache(key: str):
+    r = await _get_redis()
     if r:
         try:
-            value = r.get(key)
+            value = await r.get(key)
         except Exception:
             value = _fallback_cache.get(key)
     else:
@@ -62,7 +59,13 @@ def get_cache(key: str):
 
     if value is None:
         return None
-    try:
-        return json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return value
+
+    if isinstance(value, bytes):
+        try:
+            return serializer.from_binary(value)
+        except Exception:
+            try:
+                return value.decode("utf-8")
+            except Exception:
+                return value
+    return value

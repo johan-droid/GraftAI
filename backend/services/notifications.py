@@ -2,12 +2,16 @@ import logging
 import os
 from typing import Optional
 from backend.services.mail_service import send_email, render_template
-from backend.services.onesignal import send_push_notification
 from backend.services.redis_client import publish
 from backend.utils.db import AsyncSessionLocal
 from backend.models.tables import NotificationTable
 
 logger = logging.getLogger(__name__)
+
+# OneSignal integration removed: keep a no-op fallback to preserve call sites.
+async def send_push_notification(user_player_ids: list[str], heading: str, content: str, data: Optional[dict] = None):
+    logger.debug("Push notification skipped: OneSignal integration removed.")
+    return None
 
 
 def _build_event_templates(notification_type: str, event_data: dict) -> tuple[str, str, str]:
@@ -102,7 +106,7 @@ async def _send_notification(recipient_emails: list[str], user_player_ids: list[
             )
             logger.info("Push notification triggered")
         except Exception as e:
-            logger.warning(f"OneSignal notification failed: {e}")
+            logger.warning(f"Push notification failed: {e}")
 
     # Realtime pub/sub
     try:

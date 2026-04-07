@@ -1,6 +1,7 @@
 import os
 import logging
 import httpx
+from backend.utils.http_client import ClientProxy
 from typing import Optional
 from msal import ConfidentialClientApplication
 from datetime import datetime
@@ -39,9 +40,7 @@ async def get_ms_graph_client(db: AsyncSession, user_id: str) -> Optional[Client
         }
     )
 
-    client = await get_client()
     return ClientProxy(
-        client=client,
         base_url="https://graph.microsoft.com/v1.0",
         headers={
             "Authorization": f"Bearer {access_token}",

@@ -1,5 +1,6 @@
 import os
 import logging
+import inspect
 from dotenv import load_dotenv
 
 # Initialize logger
@@ -112,4 +113,11 @@ async def get_db():
         )
     async with AsyncSessionLocal() as session:
         yield session
+
+
+async def unwrap_result(value):
+    """Return SQLAlchemy results uniformly across sync/async call sites."""
+    if inspect.isawaitable(value):
+        return await value
+    return value
 

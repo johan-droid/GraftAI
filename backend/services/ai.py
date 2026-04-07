@@ -15,7 +15,7 @@ from backend.auth.logic import get_rate_limiter
 from backend.services import scheduler
 from backend.services.langchain_client import llm
 from backend.services.mailbox import get_recent_emails
-from backend.services.cache import get_cache, set_cache
+from backend.utils.cache import get_cache, set_cache
 from backend.services.usage import check_usage_limit, increment_usage
 from backend.utils.db import get_db
 from backend.utils.resilience import get_breaker
@@ -506,7 +506,7 @@ async def ai_chat(
             pass # Continue to online mode
 
     cache_key = f"ai:chat:{user_id}:{hash((prompt, request.timezone))}"
-    cached = get_cache(cache_key)
+    cached = await get_cache(cache_key)
     if isinstance(cached, str) and cached.strip():
         await increment_usage(db, user_id, "ai_messages")
         return AIResponse(result=cached, model_used="graftai-assistant-cache", action={"type": "none"})
@@ -576,6 +576,6 @@ async def ai_chat(
             "You can ask me to list, schedule, update, or delete calendar events."
         )
 
-    set_cache(cache_key, result_text, 120)
+    await set_cache(cache_key, result_text, 120)
     await increment_usage(db, user_id, "ai_messages")
     return AIResponse(result=result_text, model_used=model_used, action={"type": "none"})

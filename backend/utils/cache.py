@@ -1,33 +1,32 @@
-import json
 import logging
 from typing import Any, Optional
 
-from backend.utils.redis_singleton import get_redis
+from backend.utils.redis_singleton import get_redis_binary
 from backend.utils.l1_cache import l1_cache
+from backend.utils.serialization import serializer
 
 logger = logging.getLogger(__name__)
 
 
 async def get_redis_client():
-    """Returns a singleton Redis client instance."""
+    """Returns a singleton Redis client instance using a binary-safe transport."""
     try:
-        return await get_redis()
+        return await get_redis_binary()
     except Exception:
         return None
 
 async def set_cache(key: str, value: Any, ttl_seconds: int = 300):
-    """Stores a value in Redis with an expiration time."""
+    """Stores a value in Redis with an expiration time using MessagePack."""
     client = await get_redis_client()
     if not client:
         return False
     try:
         # 1. Update L1 (In-Memory)
         l1_cache.set(key, value)
-        
+
         # 2. Update L2 (Redis)
-        if not isinstance(value, str):
-            value = json.dumps(value)
-        await client.setex(key, ttl_seconds, value)
+        payload = serializer.pack_for_cache(value)
+        await client.setex(key, ttl_seconds, payload)
         return True
     except Exception as e:
         logger.warning(f"⚠ Cache set failed for key {key}: {e}")
@@ -48,16 +47,21 @@ async def get_cache(key: str) -> Optional[Any]:
         return None
     try:
         data = await client.get(key)
-        if data:
-            try:
-                parsed = json.loads(data)
-                # Populate L1 for subsequent zero-latency hits
-                l1_cache.set(key, parsed)
-                return parsed
-            except json.JSONDecodeError:
-                l1_cache.set(key, data)
-                return data
-        return None
+        if data is None:
+            return None
+
+        try:
+            parsed = serializer.from_binary(data)
+            l1_cache.set(key, parsed)
+            return parsed
+        except Exception:
+            if isinstance(data, bytes):
+                try:
+                    decoded = data.decode("utf-8")
+                    return decoded
+                except Exception:
+                    return data
+            return data
     except Exception as e:
         logger.warning(f"⚠ Cache get failed for key {key}: {e}")
         return None

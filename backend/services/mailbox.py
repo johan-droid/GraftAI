@@ -3,6 +3,7 @@ import httpx
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from anyio import to_thread
 
 from backend.models.user_token import UserTokenTable
 from backend.utils.db import unwrap_result
@@ -46,35 +47,39 @@ async def get_recent_emails(db: AsyncSession, user_id: str, limit: int = 5) -> L
 async def _fetch_gmail_recent(token: UserTokenTable, limit: int) -> List[Dict[str, Any]]:
     """Fetch recent messages from Gmail API."""
     from googleapiclient.discovery import build
-    
+
     token_data = {
         "access_token": token.access_token,
         "refresh_token": token.refresh_token,
         "scopes": token.scopes
     }
     creds = get_google_credentials(token_data)
-    service = build("gmail", "v1", credentials=creds)
-    
-    # List recent messages
-    results = service.users().messages().list(userId="me", maxResults=limit).execute()
-    messages = results.get("messages", [])
-    
-    fetched_emails = []
-    for msg in messages:
-        m = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
-        headers = m.get("payload", {}).get("headers", [])
-        subject = next((h["value"] for h in headers if h["name"] == "Subject"), "No Subject")
-        sender = next((h["value"] for h in headers if h["name"] == "From"), "Unknown Sender")
-        snippet = m.get("snippet", "")
-        
-        fetched_emails.append({
-            "source": "gmail",
-            "subject": subject,
-            "from": sender,
-            "snippet": snippet,
-            "id": msg["id"]
-        })
-    return fetched_emails
+
+    def sync_fetch() -> List[Dict[str, Any]]:
+        service = build("gmail", "v1", credentials=creds)
+
+        # List recent messages
+        results = service.users().messages().list(userId="me", maxResults=limit).execute()
+        messages = results.get("messages", [])
+
+        fetched_emails: List[Dict[str, Any]] = []
+        for msg in messages:
+            m = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
+            headers = m.get("payload", {}).get("headers", [])
+            subject = next((h["value"] for h in headers if h["name"] == "Subject"), "No Subject")
+            sender = next((h["value"] for h in headers if h["name"] == "From"), "Unknown Sender")
+            snippet = m.get("snippet", "")
+
+            fetched_emails.append({
+                "source": "gmail",
+                "subject": subject,
+                "from": sender,
+                "snippet": snippet,
+                "id": msg["id"]
+            })
+        return fetched_emails
+
+    return await to_thread.run_sync(sync_fetch)
 
 async def _fetch_outlook_recent(token: UserTokenTable, limit: int) -> List[Dict[str, Any]]:
     """Fetch recent messages from Outlook/MS Graph API."""

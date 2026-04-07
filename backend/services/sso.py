@@ -3,7 +3,6 @@ SSO (OAuth2, OIDC) authentication implementation with Redis-backed state storage
 """
 
 from datetime import datetime, timedelta, timezone
-import asyncio
 import os
 import json
 from typing import Any
@@ -191,8 +190,8 @@ async def _start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/d
     }
 
 
-def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboard"):
-    return asyncio.run(_start_oauth2_flow(provider, redirect_to))
+async def start_oauth2_flow(provider: str = "microsoft", redirect_to: str = "/dashboard"):
+    return await _start_oauth2_flow(provider, redirect_to)
 
 
 async def get_authorization_url(provider: str = "microsoft", redirect_to: str = "/dashboard"):

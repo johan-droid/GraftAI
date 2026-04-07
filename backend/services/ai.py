@@ -6,6 +6,7 @@ import re
 from typing import Optional, Any, Dict
 from zoneinfo import ZoneInfo
 
+import inspect
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -222,8 +223,16 @@ async def _resolve_event_id(db: AsyncSession, user_id: str, prompt: str) -> Opti
         return None
 
     try:
-        candidate = min(events, key=lambda e: getattr(e, "start_time", now))
+        def _event_start_key(event: Any) -> datetime:
+            value = getattr(event, "start_time", now)
+            if isinstance(value, datetime):
+                return value
+            return now
+
+        candidate = min(events, key=_event_start_key)
         candidate_id = getattr(candidate, "id", None)
+        if inspect.isawaitable(candidate_id):
+            return None
         return int(candidate_id) if candidate_id is not None else None
     except Exception:
         return None
@@ -276,14 +285,23 @@ def _format_events_compact(events: list[Any], user_timezone: str) -> str:
     # Using more events (up to 20) with fewer tokens per event
     for event in events[:20]:
         eid = getattr(event, "id", "?")
-        title = getattr(event, "title", "Untitled")[:25].strip()
+        title_raw = getattr(event, "title", "Untitled")
+        if inspect.isawaitable(title_raw):
+            title_raw = "Untitled"
+        title = str(title_raw)[:25].strip()
+
         start = getattr(event, "start_time", None)
-        if not isinstance(start, datetime): continue
-        if start.tzinfo is None: start = start.replace(tzinfo=timezone.utc)
+        if inspect.isawaitable(start) or not isinstance(start, datetime):
+            continue
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
         start_tz = start.astimezone(tz)
         
         end = getattr(event, "end_time", start + timedelta(minutes=30))
-        if end.tzinfo is None: end = end.replace(tzinfo=timezone.utc)
+        if inspect.isawaitable(end) or not isinstance(end, datetime):
+            end = start + timedelta(minutes=30)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
         end_tz = end.astimezone(tz)
         
         # ID|TITLE|MON 07|09:00-10:00
@@ -358,6 +376,7 @@ async def _offline_assistant_response(
 
         # Robust extraction for updates if simple resolution fails
         if not event_id or "to" in prompt.lower() or "at" in prompt.lower():
+            action_hint = ""
             try:
                 system_instruction = (
                     "You are a precise data extraction engine. "
@@ -384,6 +403,11 @@ async def _offline_assistant_response(
                         parsed = parsed.replace(tzinfo=_safe_zoneinfo(user_timezone))
                     new_start_override = parsed.astimezone(timezone.utc)
             except Exception as e:
+                parsed_event_id, parsed_start = _parse_update_action_payload(action_hint, user_timezone)
+                if parsed_event_id is not None:
+                    event_id = parsed_event_id
+                if parsed_start is not None:
+                    new_start_override = parsed_start
                 logger.warning(f"Precision extraction failed for update: {e}")
 
         if not event_id:
@@ -532,6 +556,7 @@ async def ai_chat(
         "Your UI is built on 'Strong Sync' technology, meaning every action is reflected instantly. "
         "Do not mention specific third-party model providers. "
         "Keep answers concise, professional, and actionable.\n\n"
+        "Your Real-Time Schedule (GROUND TRUTH):\n"
         "AUTHORITATIVE CONTEXT (C-Table Format: ID|Title|Day|TimeRange):\n"
         f"{compact_context}\n\n"
         "Strict Rule: If the user asks for a change, focus on confirming the specific event ID and time."

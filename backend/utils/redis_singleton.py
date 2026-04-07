@@ -25,6 +25,7 @@ async def get_redis() -> redis.Redis:
             await _client_decoded.ping()
             logger.info("Redis connected (Decoded Singleton Pool)")
         except Exception as exc:
+            _client_decoded = None
             logger.warning(f"Decoded Redis unavailable ({type(exc).__name__})")
             raise
     return _client_decoded
@@ -46,6 +47,7 @@ async def get_redis_binary() -> redis.Redis:
             await _client_binary.ping()
             logger.info("Redis connected (Binary Singleton Pool)")
         except Exception as exc:
+            _client_binary = None
             logger.error(f"Binary Redis unavailable: {exc}")
             raise
     return _client_binary

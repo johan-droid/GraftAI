@@ -1,5 +1,6 @@
 import logging
 import os
+import inspect
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -7,7 +8,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from backend.utils.db import get_db
+from backend.utils.db import get_db, unwrap_result
 from backend.models.tables import UserTable, UserTier
 from backend.auth.schemes import get_current_user_id
 from backend.utils.cache import get_redis_client
@@ -149,26 +150,39 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str):
     Increments in Redis and pushes to a 'Flush Queue' for batch DB updates.
     """
     redis = await get_redis_client()
-    
-    # 1. Update Redis (Instant)
-    current_count = 0
-    if redis:
-        current_count = await redis.incr(f"usage:{user_id}:{feature}")
-        # Add to Flush Queue for background worker persistence
-        await redis.sadd("usage:flush_queue", user_id)
+
+    # Always load user for deterministic quota checks and consistent test behavior.
+    stmt = select(UserTable).where(UserTable.id == user_id)
+    result = await db.execute(stmt)
+    scalars = result.scalars()
+    scalars = await unwrap_result(scalars)
+    user = scalars.first()
+    if inspect.isawaitable(user):
+        user = await user
+    if not user:
+        logger.warning(f"increment_usage skipped: user {user_id} not found")
+        return
+
+    # 1. Update DB counters immediately for consistent source of truth.
+    if feature == "ai_messages":
+        user.daily_ai_count += 1
+        current_count = user.daily_ai_count
     else:
-        # Fallback to DB if Redis is down
-        stmt = select(UserTable).where(UserTable.id == user_id)
-        user = (await db.execute(stmt)).scalars().first()
-        if user:
-            if feature == "ai_messages": user.daily_ai_count += 1
-            else: user.daily_sync_count += 1
-            await db.commit()
-            current_count = user.daily_ai_count if "ai" in feature else user.daily_sync_count
+        user.daily_sync_count += 1
+        current_count = user.daily_sync_count
+    await db.commit()
+
+    # 2. Mirror to Redis and enqueue write-behind flush metadata when available.
+    if redis:
+        try:
+            await redis.set(f"usage:{user_id}:{feature}", current_count)
+            await redis.sadd("usage:flush_queue", user_id)
+        except Exception as exc:
+            logger.warning(f"Redis mirror failed for usage counter ({feature}, {user_id}): {exc}")
 
     logger.info(f"📈 Incremented {feature} for user {user_id} (New count: {current_count})")
     
-    # 2. Trigger Real-Time UI Sync (SSE)
+    # 3. Trigger Real-Time UI Sync (SSE)
     from backend.utils.arq_utils import enqueue_job
     await enqueue_job("task_emit_quota_update", user_id=user_id, feature=feature, count=current_count)
 

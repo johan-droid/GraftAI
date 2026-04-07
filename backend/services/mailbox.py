@@ -95,23 +95,25 @@ async def _fetch_outlook_recent(token: UserTokenTable, limit: int) -> List[Dict[
         "Content-Type": "application/json"
     }
     
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        # Fetch top N messages from inbox
-        resp = await client.get(
-            f"https://graph.microsoft.com/v1.0/me/messages?$top={limit}&$select=subject,from,bodyPreview",
-            headers=headers
-        )
+    from backend.utils.http_client import get_client
+    client = await get_client()
+    
+    # Fetch top N messages from inbox
+    resp = await client.get(
+        f"https://graph.microsoft.com/v1.0/me/messages?$top={limit}&$select=subject,from,bodyPreview",
+        headers=headers
+    )
+    
+    if resp.status_code != 200:
+        logger.error(f"❌ Outlook fetch error: {resp.status_code}")
+        return []
         
-        if resp.status_code != 200:
-            logger.error(f"❌ Outlook fetch error: {resp.status_code}")
-            return []
-            
-        data = resp.json()
-        messages = data.get("value", [])
-        
-        fetched_emails = []
-        for msg in messages:
-            fetched_emails.append({
+    data = resp.json()
+    messages = data.get("value", [])
+    
+    fetched_emails = []
+    for msg in messages:
+        fetched_emails.append({
                 "source": "outlook",
                 "subject": msg.get("subject"),
                 "from": msg.get("from", {}).get("emailAddress", {}).get("address"),

@@ -111,13 +111,13 @@ async def get_db():
         raise RuntimeError(
             "Database not configured. Set DATABASE_URL in your .env file."
         )
-    async with AsyncSessionLocal() as session:
+    async with AsyncSessionLocal() as session:https://github.com/johan-droid/GraftAI/pull/8/conflict?name=backend%252Futils%252Fdb.py&ancestor_oid=7e19a74b3a3c0cf88d7f2d04c26eb117e40196e6&base_oid=708a335e8ea420e2b18456080a6979c77ff0dcab&head_oid=8458252139a84e393a06ae0488f3726e4a27db50
         yield session
-
 
 async def unwrap_result(value):
     """Return SQLAlchemy results uniformly across sync/async call sites."""
     if inspect.isawaitable(value):
         return await value
     return value
+
 

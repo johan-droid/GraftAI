@@ -56,10 +56,11 @@ async def _get_auth0_jwk(token: str) -> dict:
         raise JWTError("Missing kid in token header")
     jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(jwks_url)
-            response.raise_for_status()
-            jwks = response.json()
+        from backend.utils.http_client import get_client
+        client = await get_client()
+        response = await client.get(jwks_url)
+        response.raise_for_status()
+        jwks = response.json()
     except Exception as exc:
         raise JWTError(f"Unable to fetch JWKS from Auth0: {exc}")
     for key in jwks.get("keys", []):

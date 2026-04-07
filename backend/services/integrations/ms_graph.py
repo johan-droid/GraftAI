@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.user_token import UserTokenTable
+from backend.utils.http_client import get_client, ClientProxy
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
 MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/common"
 
 
-async def get_ms_graph_client(db: AsyncSession, user_id: str) -> Optional[httpx.AsyncClient]:
+async def get_ms_graph_client(db: AsyncSession, user_id: str) -> Optional[ClientProxy]:
     """Returns an authenticated Microsoft Graph client for the given user."""
     stmt = select(UserTokenTable).where(
         (UserTokenTable.user_id == user_id)
@@ -93,23 +94,28 @@ async def create_teams_meeting(token_data: dict, event_details: dict) -> str:
             }
         }
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # First, we must use /me/onlineMeetings for personal accounts/Teams
-            resp = await client.post(
-                "https://graph.microsoft.com/v1.0/me/onlineMeetings",
-                headers=headers,
-                json=meeting_payload
-            )
-            
-            if resp.status_code != 201:
-                logger.error(f"❌ MS Graph API Error: {resp.status_code} - {resp.text}")
-                raise RuntimeError(f"MS Graph API returned status {resp.status_code}")
-            
-            meeting_data = resp.json()
-            join_url = meeting_data.get("joinWebUrl")
-            
-            logger.info(f"✅ Teams meeting created: {join_url}")
-            return join_url
+        client = await get_client()
+        proxy = ClientProxy(
+            client=client,
+            base_url="https://graph.microsoft.com/v1.0",
+            headers=headers
+        )
+        
+        # First, we must use /me/onlineMeetings for personal accounts/Teams
+        resp = await proxy.post(
+            "/me/onlineMeetings",
+            json=meeting_payload
+        )
+        
+        if resp.status_code != 201:
+            logger.error(f"❌ MS Graph API Error: {resp.status_code} - {resp.text}")
+            raise RuntimeError(f"MS Graph API returned status {resp.status_code}")
+        
+        meeting_data = resp.json()
+        join_url = meeting_data.get("joinWebUrl")
+        
+        logger.info(f"✅ Teams meeting created: {join_url}")
+        return join_url
 
     except Exception as e:
         logger.error(f"❌ Unexpected error in Teams meeting creation: {e}")
@@ -135,25 +141,31 @@ async def list_ms_events(access_token: str, delta_link: Optional[str] = None) ->
             from datetime import timedelta, timezone
             start = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
             end = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
-            url = f"https://graph.microsoft.com/v1.0/me/calendar/calendarView/delta?startDateTime={start}&endDateTime={end}"
+            url = f"/me/calendar/calendarView/delta?startDateTime={start}&endDateTime={end}"
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url, headers=headers)
+        client = await get_client()
+        proxy = ClientProxy(
+            client=client,
+            base_url="https://graph.microsoft.com/v1.0",
+            headers=headers
+        )
+
+        resp = await proxy.get(url)
+        
+        if resp.status_code == 410:
+            # Delta token expired, restart sync
+            logger.warning("🔄 Microsoft Delta link expired (410), restarting sync.")
+            from datetime import timedelta, timezone
+            start = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            end = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
+            url = f"/me/calendar/calendarView/delta?startDateTime={start}&endDateTime={end}"
+            resp = await proxy.get(url)
+
+        if resp.status_code != 200:
+            logger.error(f"❌ MS Graph list_events error: {resp.status_code} - {resp.text}")
+            raise RuntimeError(f"MS Graph list_events failed: {resp.status_code}")
             
-            if resp.status_code == 410:
-                # Delta token expired, restart sync
-                logger.warning("🔄 Microsoft Delta link expired (410), restarting sync.")
-                from datetime import timedelta, timezone
-                start = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-                end = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
-                url = f"https://graph.microsoft.com/v1.0/me/calendar/calendarView/delta?startDateTime={start}&endDateTime={end}"
-                resp = await client.get(url, headers=headers)
-
-            if resp.status_code != 200:
-                logger.error(f"❌ MS Graph list_events error: {resp.status_code} - {resp.text}")
-                raise RuntimeError(f"MS Graph list_events failed: {resp.status_code}")
-                
-            return resp.json()
+        return resp.json()
             
     except Exception as e:
         logger.error(f"❌ Unexpected error in MS Graph list_events: {e}")
@@ -182,13 +194,20 @@ async def create_ms_event(token_data: dict, event_details: dict) -> dict:
             # Actually, omitting it often works better for personal accounts.
             "onlineMeetingProvider": "teamsForBusiness" if is_meeting else "unknown"
         }
+        
+        client = await get_client()
+        proxy = ClientProxy(
+            client=client,
+            base_url="https://graph.microsoft.com/v1.0",
+            headers=headers
+        )
+        
         # Fallback for Personal accounts: if teamsForBusiness fails, we can retry without it or with teamsForLife
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post("https://graph.microsoft.com/v1.0/me/events", headers=headers, json=payload)
-            if resp.status_code != 201:
-                logger.error(f"❌ MS Graph create_event failed: {resp.status_code} - {resp.text}")
-                raise RuntimeError(f"MS Graph create_event returned {resp.status_code}")
-            return resp.json()
+        resp = await proxy.post("/me/events", json=payload)
+        if resp.status_code != 201:
+            logger.error(f"❌ MS Graph create_event failed: {resp.status_code} - {resp.text}")
+            raise RuntimeError(f"MS Graph create_event returned {resp.status_code}")
+        return resp.json()
     except Exception as e:
         logger.error(f"❌ Unexpected error in Microsoft event creation: {e}")
         raise e
@@ -222,19 +241,24 @@ async def update_ms_event(token_data: dict, external_id: str, event_details: dic
         # Remove None values
         payload = {k: v for k, v in payload.items() if v is not None}
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.patch(
-                f"https://graph.microsoft.com/v1.0/me/events/{external_id}",
-                headers=headers,
-                json=payload
-            )
+        client = await get_client()
+        proxy = ClientProxy(
+            client=client,
+            base_url="https://graph.microsoft.com/v1.0",
+            headers=headers
+        )
+        
+        resp = await proxy.patch(
+            f"/me/events/{external_id}",
+            json=payload
+        )
+        
+        if resp.status_code != 200:
+            logger.error(f"❌ MS Graph Update Error: {resp.status_code} - {resp.text}")
+            raise RuntimeError(f"MS Graph API returned status {resp.status_code}")
             
-            if resp.status_code != 200:
-                logger.error(f"❌ MS Graph Update Error: {resp.status_code} - {resp.text}")
-                raise RuntimeError(f"MS Graph API returned status {resp.status_code}")
-                
-            logger.info(f"✅ Microsoft Event updated: {external_id}")
-            return resp.json()
+        logger.info(f"✅ Microsoft Event updated: {external_id}")
+        return resp.json()
     except Exception as e:
         logger.error(f"❌ MS Graph update failed for {external_id}: {e}")
         raise e
@@ -248,17 +272,20 @@ async def delete_ms_event(token_data: dict, external_id: str) -> None:
             "Authorization": f"Bearer {access_token}",
         }
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.delete(
-                f"https://graph.microsoft.com/v1.0/me/events/{external_id}",
-                headers=headers
-            )
+        client = await get_client()
+        proxy = ClientProxy(
+            client=client,
+            base_url="https://graph.microsoft.com/v1.0",
+            headers=headers
+        )
+        
+        resp = await proxy.delete(f"/me/events/{external_id}")
+        
+        if resp.status_code != 204:
+            logger.error(f"❌ MS Graph Delete Error: {resp.status_code} - {resp.text}")
+            raise RuntimeError(f"MS Graph API returned status {resp.status_code}")
             
-            if resp.status_code != 204:
-                logger.error(f"❌ MS Graph Delete Error: {resp.status_code} - {resp.text}")
-                raise RuntimeError(f"MS Graph API returned status {resp.status_code}")
-                
-            logger.info(f"✅ Microsoft Event deleted: {external_id}")
+        logger.info(f"✅ Microsoft Event deleted: {external_id}")
     except Exception as e:
         logger.error(f"❌ MS Graph delete failed for {external_id}: {e}")
         raise e

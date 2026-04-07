@@ -1,6 +1,6 @@
 import os
 import logging
-import httpx
+from backend.utils.http_client import get_client, ClientProxy
 
 logger = logging.getLogger(__name__)
 
@@ -16,17 +16,17 @@ async def get_zoom_token() -> str:
         
     url = f"https://zoom.us/oauth/token?grant_type=account_credentials&account_id={ZOOM_ACCOUNT_ID}"
     
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            url,
-            auth=(ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET)
-        )
+    client = await get_client()
+    resp = await client.post(
+        url,
+        auth=(ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET)
+    )
+    
+    if resp.status_code != 200:
+        logger.error(f"❌ Zoom token failed: {resp.status_code} - {resp.text}")
+        raise RuntimeError("Zoom token retrieval failed.")
         
-        if resp.status_code != 200:
-            logger.error(f"❌ Zoom token failed: {resp.status_code} - {resp.text}")
-            raise RuntimeError("Zoom token retrieval failed.")
-            
-        return resp.json()["access_token"]
+    return resp.json()["access_token"]
 
 async def create_zoom_meeting(event_details: dict) -> str:
     """Creates a Zoom meeting and returns the join URL."""
@@ -52,16 +52,16 @@ async def create_zoom_meeting(event_details: dict) -> str:
             }
         }
         
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://api.zoom.us/v2/users/me/meetings",
-                headers=headers,
-                json=payload
-            )
-            
-            if resp.status_code != 201:
-                logger.error(f"❌ Zoom API Error: {resp.status_code} - {resp.text}")
-                raise RuntimeError(f"Zoom API returned {resp.status_code}")
+        client = await get_client()
+        resp = await client.post(
+            "https://api.zoom.us/v2/users/me/meetings",
+            headers=headers,
+            json=payload
+        )
+        
+        if resp.status_code != 201:
+            logger.error(f"❌ Zoom API Error: {resp.status_code} - {resp.text}")
+            raise RuntimeError(f"Zoom API returned {resp.status_code}")
                 
             data = resp.json()
             logger.info(f"✅ Zoom meeting created: {data.get('join_url')}")

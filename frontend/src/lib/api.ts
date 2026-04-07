@@ -257,7 +257,7 @@ export async function upgradeLLM(modelName: string, version?: string) {
 // Services: Calendar
 // ──────────────────────────────────────
 export interface CalendarEvent {
-  id: number;
+  id: number | string;
   user_id: string;
   title: string;
   description?: string;
@@ -285,11 +285,11 @@ export async function createEvent(data: Partial<CalendarEvent>) {
   return apiClient.post<CalendarEvent>("/calendar/events", data);
 }
 
-export async function updateEvent(id: number, data: Partial<CalendarEvent>) {
+export async function updateEvent(id: number | string, data: Partial<CalendarEvent>) {
   return apiClient.patch<CalendarEvent>(`/calendar/events/${id}`, data);
 }
 
-export async function deleteEvent(id: number) {
+export async function deleteEvent(id: number | string) {
   return apiClient.delete<void>(`/calendar/events/${id}`);
 }
 

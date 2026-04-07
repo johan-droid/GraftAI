@@ -48,7 +48,7 @@ async def login(
             detail="Incorrect email or password",
         )
 
-    tokens = create_jwt_token(str(user.id), email=user.email)
+    tokens = await create_jwt_token(str(user.id), email=user.email)
     response = JSONResponse(
         content={
             "message": "Login successful",

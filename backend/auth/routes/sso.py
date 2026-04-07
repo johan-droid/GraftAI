@@ -139,19 +139,27 @@ async def sso_callback(
 
         await db.commit()
 
-        # 3. Create Session
-        access_token = logic.create_access_token(data={"sub": str(user.id)})
-        refresh_token = logic.create_refresh_token(data={"sub": str(user.id)})
+        # 3. Create Session tokens and register session state in Redis
+        token_data = await logic.create_jwt_token(str(user.id), email=user.email)
 
         # 4. Redirect with Handoff
         target_path = sso_data.get("redirect_to", sso_data.get("original_redirect", "/dashboard"))
         
         # If Token Bridge is enabled, we use a middle-man redirect to ensure token transfer
-        bridge_url = logic.get_token_bridge_url(access_token, refresh_token, target_path)
+        bridge_url = logic.get_token_bridge_url(
+            token_data["access_token"],
+            token_data["refresh_token"],
+            target_path,
+        )
         response = RedirectResponse(url=bridge_url)
         
         # Also sets fallback cookies for the backend domain itself
-        logic.set_auth_cookies(response, access_token, refresh_token)
+        logic.set_auth_cookies(
+            response,
+            token_data["access_token"],
+            token_data["refresh_token"],
+            request,
+        )
         return response
 
     except Exception as e:

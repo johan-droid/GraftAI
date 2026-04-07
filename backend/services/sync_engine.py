@@ -1,16 +1,24 @@
 import hashlib
+import json
 import logging
 import os
 from datetime import datetime
 from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, update
+from sqlalchemy.dialects.postgresql import insert
 
 from backend.models.tables import EventTable, UserTable
 from backend.models.user_token import UserTokenTable
 from backend.services.integrations import google_calendar, ms_graph
+from backend.utils.resilience import get_breaker
+from backend.utils.serialization import serializer
 
 logger = logging.getLogger(__name__)
+
+# Register 3rd-party breakers
+google_breaker = get_breaker("google_calendar", threshold=5, recovery_timeout=120)
+ms_breaker = get_breaker("microsoft_calendar", threshold=5, recovery_timeout=120)
 
 def generate_fingerprint(event_data: Dict[str, Any]) -> str:
     """
@@ -111,6 +119,36 @@ async def upsert_event(db: AsyncSession, user_id: str, source: str, event_data: 
         logger.info(f"🆕 Created sync event for user {user_id} (source: {source})")
         return new_event
 
+async def bulk_upsert_events(db: AsyncSession, user_id: str, source: str, events: list[Dict[str, Any]]):
+    """
+    Perform a high-performance batch upsert to handle 'big masses' of data.
+    """
+    if not events:
+        return
+        
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    
+    # Chunking for memory safety on weak CPUs
+    CHUNK_SIZE = 50
+    for i in range(0, len(events), CHUNK_SIZE):
+        chunk = events[i:i + CHUNK_SIZE]
+        stmt = pg_insert(EventTable).values(chunk)
+        
+        # Determine cols to update
+        cols = {
+            c.name: stmt.excluded[c.name] 
+            for c in EventTable.__table__.columns 
+            if c.name not in ['id', 'user_id', 'external_id', 'source', 'created_at']
+        }
+        
+        upsert_stmt = stmt.on_conflict_do_update(
+            index_elements=['user_id', 'external_id'],
+            set_=cols
+        )
+        await db.execute(upsert_stmt)
+    
+    await db.commit()
+
 async def sync_google_events(db: AsyncSession, token_record: UserTokenTable):
     """
     Perform incremental sync for Google Calendar.
@@ -126,14 +164,16 @@ async def sync_google_events(db: AsyncSession, token_record: UserTokenTable):
             "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
         }
 
-        results = await google_calendar.list_google_events(
+        results = await google_breaker(
+            google_calendar.list_google_events,
             token_data,
             sync_token=token_record.sync_token
         )
         
         items = results.get("items", [])
         next_sync_token = results.get("nextSyncToken")
-        
+            # Gather events for batch processing
+        events_to_sync = []
         for item in items:
             if item.get("status") == "cancelled":
                 # Handle deletion
@@ -147,34 +187,29 @@ async def sync_google_events(db: AsyncSession, token_record: UserTokenTable):
                 continue
                 
             # Map Google item to our schema
-            # Handle date vs dateTime
-            start = item["start"].get("dateTime", item["start"].get("date"))
-            end = item["end"].get("dateTime", item["end"].get("date"))
+            start_data = item.get("start", {})
+            end_data = item.get("end", {})
             
-            # Robust parsing
-            try:
-                start_dt = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
-                end_dt = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
-            except Exception:
-                logger.warning(f"Skipping event {item.get('id')} due to invalid date format: {start}")
-                continue
-
+            # Extract datetime strings
+            start_str = start_data.get("dateTime") or start_data.get("date")
+            end_str = end_data.get("dateTime") or end_data.get("date")
+            
             event_payload = {
+                "user_id": user_id,
                 "external_id": item.get("id"),
                 "title": item.get("summary", "Untitled Event"),
                 "description": item.get("description"),
-                "start_time": start_dt,
-                "end_time": end_dt,
-                "category": classify_google_category(item),
-                "is_meeting": bool(item.get("hangoutLink") or item.get("conferenceData") or item.get("attendees")),
-                "meeting_platform": "google_meet" if item.get("hangoutLink") or item.get("conferenceData") else None,
-                "meeting_link": item.get("hangoutLink") or (item.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri") if item.get("conferenceData") else None),
-                "attendees": item.get("attendees", []),
+                "start_time": datetime.fromisoformat(start_str.replace("Z", "+00:00")),
+                "end_time": datetime.fromisoformat(end_str.replace("Z", "+00:00")),
+                "category": "meeting",
                 "source": "google",
             }
+            event_payload["fingerprint"] = generate_fingerprint(event_payload)
+            events_to_sync.append(event_payload)
             
-            await upsert_event(db, user_id, "google", event_payload)
-            
+        if events_to_sync:
+            await bulk_upsert_events(db, user_id, "google", events_to_sync)
+
         # Update token with new sync token
         if next_sync_token:
             token_record.sync_token = next_sync_token
@@ -197,8 +232,9 @@ async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
     """
     user_id = token_record.user_id
     try:
-        # 1. Fetch events from MS Graph (using delta token if available)
-        results = await ms_graph.list_ms_events(
+        # 1. Fetch events from MS Graph with Circuit Breaker
+        results = await ms_breaker(
+            ms_graph.list_ms_events,
             token_record.access_token, 
             delta_link=token_record.sync_token
         )
@@ -206,6 +242,7 @@ async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
         items = results.get("value", [])
         next_delta_link = results.get("@odata.deltaLink")
         
+        events_to_sync = []
         for item in items:
             if item.get("@removed"):
                 # Handle deletion
@@ -220,19 +257,25 @@ async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
                 
             # Map MS item to our schema
             event_payload = {
+                "user_id": user_id,
                 "external_id": item.get("id"),
                 "title": item.get("subject", "Untitled Meeting"),
                 "description": item.get("body", {}).get("content"),
                 "start_time": datetime.fromisoformat(item["start"].get("dateTime").replace("Z", "+00:00")),
                 "end_time": datetime.fromisoformat(item["end"].get("dateTime").replace("Z", "+00:00")),
+                "category": "meeting",
+                "source": "microsoft",
                 "is_meeting": True,
                 "meeting_platform": "teams",
                 "meeting_link": item.get("onlineMeeting", {}).get("joinUrl"),
                 "attendees": item.get("attendees", []),
             }
+            event_payload["fingerprint"] = generate_fingerprint(event_payload)
+            events_to_sync.append(event_payload)
             
-            await upsert_event(db, user_id, "microsoft", event_payload)
-            
+        if events_to_sync:
+            await bulk_upsert_events(db, user_id, "microsoft", events_to_sync)
+
         # 2. Store next delta link
         if next_delta_link:
             token_record.sync_token = next_delta_link
@@ -250,22 +293,60 @@ async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
             await enqueue_sync_error_alert(user.email, str(e))
 
 import sentry_sdk
-from backend.utils.cache import acquire_lock, release_lock
+from backend.utils.cache import acquire_lock, release_lock, get_redis_client
+
+SYNC_MIN_INTERVAL_SECONDS = int(os.getenv("SYNC_MIN_INTERVAL_SECONDS", "120"))
+
+
+async def _acquire_sync_cooldown(user_id: str) -> bool:
+    """
+    Prevents repeated full-provider sync bursts for the same user.
+    Returns False when a recent sync already ran within the cooldown window.
+    """
+    if SYNC_MIN_INTERVAL_SECONDS <= 0:
+        return True
+
+    client = await get_redis_client()
+    if not client:
+        # Fail open when cache infra is unavailable.
+        return True
+
+    key = f"sync_cooldown:{user_id}"
+    try:
+        return bool(
+            await client.set(key, "1", ex=SYNC_MIN_INTERVAL_SECONDS, nx=True)
+        )
+    except Exception as exc:
+        logger.warning(f"[SYNC] Cooldown check failed for user {user_id}: {exc}")
+        return True
 
 async def sync_user_calendar(db: AsyncSession, user_id: str):
     """
     High-level orchestrator to sync ALL active integrations for a user.
     Uses a Redis-based sync lock to ensure concurrency safety.
     """
+    if not await _acquire_sync_cooldown(user_id):
+        logger.info(
+            f"[SYNC] ⏱ Skipping sync for user {user_id}: recent sync within cooldown ({SYNC_MIN_INTERVAL_SECONDS}s)."
+        )
+        return
+
     lock_name = f"sync_user_{user_id}"
-    if not acquire_lock(lock_name, ttl_seconds=300):
+    if not await acquire_lock(lock_name, ttl_seconds=300):
         logger.info(f"[SYNC] ⏳ Sync already in progress for user {user_id}. Skipping.")
         return
 
     # Start a Sentry span for the full sync transaction
+    from backend.services.redis_client import publish
     with sentry_sdk.start_span(op="calendar.sync", description=f"Sync for {user_id}"):
         try:
             logger.info(f"[SYNC] 🔄 Starting full calendar sync orchestration for user {user_id}")
+            # Binary SSE: Minimal overhead for real-time status
+            await publish(f"sse:user:{user_id}", serializer.pack_for_cache({
+                "event": "SYNC_STATUS", 
+                "status": "syncing", 
+                "message": "Starting full calendar sync..."
+            }))
             
             # Fetch all active tokens for this user
             stmt = select(UserTokenTable).where(
@@ -276,6 +357,11 @@ async def sync_user_calendar(db: AsyncSession, user_id: str):
             
             if not tokens:
                 logger.warning(f"[SYNC] ⚠️ No active integrations found for user {user_id}. Skipping sync.")
+                await publish(f"sse:user:{user_id}", serializer.pack_for_cache({
+                    "event": "SYNC_STATUS", 
+                    "status": "no_integrations", 
+                    "message": "No active integrations found."
+                }))
                 return
 
             for token in tokens:
@@ -289,6 +375,11 @@ async def sync_user_calendar(db: AsyncSession, user_id: str):
                         logger.warning(f"[SYNC] ❓ Unknown provider '{token.provider}' for token {token.id}")
 
             logger.info(f"[SYNC] ✨ Orchestration completed for user {user_id}")
+            await publish(f"sse:user:{user_id}", serializer.pack_for_cache({
+                "event": "SYNC_STATUS", 
+                "status": "idle", 
+                "message": "Sync completed successfully."
+            }))
             
             # 3. Ensure Real-Time Webhooks are active for this user
             with sentry_sdk.start_span(op="webhook.register", description="Webhook Maintenance"):
@@ -300,4 +391,4 @@ async def sync_user_calendar(db: AsyncSession, user_id: str):
                     
         finally:
             # Always release the lock
-            release_lock(lock_name)
+            await release_lock(lock_name)

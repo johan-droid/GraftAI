@@ -14,14 +14,17 @@ import {
   MapPin,
   Users,
   Sparkles,
-  TrendingUp,
-  MoreHorizontal,
-  ChevronRight,
-  Globe,
   Activity,
   X,
+  Zap,
+  ChevronRight,
+  MoreHorizontal,
+  Globe,
 } from "lucide-react";
 import { getAnalyticsSummary, getEvents, getProactiveSuggestion, type CalendarEvent } from "@/lib/api";
+import { CharmingHeader } from "@/components/dashboard/CharmingHeader";
+import { msgpack } from "@/lib/msgpack";
+import { toast } from "sonner";
 
 const STAGGER = {
   hidden: { opacity: 0 },
@@ -163,10 +166,32 @@ export default function Dashboard() {
       }
     });
 
+    // 4. Connect Real-time Binary Sync (SaaS Precision)
+    const sseUrl = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/sse/subscribe/${typedUser?.email}`;
+    const eventSource = new EventSource(sseUrl);
+
+    eventSource.onmessage = async (event) => {
+      // Logic: Handle binary or JSON transparently
+      const data = await msgpack.parseEventData(event.data);
+      if (data?.event === "SYNC_STATUS" && data?.status === "idle") {
+        // Trigger a refresh when a background sync finishes
+        getEvents(now.toISOString(), end.toISOString()).then(res => {
+          const sorted = [...res]
+            .filter((e) => new Date(e.end_time).getTime() >= Date.now())
+            .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+          setUpcomingMeetings(sorted.slice(0, 6));
+        });
+      }
+      if (data?.event === "QUOTA_UPDATE") {
+        toast.info(`Quota Updated: ${data.data.feature}`);
+      }
+    };
+
     return () => {
       alive = false;
+      eventSource.close();
     };
-  }, [isAuthenticated, typedUser?.bio, typedUser?.job_title, typedUser?.location]);
+  }, [isAuthenticated, typedUser]);
 
   const handleOnboardingSubmit = async () => {
     if (!cameFrom || !useCase || !industry) {
@@ -223,45 +248,26 @@ export default function Dashboard() {
   const timezoneString = Intl.DateTimeFormat().resolvedOptions().timeZone.split("/").pop()?.replace("_", " ") || "Local";
 
   return (
-    <div className="p-3 sm:p-6 md:p-10 max-w-7xl mx-auto">
-      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-5 sm:space-y-8">
-        <motion.div variants={ITEM} className="flex flex-col md:flex-row md:items-center gap-4 sm:gap-6 pb-1 sm:pb-2">
-          <div className="flex items-start gap-4">
-             <div className="hidden sm:flex h-14 w-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 items-center justify-center shrink-0">
-                <Clock className="w-7 h-7 text-indigo-400 animate-pulse" />
-             </div>
-             <div>
-               <div className="flex items-center gap-2 mb-1">
-                 <p className="text-indigo-400 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.25em]">{greeting} 👋</p>
-                 <span className="w-1 h-1 rounded-full bg-slate-700" />
-                 <p className="text-slate-500 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
-                   {timeString} <span className="opacity-50">•</span> {timezoneString}
-                 </p>
-               </div>
-               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight uppercase">{profileName}&apos;s workspace</h1>
-             </div>
-          </div>
-          <div className="md:ml-auto flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
-            <Link
-              href="/dashboard/calendar"
-              className="w-full md:w-auto inline-flex min-h-10 sm:min-h-11 items-center justify-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] sm:text-[13px] font-bold transition-all shadow-lg shadow-indigo-600/25 active:scale-95"
-            >
-              <Calendar className="w-4 h-4" />
-              New event
-            </Link>
-          </div>
-        </motion.div>
+    <div className="p-4 sm:p-8 md:p-14 max-w-7xl mx-auto space-y-10">
+      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-12">
+        
+        {/* Charming Greeting Engine */}
+        <CharmingHeader 
+          userName={profileName} 
+          upcomingCount={upcomingMeetings.length} 
+        />
 
-        <motion.div variants={ITEM} className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-5">
+        <motion.div variants={ITEM} className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 pt-4">
           {[
-            { label: "Total Meetings", value: stats.meetings, sub: "Last 30 days", icon: Calendar, color: "indigo" },
-            { label: "Scheduled Hours", value: `${stats.hours}h`, sub: "Active workload", icon: Clock, color: "violet" },
-            { label: "Cancellations", value: stats.cancellations, sub: "Avoided conflicts", icon: TrendingUp, color: "emerald" },
-            { label: "Active Window", value: upcomingMeetings.length, sub: "Next 14 days", icon: Activity, color: "cyan" },
+            { label: "Analytic Period", value: stats.meetings, sub: "Last 30 days", icon: Calendar, color: "indigo" },
+            { label: "Active Momentum", value: `${stats.hours}h`, sub: "Workload intensity", icon: Clock, color: "violet" },
+            { label: "Risk Mitigation", value: stats.cancellations, sub: "Conflict prevention", icon: Zap, color: "emerald" },
+            { label: "Forward View", value: upcomingMeetings.length, sub: "Next 14 days", icon: Activity, color: "cyan" },
           ].map((stat) => (
-            <div key={stat.label} className="group relative overflow-hidden rounded-xl sm:rounded-2xl border border-white/[0.08] bg-[#0d1424]/40 p-3 sm:p-5 hover:bg-[#0d1424]/60 transition-all hover:border-white/15">
-              <div className={`${STAT_COLOR_CLASSES[stat.color]} w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl mb-2 sm:mb-4 flex items-center justify-center border transition-transform group-hover:scale-110`}>
-                <stat.icon className="w-3.5 h-3.5 sm:w-[1.125rem] sm:h-[1.125rem] text-current" />
+            <div key={stat.label} className="group relative overflow-hidden rounded-3xl border border-white/[0.04] bg-white/[0.015] backdrop-blur-xl p-5 sm:p-6 hover:bg-white/[0.035] transition-all hover:border-indigo-500/20 active:scale-[0.98]">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[50px] group-hover:bg-indigo-500/10 transition-all rounded-full pointer-events-none" />
+              <div className={`${STAT_COLOR_CLASSES[stat.color]} w-8 h-8 sm:w-10 sm:h-10 rounded-2xl mb-4 sm:mb-6 flex items-center justify-center border transition-all group-hover:scale-110 shadow-lg`}>
+                <stat.icon className="w-4 h-4 sm:w-5 sm:h-5 text-current" />
               </div>
               <p className="text-lg sm:text-2xl md:text-3xl font-bold text-white tracking-tighter mb-0.5 sm:mb-1.5">{stat.value}</p>
               <p className="text-[10px] sm:text-[13px] text-slate-400 font-semibold leading-tight">{stat.label}</p>

@@ -24,8 +24,8 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
-def get_redis_client():
-    return _get_redis_from_service()
+async def get_redis_client():
+    return await _get_redis_from_service()
 
 _AUTH_RATE_LIMIT_LUA = """
 local key = KEYS[1]
@@ -53,11 +53,11 @@ def get_rate_limiter(max_requests: int, window_seconds: int):
         if "," in client_ip:
             client_ip = client_ip.split(",")[0].strip()
 
-        client = get_redis_client()
+        client = await get_redis_client()
         key = f"auth_rate_limit:{client_ip}:{request.url.path}"
 
         try:
-            allowed = client.eval(_AUTH_RATE_LIMIT_LUA, 1, key, max_requests, window_seconds)
+            allowed = await client.eval(_AUTH_RATE_LIMIT_LUA, 1, key, max_requests, window_seconds)
         except Exception as e:
             logger.error(f"Rate limiter Redis failure: {e}")
             return True
@@ -79,7 +79,7 @@ def is_secure_request(request: Request | None) -> bool:
     return forwarded_proto.lower() == "https" or request.url.scheme == "https"
 
 
-def create_jwt_token(sub: str, email: Optional[str] = None):
+async def create_jwt_token(sub: str, email: Optional[str] = None):
     """Create access and refresh tokens and persist refresh token in Redis."""
     now = datetime.now(timezone.utc)
 
@@ -107,11 +107,11 @@ def create_jwt_token(sub: str, email: Optional[str] = None):
     }
     refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
 
-    client = get_redis_client()
-    client.setex(
+    client = await get_redis_client()
+    await client.setex(
         f"refresh:{refresh_token}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, str(sub)
     )
-    client.sadd(f"user_tokens:{sub}", refresh_token)
+    await client.sadd(f"user_tokens:{sub}", refresh_token)
 
     # Register this specific access session in Redis
     cache_key = hashlib.sha256(access_token.encode()).hexdigest()[:32]
@@ -124,7 +124,7 @@ def create_jwt_token(sub: str, email: Optional[str] = None):
     pipe.setex(session_key, ACCESS_TOKEN_EXPIRE_MINUTES * 60, str(sub))
     pipe.sadd(tokens_key, refresh_token)
     pipe.expire(tokens_key, REFRESH_TOKEN_EXPIRE_DAYS * 86400)
-    pipe.execute()
+    await pipe.execute()
 
     return {
         "access_token": access_token,
@@ -142,7 +142,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc), "type": "access"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def create_refresh_token(data: dict):
+async def create_refresh_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc), "type": "refresh"})
@@ -151,9 +151,9 @@ def create_refresh_token(data: dict):
     # Store in Redis for revocation checks
     sub = data.get("sub")
     if sub:
-        client = get_redis_client()
-        client.setex(f"refresh:{rt}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, str(sub))
-        client.sadd(f"user_tokens:{sub}", rt)
+        client = await get_redis_client()
+        await client.setex(f"refresh:{rt}", REFRESH_TOKEN_EXPIRE_DAYS * 86400, str(sub))
+        await client.sadd(f"user_tokens:{sub}", rt)
     
     return rt
 

@@ -35,12 +35,13 @@ AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
 SESSION_CACHE_TTL = 300  # 5 minutes
 
 
-def blacklist_token(token: str, expires_in: int) -> None:
-    safe_set(f"token:blacklist:{token}", "1", ex=expires_in)
+async def blacklist_token(token: str, expires_in: int) -> None:
+    await safe_set(f"token:blacklist:{token}", "1", ex=expires_in)
 
 
-def is_token_blacklisted(token: str) -> bool:
-    return safe_get(f"token:blacklist:{token}") is not None
+async def is_token_blacklisted(token: str) -> bool:
+    res = await safe_get(f"token:blacklist:{token}")
+    return res is not None
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
@@ -98,7 +99,7 @@ async def decode_token(token: str) -> Optional[dict]:
 
 async def verify_better_auth_session(token: str, db: AsyncSession) -> Optional[dict]:
     cache_key = f"session:ba:{token[-32:]}"
-    cached = safe_get(cache_key)
+    cached = await safe_get(cache_key)
     if cached:
         try:
             return json.loads(cached)
@@ -141,7 +142,7 @@ async def verify_better_auth_session(token: str, db: AsyncSession) -> Optional[d
             return None
 
         payload = {"sub": str(user[0]), "email": user[1], "name": user[2], "type": "better-auth"}
-        safe_set(cache_key, json.dumps(payload), ex=SESSION_CACHE_TTL)
+        await safe_set(cache_key, json.dumps(payload), ex=SESSION_CACHE_TTL)
         return payload
     except Exception as exc:
         logger.error(f"Better Auth session verification failed: {exc}")
@@ -205,7 +206,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if is_token_blacklisted(token):
+    if await is_token_blacklisted(token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",
@@ -229,15 +230,15 @@ async def get_current_user(
 
     session_key = _session_cache_key(token)
     try:
-        redis_client = get_redis_service()
-        if redis_client.get(session_key) is None:
+        redis_client = await get_redis_service()
+        if await redis_client.get(session_key) is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Session has expired or was revoked",
                 headers={"WWW-Authenticate": "Bearer"},
             )
     except Exception:
-        if safe_get(session_key) is None:
+        if await safe_get(session_key) is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Session has expired or was revoked",
@@ -272,7 +273,7 @@ async def is_admin_user(
 
 async def get_current_user_id_optional(request: Request) -> Optional[str]:
     token = request.cookies.get("graftai_access_token")
-    if not token or is_token_blacklisted(token):
+    if not token or await is_token_blacklisted(token):
         return None
 
     payload = await decode_token(token)

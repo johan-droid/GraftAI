@@ -7,7 +7,7 @@ from backend.api.deps import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.services import scheduler
 from backend.services.sync_engine import sync_user_calendar
-from backend.services.usage import increment_usage
+from backend.services.usage import increment_usage, check_usage_limit
 from backend.utils.sanitization import sanitize_recursive
 import logging
 
@@ -135,6 +135,7 @@ async def delete_event(
 async def manual_calendar_sync(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
+    _usage_check: bool = Depends(check_usage_limit("calendar_syncs")),
 ):
     """Trigger real-time synchronization for all active calendar integrations."""
     await sync_user_calendar(db, user_id)

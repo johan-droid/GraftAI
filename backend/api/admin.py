@@ -28,10 +28,10 @@ async def get_sync_status(
 
     try:
         # 1. Check Redis Connectivity
-        redis_client = get_redis()
+        redis_client = await get_redis()
         redis_ok = False
         try:
-            redis_ok = redis_client.ping()
+            redis_ok = await redis_client.ping()
         except Exception:
             pass
 

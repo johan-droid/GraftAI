@@ -8,6 +8,7 @@ from backend.models.tables import WebhookSubscriptionTable
 from backend.models.user_token import UserTokenTable
 from backend.services.integrations.google_calendar import get_google_service
 from backend.services.integrations.ms_graph import get_ms_graph_client
+from backend.utils.cache import acquire_lock, release_lock
 
 logger = logging.getLogger(__name__)
 
@@ -15,25 +16,54 @@ async def register_user_webhooks(db: AsyncSession, user_id: str):
     """
     Subscribes to Google and Microsoft push notifications for a user based on connected accounts.
     """
+    lock_name = f"webhook_register:{user_id}"
+    if not await acquire_lock(lock_name, ttl_seconds=60):
+        logger.info(f"⏳ Webhook registration already in progress for user {user_id}. Skipping.")
+        return
+
+    try:
     # 1. Google Subscriptions
-    stmt = select(UserTokenTable).where(
-        (UserTokenTable.user_id == user_id) & (UserTokenTable.provider == "google") & (UserTokenTable.is_active == True)
-    )
-    result = await db.execute(stmt)
-    google_token = result.scalars().first()
-    
-    if google_token:
-        await _subscribe_google(db, user_id, google_token)
+        stmt = select(UserTokenTable).where(
+            (UserTokenTable.user_id == user_id) & (UserTokenTable.provider == "google") & (UserTokenTable.is_active == True)
+        )
+        result = await db.execute(stmt)
+        google_token = result.scalars().first()
+        
+        if google_token and not await _has_fresh_subscription(db, user_id, "google"):
+            await _subscribe_google(db, user_id, google_token)
+        elif google_token:
+            logger.info(f"✅ Reusing existing Google webhook for user {user_id}")
 
     # 2. Microsoft Subscriptions
-    stmt = select(UserTokenTable).where(
-        (UserTokenTable.user_id == user_id) & (UserTokenTable.provider == "microsoft") & (UserTokenTable.is_active == True)
+        stmt = select(UserTokenTable).where(
+            (UserTokenTable.user_id == user_id) & (UserTokenTable.provider == "microsoft") & (UserTokenTable.is_active == True)
+        )
+        result = await db.execute(stmt)
+        ms_token = result.scalars().first()
+        
+        if ms_token and not await _has_fresh_subscription(db, user_id, "microsoft"):
+            await _subscribe_microsoft(db, user_id, ms_token)
+        elif ms_token:
+            logger.info(f"✅ Reusing existing Microsoft webhook for user {user_id}")
+    finally:
+        await release_lock(lock_name)
+
+
+async def _has_fresh_subscription(
+    db: AsyncSession,
+    user_id: str,
+    provider: str,
+    min_valid_hours: int = 6,
+) -> bool:
+    threshold = datetime.now(timezone.utc) + timedelta(hours=min_valid_hours)
+    stmt = select(WebhookSubscriptionTable).where(
+        (WebhookSubscriptionTable.user_id == user_id)
+        & (WebhookSubscriptionTable.provider == provider)
+        & (WebhookSubscriptionTable.is_active == True)
+        & (WebhookSubscriptionTable.expiration_at >= threshold)
     )
     result = await db.execute(stmt)
-    ms_token = result.scalars().first()
-    
-    if ms_token:
-        await _subscribe_microsoft(db, user_id, ms_token)
+    return result.scalars().first() is not None
 
 async def _subscribe_google(db: AsyncSession, user_id: str, token: UserTokenTable):
     """Watches the primary Google calendar."""

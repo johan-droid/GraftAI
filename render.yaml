@@ -4,8 +4,9 @@ services:
     name: graftai-api
     runtime: docker
     dockerfilePath: backend/Dockerfile
-    region: oregon # or your preferred region
-    plan: free # or starter for more power
+    region: oregon 
+    plan: starter
+    preDeployCommand: "python -m backend.services.migrations"
     envVars:
       - key: ENV
         value: production
@@ -29,7 +30,7 @@ services:
     # Overriding the default CMD for the worker
     dockerCommand: arq backend.worker.WorkerSettings
     region: oregon
-    plan: free
+    plan: starter
     envVars:
       - key: REDIS_URL
         fromService:
@@ -42,7 +43,7 @@ services:
   - type: redis
     name: graftai-redis
     region: oregon
-    plan: free
+    plan: starter
     ipAllowList: [] # Redis 6.2+ VPC only by default on Render
 
 # 4. Managed Postgres (Optional if already using Neon, but here for completeness)

@@ -47,5 +47,11 @@ ENV PORT=8000
 
 EXPOSE 8000
 
+# Health Check for automated orchestration failover
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
 # Default CMD (Overridden by Render for the Worker instance)
-CMD ["gunicorn", "backend.api.main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "90"]
+# Optimized Production Entrypoint:
+# USES WEB_CONCURRENCY if set, else calculates optimized (2*CPU + 1) worker count
+CMD ["sh", "-c", "gunicorn backend.api.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-$((2 * $(nproc) + 1))} --timeout 120 --keep-alive 5 --max-requests 1000 --max-requests-jitter 50"]

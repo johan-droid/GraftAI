@@ -3,7 +3,8 @@ import { DM_Sans, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/app/providers/auth-provider";
 import { NotificationProvider } from "@/providers/notification-provider";
-import { ToastContainer } from "@/components/ui/Toast";
+import ServiceWorkerLoader from "@/components/sw-loader";
+import { Toaster } from "sonner";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -77,8 +78,9 @@ export default function RootLayout({
       >
         <NotificationProvider>
           <AuthProvider>
+            <ServiceWorkerLoader />
             {children}
-            <ToastContainer />
+            <Toaster position="top-right" expand={false} richColors closeButton theme="dark" />
           </AuthProvider>
         </NotificationProvider>
       </body>

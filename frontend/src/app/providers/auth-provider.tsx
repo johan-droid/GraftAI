@@ -3,7 +3,7 @@
 import * as React from "react";
 import { createContext, useContext } from "react";
 import { useRouter } from "next/navigation";
-import { getSessionSafe, signOut } from "@/lib/auth-client";
+import { getSessionSafe, signOut, syncWithBackend } from "@/lib/auth-client";
 import { invalidateSessionCache } from "@/lib/api";
 
 type User = {
@@ -74,6 +74,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (response?.data) {
           transientAuthFailuresRef.current = 0;
           setSession(response.data);
+          
+          // CRITICAL SYNC: Ensure backend user record exists/is fresh.
+          // This bridges the 'social login' to 'local database' gap without manual intervention.
+          if (response.data.user) {
+            void syncWithBackend().then(res => {
+              if (res.error) console.error("[AUTH]: Initial sync error:", res.error);
+            });
+          }
         } else if (response?.error) {
           if (isLikelyNetworkError(response.error)) {
             console.debug("Session check encountered a network glitch; retrying without kicking user out.");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -18,6 +18,7 @@ import {
   List,
   Globe,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import {
   getEvents,
@@ -29,6 +30,21 @@ import {
   CalendarEvent as Event,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useSyncStatus } from "@/hooks/use-sync-status";
+import { useOfflineSync } from "@/hooks/use-offline-sync";
+import { db, LocalEvent } from "@/lib/db";
+import { useToast } from "@/hooks/use-toast";
+import { DayCell } from "@/components/calendar/DayCell";
+import dynamic from "next/dynamic";
+import CalendarSkeleton from "@/components/calendar/CalendarSkeleton";
+
+const DayDetailModal = dynamic(() => import("@/components/calendar/DayDetailModal"), {
+  loading: () => null,
+});
+
+const EditEventModal = dynamic(() => import("@/components/calendar/EditEventModal"), {
+  loading: () => null,
+});
 
 const CATEGORIES = {
   meeting: {
@@ -64,6 +80,8 @@ const CATEGORIES = {
 type Cat = keyof typeof CATEGORIES;
 
 type ViewMode = "month" | "week" | "list";
+const CALENDAR_SYNC_COOLDOWN_MS = 10 * 60 * 1000;
+const CALENDAR_LAST_SYNC_KEY = "graftai_calendar_last_sync_at";
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -110,29 +128,59 @@ export default function CalendarPage() {
     return { days: list, startDate: sd, endDate: ed };
   }, [currentDate]);
 
+  const { isSyncing: sseSyncing, status: sseStatus, message: sseMessage, lastSyncAt } = useSyncStatus();
+  const { isOnline, getEvents: getOfflineEvents } = useOfflineSync(startDate, endDate);
+  const deferredEvents = useDeferredValue(events);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (lastSyncAt) {
+      getOfflineEvents(startDate.toISOString(), endDate.toISOString())
+        .then(setEvents)
+        .catch(console.error);
+        
+      if (isOnline) toast.success(sseMessage || "Your calendar is up to date.");
+    }
+  }, [lastSyncAt, startDate, endDate, toast, sseMessage, getOfflineEvents, isOnline]);
+
+  const runCalendarSync = async (force: boolean = false) => {
+    if (isSyncing || sseSyncing) return;
+
+    if (!force && typeof window !== "undefined") {
+      const raw = window.localStorage.getItem(CALENDAR_LAST_SYNC_KEY);
+      const lastSyncAtVal = raw ? Number(raw) : 0;
+      if (Number.isFinite(lastSyncAtVal) && Date.now() - lastSyncAtVal < CALENDAR_SYNC_COOLDOWN_MS) {
+        return;
+      }
+    }
+
+    setIsSyncing(true);
+    try {
+      await manualSync();
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CALENDAR_LAST_SYNC_KEY, String(Date.now()));
+      }
+      const syncedEvents = await getEvents(startDate.toISOString(), endDate.toISOString());
+      setEvents(syncedEvents);
+    } catch (error) {
+      console.error("Calendar sync failed:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
-    getEvents(startDate.toISOString(), endDate.toISOString())
+    getOfflineEvents(startDate.toISOString(), endDate.toISOString())
       .then(setEvents)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [startDate, endDate]);
+  }, [startDate, endDate, getOfflineEvents]);
 
   useEffect(() => {
-    const syncCalendar = async () => {
-      setIsSyncing(true);
-      try {
-        await manualSync();
-        const syncedEvents = await getEvents(startDate.toISOString(), endDate.toISOString());
-        setEvents(syncedEvents);
-      } catch (error) {
-        console.error("Calendar sync failed:", error);
-      } finally {
-        setIsSyncing(false);
-      }
-    };
-
-    syncCalendar();
+    void runCalendarSync(false);
+    // Intentional one-time mount sync; rate-limited via localStorage cooldown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -166,44 +214,95 @@ export default function CalendarPage() {
     }));
   }, [showModal, selectedDate]);
 
-  const getEventsForDay = (d: Date) =>
-    events.filter((e) => {
-      const ed = new Date(e.start_time);
-      return (
-        ed.getDate() === d.getDate() &&
-        ed.getMonth() === d.getMonth() &&
-        ed.getFullYear() === d.getFullYear()
-      );
+  // High-Efficiency Memoized Indexing (Big Brand Methodology)
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, Event[]> = {};
+    deferredEvents.forEach((event: Event) => {
+      const dateKey = new Date(event.start_time).toDateString();
+      if (!map[dateKey]) map[dateKey] = [];
+      map[dateKey].push(event);
     });
+    return map;
+  }, [deferredEvents]);
+
+  const getEventsForDay = (d: Date) => eventsByDate[d.toDateString()] || [];
+
+  // High-Efficiency Category Counting (O(N) One-Pass)
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { meeting: 0, task: 0, birthday: 0, event: 0 };
+    events.forEach((ev) => {
+      if (counts[ev.category] !== undefined) counts[ev.category]++;
+    });
+    return counts;
+  }, [events]);
 
   const handleCreate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!selectedDate) return;
+
+    // 1. Prepare data
+    const start = new Date(draftEvent.start_time_local);
+    const end = new Date(draftEvent.end_time_local);
+    const attendees = draftEvent.attendees
+      .split(",")
+      .map((email) => email.trim())
+      .filter((email) => email.length > 0);
+
+    const eventPayload = {
+      title: draftEvent.title || "New Event",
+      description: draftEvent.description,
+      category: draftEvent.category,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      is_remote: draftEvent.is_remote,
+      status: draftEvent.status,
+      meeting_platform: draftEvent.meeting_platform || undefined,
+      attendees,
+    };
+
+    // 2. OPTIMISTIC UPDATE (Offline-First)
+    const tempId = `temp_${Date.now()}`;
+    const optimisticEvent: any = { 
+      id: tempId, 
+      ...eventPayload, 
+      sync_status: 'pending' 
+    };
+
+    setEvents((prev) => [...prev, optimisticEvent]);
+    setShowModal(false);
+    setSelectedDate(null);
+
+    // 3. Save to local DB
+    await db.events.add({
+      ...(optimisticEvent as LocalEvent),
+      user_id: 'me', // placeholder
+      last_modified: new Date().toISOString()
+    });
+
+    if (!isOnline) {
+      toast.success("Event saved locally. Will sync when online.");
+      return;
+    }
+
+    // 4. Background Server Call
     setCreating(true);
     try {
-      const start = new Date(draftEvent.start_time_local);
-      const end = new Date(draftEvent.end_time_local);
-      const attendees = draftEvent.attendees
-        .split(",")
-        .map((email) => email.trim())
-        .filter((email) => email.length > 0);
-
-      const created = await createEvent({
-        title: draftEvent.title || "New Event",
-        description: draftEvent.description,
-        category: draftEvent.category,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        is_remote: draftEvent.is_remote,
-        status: draftEvent.status,
-        meeting_platform: draftEvent.meeting_platform || undefined,
-        attendees,
+      const created = await createEvent(eventPayload);
+      
+      // Update local state and DB with the real ID from server
+      setEvents((prev) => prev.map(ev => ev.id === tempId ? created : ev));
+      await db.events.delete(tempId);
+      await db.events.add({
+        ...created,
+        sync_status: 'synced',
+        last_modified: new Date().toISOString()
       });
-      setEvents((prev) => [...prev, created]);
-      setShowModal(false);
-      setSelectedDate(null);
+      
+      toast.success("Event synced successfully.");
     } catch (e) {
-      console.error(e);
+      console.error("Sync failed, event remains in local queue:", e);
+      // We keep the pending event in the local list
+      toast.error("Cloud sync failed. Event is kept locally.");
     } finally {
       setCreating(false);
     }
@@ -214,19 +313,20 @@ export default function CalendarPage() {
     if (!editingEvent) return;
     try {
       const updated = await updateEvent(editingEvent.id, editingEvent);
-      setEvents((prev) => prev.map((ev) => (ev.id === updated.id ? updated : ev)));
+      setEvents((prev) => prev.map((ev) => (ev.id.toString() === updated.id.toString() ? updated : ev)));
       setEditingEvent(null);
     } catch (e) {
       console.error(e);
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number | string) => {
     if (!confirm("Delete this event?")) return;
     try {
       await deleteEvent(id);
-      setEvents((prev) => prev.filter((e) => e.id !== id));
+      setEvents((prev) => prev.filter((e) => e.id.toString() !== id.toString()));
       setEditingEvent(null);
+      await db.events.delete(id);
     } catch (e) {
       console.error(e);
     }
@@ -286,9 +386,29 @@ export default function CalendarPage() {
             Today
           </button>
 
+          <button
+            onClick={() => void runCalendarSync(true)}
+            disabled={isSyncing}
+            className="px-4 py-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-200 hover:text-white hover:bg-indigo-500/20 text-[13px] font-bold transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sync now
+          </button>
+
           <div className="ml-auto flex items-center gap-1.5 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
-            {isSyncing ? (
-              <span className="text-[13px] font-medium text-slate-300">Syncing Google Calendar...</span>
+            {!isOnline && (
+              <div className="flex items-center gap-2 px-3 animate-pulse">
+                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                <span className="text-[11px] font-bold text-amber-500 uppercase tracking-tight">Offline Mode</span>
+              </div>
+            )}
+            {(isSyncing || sseSyncing) ? (
+              <div className="flex items-center gap-2 px-3">
+                <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                <span className="text-[11px] font-medium text-slate-300">
+                  {sseMessage || (isSyncing ? "Syncing..." : "Updating...")}
+                </span>
+              </div>
             ) : null}
             {(["month", "week", "list"] as ViewMode[]).map((mode) => (
               <button
@@ -315,9 +435,7 @@ export default function CalendarPage() {
         {/* Calendar Grid */}
         <div className="flex-1 overflow-auto p-4">
           {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
-            </div>
+            <CalendarSkeleton />
           ) : (
             <>
               {/* Day headers */}
@@ -341,53 +459,19 @@ export default function CalendarPage() {
                   const isCurrentMonth = day.getMonth() === currentDate.getMonth();
 
                   return (
-                    <motion.div
+                    <DayCell
                       key={idx}
-                      whileHover={{ scale: isCurrentMonth ? 1.02 : 1 }}
-                      onClick={() => {
-                        if (isCurrentMonth) {
-                          setSelectedDate(day);
-                          setShowModal(true);
-                        }
+                      day={day}
+                      today={today}
+                      currentDate={currentDate}
+                      selectedDate={selectedDate}
+                      dayEvents={dayEvents}
+                      categories={CATEGORIES}
+                      onSelect={(d) => {
+                        setSelectedDate(d);
+                        setShowModal(true);
                       }}
-                      className={cn(
-                        "relative flex flex-col p-2 rounded-xl cursor-pointer min-h-[80px] md:min-h-[100px] transition-all border",
-                        isSelected
-                          ? "border-indigo-500/60 bg-indigo-600/10"
-                          : isCurrentMonth
-                          ? "border-white/[0.05] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]"
-                          : "border-transparent opacity-30 cursor-default"
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          "w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold mb-1 self-center",
-                          isToday ? "bg-indigo-600 text-white" : isSelected ? "text-indigo-300" : "text-slate-400"
-                        )}
-                      >
-                        {day.getDate()}
-                      </div>
-
-                      <div className="space-y-0.5 flex-1">
-                        {dayEvents.slice(0, 2).map((ev) => (
-                          <div
-                            key={ev.id}
-                            className={cn(
-                              "text-[10px] font-medium px-1.5 py-0.5 rounded-md truncate border",
-                              CATEGORIES[ev.category]?.bg ?? "bg-slate-500/10 border-slate-500/20",
-                              CATEGORIES[ev.category]?.text ?? "text-slate-300"
-                            )}
-                          >
-                            {ev.title}
-                          </div>
-                        ))}
-                        {dayEvents.length > 2 && (
-                          <div className="text-[10px] text-slate-500 font-medium px-1">
-                            +{dayEvents.length - 2} more
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
+                    />
                   );
                 })}
               </div>
@@ -467,7 +551,7 @@ export default function CalendarPage() {
                   <span className="text-[12px] text-slate-400 font-medium">{val.label}</span>
                 </div>
                 <span className="text-[11px] text-slate-600 font-mono">
-                  {events.filter((e) => e.category === key).length}
+                  {categoryCounts[key] ?? 0}
                 </span>
               </div>
             ))}
@@ -477,329 +561,34 @@ export default function CalendarPage() {
 
       {/* Day Detail Modal */}
       <AnimatePresence>
-        {showModal && selectedDate && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => setShowModal(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 16 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="relative w-full max-w-lg bg-[#0d1424] border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
-            >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07]">
-                <div>
-                  <h3 className="text-base font-bold text-white">
-                    {selectedDate.toLocaleDateString("en-US", {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{getEventsForDay(selectedDate).length} events</p>
-                </div>
-                <button
-                  onClick={() => setShowModal(false)}
-                  aria-label="Close day details"
-                  title="Close day details"
-                  className="p-1.5 rounded-lg hover:bg-white/8 text-slate-500 hover:text-white transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="p-4 max-h-[60vh] overflow-y-auto space-y-4">
-                <form onSubmit={handleCreate} className="space-y-4">
-                  <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <h4 className="text-sm font-semibold text-white">Create event</h4>
-                    <div className="grid gap-3">
-                      <input
-                        value={draftEvent.title}
-                        onChange={(e) => setDraftEvent({ ...draftEvent, title: e.target.value })}
-                        placeholder="Event title"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60"
-                      />
-                      <textarea
-                        rows={3}
-                        value={draftEvent.description}
-                        onChange={(e) => setDraftEvent({ ...draftEvent, description: e.target.value })}
-                        placeholder="Agenda / description"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60 resize-none"
-                      />
-                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                        <label className="space-y-1 text-[11px] text-slate-400">
-                          Start time
-                          <input
-                            type="datetime-local"
-                            value={draftEvent.start_time_local}
-                            onChange={(e) => setDraftEvent({ ...draftEvent, start_time_local: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60"
-                          />
-                        </label>
-                        <label className="space-y-1 text-[11px] text-slate-400">
-                          End time
-                          <input
-                            type="datetime-local"
-                            value={draftEvent.end_time_local}
-                            onChange={(e) => setDraftEvent({ ...draftEvent, end_time_local: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60"
-                          />
-                        </label>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                        <label className="space-y-1 text-[11px] text-slate-400">
-                          Category
-                          <select
-                            value={draftEvent.category}
-                            onChange={(e) => setDraftEvent({ ...draftEvent, category: e.target.value as Cat })}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60 appearance-none"
-                          >
-                            {Object.keys(CATEGORIES).map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="space-y-1 text-[11px] text-slate-400">
-                          Meeting platform
-                          <select
-                            value={draftEvent.meeting_platform}
-                            onChange={(e) => setDraftEvent({ ...draftEvent, meeting_platform: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60 appearance-none"
-                          >
-                            <option value="">None</option>
-                            <option value="google">Google Meet</option>
-                            <option value="microsoft">Microsoft Teams</option>
-                            <option value="zoom">Zoom</option>
-                          </select>
-                        </label>
-                      </div>
-                      <input
-                        value={draftEvent.attendees}
-                        onChange={(e) => setDraftEvent({ ...draftEvent, attendees: e.target.value })}
-                        placeholder="Attendees (comma separated emails)"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/60"
-                      />
-                      <label className="inline-flex items-center gap-2 text-sm text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={draftEvent.is_remote}
-                          onChange={(e) => setDraftEvent({ ...draftEvent, is_remote: e.target.checked })}
-                          className="h-4 w-4 rounded border-white/10 bg-white/5 text-indigo-500 focus:ring-indigo-500"
-                        />
-                        Remote meeting
-                      </label>
-                    </div>
-                  </div>
-                </form>
-
-                {getEventsForDay(selectedDate).length === 0 ? (
-                  <div className="text-center py-10">
-                    <Calendar className="w-10 h-10 text-slate-700 mx-auto mb-3" />
-                    <p className="text-slate-500 text-sm">No events for this day</p>
-                  </div>
-                ) : (
-                  getEventsForDay(selectedDate).map((ev) => (
-                    <div
-                      key={ev.id}
-                      className="group flex items-start gap-3 p-3 rounded-xl border border-white/[0.06] bg-white/[0.025] hover:border-white/10 transition-all"
-                    >
-                      <div className={`w-1 h-full min-h-[40px] rounded-full shrink-0 ${CATEGORIES[ev.category]?.dot ?? "bg-slate-400"}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white">{ev.title}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                            <Clock className="w-3 h-3" />
-                            {new Date(ev.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                          <span
-                            className={cn(
-                              "text-[10px] font-bold px-1.5 py-0.5 rounded border",
-                              CATEGORIES[ev.category]?.bg,
-                              CATEGORIES[ev.category]?.text
-                            )}
-                          >
-                            {ev.category}
-                          </span>
-                          {ev.is_remote && <Video className="w-3 h-3 text-slate-500" />}
-                        </div>
-                      </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => {
-                            setEditingEvent(ev);
-                            setShowModal(false);
-                          }}
-                          aria-label="Edit event"
-                          title="Edit event"
-                          className="p-1.5 rounded-md hover:bg-white/10 text-slate-500 hover:text-white transition-all"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(ev.id)}
-                          aria-label="Delete event"
-                          title="Delete event"
-                          className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="px-4 py-3 border-t border-white/[0.07] flex justify-between">
-                <button
-                  onClick={handleCreate}
-                  disabled={creating}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/8 text-sm font-medium transition-all disabled:opacity-50"
-                >
-                  {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                  Add event
-                </button>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all"
-                >
-                  Done
-                </button>
-              </div>
-            </motion.div>
-          </div>
+        {showModal && (
+          <DayDetailModal
+            isOpen={showModal}
+            onClose={() => setShowModal(false)}
+            selectedDate={selectedDate}
+            dayEvents={getEventsForDay(selectedDate!)}
+            categories={CATEGORIES}
+            draftEvent={draftEvent}
+            setDraftEvent={setDraftEvent}
+            handleCreate={handleCreate}
+            handleDelete={handleDelete}
+            setEditingEvent={setEditingEvent}
+            creating={creating}
+          />
         )}
       </AnimatePresence>
 
       {/* Edit Event Modal */}
       <AnimatePresence>
         {editingEvent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-              onClick={() => setEditingEvent(null)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-md bg-[#0d1424] border border-white/10 rounded-2xl p-6 shadow-2xl"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Edit3 className="w-4 h-4 text-indigo-400" /> Edit event
-                </h3>
-                <button
-                  onClick={() => setEditingEvent(null)}
-                  aria-label="Close editor"
-                  title="Close editor"
-                  className="p-1.5 rounded-lg hover:bg-white/8 text-slate-500 hover:text-white transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdate} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
-                    Title
-                  </label>
-                  <input
-                    type="text"
-                    value={editingEvent.title}
-                    onChange={(e) => setEditingEvent({ ...editingEvent, title: e.target.value })}
-                    title="Event title"
-                    placeholder="Event title"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500/60 transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
-                    Description
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={editingEvent.description}
-                    onChange={(e) => setEditingEvent({ ...editingEvent, description: e.target.value })}
-                    title="Event description"
-                    placeholder="Event description"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500/60 transition-colors resize-none"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
-                      Status
-                    </label>
-                    <select
-                      value={editingEvent.status}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, status: e.target.value })}
-                      aria-label="Event status"
-                      title="Event status"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60 appearance-none"
-                    >
-                      <option value="confirmed">Confirmed</option>
-                      <option value="pending">Pending</option>
-                      <option value="canceled">Canceled</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">
-                      Category
-                    </label>
-                    <select
-                      value={editingEvent.category}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, category: e.target.value as Cat })}
-                      aria-label="Event category"
-                      title="Event category"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-indigo-500/60 appearance-none"
-                    >
-                      {Object.keys(CATEGORIES).map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(editingEvent.id)}
-                    aria-label="Delete event"
-                    title="Delete event"
-                    className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingEvent(null)}
-                    className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white text-sm font-medium transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle2 className="w-4 h-4" /> Save
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
+          <EditEventModal
+            event={editingEvent}
+            onClose={() => setEditingEvent(null)}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+            setEditingEvent={setEditingEvent}
+            categories={CATEGORIES}
+          />
         )}
       </AnimatePresence>
     </div>

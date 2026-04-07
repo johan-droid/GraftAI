@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Optional
-from backend.services.email import send_email, render_template
+from backend.services.mail_service import send_email, render_template
 from backend.services.onesignal import send_push_notification
 from backend.services.redis_client import publish
 from backend.utils.db import AsyncSessionLocal
@@ -94,7 +94,7 @@ async def _send_notification(recipient_emails: list[str], user_player_ids: list[
                 "updated": "Event updated",
                 "deleted": "Event deleted",
             }
-            send_push_notification(
+            await send_push_notification(
                 user_player_ids,
                 heading=headings.get(content_type, "Notification"),
                 content=f"{event_data.get('title')} {content_type}",
@@ -108,7 +108,7 @@ async def _send_notification(recipient_emails: list[str], user_player_ids: list[
     try:
         channel = f"user_notifications_{event_data.get('user_id')}"
         payload = {"type": f"event_{content_type}", "event": event_data}
-        publish(channel, str(payload))
+        await publish(channel, str(payload))
     except Exception as e:
         logger.warning(f"Realtime publish failed: {e}")
 

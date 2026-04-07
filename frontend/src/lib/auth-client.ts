@@ -241,7 +241,7 @@ async function getAvailableSocialProviders(): Promise<string[]> {
   }
 }
 
-export const getSessionSafe = async (allowRefreshRetry = true) => {
+export const getSessionSafe = async (allowRefreshRetry = true): Promise<AuthResult<any>> => {
   try {
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -290,6 +290,42 @@ export const getSessionSafe = async (allowRefreshRetry = true) => {
     return {
       data: null,
       error: { message: err instanceof Error ? err.message : "Failed to fetch session" },
+    };
+  }
+};
+
+export const syncWithBackend = async (): Promise<AuthResult<{status: string, user_id: string}>> => {
+  try {
+    const token = getToken();
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+      headers["X-Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(authEndpoint("/auth/sync"), {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: JSON.stringify({}),
+    });
+
+    if (!res.ok) {
+      const error = await parseError(res);
+      return { data: null, error };
+    }
+
+    const data = await res.json();
+    console.log("[AUTH_SYNC]: Successfully synchronized with backend database.");
+    return { data, error: null };
+  } catch (err) {
+    console.error("[AUTH_SYNC]: unexpected error:", err);
+    return {
+      data: null,
+      error: { message: err instanceof Error ? err.message : "Sync failed" },
     };
   }
 };

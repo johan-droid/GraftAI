@@ -77,8 +77,11 @@ if DATABASE_URL:
                 # Use standard SSL context for production stability
                 _connect_args["ssl"] = "require" if is_render else True
  
-            pool_size = int(os.getenv("DB_POOL_SIZE", "20")) # Render starter/pro limits
-            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+            # Optimize for high-efficiency on low-resource (free-tier) instances
+            # Optimize for high-efficiency on production-grade instances
+            pool_size = int(os.getenv("DB_POOL_SIZE", "10")) # Increased base pool
+            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "30")) # Allow larger bursts
+            pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "110")) # Proactive reconnect for Neon
  
             engine = create_async_engine(
                 _clean_url,
@@ -86,10 +89,10 @@ if DATABASE_URL:
                 future=True,
                 connect_args=_connect_args,
                 pool_pre_ping=True,
-                pool_recycle=180,  # Pro-grade recycle: 3 minutes to avoid Neon/Render idle kills
+                pool_recycle=pool_recycle,
                 pool_size=pool_size,
                 max_overflow=max_overflow,
-                pool_timeout=30,
+                pool_timeout=45, # Slightly longer wait for connections during bursts
             )
             AsyncSessionLocal = async_sessionmaker(
                 bind=engine,
@@ -109,22 +112,4 @@ async def get_db():
         )
     async with AsyncSessionLocal() as session:
         yield session
-
-
-def maybe_await(value):
-    """Resolve awaitables for robust AsyncMock and real DB result handling."""
-    import inspect
-
-    if inspect.isawaitable(value):
-        return value
-    return value
-
-
-async def unwrap_result(value):
-    """Await coroutine results if needed."""
-    import inspect
-
-    if inspect.isawaitable(value):
-        return await value
-    return value
 

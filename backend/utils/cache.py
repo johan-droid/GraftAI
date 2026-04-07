@@ -1,67 +1,82 @@
 import json
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from backend.utils.redis_singleton import get_redis
+from backend.utils.l1_cache import l1_cache
 
 logger = logging.getLogger(__name__)
 
 
-def get_redis_client():
+async def get_redis_client():
     """Returns a singleton Redis client instance."""
     try:
-        return get_redis()
+        return await get_redis()
     except Exception:
         return None
 
-def set_cache(key: str, value: Any, ttl_seconds: int = 300):
+async def set_cache(key: str, value: Any, ttl_seconds: int = 300):
     """Stores a value in Redis with an expiration time."""
-    client = get_redis_client()
+    client = await get_redis_client()
     if not client:
         return False
     try:
-        # Pydantic models must be dumped to JSON first outside this call
-        # but for simple types we can just use json.dumps here if it's not a string
+        # 1. Update L1 (In-Memory)
+        l1_cache.set(key, value)
+        
+        # 2. Update L2 (Redis)
         if not isinstance(value, str):
             value = json.dumps(value)
-        client.setex(key, ttl_seconds, value)
+        await client.setex(key, ttl_seconds, value)
         return True
     except Exception as e:
         logger.warning(f"⚠ Cache set failed for key {key}: {e}")
         return False
 
-def get_cache(key: str):
-    """Retrieves a value from Redis."""
-    client = get_redis_client()
+    # 1. Try L1 (Memory)
+    val = l1_cache.get(key)
+    if val is not None:
+        return val
+
+    # 2. Fallback to L2 (Redis)
+    client = await get_redis_client()
     if not client:
         return None
     try:
-        data = client.get(key)
+        data = await client.get(key)
         if data:
             try:
-                return json.loads(data)
+                parsed = json.loads(data)
+                # Populate L1 for subsequent zero-latency hits
+                l1_cache.set(key, parsed)
+                return parsed
             except json.JSONDecodeError:
+                l1_cache.set(key, data)
                 return data
         return None
     except Exception as e:
         logger.warning(f"⚠ Cache get failed for key {key}: {e}")
         return None
 
-def invalidate_user_calendar_cache(user_id: str):
+async def invalidate_user_calendar_cache(user_id: str):
     """
     Purges all calendar event cache keys for a specific user.
     Uses SCAN to find and delete range-based keys efficiently.
     """
-    client = get_redis_client()
+    client = await get_redis_client()
     if not client:
         return False
     try:
+        # Invalidate local first
+        l1_cache.invalidate(f"calendar:user_{user_id}:")
+        
+        # Then Redis
         pattern = f"calendar:user_{user_id}:*"
         cursor = 0
         while True:
-            cursor, keys = client.scan(cursor=cursor, match=pattern, count=100)
+            cursor, keys = await client.scan(cursor=cursor, match=pattern, count=100)
             if keys:
-                client.delete(*keys)
+                await client.delete(*keys)
             if cursor == 0:
                 break
         logger.info(f"[CACHE] 🗑 Cache invalidated for user {user_id} (Pattern: {pattern})")
@@ -70,29 +85,26 @@ def invalidate_user_calendar_cache(user_id: str):
         logger.warning(f"[CACHE] ⚠ Cache invalidation failed for user {user_id}: {e}")
         return False
 
-def acquire_lock(lock_name: str, ttl_seconds: int = 600):
+async def acquire_lock(lock_name: str, ttl_seconds: int = 600):
     """
     Attempts to acquire an atomic lock in Redis.
-    Returns True if the lock was acquired, False otherwise.
     """
-    client = get_redis_client()
+    client = await get_redis_client()
     if not client:
         return False
     try:
-        # NX=True ensures the key is only set if it doesn't exist
-        # This is an atomic compare-and-set operation
-        return bool(client.set(f"lock:{lock_name}", "locked", ex=ttl_seconds, nx=True))
+        return bool(await client.set(f"lock:{lock_name}", "locked", ex=ttl_seconds, nx=True))
     except Exception as e:
         logger.error(f"[CACHE] ❌ Failed to acquire lock {lock_name}: {e}")
         return False
 
-def release_lock(lock_name: str):
+async def release_lock(lock_name: str):
     """Releases a previously held lock."""
-    client = get_redis_client()
+    client = await get_redis_client()
     if not client:
         return False
     try:
-        client.delete(f"lock:{lock_name}")
+        await client.delete(f"lock:{lock_name}")
         return True
     except Exception as e:
         logger.warning(f"[CACHE] ⚠ Failed to release lock {lock_name}: {e}")
@@ -100,7 +112,6 @@ def release_lock(lock_name: str):
 
 def get_calendar_cache_key(user_id: str, start: Any, end: Any):
     """Generates a unique cache key based on user and time range."""
-    # Ensure start/end are stringified consistently
     start_str = start.isoformat() if hasattr(start, 'isoformat') else str(start)
     end_str = end.isoformat() if hasattr(end, 'isoformat') else str(end)
     return f"calendar:user_{user_id}:range:{start_str}_{end_str}"

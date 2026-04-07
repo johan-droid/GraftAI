@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.api.deps import get_db
 from backend.models.tables import WebhookSubscriptionTable
-from backend.utils.cache import invalidate_user_calendar_cache
+from backend.utils.cache import invalidate_user_calendar_cache, acquire_lock
 from backend.utils.arq_utils import enqueue_job
 
 logger = logging.getLogger(__name__)
@@ -38,10 +38,13 @@ async def google_calendar_webhook(
 
     if sub:
         # 1. Invalidate Cache
-        invalidate_user_calendar_cache(sub.user_id)
-        # 2. Enqueue background sync
-        await enqueue_job("task_sync_calendar", user_id=sub.user_id)
-        logger.info(f"[WEBHOOK] 🔄 Triggered background sync for user {sub.user_id}")
+        await invalidate_user_calendar_cache(sub.user_id)
+        # 2. Enqueue background sync with short debounce to avoid burst storms
+        if await acquire_lock(f"webhook_sync_enqueue:{sub.user_id}", ttl_seconds=45):
+            await enqueue_job("task_sync_calendar", user_id=sub.user_id)
+            logger.info(f"[WEBHOOK] 🔄 Triggered background sync for user {sub.user_id}")
+        else:
+            logger.info(f"[WEBHOOK] ⏱ Debounced duplicate sync enqueue for user {sub.user_id}")
 
     return Response(status_code=200)
 
@@ -76,8 +79,11 @@ async def microsoft_graph_webhook(
             
             if sub and sub.client_state == client_state:
                 logger.info(f"[WEBHOOK] 🔄 MS Graph Change for user {sub.user_id}")
-                invalidate_user_calendar_cache(sub.user_id)
-                await enqueue_job("task_sync_calendar", user_id=sub.user_id)
+                await invalidate_user_calendar_cache(sub.user_id)
+                if await acquire_lock(f"webhook_sync_enqueue:{sub.user_id}", ttl_seconds=45):
+                    await enqueue_job("task_sync_calendar", user_id=sub.user_id)
+                else:
+                    logger.info(f"[WEBHOOK] ⏱ Debounced duplicate sync enqueue for user {sub.user_id}")
         
     except Exception as e:
         logger.error(f"[WEBHOOK] ❌ Parse failure: {e}")

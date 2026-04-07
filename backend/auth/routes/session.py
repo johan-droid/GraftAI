@@ -209,11 +209,11 @@ async def get_integration_status(
 
 @router.post("/refresh")
 async def refresh_token(request: Request, payload: Optional[RefreshTokenRequest] = None):
-    client = get_redis_client()
+    client = await get_redis_client()
     refresh_token_value = (payload.refresh_token if payload else None) or request.cookies.get("graftai_refresh_token") or request.query_params.get("refresh_token")
     if not refresh_token_value:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
-    user_id = client.get(f"refresh:{refresh_token_value}")
+    user_id = await client.get(f"refresh:{refresh_token_value}")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
     if isinstance(user_id, bytes): user_id = user_id.decode()
@@ -223,9 +223,9 @@ async def refresh_token(request: Request, payload: Optional[RefreshTokenRequest]
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-    client.delete(f"refresh:{refresh_token_value}")
-    client.srem(f"user_tokens:{user_id}", refresh_token_value)
-    token_data = create_jwt_token(user_id)
+    await client.delete(f"refresh:{refresh_token_value}")
+    await client.srem(f"user_tokens:{user_id}", refresh_token_value)
+    token_data = await create_jwt_token(user_id)
     response = JSONResponse(content={"message": "Token refreshed successfully"})
     attach_jwt_cookies(response, token_data, request)
     return response
@@ -244,10 +244,10 @@ def logout_feedback(
 
 @router.post("/logout")
 async def logout(request: Request, current_user=Depends(get_current_user)):
-    client = get_redis_client()
+    client = await get_redis_client()
     refresh_token = request.cookies.get("graftai_refresh_token")
     if refresh_token:
-        client.delete(f"refresh:{refresh_token}")
+        await client.delete(f"refresh:{refresh_token}")
     response = JSONResponse(content={"message": "Successfully logged out"})
     response.delete_cookie(key="graftai_access_token", path="/")
     response.delete_cookie(key="graftai_refresh_token", path="/")
@@ -269,8 +269,8 @@ async def delete_account(
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
             await db.execute(delete(UserTable).where(UserTable.id == user_id))
-        client = get_redis_client()
-        client.delete(f"sso_token:{user_id}")
+        client = await get_redis_client()
+        await client.delete(f"sso_token:{user_id}")
     except HTTPException: raise
     except Exception as e:
         logger.error(f"Account deletion failed for {user_id}: {e}")
@@ -294,31 +294,31 @@ async def delete_account(
     response.delete_cookie(key="graftai_access_token", path="/")
     response.delete_cookie(key="graftai_refresh_token", path="/")
     token_key = f"user_tokens:{user_id}"
-    tokens = client.smembers(token_key)
+    tokens = await client.smembers(token_key)
     if tokens:
         for t in tokens:
-            client.delete(f"refresh:{t if isinstance(t, str) else t.decode()}")
-    client.delete(token_key)
+            await client.delete(f"refresh:{t if isinstance(t, str) else t.decode()}")
+    await client.delete(token_key)
     return response
 
 @router.post("/revoke")
-def revoke_sessions(
+async def revoke_sessions(
     target_user_id: Optional[str] = None,
     current_user_id: str = Depends(get_current_user_id),
 ):
-    client = get_redis_client()
+    client = await get_redis_client()
     revoke_id = current_user_id
     if target_user_id and target_user_id != current_user_id:
         if not access_control.check_user_role(current_user_id, "admin"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrative privileges required")
         revoke_id = target_user_id
     token_key = f"user_tokens:{revoke_id}"
-    tokens = client.smembers(token_key)
+    tokens = await client.smembers(token_key)
     deleted_count = 0
     if tokens:
         for t in tokens:
-            if client.delete(f"refresh:{t if isinstance(t, str) else t.decode()}"):
+            if await client.delete(f"refresh:{t if isinstance(t, str) else t.decode()}"):
                 deleted_count += 1
-        client.delete(token_key)
+        await client.delete(token_key)
     logger.info(f"User {current_user_id} revoked {deleted_count} sessions for {revoke_id}")
     return {"message": f"Successfully revoked {deleted_count} sessions for {revoke_id}"}

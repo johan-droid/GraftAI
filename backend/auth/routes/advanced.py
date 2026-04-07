@@ -28,7 +28,7 @@ def _passwordless_request(
     return passwordless.request_magic_link(email)
 
 @router.post("/passwordless/verify")
-def _passwordless_verify(
+async def _passwordless_verify(
     request: Request,
     email: str,
     code: str,
@@ -38,7 +38,7 @@ def _passwordless_verify(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired OTP"
         )
-    token_data = create_jwt_token(email)
+    token_data = await create_jwt_token(email)
     response = JSONResponse(content=token_data)
     attach_jwt_cookies(response, token_data, request)
     return response

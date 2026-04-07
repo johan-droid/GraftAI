@@ -18,6 +18,7 @@ from backend.services.mailbox import get_recent_emails
 from backend.services.cache import get_cache, set_cache
 from backend.services.usage import check_usage_limit, increment_usage
 from backend.utils.db import get_db
+from backend.utils.resilience import get_breaker
 
 try:
     from groq import AsyncGroq
@@ -26,6 +27,9 @@ except ImportError:
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
+
+# Core AI Circuit Breaker
+groq_breaker = get_breaker("groq", threshold=3, recovery_timeout=60)
 
 
 class AIRequest(BaseModel):
@@ -183,54 +187,23 @@ def _extract_datetime(prompt: str, user_timezone: str) -> datetime:
 
 def _detect_intent(prompt: str) -> str:
     lower = prompt.lower()
-
-    list_phrases = [
-        "what do i have",
-        "what's my schedule",
-        "what is my schedule",
-        "show my schedule",
-        "show me my schedule",
-        "my schedule",
-        "today's schedule",
-        "this week's schedule",
-        "this week",
-        "show my week",
-        "upcoming events",
-        "what am i doing",
-        "agenda",
-        "list my schedule",
-        "what is on my calendar",
-        "do i have any",
-    ]
-
-    if any(phrase in lower for phrase in list_phrases):
-        return "list"
-
-    if any(k in lower for k in ["delete", "remove", "cancel"]):
-        return "delete"
-    if any(k in lower for k in ["reschedule", "move", "update", "change time"]):
-        return "update"
-
-    schedule_phrases = [
-        ("schedule", ["meeting", "call", "event", "appointment", "session", "slot"]),
-        ("book", ["meeting", "call", "event", "appointment", "session"]),
-        ("create", ["meeting", "event", "appointment", "call", "session"]),
-        ("add", ["meeting", "event", "appointment", "call", "session"]),
-        ("set up", ["meeting", "call", "event", "appointment", "session"]),
-    ]
-
-    for verb, terms in schedule_phrases:
-        if verb in lower and any(term in lower for term in terms):
+    
+    # 1. Structural matching for common phrases
+    match lower:
+        case p if any(k in p for k in ["what do i have", "my schedule", "agenda"]):
+            return "list"
+        case p if any(k in p for k in ["schedule", "book", "create", "add"]):
             return "schedule"
-
-    if any(k in lower for k in ["schedule", "book", "create", "add"]) and any(
-        term in lower for term in ["meeting", "event", "call", "appointment", "session"]
-    ):
-        return "schedule"
-
-    if any(k in lower for k in ["list", "show", "upcoming", "what do i have", "agenda", "calendar today", "calendar this week"]):
+        case p if any(k in p for k in ["delete", "remove", "cancel"]):
+            return "delete"
+        case p if any(k in p for k in ["reschedule", "move", "update", "change"]):
+            return "update"
+            
+    # 2. Fallback secondary phrase detection
+    list_keys = ["today's schedule", "this week", "upcoming", "what is on my calendar"]
+    if any(k in lower for k in list_keys):
         return "list"
-
+        
     return "none"
 
 
@@ -288,6 +261,35 @@ def _format_events(events: list[Any], user_timezone: str) -> str:
         return "No events found in this time window."
 
     return "\n".join(lines)
+
+
+def _format_events_compact(events: list[Any], user_timezone: str) -> str:
+    """
+    C-Table (Compact Table) format: ID|Title|Day|TimeRange
+    Optimized for LLM context injection to minimize token usage and latency.
+    """
+    if not events:
+        return "CALENDAR_EMPTY"
+    
+    tz = _safe_zoneinfo(user_timezone)
+    rows = []
+    # Using more events (up to 20) with fewer tokens per event
+    for event in events[:20]:
+        eid = getattr(event, "id", "?")
+        title = getattr(event, "title", "Untitled")[:25].strip()
+        start = getattr(event, "start_time", None)
+        if not isinstance(start, datetime): continue
+        if start.tzinfo is None: start = start.replace(tzinfo=timezone.utc)
+        start_tz = start.astimezone(tz)
+        
+        end = getattr(event, "end_time", start + timedelta(minutes=30))
+        if end.tzinfo is None: end = end.replace(tzinfo=timezone.utc)
+        end_tz = end.astimezone(tz)
+        
+        # ID|TITLE|MON 07|09:00-10:00
+        rows.append(f"{eid}|{title}|{start_tz.strftime('%a %d')}|{start_tz.strftime('%H:%M')}-{end_tz.strftime('%H:%M')}")
+    
+    return "\n".join(rows)
 
 
 async def _offline_assistant_response(
@@ -354,14 +356,16 @@ async def _offline_assistant_response(
         event_id = await _resolve_event_id(db, user_id, prompt)
         new_start_override: Optional[datetime] = None
 
-        if not event_id:
-            # Compatibility fallback for prompts resolved through legacy ACTION payloads.
+        # Robust extraction for updates if simple resolution fails
+        if not event_id or "to" in prompt.lower() or "at" in prompt.lower():
             try:
                 system_instruction = (
-                    "Extract update action only from the user's message. "
-                    "You must output a strictly valid JSON object with exactly these keys: "
-                    "'event_id' (integer representing the ID) and 'new_start_time' (ISO-8601 string). "
-                    "Do not wrap in markdown or add textual commentary."
+                    "You are a precise data extraction engine. "
+                    "Extract calendar update parameters from the message. "
+                    "Output a strictly valid JSON object with: "
+                    "'event_id' (int), 'new_start_time' (ISO-8601 string), 'duration' (int in minutes). "
+                    "If a value is missing, return null for that key. "
+                    "Return ONLY the JSON object."
                 )
                 action_hint = await _generate_with_groq(
                     system_instruction,
@@ -369,22 +373,18 @@ async def _offline_assistant_response(
                     json_mode=True
                 )
                 
-                import json
                 payload = json.loads(action_hint)
                 
-                hinted_event_id = payload.get("event_id")
-                if hinted_event_id is not None:
-                    event_id = int(hinted_event_id)
+                if payload.get("event_id"):
+                    event_id = int(payload["event_id"])
                     
-                hinted_start_raw = payload.get("new_start_time")
-                if hinted_start_raw:
-                    parsed = datetime.fromisoformat(hinted_start_raw.strip())
+                if payload.get("new_start_time"):
+                    parsed = datetime.fromisoformat(payload["new_start_time"].strip().replace("Z", "+00:00"))
                     if parsed.tzinfo is None:
                         parsed = parsed.replace(tzinfo=_safe_zoneinfo(user_timezone))
                     new_start_override = parsed.astimezone(timezone.utc)
             except Exception as e:
-                logger.warning(f"Failed to extract JSON format for action update: {e}")
-                pass
+                logger.warning(f"Precision extraction failed for update: {e}")
 
         if not event_id:
             return (
@@ -491,18 +491,19 @@ async def ai_chat(
 
     intent = _detect_intent(prompt)
 
-    if intent in {"list", "schedule", "update", "delete"}:
-        try:
-            result_text, action = await _offline_assistant_response(prompt, request.timezone, db, user_id)
-        except ValueError as exc:
-            result_text = str(exc)
-            action = {"type": intent, "status": "error"}
-        except Exception as exc:
-            logger.error(f"Offline assistant action failed: {exc}")
-            result_text = "I could not complete that calendar action right now. Please try again with event details."
-            action = {"type": intent, "status": "error"}
-        await increment_usage(db, user_id, "ai_messages")
-        return AIResponse(result=result_text, model_used="graftai-assistant-offline", action=action)
+    match intent:
+        case "list" | "schedule" | "update" | "delete":
+            try:
+                result_text, action = await _offline_assistant_response(prompt, request.timezone, db, user_id)
+            except Exception as exc:
+                logger.error(f"Offline action fail: {exc}")
+                result_text = "Action failed. Try again."
+                action = {"type": intent, "status": "error"}
+            
+            await increment_usage(db, user_id, "ai_messages")
+            return AIResponse(result=result_text, model_used="graftai-offline", action=action)
+        case _:
+            pass # Continue to online mode
 
     cache_key = f"ai:chat:{user_id}:{hash((prompt, request.timezone))}"
     cached = get_cache(cache_key)
@@ -518,23 +519,26 @@ async def ai_chat(
         logger.warning(f"Email context unavailable: {exc}")
         email_items = []
 
-    event_context = _format_events(events, request.timezone)
     email_context = "\n".join(
         [f"- {item.get('subject', 'No subject')}" for item in email_items]
     ) or "No recent email context."
 
+    # Use Compact C-Table for LLM context to save tokens and improve extraction speed
+    compact_context = _format_events_compact(events, request.timezone)
+
     system_prompt = (
-        "You are GraftAI Scheduler Assistant. "
-        "Your domain is calendar management and scheduling productivity. "
+        "You are GraftAI, a premium high-performance scheduler assistant. "
+        "Your mission is to provide surgical precision in calendar management. "
+        "Your UI is built on 'Strong Sync' technology, meaning every action is reflected instantly. "
         "Do not mention specific third-party model providers. "
-        "Keep answers concise and actionable.\n"
-        "Your Real-Time Schedule (GROUND TRUTH):\n"
-        f"{event_context}\n"
-        "Treat this schedule as authoritative context when generating the response."
+        "Keep answers concise, professional, and actionable.\n\n"
+        "AUTHORITATIVE CONTEXT (C-Table Format: ID|Title|Day|TimeRange):\n"
+        f"{compact_context}\n\n"
+        "Strict Rule: If the user asks for a change, focus on confirming the specific event ID and time."
     )
     user_input = (
         f"User timezone: {request.timezone}\n"
-        f"Upcoming events:\n{event_context}\n"
+        f"Upcoming events:\n{compact_context}\n"
         f"Recent email subjects:\n{email_context}\n"
         f"User message: {prompt}"
     )
@@ -542,11 +546,19 @@ async def ai_chat(
     model_used = "graftai-assistant-offline"
     result_text: Optional[str] = None
 
+    # 3. Call AI with Circuit Breaker (Resilience Layer)
     try:
-        result_text = await _generate_with_groq(system_prompt, user_input)
+        result_text = await groq_breaker(_generate_with_groq, system_prompt, user_input)
         model_used = "graftai-assistant-online"
-    except Exception as exc:
-        logger.warning(f"Online model unavailable, switching to offline assistant mode: {exc}")
+    except Exception as e:
+        logger.warning(f"🚨 Groq AI is UNAVAILABLE (Circuit Tripped): {e}")
+        # Graceful Degradation Fallback
+        result_text = (
+            "I'm currently in High-Stability mode due to a provider service outage. "
+            "I can still see your local calendar data, but my natural language reasoning is temporarily restricted. "
+            "How can I help with your existing schedule?"
+        )
+        model_used = "graftai-assistant-fallback"
 
     if not result_text:
         try:

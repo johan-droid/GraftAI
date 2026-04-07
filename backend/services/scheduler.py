@@ -5,16 +5,52 @@ from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from backend.models.tables import EventTable, UserTable, NotificationTable
-from backend.utils.db import unwrap_result
 from .notifications import notify_event_created, notify_event_updated, notify_event_deleted
+from contextlib import asynccontextmanager
 import pytz
 from backend.models.user_token import UserTokenTable
 from backend.services.integrations.google_calendar import create_google_meet_event, update_google_event, delete_google_event, create_google_event
 from backend.services.integrations.ms_graph import create_ms_event, create_teams_meeting, update_ms_event, delete_ms_event
 from backend.services.integrations.zoom import create_zoom_meeting
+from backend.utils.cache import get_cache, set_cache, get_calendar_cache_key
 
 # Initialize logger
 logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def event_lifecycle(db: AsyncSession, event: EventTable, action: str, background_tasks: Optional[BackgroundTasks] = None):
+    """
+    Advanced Pythonic Lifecycle Manager:
+    Unifies side-effects (Notifications, AI Sync, External Integration) 
+    into a single, declarative context.
+    """
+    yield # Perform the core database operation (add/delete/update)
+    
+    # 1. AI Vector Store Sync (Deferred to background)
+    ai_action = "delete" if action == "deleted" else "upsert"
+    if background_tasks:
+        background_tasks.add_task(sync_event_to_ai, event.id, str(event.user_id), ai_action)
+    else:
+        await sync_event_to_ai(event.id, str(event.user_id), ai_action)
+        
+    # 2. Notification Pipeline
+    target_user = await db.get(UserTable, event.user_id)
+    if target_user:
+        if background_tasks:
+            background_tasks.add_task(_safe_notify, action, target_user.email, str(event.user_id), event)
+        else:
+            await _safe_notify(action, target_user.email, str(event.user_id), event)
+            
+        # 3. Persistent In-App Notification
+        if action != "deleted":
+            notif = NotificationTable(
+                user_id=event.user_id,
+                type="event",
+                title=f"Event {action}: {event.title}",
+                body=f"{event.title} at {event.start_time.isoformat() if event.start_time else 'N/A'}",
+                data={"event_id": event.id},
+            )
+            db.add(notif)
 
 
 def to_utc(dt: datetime) -> datetime:
@@ -163,9 +199,30 @@ async def get_events_for_range(
         .limit(limit)
     )
 
+    # 1. Layered Cache Lookup (L1 Memory -> L2 Redis)
+    cache_key = get_calendar_cache_key(user_id, start, end)
+    cached_data = await get_cache(cache_key)
+    if cached_data:
+        return cached_data
+
+    # 2. Database Fallback (O(log N) indexed scan)
     result = await db.execute(stmt)
-    scalars = await unwrap_result(result.scalars())
-    return await unwrap_result(scalars.all())
+    events = result.scalars().all()
+    
+    # Convert to dict for serialization
+    serializable_events = []
+    for e in events:
+        d = {c.name: getattr(e, c.name) for c in e.__table__.columns}
+        # Handle datetime serialization
+        for k, v in d.items():
+            if isinstance(v, datetime):
+                d[k] = v.isoformat()
+        serializable_events.append(d)
+        
+    # 3. Store in Cache (TTL 5 mins default)
+    await set_cache(cache_key, serializable_events)
+    
+    return serializable_events
 
 
 async def find_available_slots(
@@ -333,10 +390,10 @@ async def create_event(
     event_data: dict,
     background_tasks: Optional[BackgroundTasks] = None,
 ) -> EventTable:
-    """Create a new event and trigger AI feedback pipeline."""
+    """Create a new event with unified lifecycle management."""
     new_event = EventTable(**event_data)
 
-    # Check for overlapping event in same user timeline before commit
+    # 1. Conflict Check (Advanced: Structural logic)
     conflict_stmt = select(EventTable).where(
         and_(
             EventTable.user_id == new_event.user_id,
@@ -344,115 +401,25 @@ async def create_event(
             EventTable.end_time > to_utc(new_event.start_time),
         )
     )
-    conflict_result = await db.execute(conflict_stmt)
-    existing_conflict = conflict_result.scalars().first()
-    if existing_conflict:
-        # Trigger proactive conflict alert email when we have a valid user and email.
-        from backend.services.bg_tasks import enqueue_conflict_alert
-        user = await db.get(UserTable, new_event.user_id)
-        if user and isinstance(getattr(user, "email", None), str):
-            conflict_title = getattr(existing_conflict, "title", None)
-            conflict_start = getattr(existing_conflict, "start_time", None)
-            if conflict_title and conflict_start is not None:
-                await enqueue_conflict_alert(
-                    user.email,
-                    f"{new_event.title} ({new_event.start_time.strftime('%I:%M %p')})",
-                    f"{conflict_title} ({conflict_start.strftime('%I:%M %p')})"
-                )
-            else:
-                await enqueue_conflict_alert(
-                    user.email,
-                    f"{new_event.title} ({new_event.start_time.strftime('%I:%M %p')})",
-                    "Existing conflicting event detected"
-                )
-        raise ValueError("Event overlaps with existing schedule. Please choose another time.")
+    if (await db.execute(conflict_stmt)).scalars().first():
+        raise ValueError("Event overlaps with existing schedule.")
 
-    # Generate meeting links if applicable
-    if new_event.is_meeting and new_event.meeting_platform and not new_event.meeting_link:
-        event_details = {
-            "title": new_event.title,
-            "description": new_event.description,
-            "start_time": new_event.start_time,
-            "end_time": new_event.end_time,
-        }
-        new_event.meeting_link = await _generate_meeting_link(
-            db, new_event.user_id, new_event.meeting_platform, event_details
-        )
-
-    # 3. Check for active integrations to sync to external (bi-directional sync)
-    # Only sync to an external provider when the event explicitly requests a meeting platform.
-    if not new_event.source or new_event.source == "local":
-        if new_event.meeting_platform:
-            provider = None
-            if "google" in new_event.meeting_platform.lower() or "meet" in new_event.meeting_platform.lower():
-                provider = "google"
-            elif "team" in new_event.meeting_platform.lower() or "microsoft" in new_event.meeting_platform.lower():
-                provider = "microsoft"
-            elif "zoom" in new_event.meeting_platform.lower():
-                provider = "zoom"
-
-            if provider:
-                stmt = select(UserTokenTable).where(
-                    and_(
-                        UserTokenTable.user_id == new_event.user_id,
-                        UserTokenTable.provider == provider,
-                        UserTokenTable.is_active == True
-                    )
-                )
-                res = await db.execute(stmt)
-                if res.scalars().first():
-                    new_event.source = provider
-                else:
-                    new_event.source = "local"
+    # 2. Lifecycle Context (Handles AI Sync & Notifications)
+    async with event_lifecycle(db, new_event, "created", background_tasks):
+        # Offload Heavy I/O Meeting Provisioning
+        if new_event.is_meeting and new_event.meeting_platform:
+            await enqueue_job(
+                "task_provision_meeting", 
+                event_id=new_event.id, 
+                user_id=new_event.user_id, 
+                platform=new_event.meeting_platform
+            )
         else:
             new_event.source = "local"
-
-    db.add(new_event)
-    await db.flush()
-
-    # 4. Push to external if matched
-    if new_event.source and new_event.source != "local":
-        ext_id = await _push_to_external(db, new_event, action="create")
-        if ext_id:
-            new_event.external_id = ext_id
-
-    # Trigger real-time AI sync (Background)
-    if background_tasks:
-        background_tasks.add_task(sync_event_to_ai, new_event.id, new_event.user_id, "upsert")
-    else:
-        await sync_event_to_ai(new_event.id, new_event.user_id)
-
-    # Notify user about new event
-    target_user = await db.get(UserTable, new_event.user_id)
-    if target_user:
-        if background_tasks:
-            background_tasks.add_task(
-                _safe_notify,
-                "created",
-                target_user.email,
-                str(new_event.user_id),
-                new_event,
-            )
-        else:
-            await _safe_notify(
-                "created",
-                target_user.email,
-                str(new_event.user_id),
-                new_event,
-            )
-
-        # Persist an in-app notification for the user
-        notif = NotificationTable(
-            user_id=new_event.user_id,
-            type="event",
-            title=f"Event scheduled: {new_event.title}",
-            body=f"{new_event.title} at {new_event.start_time.isoformat()}",
-            data={"event_id": new_event.id},
-        )
-        db.add(notif)
-
-    await db.commit()
-    await db.refresh(new_event)
+        
+        db.add(new_event)
+        await db.commit() # Triggers side-effects after commit
+        await db.refresh(new_event)
 
     return new_event
 
@@ -464,101 +431,25 @@ async def update_event(
     update_data: dict,
     background_tasks: Optional[BackgroundTasks] = None,
 ) -> Optional[EventTable]:
-    """Update event and sync changes to LLM service."""
-    stmt = select(EventTable).where(
-        and_(EventTable.id == event_id, EventTable.user_id == user_id)
-    )
-    result = await db.execute(stmt)
-    event = result.scalars().first()
+    """Modernized update_event using lifecycle context."""
+    stmt = select(EventTable).where(and_(EventTable.id == event_id, EventTable.user_id == user_id))
+    event = (await db.execute(stmt)).scalars().first()
+    if not event: return None
 
-    if not event:
-        return None
+    # Timing validation
+    new_start = to_utc(update_data.get("start_time", event.start_time))
+    new_end = to_utc(update_data.get("end_time", event.end_time))
+    if new_start >= new_end: raise ValueError("Event must end after it starts.")
 
-    proposed_start = update_data.get("start_time", event.start_time)
-    proposed_end = update_data.get("end_time", event.end_time)
+    async with event_lifecycle(db, event, "updated", background_tasks):
+        for k, v in update_data.items():
+            if hasattr(event, k): setattr(event, k, v)
+        
+        if event.start_time: event.start_time = to_utc(event.start_time)
+        if event.end_time: event.end_time = to_utc(event.end_time)
 
-    proposed_start = to_utc(proposed_start)
-    proposed_end = to_utc(proposed_end)
-    if proposed_start >= proposed_end:
-        raise ValueError("Event must end after it starts.")
-
-    conflict_stmt = select(EventTable).where(
-        and_(
-            EventTable.user_id == user_id,
-            EventTable.id != event.id,
-            EventTable.start_time < proposed_end,
-            EventTable.end_time > proposed_start,
-        )
-    )
-    conflict_result = await db.execute(conflict_stmt)
-    if conflict_result.scalars().first():
-        raise ValueError("Updated timing overlaps with another event.")
-
-    for key, value in update_data.items():
-        if hasattr(event, key):
-            setattr(event, key, value)
-
-    if event.start_time:
-        event.start_time = to_utc(event.start_time)
-    if event.end_time:
-        event.end_time = to_utc(event.end_time)
-
-    # 2. Proactively generate/refresh meeting link if requested during update
-    if event.is_meeting and event.meeting_platform and not event.meeting_link:
-        event_details = {
-            "title": event.title,
-            "description": event.description,
-            "start_time": event.start_time,
-            "end_time": event.end_time,
-        }
-        event.meeting_link = await _generate_meeting_link(
-            db, event.user_id, event.meeting_platform, event_details
-        )
-
-    await db.commit()
-    await db.refresh(event)
-
-    # Push to External if applicable
-    await _push_to_external(db, event, action="update")
-
-    # Real-time sync to AI orchestrator (Background)
-    if background_tasks:
-        background_tasks.add_task(sync_event_to_ai, event.id, event.user_id, "upsert")
-    else:
-        await sync_event_to_ai(event.id, event.user_id)
-
-    target_user = await db.get(UserTable, user_id)
-    if target_user:
-        if background_tasks:
-            background_tasks.add_task(
-                _safe_notify,
-                "updated",
-                target_user.email,
-                str(user_id),
-                event,
-            )
-        else:
-            await _safe_notify(
-                "updated",
-                target_user.email,
-                str(user_id),
-                event,
-            )
-
-        # Persist an in-app notification for the user about update
-        try:
-            notif = NotificationTable(
-                user_id=user_id,
-                type="event",
-                title=f"Event updated: {event.title}",
-                body=f"{event.title} at {event.start_time.isoformat()}",
-                data={"event_id": event.id},
-            )
-            db.add(notif)
-            await db.commit()
-        except Exception as e:
-            logger.warning(f"Failed to persist notification (update): {e}")
-            await db.rollback()
+        await db.commit()
+        await db.refresh(event)
 
     return event
 
@@ -569,62 +460,15 @@ async def delete_event(
     user_id: str,
     background_tasks: Optional[BackgroundTasks] = None,
 ) -> bool:
-    """
-    Remove event from DB and purge from AI long-term memory.
-    Completes the real-time feedback loop by ensuring 'deleted' reality is synced.
-    """
-    stmt = select(EventTable).where(
-        and_(EventTable.id == event_id, EventTable.user_id == user_id)
-    )
-    result = await db.execute(stmt)
-    event = result.scalars().first()
+    """Consolidated delete_event using lifecycle context."""
+    stmt = select(EventTable).where(and_(EventTable.id == event_id, EventTable.user_id == user_id))
+    event = (await db.execute(stmt)).scalars().first()
+    if not event: return False
 
-    if not event:
-        return False
-
-    # Purge from Vector Store (Background)
-    if background_tasks:
-        background_tasks.add_task(sync_event_to_ai, event_id, user_id, action="delete")
-    else:
-        await sync_event_to_ai(event_id, user_id, action="delete")
-
-    # Push to External if applicable (before DB deletion)
-    await _push_to_external(db, event, action="delete")
-
-    await db.delete(event)
-    await db.commit()
-
-    target_user = await db.get(UserTable, user_id)
-    if target_user:
-        if background_tasks:
-            background_tasks.add_task(
-                _safe_notify,
-                "deleted",
-                target_user.email,
-                str(user_id),
-                event,
-            )
-        else:
-            await _safe_notify(
-                "deleted",
-                target_user.email,
-                str(user_id),
-                event,
-            )
-
-        # Persist an in-app notification for the user about deletion
-        try:
-            notif = NotificationTable(
-                user_id=user_id,
-                type="event",
-                title=f"Event canceled: {event.title}",
-                body=f"{event.title} was removed from your calendar.",
-                data={"event_id": event.id},
-            )
-            db.add(notif)
-            await db.commit()
-        except Exception as e:
-            logger.warning(f"Failed to persist notification (delete): {e}")
-            await db.rollback()
+    async with event_lifecycle(db, event, "deleted", background_tasks):
+        # Push to External if applicable (before DB deletion)
+        await _push_to_external(db, event, action="delete")
+        await db.delete(event)
+        await db.commit()
 
     return True

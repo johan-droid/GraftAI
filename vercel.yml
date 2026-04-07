@@ -2,9 +2,8 @@ version: 2
 build:
   env:
     NEXT_PUBLIC_API_BASE_URL: "$NEXT_PUBLIC_API_BASE_URL"
-    API_BASE_URL: "$API_BASE_URL"
-    AUTH0_DOMAIN: "$AUTH0_DOMAIN"
-    AUTH0_AUDIENCE: "$AUTH0_AUDIENCE"
+    BETTER_AUTH_URL: "$BETTER_AUTH_URL"
+    NEXT_PUBLIC_BETTER_AUTH_URL: "$NEXT_PUBLIC_BETTER_AUTH_URL"
 
 # For a monorepo, we build frontend from its own folder and deploy it.
 projects:

@@ -32,3 +32,27 @@ async def enqueue_job(function_name: str, **kwargs):
     except Exception as e:
         logger.error(f"❌ Failed to enqueue job {function_name}: {e}")
         return None
+
+async def publish_event(stream_key: str, event_type: str, data: dict, max_len: int = 2000):
+    """
+    Publishes a high-performance binary event to a Redis Stream with XADD.
+    Uses MessagePack serialization for binary safety and bandwidth efficiency.
+    """
+    from backend.utils.redis_singleton import get_redis_binary
+    from backend.utils.serialization import serializer
+    from datetime import datetime, timezone
+    
+    try:
+        r = await get_redis_binary()
+        payload = {
+            "event": event_type,
+            "data": data,
+            "timestamp": datetime.now(timezone.utc).timestamp()
+        }
+        binary_payload = serializer.to_binary(payload)
+        
+        # XADD key ID field value [MAXLEN ~ len]
+        # Using approximate maxlen (~) for high efficiency
+        await r.xadd(stream_key, {"payload": binary_payload}, maxlen=max_len, approximate=True)
+    except Exception as e:
+        logger.error(f"❌ Failed to publish stream event {event_type} to {stream_key}: {e}")

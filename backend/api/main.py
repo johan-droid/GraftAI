@@ -17,7 +17,11 @@ load_dotenv(dotenv_path=dotenv_path)
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 from backend.auth.routes     import router as auth_router
@@ -27,6 +31,7 @@ from backend.api.users       import router as users_router
 from backend.api.uploads     import router as uploads_router
 from backend.api.admin       import router as admin_router
 from backend.services.ai        import router as ai_router
+from backend.api.sync_stream    import router as sync_stream_router
 
 from backend.services.analytics import router as analytics_router
 from backend.services.consent   import router as consent_router
@@ -44,11 +49,21 @@ from backend.services.migrations import run_migrations
 # round-trip on every request.  Redis-backed rate limiting is preserved as
 # fallback for multi-instance deployments.
 
-import time
-from collections import defaultdict, deque
+from backend.utils.redis_singleton import get_redis
 
-_rate_buckets: dict[str, deque] = defaultdict(deque)
-
+_RATE_LIMIT_LUA = """
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local current = redis.call('INCR', key)
+if current == 1 then
+    redis.call('EXPIRE', key, window)
+end
+if current > limit then
+    return 0
+end
+return 1
+"""
 
 def _parse_rate_limit(rate_limit_str: str):
     match = re.match(r"(\d+)/(\w+)", rate_limit_str)
@@ -60,9 +75,8 @@ def _parse_rate_limit(rate_limit_str: str):
                "hour": 3600, "hours": 3600, "day": 86400, "days": 86400}
     return count, windows.get(unit, 60)
 
-
 class RateLimitMiddleware:
-    """Sliding-window in-process rate limiter — zero Redis calls."""
+    """Sliding-window Redis-backed rate limiter."""
 
     def __init__(self, app, rate_limit: str = "100/minute"):
         self.app = app
@@ -86,15 +100,21 @@ class RateLimitMiddleware:
         if "," in client_ip:
             client_ip = client_ip.split(",")[0].strip()
 
-        key = f"{client_ip}:{request.url.path}"
-        now = time.time()
-        bucket = _rate_buckets[key]
+        # Skip health checks and static assets from rate limiting
+        if request.url.path in ["/health", "/favicon.ico", "/"]:
+            await self.app(scope, receive, send)
+            return
 
-        # Evict timestamps outside the window
-        while bucket and bucket[0] < now - self.window:
-            bucket.popleft()
+        key = f"rate_limit:{client_ip}:{request.url.path}"
 
-        if len(bucket) >= self.max_requests:
+        try:
+            redis_client = await get_redis()
+            allowed = await redis_client.eval(_RATE_LIMIT_LUA, 1, key, self.max_requests, self.window)
+        except Exception as e:
+            logger.error(f"Global Rate limiter Redis failure: {e}")
+            allowed = True # Fail open
+
+        if not allowed:
             response = JSONResponse(
                 status_code=429,
                 content={"detail": "Rate limit exceeded. Please try again later."},
@@ -102,13 +122,23 @@ class RateLimitMiddleware:
             await response(scope, receive, send)
             return
 
-        bucket.append(now)
         await self.app(scope, receive, send)
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
-from contextlib import asynccontextmanager
-
+# ── Sentry Initialization (Production Only) ──────────────────────────────────
+if os.getenv("SENTRY_DSN"):
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        integrations=[
+            StarletteIntegration(transaction_style="endpoint"),
+            FastApiIntegration(transaction_style="endpoint"),
+        ],
+        environment=os.getenv("ENV", "production"),
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
+    logger.info("📡 [STARTUP] Sentry SDK initialized.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -169,8 +199,6 @@ async def lifespan(app: FastAPI):
 
     logger.info("🟢 [STARTUP] ALL SYSTEMS GO.")
     yield
-    # Shutdown: clean up rate-limit buckets to avoid memory leak on reload
-    _rate_buckets.clear()
     logger.info("🛑 [SHUTDOWN] Cleaning up...")
 
 
@@ -182,7 +210,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ── Global Exception Handler (Audit Hole Fix) ─────────────────────────────────
+# ── Global Exception Handler (Stateless & LB Friendly) ────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"🔥 UNHANDLED ERROR: {type(exc).__name__}: {exc}", exc_info=True)
@@ -191,11 +219,17 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={
             "detail": "A critical system error occurred. Our engineering team has been notified.",
             "type": "internal_error",
-            "request_id": request.headers.get("x-request-id", "system")
+            "request_id": request.headers.get("x-request-id", "system"),
+            "timestamp": datetime.now(timezone.utc).isoformat()
         },
     )
 
-# ── CORS (outermost — must answer OPTIONS before rate limiter) ────────────────
+# ── Middleware Stack ────────────────────────────────────────────────────────
+
+# 1. GZip Compression (Efficiency: Reduces payload size by up to 80%)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# 2. CORS Management
 _extra_origins = [
     o.strip()
     for o in os.getenv("EXTRA_CORS_ORIGINS", "").split(",")
@@ -223,6 +257,30 @@ app.add_middleware(
     expose_headers=["X-Backend-Server", "X-Request-Id", "x-xsrf-token", "X-XSRF-TOKEN"],
     max_age=600,
 )
+
+# 3. Global Request/Response Optimization Middleware
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    import time
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    process_time = time.perf_counter() - start_time
+    response.headers["X-Process-Time"] = f"{process_time:.4f}s"
+    response.headers["X-Sovereign-Version"] = "1.1.0"
+    response.headers["X-Backend-Node"] = os.getenv("HOSTNAME", "default-node")
+    return response
+
+# 4. Global Logging Middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    # Skip logging for health checks to keep logs clean and reduce I/O
+    if request.url.path == "/health":
+        return await call_next(request)
+    
+    logger.info(f"Incoming request: {request.method} {request.url.path}")
+    response = await call_next(request)
+    logger.info(f"Response status: {response.status_code}")
+    return response
 
 # ── Rate limiter (inner, skips OPTIONS already) ─────────────────────────────
 _rate_limit_str = os.getenv("RATE_LIMIT", "100/minute")
@@ -255,6 +313,7 @@ v1.include_router(billing_router)
 v1.include_router(webhooks_router)
 v1.include_router(mfa_router)
 v1.include_router(admin_router)
+v1.include_router(sync_stream_router)
 
 app.include_router(v1)
 

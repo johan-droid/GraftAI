@@ -33,6 +33,10 @@ async def set_cache(key: str, value: Any, ttl_seconds: int = 300):
         logger.warning(f"⚠ Cache set failed for key {key}: {e}")
         return False
 
+
+async def get_cache(key: str) -> Optional[Any]:
+    """Fetches a value from cache, preferring L1 memory over Redis."""
+
     # 1. Try L1 (Memory)
     val = l1_cache.get(key)
     if val is not None:

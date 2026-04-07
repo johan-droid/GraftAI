@@ -10,6 +10,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@serwist/next": "^9.5.7",
+    "@tailwindcss/container-queries": "^0.1.1",
     "clsx": "^2.1.1",
     "dexie": "^4.4.2",
     "framer-motion": "^12.38.0",
@@ -18,7 +20,10 @@
     "next": "^16.2.1",
     "pg": "^8.20.0",
     "react": "^19.2.4",
+    "react-device-detect": "^2.2.3",
     "react-dom": "^19.2.4",
+    "react-swipeable": "^7.0.2",
+    "serwist": "^9.5.7",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0"
   },

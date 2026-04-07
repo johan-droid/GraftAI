@@ -196,7 +196,7 @@ class EventTable(Base):
     # Smart Sync Engine Fields
     external_id = Column(String(512), index=True) # ID from Google/Microsoft/Zoom
     fingerprint = Column(String(256), index=True) # deduplication hash
-    source = Column(String(50), default="local") # google, microsoft, zoom, local
+    source = Column(String(50), default="local", index=True) # google, microsoft, zoom, local
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(

@@ -18,10 +18,12 @@ export function useSyncStatus() {
     const token = getToken();
     if (!token) return;
 
-    // Build absolute URL for EventSource
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || window.location.origin;
-    const url = new URL("/api/v1/calendar/sync/stream", baseUrl);
-    url.searchParams.set("token", token); // Some browsers don't support headers in EventSource, so we pass token in query
+    let baseUrl = "";
+    if (typeof window === "undefined") {
+      baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    }
+    const url = new URL("/api/v1/calendar/sync/stream", baseUrl || window.location.origin);
+    url.searchParams.set("token", token); // Fallback for browsers rejecting EventSource with credentials
 
     const eventSource = new EventSource(url.toString());
 

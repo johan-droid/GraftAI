@@ -76,4 +76,4 @@ async def get_sync_status(
         }
     except Exception as e:
         logger.exception("Failed to fetch sync status")
-        raise HTTPException(status_code=500, detail=f"Monitoring error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal monitoring error. Check logs for details.")

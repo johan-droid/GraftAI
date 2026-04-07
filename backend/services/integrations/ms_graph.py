@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.user_token import UserTokenTable
 from backend.utils.http_client import get_client, ClientProxy
+from backend.services.integrations.token_service import ensure_valid_token
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -19,24 +20,10 @@ MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/common"
 
 
 async def get_ms_graph_client(db: AsyncSession, user_id: str) -> Optional[ClientProxy]:
-    """Returns an authenticated Microsoft Graph client for the given user."""
-    stmt = select(UserTokenTable).where(
-        (UserTokenTable.user_id == user_id)
-        & (UserTokenTable.provider == "microsoft")
-        & (UserTokenTable.is_active == True)
-    )
-    result = await db.execute(stmt)
-    token = result.scalars().first()
-    if not token:
-        logger.info(f"No active Microsoft token found for user {user_id}")
+    """Returns an authenticated Microsoft Graph client for the given user with JIT rotation."""
+    access_token = await ensure_valid_token(db, user_id, "microsoft")
+    if not access_token:
         return None
-
-    access_token = get_ms_graph_token(
-        {
-            "refresh_token": token.refresh_token,
-            "scopes": token.scopes or "",
-        }
-    )
 
     return ClientProxy(
         base_url="https://graph.microsoft.com/v1.0",

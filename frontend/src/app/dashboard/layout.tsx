@@ -28,6 +28,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useAuthContext } from "@/app/providers/auth-provider";
 import { syncUserTimezone, updateUserProfile, submitLogoutFeedback } from "@/lib/api";
 import { DashboardProvider, useDashboard } from "@/providers/dashboard-provider";
+import { useSwipeable } from "react-swipeable";
 
 const NAV_GROUPS = [
   {
@@ -113,6 +114,20 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  const handleMenuToggle = (open: boolean) => {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(10);
+    }
+    setMobileMenuOpen(open);
+  };
+
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => handleMenuToggle(false),
+    onSwipedRight: () => handleMenuToggle(true),
+    preventScrollOnSwipe: false,
+    trackMouse: false,
+  });
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -261,7 +276,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="relative flex h-[100dvh] overflow-hidden bg-[#030712] pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+    <div 
+      {...swipeHandlers}
+      className="relative flex h-[100dvh] overflow-hidden bg-[#030712] pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+    >
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute top-0 left-64 w-[600px] h-[400px] bg-indigo-600/5 rounded-full blur-[100px]" />
         <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-violet-600/5 rounded-full blur-[100px]" />
@@ -273,7 +291,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Drawer Navigation Removed for Native Bottom Nav */}
 
-      <div className="z-10 flex min-w-0 flex-1 flex-col pb-[calc(86px+env(safe-area-inset-bottom))] lg:pb-0">
+      <div className="z-10 flex min-w-0 flex-1 flex-col pb-0 lg:pb-0">
         <header className="flex items-center gap-3 h-14 px-4 sm:px-5 border-b border-white/[0.06] bg-[#040a18]/85 backdrop-blur-2xl sticky top-0 z-30">
           <div className="flex items-center gap-1.5 text-sm text-slate-500">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex lg:hidden items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 mr-1.5">
@@ -291,6 +309,13 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <PrivacyToggle />
             <NotificationCenter />
+            <button
+              onClick={() => handleMenuToggle(true)}
+              className="lg:hidden flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-slate-400 active:scale-95 transition-all"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
             <button className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/8 text-slate-400 hover:text-white hover:bg-white/8 transition-all text-[12px] font-medium">
               <Command className="w-3.5 h-3.5" />
               <span>Command</span>
@@ -385,54 +410,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        <div className="mobile-safe-bottom fixed inset-x-0 bottom-0 z-50 px-3 pb-2 lg:hidden">
-          <nav className="mx-auto flex h-[68px] max-w-md items-center rounded-[24px] border border-white/[0.14] bg-[#040a18]/85 px-1.5 backdrop-blur-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.35)]">
-            {BOTTOM_NAV_LINKS.map((link) => {
-              const isActive = pathname === link.href;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  aria-current={isActive ? "page" : undefined}
-                  className={cn(
-                    "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide active:scale-95 transition-transform",
-                    isActive ? "text-indigo-300" : "text-slate-400"
-                  )}
-                >
-                  {isActive && (
-                    <motion.span
-                      layoutId="dashboard-mobile-tab"
-                      className="absolute inset-1 -z-10 rounded-2xl border border-indigo-400/25 bg-indigo-500/18"
-                    />
-                  )}
-                  <link.icon className={cn("h-[22px] w-[22px]", isActive && "drop-shadow-[0_0_10px_rgba(99,102,241,0.4)]")} />
-                  <span>{link.name}</span>
-                </Link>
-              );
-            })}
-
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              className={cn(
-                "relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide active:scale-95 transition-transform",
-                mobileMenuOpen ? "text-indigo-300" : "text-slate-400"
-              )}
-              aria-expanded={mobileMenuOpen ? "true" : "false"}
-              aria-label="Open more navigation options"
-            >
-              {mobileMenuOpen && <span className="absolute inset-1 -z-10 rounded-2xl border border-indigo-400/25 bg-indigo-500/18" />}
-              <Menu className="h-[22px] w-[22px]" />
-              <span>More</span>
-            </button>
-          </nav>
-        </div>
+        {/* Mobile Navigation Drawer Triggered from Header Menu */}
 
         <AnimatePresence>
           {mobileMenuOpen && (
             <>
               <motion.button
                 aria-label="Close mobile navigation"
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={() => handleMenuToggle(false)}
                 className="fixed inset-0 z-[60] bg-black/55 lg:hidden"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -455,7 +440,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                     <h2 className="mt-1 text-base font-semibold text-white">Workspace Menu</h2>
                   </div>
                   <button
-                    onClick={() => setMobileMenuOpen(false)}
+                    onClick={() => handleMenuToggle(false)}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-200"
                     aria-label="Close navigation menu"
                   >
@@ -517,7 +502,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
                 <button
                   onClick={() => {
-                    setMobileMenuOpen(false);
+                    handleMenuToggle(false);
                     setLogoutModalOpen(true);
                   }}
                   className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3.5 text-sm font-semibold text-rose-300"

@@ -65,8 +65,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     let active = true;
 
-    async function loadSession() {
-      setLoading(true);
+    async function loadSession(isSilent = false) {
+      if (!isSilent) setLoading(true);
       try {
         const response = await getSessionSafe();
         if (!active) return;
@@ -76,7 +76,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(response.data);
           
           // CRITICAL SYNC: Ensure backend user record exists/is fresh.
-          // This bridges the 'social login' to 'local database' gap without manual intervention.
           if (response.data.user) {
             void syncWithBackend().then(res => {
               if (res.error) console.error("[AUTH]: Initial sync error:", res.error);
@@ -87,16 +86,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.debug("Session check encountered a network glitch; retrying without kicking user out.");
           } else {
             transientAuthFailuresRef.current += 1;
-            if (transientAuthFailuresRef.current >= 2) {
+            // Only set session to null if we've failed twice OR if it's a blocking load
+            if (transientAuthFailuresRef.current >= 2 || !isSilent) {
               setSession(null);
             } else {
-              console.debug("Transient auth failure detected; retaining session and retrying shortly.");
+              console.debug("Transient auth failure detected in background; retaining session and retrying shortly.");
               if (typeof window !== "undefined") {
                 if (retryTimerRef.current) {
                   window.clearTimeout(retryTimerRef.current);
                 }
                 retryTimerRef.current = window.setTimeout(() => {
-                  void loadSession();
+                  void loadSession(isSilent);
                 }, 1200);
               }
             }
@@ -108,12 +108,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Session load failure", err);
         setSession(null);
       } finally {
-        if (active) setLoading(false);
+        if (active && !isSilent) setLoading(false);
       }
     }
 
-    loadSession();
-    const interval = setInterval(loadSession, 60_000);
+    loadSession(false); // Initial load is NOT silent
+    const interval = setInterval(() => loadSession(true), 60_000); // Background refreshes ARE silent
 
     return () => {
       active = false;
@@ -137,6 +137,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [session, loading, redirectToLogin, isProtectedPath]);
+
+  // Global Realtime SSE Listener (Replaces Manual Interval Polling)
+  React.useEffect(() => {
+    if (!session?.user) return;
+    const { getToken } = require("@/lib/auth-client");
+    const token = getToken();
+    if (!token) return;
+
+    const baseUrl = typeof window === "undefined" 
+      ? (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000") 
+      : window.location.origin;
+
+    const url = new URL("/api/v1/calendar/sync/stream", baseUrl);
+    url.searchParams.set("token", token);
+
+    const eventSource = new EventSource(url.toString());
+    eventSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload.event === "QUOTA_UPDATE") {
+          refreshFn(); // Seamless UI update!
+        }
+      } catch (err) {}
+    };
+
+    return () => eventSource.close();
+  }, [(session?.user as User | null)?.id]);
 
   React.useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;

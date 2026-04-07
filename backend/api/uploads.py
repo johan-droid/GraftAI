@@ -28,6 +28,23 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # On Unix-like systems, we'd set permissions here.
 # On Windows, we ensure the directory is created.
 
+# SEC-08 Magic Byte signatures for strict MIME validation
+MAGIC_BYTES: dict[str, bytes] = {
+    "image/jpeg":      b"\xff\xd8\xff",
+    "image/png":       b"\x89PNG",
+    "image/gif":       b"GIF8",
+    "image/webp":      b"RIFF",
+    "application/pdf": b"%PDF",
+}
+
+def _verify_magic_bytes(header_bytes: bytes, declared_content_type: str) -> bool:
+    """Checks the start of the file against known magic bytes for the declared type."""
+    expected_prefix = MAGIC_BYTES.get(declared_content_type)
+    if expected_prefix is None:
+        # Pass through for types we don't have binary signatures for (docx, txt, etc.)
+        return True
+    return header_bytes.startswith(expected_prefix)
+
 
 @router.post("")
 async def upload_file(
@@ -47,16 +64,27 @@ async def upload_file(
             detail=f"File type {file.content_type} not allowed.",
         )
 
-    # 2. Validate File Size (requires reading a bit of the file or checking headers)
-    # Spooling to check size without loading entire file into memory
+    # 2. Validate File Size & Magic Bytes (SEC-08)
+    # - Check size by seeking
     file.file.seek(0, os.SEEK_END)
     file_size = file.file.tell()
-    file.file.seek(0)  # Reset pointer
-
+    
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File too large. Maximum size is {MAX_FILE_SIZE / 1024 / 1024}MB.",
+        )
+
+    # - Verify Magic Bytes
+    file.file.seek(0)
+    header_sample = file.file.read(16)
+    file.file.seek(0) # IMPORTANT: reset pointer for the storage service later
+    
+    if not _verify_magic_bytes(header_sample, file.content_type):
+        logger.warning(f"SEC-08: File magic byte mismatch for {file.content_type}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match the declared extension/type."
         )
 
     # 3. Generate Secure Filename (UUID)

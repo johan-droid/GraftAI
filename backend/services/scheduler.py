@@ -51,55 +51,42 @@ async def event_lifecycle(db: AsyncSession, event: EventTable, action: str, back
                 data={"event_id": event.id},
             )
             db.add(notif)
+        
+        # 4. Global Cache Invalidation (L1 + L2)
+        from backend.utils.cache import invalidate_user_calendar_cache
+        if background_tasks:
+            background_tasks.add_task(invalidate_user_calendar_cache, str(event.user_id))
+        else:
+            await invalidate_user_calendar_cache(str(event.user_id))
 
 
 def to_utc(dt: datetime) -> datetime:
+    """High-performance timezone normalization to UTC."""
     if dt is None:
         return dt
     if dt.tzinfo is None:
+        import pytz
         return pytz.UTC.localize(dt)
     return dt.astimezone(pytz.UTC)
 
 
 async def _generate_meeting_link(db, user_id: str, platform: str, event_details: dict) -> str:
     """
-    Generates a real meeting link using connected third-party integrations.
-    Falls back to a simulated link if no integration is connected.
+    Generates a real meeting link using decentralised JIT rotation.
     """
     try:
-        # Fetch the latest active token for this provider
-        stmt = select(UserTokenTable).where(
-            and_(
-                UserTokenTable.user_id == user_id,
-                UserTokenTable.provider == platform,
-                UserTokenTable.is_active == True
-            )
-        )
-        result = await db.execute(stmt)
-        token_record = result.scalars().first()
-
-        if not token_record:
-            raise ValueError(f"No connected {platform} account found for user {user_id}")
-
-        token_data = {
-            "access_token": token_record.access_token,
-            "refresh_token": token_record.refresh_token,
-            "scopes": token_record.scopes
-        }
-
         if platform == "google_meet" or platform == "google":
-            return await create_google_meet_event(token_data, event_details)
+            return await create_google_meet_event(db, user_id, event_details)
         elif platform == "teams" or platform == "microsoft":
-            return await create_teams_meeting(token_data, event_details)
+            return await create_teams_meeting(db, user_id, event_details)
         elif platform == "zoom":
-            return await create_zoom_meeting(token_data, event_details)
+            return await create_zoom_meeting(db, user_id, event_details)
         
     except Exception as e:
-        logger.warning(f"⚠️ Meeting link generation failed for {platform} (Rate limit/API error): {e}. Falling back to synthetic link.")
+        logger.warning(f"⚠️ Meeting link generation failed for {platform}: {e}. Falling back to synthetic.")
         import uuid
         return f"https://meet.graftai.tech/{uuid.uuid4().hex[:10]}"
 
-    # Fallback for completely unsupported platform strings
     import uuid
     return f"https://meet.graftai.tech/{uuid.uuid4().hex[:10]}"
 
@@ -113,25 +100,6 @@ async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "
         return
 
     try:
-        # Fetch token for the provider
-        provider = "google" if event.source == "google" else "microsoft"
-        stmt = select(UserTokenTable).where(
-            and_(
-                UserTokenTable.user_id == event.user_id,
-                UserTokenTable.provider == provider,
-                UserTokenTable.is_active == True
-            )
-        )
-        result = await db.execute(stmt)
-        token_record = result.scalars().first()
-        if not token_record: return
-
-        token_data = {
-            "access_token": token_record.access_token,
-            "refresh_token": token_record.refresh_token,
-            "scopes": token_record.scopes
-        }
-
         event_details = {
             "title": event.title,
             "description": event.description,
@@ -144,7 +112,7 @@ async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "
 
         if event.source == "google":
             if action == "create":
-                result = await create_google_event(token_data, event_details)
+                result = await create_google_event(db, str(event.user_id), event_details)
                 ext_id = result.get("id")
                 # Extract meeting link if Google created one automatically
                 meet_link = result.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri")
@@ -154,24 +122,17 @@ async def _push_to_external(db: AsyncSession, event: EventTable, action: str = "
                     event.meeting_platform = "google"
                 return ext_id
             elif action == "update":
-                await update_google_event(token_data, event.external_id, event_details)
+                await update_google_event(db, str(event.user_id), event.external_id, event_details)
             elif action == "delete":
-                await delete_google_event(token_data, event.external_id)
+                await delete_google_event(db, str(event.user_id), event.external_id)
         elif event.source == "microsoft":
             if action == "create":
-                # Similar logic for Microsoft Teams
-                result = await create_ms_event(token_data, event_details)
-                ext_id = result.get("id")
-                meet_link = result.get("onlineMeeting", {}).get("joinUrl")
-                if meet_link and not event.meeting_link:
-                    event.meeting_link = meet_link
-                    event.is_meeting = True
-                    event.meeting_platform = "microsoft"
-                return ext_id
+                result = await create_ms_event(db, str(event.user_id), event_details)
+                return result.get("id")
             elif action == "update":
-                await update_ms_event(token_data, event.external_id, event_details)
+                await update_ms_event(db, str(event.user_id), event.external_id, event_details)
             elif action == "delete":
-                await delete_ms_event(token_data, event.external_id)
+                await delete_ms_event(db, str(event.user_id), event.external_id)
 
         return None
 
@@ -404,8 +365,9 @@ async def create_event(
             EventTable.end_time > to_utc(new_event.start_time),
         )
     )
-    if (await db.execute(conflict_stmt)).scalars().first():
-        raise ValueError("Event overlaps with existing schedule.")
+    conflict = (await db.execute(conflict_stmt)).scalars().first()
+    if conflict:
+        raise ValueError(f"Schedule conflict: Your request overlaps with '{conflict.title}' at {conflict.start_time.strftime('%I:%M %p')}.")
 
     # 2. Lifecycle Context (Handles AI Sync & Notifications)
     async with event_lifecycle(db, new_event, "created", background_tasks):

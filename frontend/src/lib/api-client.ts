@@ -1,12 +1,14 @@
-import { getAuthToken, getToken } from "./auth-client";
+import { getAuthToken, getToken, tryRefreshSession, invalidateSessionCache } from "./auth-client";
 
 function getApiBaseUrl() {
+  if (typeof window !== "undefined") {
+    // Force relative paths in the browser to ensure requests use the Next.js proxy.
+    // This is CRITICAL for cross-domain auth to work.
+    return "";
+  }
   const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
   if (envUrl) {
     return envUrl.replace(/\/+$|\/+$/g, "");
-  }
-  if (typeof window !== "undefined") {
-    return ""; // relative same-origin path is preferred in browser to use /api rewrites
   }
   return "http://localhost:8000";
 }
@@ -114,32 +116,27 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
     clearTimeout(id);
 
     // 4. Handle Unauthorized (Response Interceptor)
-    if (response.status === 401 || response.status === 403) {
-      // Attempt a one-time refresh using either the browser refresh cookie
-      // or the explicit refresh token stored on the frontend host.
-      const refreshUrl = composeEndpoint("/auth/refresh", true);
-      const refreshBody: Record<string, string> = {};
-      const refreshToken = getCookie("graftai_refresh_token");
-      if (refreshToken) {
-        refreshBody.refresh_token = refreshToken;
+    if (response.status === 401) {
+      console.warn(`[API_CLIENT]: 401 Unauthorized at ${path}. Attempting synchronized refresh...`);
+
+      // SEC-021: Clear stale storage tokens to allow cookie-based fallback during retry.
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("graftai_access_token");
+        sessionStorage.removeItem("graftai_access_token");
       }
 
-      const refreshResponse = await fetch(refreshUrl, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: Object.keys(refreshBody).length ? JSON.stringify(refreshBody) : undefined,
-      }).catch(() => null);
-
-      if (refreshResponse?.ok) {
+      const refreshed = await tryRefreshSession();
+      
+      if (refreshed) {
+        console.log(`[API_CLIENT]: Refresh successful. Retrying original request to ${path}...`);
+        
         const retryHeaders = new Headers(headers);
         const refreshedToken = getToken();
         if (refreshedToken) {
           retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
         } else {
+          // If HttpOnly cookie is set but getToken() returns null (standard behavior),
+          // we MUST delete the header so the backend falls back to the cookie.
           retryHeaders.delete("Authorization");
         }
 
@@ -151,14 +148,41 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
         });
 
         if (retryResponse.ok) {
+          console.log(`[API_CLIENT]: Retry successful for ${path}.`);
           return retryResponse.json() as Promise<T>;
         }
-      }
 
-      // Do not force navigation here.
-      // A single endpoint returning 401 should not globally log out the user.
-      // AuthProvider + explicit /auth/check flow governs session transitions.
-      throw new ApiError("Session expired", response.status);
+        // If retry failed with something other than 401, extract the real error message
+        const retryText = await retryResponse.text().catch(() => "");
+        let retryMessage = `Retry failed with status ${retryResponse.status}`;
+        try {
+          if (retryText) {
+            const data = JSON.parse(retryText);
+            retryMessage = data.detail || data.error || retryText;
+          }
+        } catch { /* use default message */ }
+
+        // If the retry failed due to an invalid session (401/403 or explicit
+        // session-related message), ensure local session caches are cleared so
+        // the app can re-authenticate and avoid repeated noisy retries.
+        const likelySessionIssue = retryResponse.status === 401 || retryResponse.status === 403 || /session/i.test(retryMessage);
+        if (likelySessionIssue) {
+          console.warn(`[API_CLIENT]: Session invalid after refresh for ${path}: ${retryMessage}`);
+          invalidateSessionCache();
+          throw new ApiError("Session expired", 401);
+        }
+
+        console.error(`[API_CLIENT]: Retry failed for ${path}: ${retryMessage}`);
+        throw new ApiError(retryMessage, retryResponse.status);
+      } else {
+        console.error(`[API_CLIENT]: Refresh failed for ${path}. Session is truly expired.`);
+        
+        // SEC-021: Invalidate cache and throw 401. 
+        // We don't log out here directly to avoid race conditions with other requests; 
+        // the AuthProvider will handle the redirect on its next check or if it's a critical path.
+        invalidateSessionCache();
+        throw new ApiError("Session expired", 401);
+      }
     }
 
     // 5. General Error Handling

@@ -236,6 +236,26 @@ export default function CalendarPage() {
     return counts;
   }, [events]);
 
+  // Derived views/helpers for week and list modes
+  const weekDays = useMemo(() => {
+    const start = new Date(currentDate);
+    start.setDate(currentDate.getDate() - start.getDay());
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  }, [currentDate]);
+
+  const eventsInRange = useMemo(() => {
+    return events
+      .filter((ev) => {
+        const t = new Date(ev.start_time);
+        return t >= startDate && t <= endDate;
+      })
+      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+  }, [events, startDate, endDate]);
+
   const handleCreate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!selectedDate) return;
@@ -356,8 +376,8 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar Toolbar */}
-        <div className="flex items-center gap-4 px-6 py-4 border-b border-white/[0.06] bg-[#040a18]/40 backdrop-blur-xl shrink-0 z-10">
-          <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-4 border-b border-white/[0.06] bg-[#040a18]/40 backdrop-blur-xl shrink-0 z-10 overflow-x-auto">
+          <div className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md min-w-0">
             <button
               onClick={() => navigate("prev")}
               aria-label="Previous month"
@@ -366,7 +386,7 @@ export default function CalendarPage() {
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button className="px-4 py-1 text-[15px] font-bold text-white min-w-[200px] tracking-tight">
+            <button className="px-3 py-1 text-[15px] font-bold text-white min-w-[120px] max-w-full truncate tracking-tight">
               {monthLabel}
             </button>
             <button
@@ -381,7 +401,7 @@ export default function CalendarPage() {
 
           <button
             onClick={() => setCurrentDate(new Date())}
-            className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/8 text-[13px] font-bold transition-all shadow-sm"
+            className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/8 text-[13px] font-bold transition-all shadow-sm flex-shrink-0"
           >
             Today
           </button>
@@ -389,13 +409,13 @@ export default function CalendarPage() {
           <button
             onClick={() => void runCalendarSync(true)}
             disabled={isSyncing}
-            className="px-4 py-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-200 hover:text-white hover:bg-indigo-500/20 text-[13px] font-bold transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-200 hover:text-white hover:bg-indigo-500/20 text-[13px] font-bold transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 flex-shrink-0"
           >
             {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Sync now
           </button>
 
-          <div className="ml-auto flex items-center gap-1.5 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
+          <div className="ml-auto flex flex-wrap items-center gap-2 p-1.5 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
             {!isOnline && (
               <div className="flex items-center gap-2 px-3 animate-pulse">
                 <div className="w-2 h-2 rounded-full bg-amber-500" />
@@ -433,48 +453,128 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar Grid */}
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 flex flex-col p-4 overflow-hidden">
           {loading ? (
             <CalendarSkeleton />
           ) : (
             <>
-              {/* Day headers */}
-              <div className="grid grid-cols-7 mb-1">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                  <div
-                    key={d}
-                    className="text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider py-2"
-                  >
-                    {d}
+              {viewMode === "month" ? (
+                <>
+                  {/* Day headers */}
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[560px] grid grid-cols-7 gap-1 mb-1">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                        <div
+                          key={d}
+                          className="text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider py-2"
+                        >
+                          {d}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Date grid */}
-              <div className="grid grid-cols-7 gap-1">
-                {days.map((day, idx) => {
-                  const dayEvents = getEventsForDay(day);
-                  const isSelected = selectedDate?.toDateString() === day.toDateString();
-                  const isToday = day.toDateString() === today.toDateString();
-                  const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+                  {/* Date grid (month) */}
+                  <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+                    <div
+                      className="min-w-[560px] grid grid-cols-7 grid-rows-6 gap-1 min-h-[500px]"
+                      style={{ gridAutoRows: '1fr' }}
+                    >
+                      {days.map((day, idx) => {
+                        const dayEvents = getEventsForDay(day);
+                        return (
+                          <DayCell
+                            key={idx}
+                            day={day}
+                            today={today}
+                            currentDate={currentDate}
+                            selectedDate={selectedDate}
+                            dayEvents={dayEvents}
+                            categories={CATEGORIES}
+                            onSelect={(d) => {
+                              setSelectedDate(d);
+                              setShowModal(true);
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              ) : viewMode === "week" ? (
+                <>
+                  {/* Week headers */}
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[560px] grid grid-cols-7 gap-1 mb-1">
+                      {weekDays.map((d) => (
+                        <div
+                          key={d.toDateString()}
+                          className="text-center text-[11px] font-bold text-slate-600 uppercase tracking-wider py-2"
+                        >
+                          {d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-                  return (
-                    <DayCell
-                      key={idx}
-                      day={day}
-                      today={today}
-                      currentDate={currentDate}
-                      selectedDate={selectedDate}
-                      dayEvents={dayEvents}
-                      categories={CATEGORIES}
-                      onSelect={(d) => {
-                        setSelectedDate(d);
-                        setShowModal(true);
-                      }}
-                    />
-                  );
-                })}
-              </div>
+                  {/* Week grid */}
+                  <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto w-full">
+                    <div className="min-w-[560px] grid grid-cols-7 gap-1 min-h-[150px] h-full">
+                      {weekDays.map((day, idx) => (
+                        <DayCell
+                          key={idx}
+                          day={day}
+                          today={today}
+                          currentDate={currentDate}
+                          selectedDate={selectedDate}
+                          dayEvents={getEventsForDay(day)}
+                          categories={CATEGORIES}
+                          onSelect={(d) => {
+                            setSelectedDate(d);
+                            setShowModal(true);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* List view */}
+                  <div className="space-y-3">
+                    {eventsInRange.length > 0 ? (
+                      (() => {
+                        // Group by date
+                        const groups: Record<string, any[]> = {};
+                        eventsInRange.forEach((ev) => {
+                          const key = new Date(ev.start_time).toDateString();
+                          groups[key] = groups[key] || [];
+                          groups[key].push(ev);
+                        });
+
+                        return Object.entries(groups).map(([date, evs]) => (
+                          <div key={date} className="p-3 bg-white/3 rounded-xl border border-white/[0.04]">
+                            <div className="text-sm font-bold text-white mb-2">{date}</div>
+                            <div className="space-y-2">
+                              {evs.map((ev) => (
+                                <div key={ev.id} className="flex items-center justify-between">
+                                  <div>
+                                    <div className="text-sm font-semibold text-white">{ev.title}</div>
+                                    <div className="text-xs text-slate-400">{new Date(ev.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {ev.category}</div>
+                                  </div>
+                                  <div className="text-xs text-slate-500">{ev.is_remote ? 'Remote' : ''}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ));
+                      })()
+                    ) : (
+                      <div className="text-center py-8 text-slate-500">No events in this range</div>
+                    )}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

@@ -98,11 +98,19 @@ class RateLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        client_ip = request.headers.get("x-forwarded-for", "")
-        if not client_ip:
-            client_ip = request.client.host if request.client else "unknown"
-        if "," in client_ip:
-            client_ip = client_ip.split(",")[0].strip()
+        # SEC-03: Harden IP extraction. Only trust X-Forwarded-For if it comes from a known proxy.
+        TRUSTED_PROXY_IPS = set(os.getenv("TRUSTED_PROXY_IPS", "").split(","))
+        real_client_host = request.client.host if request.client else "unknown"
+
+        if real_client_host in TRUSTED_PROXY_IPS:
+            fwd = request.headers.get("x-forwarded-for", "")
+            if fwd:
+                # The leftmost IP is the client, but the rightmost before the proxy is most reliable in standard stacks
+                client_ip = fwd.split(",")[-1].strip()
+            else:
+                client_ip = real_client_host
+        else:
+            client_ip = real_client_host
 
         # Skip health checks and static assets from rate limiting
         if request.url.path in ["/health", "/api/v1/health", "/favicon.ico", "/"]:
@@ -124,7 +132,11 @@ class RateLimitMiddleware:
             allowed = bool(int(allowed_result))
         except Exception as e:
             logger.error(f"Global Rate limiter Redis failure: {e}")
-            allowed = True # Fail open
+            
+            # SEC-10: Fail closed on sensitive routes, fail open for non-critical reads
+            SENSITIVE_PATHS = ["/auth", "/api/v1/auth", "/api/v1/ai", "/api/v1/users/me"]
+            is_sensitive = any(request.url.path.startswith(p) for p in SENSITIVE_PATHS)
+            allowed = not is_sensitive
 
         if not allowed:
             response = JSONResponse(
@@ -138,8 +150,24 @@ class RateLimitMiddleware:
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
-# ── Sentry Initialization (Production Only) ──────────────────────────────────
+# ── Sentry Initialization (Harden PII & Control Rate) ───────────────────────
 if os.getenv("SENTRY_DSN"):
+    def _scrub_sentry_event(event: dict, hint: dict) -> dict:
+        """SEC-07: Redact sensitive fields from Sentry payload."""
+        pixel_keys = {
+            "password", "access_token", "refresh_token", "secret", "token", "authorization",
+            "stripe_customer_id", "razorpay_customer_id", "email", "phone", "phone_number"
+        }
+        
+        def _redact(data):
+            if isinstance(data, dict):
+                return {k: "[REDACTED]" if k.lower() in pixel_keys else _redact(v) for k, v in data.items()}
+            if isinstance(data, list):
+                return [_redact(i) for i in data]
+            return data
+            
+        return _redact(event)
+
     sentry_sdk.init(
         dsn=os.getenv("SENTRY_DSN"),
         integrations=[
@@ -147,10 +175,12 @@ if os.getenv("SENTRY_DSN"):
             FastApiIntegration(transaction_style="endpoint"),
         ],
         environment=os.getenv("ENV", "production"),
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
+        # SEC-07: Use environment-controlled sampling rate
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_RATE", "0.1")),
+        profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_RATE", "0.05")),
+        before_send=_scrub_sentry_event,
     )
-    logger.info("📡 [STARTUP] Sentry SDK initialized.")
+    logger.info("📡 [STARTUP] Sentry SDK initialized (with SEC-07 hardening).")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -269,6 +299,22 @@ app.add_middleware(
     expose_headers=["X-Backend-Server", "X-Request-Id", "x-xsrf-token", "X-XSRF-TOKEN"],
     max_age=600,
 )
+
+# SEC-06: Security Response Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    
+    # HSTS: Enforce HTTPS for 1 year in production environments
+    if os.getenv("ENV") == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
+    return response
 
 # 3. Global Request/Response Optimization Middleware
 @app.middleware("http")

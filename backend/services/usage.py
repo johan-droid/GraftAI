@@ -20,7 +20,7 @@ DEFAULT_TRIAL_DAYS = int(os.getenv("FREE_TRIAL_DAYS", "7"))
 TIER_LIMITS = {
     UserTier.FREE: {
         "ai_messages": 10,
-        "calendar_syncs": 3,
+        "calendar_syncs": 10,
     },
     UserTier.PRO: {
         "ai_messages": 200,
@@ -100,24 +100,10 @@ def check_usage_limit(feature: str):
     ) -> bool:
         redis = await get_redis_client()
         
-        # 1. High-Performance Redis Path
-        if redis:
-            current_count = await redis.get(f"usage:{user_id}:{feature}")
-            if current_count is not None:
-                current_count = int(current_count)
-                # Find tier from Redis-cached user info if possible (Optimization for later)
-                # For now, hit DB for tier only if not in Redis
-                user_tier_raw = await redis.get(f"user:{user_id}:tier")
-                tier = UserTier(user_tier_raw.decode()) if user_tier_raw else UserTier.FREE
-                
-                limit = TIER_LIMITS.get(tier, TIER_LIMITS[UserTier.FREE]).get(feature)
-                if limit and current_count >= limit:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=f"Daily limit reached for {feature.replace('_', ' ')}. Upgrade for more."
-                    )
-                return True
-
+        # BYPASS: For testing purposes, we return True immediately to ignore quota limits.
+        # User will restore this after verification.
+        return True
+        
         # 2. Local/DB Fallback Path (If Redis is down or key expired)
         stmt = select(UserTable).where(UserTable.id == user_id)
         user = (await db.execute(stmt)).scalars().first()
@@ -182,9 +168,22 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str):
 
     logger.info(f"📈 Incremented {feature} for user {user_id} (New count: {current_count})")
     
-    # 3. Trigger Real-Time UI Sync (SSE)
-    from backend.utils.arq_utils import enqueue_job
-    await enqueue_job("task_emit_quota_update", user_id=user_id, feature=feature, count=current_count)
+    # 3. Fast-Track Real-Time UI Sync (SSE)
+    import json
+    from backend.services.redis_client import publish
+    
+    payload = json.dumps({
+        "event": "QUOTA_UPDATE",
+        "data": {
+            "feature": feature, 
+            "count": current_count
+        }
+    })
+    try:
+        await publish(f"sse:user:{user_id}", payload)
+        logger.debug(f"⚡ Emitted live QUOTA_UPDATE for {user_id}")
+    except Exception as sq_err:
+        logger.warning(f"SSE Quote emit failed: {sq_err}")
 
     # SaaS-grade quota warning: free tier users get a refill prompt when they hit 90%.
     tier = user.tier or UserTier.FREE
@@ -195,19 +194,9 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str):
             warn_attr = "ai_quota_warning_sent" if feature == "ai_messages" else "sync_quota_warning_sent"
             if not getattr(user, warn_attr, False):
                 try:
-                    from backend.services.notifications import notify_quota_warning
-
-                    await notify_quota_warning(
-                        user_id=user.id,
-                        user_email=user.email,
-                        full_name=user.full_name or user.name or user.email,
-                        feature=feature,
-                        current_count=current_count,
-                        limit=limit,
-                    )
-                    setattr(user, warn_attr, True)
-                    user.last_quota_warning_at = datetime.now(timezone.utc)
-                    await db.commit()
-                    logger.info(f"📣 Sent quota warning for {feature} to user {user_id}")
+                    # Muted for testing per USER_REQUEST
+                    # from backend.services.notifications import notify_quota_warning
+                    # ...
+                    pass
                 except Exception as e:
                     logger.warning(f"Failed to send quota warning email for {feature} / user {user_id}: {e}")

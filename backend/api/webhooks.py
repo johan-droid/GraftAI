@@ -1,4 +1,5 @@
 import logging
+import hmac
 from fastapi import APIRouter, Request, Response, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -22,6 +23,7 @@ async def google_calendar_webhook(
     resource_id = request.headers.get("X-Goog-Resource-ID")
     subscription_id = request.headers.get("X-Goog-Channel-ID")
     state = request.headers.get("X-Goog-Resource-State")
+    channel_token = request.headers.get("X-Goog-Channel-Token", "")
 
     logger.info(f"[WEBHOOK] 📩 Google Notification: SubID={subscription_id}, State={state}")
 
@@ -36,15 +38,19 @@ async def google_calendar_webhook(
     result = await db.execute(stmt)
     sub = result.scalars().first()
 
-    if sub:
-        # 1. Invalidate Cache
-        await invalidate_user_calendar_cache(sub.user_id)
-        # 2. Enqueue background sync with short debounce to avoid burst storms
-        if await acquire_lock(f"webhook_sync_enqueue:{sub.user_id}", ttl_seconds=45):
-            await enqueue_job("task_sync_calendar", user_id=sub.user_id)
-            logger.info(f"[WEBHOOK] 🔄 Triggered background sync for user {sub.user_id}")
-        else:
-            logger.info(f"[WEBHOOK] ⏱ Debounced duplicate sync enqueue for user {sub.user_id}")
+    # SEC-05: Verify the channel token matches the stored client_state
+    if not sub or not hmac.compare_digest(sub.client_state or "", channel_token):
+        logger.warning(f"[WEBHOOK] 🚨 Invalid or missing Google channel token for sub {subscription_id}")
+        return Response(status_code=403)
+
+    # 1. Invalidate Cache
+    await invalidate_user_calendar_cache(sub.user_id)
+    # 2. Enqueue background sync with short debounce to avoid burst storms
+    if await acquire_lock(f"webhook_sync_enqueue:{sub.user_id}", ttl_seconds=45):
+        await enqueue_job("task_sync_calendar", user_id=sub.user_id)
+        logger.info(f"[WEBHOOK] 🔄 Triggered background sync for user {sub.user_id}")
+    else:
+        logger.info(f"[WEBHOOK] ⏱ Debounced duplicate sync enqueue for user {sub.user_id}")
 
     return Response(status_code=200)
 

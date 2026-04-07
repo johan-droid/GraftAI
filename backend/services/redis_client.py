@@ -26,11 +26,14 @@ class InMemoryRedis:
         self._purge_expired()
         return self._data.get(key)
 
-    async def set(self, key, value, ex=None):
+    async def set(self, key, value, ex=None, nx=False):
         self._purge_expired()
+        if nx and key in self._data:
+            return None # Simulated NX failure
         self._data[key] = str(value)
         if ex is not None:
             self._expires[key] = time.time() + int(ex)
+        return True
 
     async def setex(self, key, seconds, value):
         await self.set(key, value, ex=seconds)

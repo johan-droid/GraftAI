@@ -36,29 +36,56 @@ SYNC_INTERVAL_SECONDS = 300  # 5 minutes
 async def perform_sync_cycle():
     """
     One full pass over all active user tokens to sync their calendars.
+    Uses isolated sessions for each user to prevent transaction leakage across external API calls.
     """
     logger.info("🕒 Starting synchronization cycle...")
     start_time = time.time()
     
+    # 1. Fetch active targets first (minimal overhead)
+    active_tokens = []
     async with AsyncSessionLocal() as db:
-        # 1. Fetch all active tokens
-        stmt = select(UserTokenTable).where(UserTokenTable.is_active == True)
+        stmt = select(UserTokenTable.id, UserTokenTable.provider).where(UserTokenTable.is_active == True)
         result = await db.execute(stmt)
-        tokens = result.scalars().all()
-        
-        logger.info(f"🔍 Found {len(tokens)} active service connections to sync.")
-        
-        for token in tokens:
-            try:
-                if token.provider == "google":
-                    await sync_google_events(db, token)
-                elif token.provider == "microsoft":
-                    await sync_ms_graph_events(db, token)
-                # Zoom sync can be added here when meeting:read scope is present
-            except Exception as e:
-                logger.error(f"❌ Failed to sync {token.provider} for user {token.user_id}: {e}")
+        active_tokens = result.all() # Returns list of (id, provider)
+    
+    logger.info(f"🔍 Found {len(active_tokens)} active service connections to sync.")
+    
+    for token_id, provider in active_tokens:
+        try:
+            # Create a FRESH session for each provider sync to avoid greenlet/transaction crosstalk
+            async with AsyncSessionLocal() as user_db:
+                # Re-fetch the token in the current session
+                token = await user_db.get(UserTokenTable, token_id)
+                if not token or not token.is_active:
+                    continue
+                    
+                logger.info(f"🔄 Syncing {provider} (ID: {token_id})...")
+                sync_start = time.time()
                 
-        await db.commit()
+                if provider == "google":
+                    await sync_google_events(user_db, token)
+                elif provider == "microsoft":
+                    await sync_ms_graph_events(user_db, token)
+                
+                # We do NOT commit here if sync_ engine handles its own commits/rollbacks
+                # but it does help to ensure the session is finished.
+                await user_db.commit()
+                
+                sync_duration = time.time() - sync_start
+                logger.info(f"✨ {provider} (ID: {token_id}) synced in {sync_duration:.2f}s")
+
+        except (Exception) as e:
+            error_msg = str(e).lower()
+            logger.error(f"❌ Failed to sync {provider} (ID: {token_id}): {e}")
+            
+            # If it's a connection-level error, we might want to dispose the engine pool
+            if "connection was closed" in error_msg or "interfaceerror" in error_msg:
+                logger.warning("🚨 Database connection lost. Disposing engine pool for recovery.")
+                from backend.utils.db import engine
+                await engine.dispose()
+
+    duration = time.time() - start_time
+    logger.info(f"✅ Sync cycle completed in {duration:.2f} seconds.")
 
     duration = time.time() - start_time
     logger.info(f"✅ Sync cycle completed in {duration:.2f} seconds.")
@@ -69,17 +96,47 @@ async def worker_loop():
     """
     logger.info("🚀 GraftAI Smart Sync Worker started.")
     
-    while True:
-        try:
-            await perform_sync_cycle()
-        except Exception as e:
-            logger.critical(f"💥 Critical error in worker cycle: {e}")
+    stop_event = asyncio.Event()
+
+    def signal_handler():
+        logger.info("👋 Received shutdown signal. Gracefully stopping...")
+        stop_event.set()
+
+    # Note: signal handlers are only for main thread/UNIX-like, but we can wrap the loop
+    # For Windows/WatchFiles, we primarily rely on KeyboardInterrupt catching.
+    
+    try:
+        while not stop_event.is_set():
+            try:
+                await perform_sync_cycle()
+            except Exception as e:
+                logger.critical(f"💥 Critical error in worker cycle: {e}")
+                
+            logger.info(f"💤 Sleeping for {SYNC_INTERVAL_SECONDS} seconds...")
+            # Wait for sleep OR stop event
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=SYNC_INTERVAL_SECONDS)
+            except asyncio.TimeoutError:
+                pass
+    finally:
+        logger.info("🧹 Performing final cleanup...")
+        from backend.utils.db import engine
+        from backend.utils.cache import get_redis_client
+        
+        # Dispose engine pool
+        await engine.dispose()
+        
+        # Close Redis
+        redis = await get_redis_client()
+        if redis:
+            await redis.aclose()
             
-        logger.info(f"💤 Sleeping for {SYNC_INTERVAL_SECONDS} seconds...")
-        await asyncio.sleep(SYNC_INTERVAL_SECONDS)
+        logger.info("✨ Cleanup complete. Goodbye!")
 
 if __name__ == "__main__":
     try:
         asyncio.run(worker_loop())
     except KeyboardInterrupt:
-        logger.info("👋 Sync Worker shutting down.")
+        pass
+    except Exception as e:
+        logger.error(f"Unexpected exit: {e}")

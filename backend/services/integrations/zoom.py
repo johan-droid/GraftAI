@@ -3,20 +3,29 @@ import logging
 from typing import Dict, Any
 from backend.utils.http_client import get_client
 
+import os
+import logging
+from typing import Dict, Any
+from backend.utils.http_client import get_client
+from sqlalchemy.ext.asyncio import AsyncSession
+from backend.services.integrations.token_service import ensure_valid_token
+
 logger = logging.getLogger(__name__)
 
 # Zoom configuration for User-Managed OAuth
 ZOOM_CLIENT_ID = os.getenv("ZOOM_CLIENT_ID")
 ZOOM_CLIENT_SECRET = os.getenv("ZOOM_CLIENT_SECRET")
 
-async def create_zoom_meeting(token_data: Dict[str, Any], event_details: Dict[str, Any]) -> str:
+async def create_zoom_meeting(db: AsyncSession, user_id: str, event_details: Dict[str, Any]) -> str:
     """
-    Creates a Zoom meeting for a specific user using their OAuth2 token.
+    Creates a Zoom meeting for a specific user.
+    Leverages ensure_valid_token for JIT rotation.
     """
     try:
-        access_token = token_data.get("access_token")
+        # Fetch valid token JIT
+        access_token = await ensure_valid_token(db, user_id, "zoom")
         if not access_token:
-            raise ValueError("No access token provided for Zoom meeting creation.")
+            raise ValueError("Zoom authentication failed - no valid token available.")
 
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -25,10 +34,7 @@ async def create_zoom_meeting(token_data: Dict[str, Any], event_details: Dict[st
         
         # Format start time to ISO string
         start_time = event_details.get("start_time")
-        if hasattr(start_time, "isoformat"):
-            start_time_str = start_time.isoformat()
-        else:
-            start_time_str = str(start_time)
+        start_time_str = start_time.isoformat() if hasattr(start_time, "isoformat") else str(start_time)
 
         # Calculate duration in minutes
         duration = 30 # default
@@ -61,22 +67,44 @@ async def create_zoom_meeting(token_data: Dict[str, Any], event_details: Dict[st
             json=payload
         )
         
-        if resp.status_code == 401:
-            logger.warning("❌ Zoom token expired during meeting creation.")
-            # Note: Token refresh is usually handled by the caller or a middleware
-            raise RuntimeError("Zoom token unauthorized.")
-
         if resp.status_code != 201:
-            logger.error(f"❌ Zoom API Error: {resp.status_code} - {resp.text}")
+            logger.error(f"❌ Zoom API Error: {resp.status_code}")
             raise RuntimeError(f"Zoom API returned {resp.status_code}")
                 
         data = resp.json()
-        join_url = data.get("join_url")
-        logger.info(f"✅ Zoom meeting created: {join_url}")
-        return join_url
+        return data.get("join_url")
             
     except Exception as e:
-        logger.error(f"❌ Error in Zoom meeting creation: {e}")
+        logger.error(f"❌ Zoom meeting creation fail: {e}")
         # Return a synthetic fallback link to prevent UI breakage
         import uuid
         return f"https://meet.graftai.tech/zoom-fallback-{uuid.uuid4().hex[:8]}"
+
+async def list_zoom_meetings(db: AsyncSession, user_id: str) -> list:
+    """
+    Fetches a list of upcoming Zoom meetings for context ingestion using JIT tokens.
+    """
+    try:
+        access_token = await ensure_valid_token(db, user_id, "zoom")
+        if not access_token:
+            return []
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        client = await get_client()
+        resp = await client.get(
+            "https://api.zoom.us/v2/users/me/meetings?type=upcoming&page_size=30",
+            headers=headers
+        )
+
+        if resp.status_code != 200:
+            return []
+
+        return resp.json().get("meetings", [])
+
+    except Exception as e:
+        logger.error(f"❌ Error listing Zoom meetings: {e}")
+        return []

@@ -33,6 +33,47 @@ async function parseError(res: Response): Promise<AuthError> {
   }
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = window.atob(base64.replace(/\s+/g, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function normalizePublicKeyCredential(credential: any): any {
+  return {
+    id: credential.id,
+    rawId: arrayBufferToBase64(credential.rawId),
+    type: credential.type,
+    response: {
+      clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON),
+      attestationObject: credential.response.attestationObject
+        ? arrayBufferToBase64(credential.response.attestationObject)
+        : undefined,
+      authenticatorData: credential.response.authenticatorData
+        ? arrayBufferToBase64(credential.response.authenticatorData)
+        : undefined,
+      signature: credential.response.signature
+        ? arrayBufferToBase64(credential.response.signature)
+        : undefined,
+      userHandle: credential.response.userHandle
+        ? arrayBufferToBase64(credential.response.userHandle)
+        : undefined,
+    },
+  };
+}
+
 let _cachedToken: string | null = null;
 let _cacheExpiry = 0;
 const SESSION_CACHE_TTL_MS = 30_000;
@@ -40,19 +81,35 @@ let _refreshInFlight: Promise<boolean> | null = null;
 let _providerAvailabilityCache: { providers: string[]; fetchedAt: number } | null = null;
 const PROVIDER_CACHE_TTL_MS = 60_000;
 
+function isJwtExpired(token: string): boolean {
+  try {
+    const payloadBase64 = token.split(".")[1];
+    if (!payloadBase64) return false;
+    const decoded = JSON.parse(atob(payloadBase64)) as { exp?: number };
+    if (!decoded.exp) return false;
+    return decoded.exp < (Date.now() / 1000) - 10;
+  } catch {
+    return false;
+  }
+}
+
+
 export function getToken(): string | null {
   if (typeof document === "undefined") return null;
   
+  const validate = (t: string | null) => (t && !isJwtExpired(t) ? t : null);
+
   // 1. Try Cookies
   const value = `; ${document.cookie}`;
   const parts = value.split(`; graftai_access_token=`);
   let token = parts.length === 2 ? parts.pop()?.split(";").shift() || null : null;
+  token = validate(token);
   
   // 2. Try SessionStorage
   if (!token) {
     try {
       if (typeof window !== "undefined" && window.sessionStorage) {
-        token = window.sessionStorage.getItem("graftai_access_token");
+        token = validate(window.sessionStorage.getItem("graftai_access_token"));
       }
     } catch { /* ignore */ }
   }
@@ -61,7 +118,7 @@ export function getToken(): string | null {
   if (!token) {
     try {
       if (typeof window !== "undefined" && window.localStorage) {
-        token = window.localStorage.getItem("graftai_access_token");
+        token = validate(window.localStorage.getItem("graftai_access_token"));
       }
     } catch { /* ignore */ }
   }
@@ -70,11 +127,11 @@ export function getToken(): string | null {
   if (typeof window !== "undefined") {
     try {
       const params = new URLSearchParams(window.location.search);
-      const urlToken = params.get("token") || params.get("access_token");
-      const refreshToken = params.get("refresh_token");
+      const urlToken = params.get("token") || params.get("access_token") || params.get("at");
+      const refreshToken = params.get("refresh_token") || params.get("rt");
 
       if (!token && urlToken) {
-        token = urlToken;
+        token = validate(urlToken);
       }
 
       if (token) {
@@ -107,7 +164,7 @@ export function getToken(): string | null {
 
 export async function getAuthToken(): Promise<string | null> {
   const now = Date.now();
-  if (_cachedToken && now < _cacheExpiry) {
+  if (_cachedToken && now < _cacheExpiry && !isJwtExpired(_cachedToken)) {
     return _cachedToken;
   }
 
@@ -185,7 +242,7 @@ function getRefreshTokenFromClientStorage(): string | null {
   return null;
 }
 
-async function tryRefreshSession(): Promise<boolean> {
+export async function tryRefreshSession(): Promise<boolean> {
   if (_refreshInFlight) {
     return _refreshInFlight;
   }
@@ -204,7 +261,18 @@ async function tryRefreshSession(): Promise<boolean> {
         },
         body: hasBodyToken ? JSON.stringify({ refresh_token: refreshToken }) : undefined,
       });
-      return res.ok;
+
+      if (!res.ok) return false;
+
+      // Confirm that the refresh actually resulted in an active session by
+      // performing a lightweight session check without attempting another
+      // refresh to avoid recursion.
+      try {
+        const sessionCheck = await getSessionSafe(false);
+        return !!(sessionCheck && sessionCheck.data && (sessionCheck.data as any).authenticated);
+      } catch {
+        return false;
+      }
     } catch {
       return false;
     } finally {
@@ -266,6 +334,7 @@ export const getSessionSafe = async (allowRefreshRetry = true): Promise<AuthResu
         if (allowRefreshRetry) {
           const refreshed = await tryRefreshSession();
           if (refreshed) {
+            console.log("[AUTH_CLIENT]: Session refreshed successfully. Retrying check...");
             return await getSessionSafe(false);
           }
           const err = await parseError(res);
@@ -426,28 +495,125 @@ export const signIn = {
 
   magicLink: async ({ email }: { email: string }): Promise<AuthResult> => {
     try {
-      const url = new URL(authEndpoint("/auth/passwordless/request"), typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
-      url.searchParams.set("email", email);
-
-      const fetchUrl = API_BASE_URL ? url.toString() : `${url.pathname}${url.search}`;
-      const res = await fetch(fetchUrl, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          Accept: "application/json",
-        },
-      });
-
-      if (!res.ok) {
-        const error = await parseError(res);
-        return { data: null, error };
-      }
-
-      return { data: await res.json().catch(() => ({ success: true })), error: null };
+      const response = await apiClient.post<{ email: string; code?: string; expires_at?: string; message: string }>(
+        "/auth/passwordless/request",
+        null,
+        { params: { email } }
+      );
+      return { data: response, error: null };
     } catch (err) {
       return {
         data: null,
         error: { message: err instanceof Error ? err.message : "Magic link request failed" },
+      };
+    }
+  },
+
+  verifyMagicLink: async ({ email, code }: { email: string; code: string }): Promise<AuthResult> => {
+    try {
+      const response = await apiClient.post<{ access_token: string; refresh_token: string; token_type: string; expires_in: number }>(
+        "/auth/passwordless/verify",
+        null,
+        { params: { email, code } }
+      );
+      return { data: response, error: null };
+    } catch (err) {
+      return {
+        data: null,
+        error: { message: err instanceof Error ? err.message : "Magic link verification failed" },
+      };
+    }
+  },
+
+  passkeyRegister: async ({ email }: { email: string }): Promise<AuthResult> => {
+    if (typeof window === "undefined" || !navigator.credentials || !navigator.credentials.create) {
+      return { data: null, error: { message: "Passkey registration is not supported in this browser." } };
+    }
+
+    try {
+      const startResponse = await apiClient.get<{ user_id: string; challenge: string }>(
+        "/auth/fido2/register/start",
+        { params: { email } }
+      );
+
+      const publicKey: PublicKeyCredentialCreationOptions = {
+        challenge: base64ToArrayBuffer(startResponse.challenge),
+        rp: {
+          name: "GraftAI",
+        },
+        user: {
+          id: new TextEncoder().encode(startResponse.user_id),
+          name: email,
+          displayName: email,
+        },
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },
+          { type: "public-key", alg: -257 },
+        ],
+        authenticatorSelection: {
+          userVerification: "preferred",
+          authenticatorAttachment: "platform",
+        },
+        timeout: 60000,
+        attestation: "direct",
+      };
+
+      const credential = (await navigator.credentials.create({ publicKey })) as PublicKeyCredential;
+      if (!credential) throw new Error("Passkey registration was cancelled or failed.");
+
+      const attestation = normalizePublicKeyCredential(credential);
+      const completeResponse = await apiClient.post<{ status: string }>(
+        "/auth/fido2/register/complete",
+        { email, attestation }
+      );
+
+      return { data: completeResponse, error: null };
+    } catch (err) {
+      return {
+        data: null,
+        error: { message: err instanceof Error ? err.message : "Passkey registration failed" },
+      };
+    }
+  },
+
+  passkeyLogin: async ({ email }: { email: string }): Promise<AuthResult> => {
+    if (typeof window === "undefined" || !navigator.credentials || !navigator.credentials.get) {
+      return { data: null, error: { message: "Passkey login is not supported in this browser." } };
+    }
+
+    try {
+      const startResponse = await apiClient.get<{ user_id: string; challenge: string; credential_id: string }>(
+        "/auth/fido2/login/start",
+        { params: { email } }
+      );
+
+      const publicKey: PublicKeyCredentialRequestOptions = {
+        challenge: base64ToArrayBuffer(startResponse.challenge),
+        allowCredentials: [
+          {
+            type: "public-key",
+            id: base64ToArrayBuffer(startResponse.credential_id),
+            transports: ["internal"],
+          },
+        ],
+        userVerification: "preferred",
+        timeout: 60000,
+      };
+
+      const assertion = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
+      if (!assertion) throw new Error("Passkey authentication was cancelled or failed.");
+
+      const authResponse = normalizePublicKeyCredential(assertion);
+      const completeResponse = await apiClient.post<{ access_token: string; refresh_token: string; token_type: string; expires_in: number }>(
+        "/auth/fido2/login/complete",
+        { email, assertion: authResponse }
+      );
+
+      return { data: completeResponse, error: null };
+    } catch (err) {
+      return {
+        data: null,
+        error: { message: err instanceof Error ? err.message : "Passkey login failed" },
       };
     }
   },

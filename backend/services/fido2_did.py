@@ -7,15 +7,15 @@ import json
 from backend.utils.redis_singleton import safe_get, safe_set
 
 
-def start_fido2_registration(user_id: int) -> dict:
+async def start_fido2_registration(user_id: int) -> dict:
     challenge = str(uuid.uuid4())
     credential_data = json.dumps({"challenge": challenge, "registered": False})
-    safe_set(f"fido:{user_id}", credential_data, ttl_seconds=3600)
+    await safe_set(f"fido:{user_id}", credential_data, ttl_seconds=3600)
     return {"user_id": user_id, "challenge": challenge}
 
 
-def complete_fido2_registration(user_id: int, attestation: dict) -> bool:
-    raw_data = safe_get(f"fido:{user_id}")
+async def complete_fido2_registration(user_id: str, attestation: dict) -> bool:
+    raw_data = await safe_get(f"fido:{user_id}")
     if not raw_data:
         return False
 
@@ -25,12 +25,28 @@ def complete_fido2_registration(user_id: int, attestation: dict) -> bool:
 
     record["registered"] = True
     record["attestation"] = attestation
-    safe_set(f"fido:{user_id}", json.dumps(record), ttl_seconds=86400)
+    record["credential_id"] = attestation.get("id") or attestation.get("rawId")
+    await safe_set(f"fido:{user_id}", json.dumps(record), ttl_seconds=86400)
     return True
 
 
-def verify_fido2_assertion(user_id: int, assertion: dict) -> bool:
-    raw_data = safe_get(f"fido:{user_id}")
+async def start_fido2_authentication(user_id: str) -> dict:
+    raw_data = await safe_get(f"fido:{user_id}")
+    if not raw_data:
+        return {}
+
+    record = json.loads(raw_data)
+    if not record.get("registered"):
+        return {}
+
+    challenge = str(uuid.uuid4())
+    record["challenge"] = challenge
+    await safe_set(f"fido:{user_id}", json.dumps(record), ttl_seconds=3600)
+    return {"user_id": user_id, "challenge": challenge, "credential_id": record.get("credential_id")}
+
+
+async def verify_fido2_assertion(user_id: str, assertion: dict) -> bool:
+    raw_data = await safe_get(f"fido:{user_id}")
     if not raw_data:
         return False
 
@@ -40,12 +56,12 @@ def verify_fido2_assertion(user_id: int, assertion: dict) -> bool:
     return assertion.get("challenge") == record.get("challenge")
 
 
-def issue_decentralized_id(user_id: int) -> str:
+async def issue_decentralized_id(user_id: int) -> str:
     issued_did = f"did:example:{uuid.uuid4()}"
-    safe_set(f"did:{user_id}", issued_did)
+    await safe_set(f"did:{user_id}", issued_did)
     return issued_did
 
 
-def verify_decentralized_id(user_id: int, did: str) -> bool:
-    stored_did = safe_get(f"did:{user_id}")
+async def verify_decentralized_id(user_id: int, did: str) -> bool:
+    stored_did = await safe_get(f"did:{user_id}")
     return stored_did == did

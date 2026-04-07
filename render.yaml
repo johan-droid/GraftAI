@@ -19,7 +19,7 @@ services:
           type: redis
           name: graftai-redis
           property: connectionString
-      # Pull other secrets from Render Dashboard (e.g. STRIPE_API_KEY, GOOGLE_CLIENT_ID)
+      # Pull other secrets from Render Dashboard (e.g. STRIPE_API_KEY, RAZORPAY_KEY_ID, GOOGLE_CLIENT_ID)
       - fromGroup: graftai-secrets
 
   # 2. Arq Background Worker

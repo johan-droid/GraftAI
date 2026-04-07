@@ -72,36 +72,38 @@ export default function RegisterPage() {
 
   return (
     <main className="min-h-screen bg-[#030712] flex overflow-hidden">
-      <div className="hidden lg:flex flex-col justify-between w-[420px] shrink-0 bg-gradient-to-br from-indigo-600/20 via-[#030712] to-violet-600/10 border-r border-white/[0.06] p-10 relative overflow-hidden">
+      <div className="hidden lg:flex flex-col justify-between w-[480px] shrink-0 bg-gradient-to-br from-indigo-600/20 via-[#030712] to-violet-600/10 border-r border-white/[0.06] p-12 relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-0 left-0 w-[300px] h-[300px] bg-indigo-600/15 rounded-full blur-[80px]" />
-          <div className="absolute bottom-0 right-0 w-[200px] h-[200px] bg-violet-600/10 rounded-full blur-[60px]" />
+          <div className="absolute top-0 left-0 w-[400px] h-[400px] bg-indigo-600/20 rounded-full blur-[100px]" />
+          <div className="absolute bottom-0 right-0 w-[300px] h-[300px] bg-violet-600/15 rounded-full blur-[80px]" />
         </div>
         <div className="relative z-10">
-          <div className="flex items-center gap-2.5 mb-12">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Zap className="w-4.5 h-4.5 text-white fill-white" />
+          <div className="flex items-center gap-3 mb-16">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-xl shadow-indigo-500/30 ring-1 ring-white/20">
+              <Zap className="w-5 h-5 text-white fill-white" />
             </div>
-            <span className="text-lg font-bold text-white tracking-tight">GraftAI</span>
+            <span className="text-xl font-black text-white tracking-tight">GraftAI</span>
           </div>
-          <h2 className="text-3xl font-extrabold text-white leading-tight mb-3">
-            Smarter<br />scheduling<br />starts here
+          <h2 className="font-serif text-4xl sm:text-5xl font-black text-white leading-[1.1] mb-6">
+            Smarter<br />scheduling<br />starts here.
           </h2>
-          <p className="text-slate-400 text-sm leading-relaxed mb-10">
-            Join thousands of teams using GraftAI to coordinate meetings across time zones effortlessly.
+          <p className="max-w-[300px] text-slate-400 text-[15px] leading-relaxed mb-12 font-medium">
+            Join the elite tier of productivity. Coordinate across time zones, effortlessly.
           </p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {PERKS.map((perk) => (
-              <div key={perk} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
-                  <CheckCircle className="w-3 h-3 text-indigo-400" />
+              <div key={perk} className="flex items-center gap-4">
+                <div className="w-6 h-6 rounded-full bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center shrink-0">
+                  <CheckCircle className="w-3.5 h-3.5 text-indigo-400" />
                 </div>
-                <span className="text-sm text-slate-300">{perk}</span>
+                <span className="text-[14px] text-slate-300 font-semibold">{perk}</span>
               </div>
             ))}
           </div>
         </div>
-        <p className="relative z-10 text-xs text-slate-600">© 2026 GraftAI · All rights reserved</p>
+        <div className="relative z-10 flex items-center gap-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">© 2026 GraftAI · Sovereign Edition</p>
+        </div>
       </div>
 
       <div className="flex-1 flex items-center justify-center p-6 relative">

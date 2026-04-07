@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(req: Request) {
+    // SEC-04: Block unauthenticated configuration disclosure
+    if ((process.env.NODE_ENV as string) === "production") {
+        return NextResponse.json({ error: "Not Found" }, { status: 404 });
+    }
+
+    // Optional: require a specific header even in dev to prevent accidental leakage via open dev ports
+    const authHeader = req.headers.get("x-graftai-debug");
+    if (process.env.DEBUG_TOKEN && authHeader !== process.env.DEBUG_TOKEN) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const backendUrl =
         process.env.NEXT_PUBLIC_API_BASE_URL ||
         process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -18,7 +29,7 @@ export async function GET() {
         nextPublicAppUrl: process.env.NEXT_PUBLIC_APP_URL || "NOT SET",
         socialProviders: socialProviders,
         sessionCookieCandidates: ["graftai_access_token", "graftai_refresh_token", "xsrf-token"],
-        isProduction: process.env.NODE_ENV === "production",
+        isProduction: (process.env.NODE_ENV as string) === "production",
     };
 
     return NextResponse.json(diagnostics);

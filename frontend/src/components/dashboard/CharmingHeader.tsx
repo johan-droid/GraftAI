@@ -11,39 +11,41 @@ interface CharmingHeaderProps {
 }
 
 const WISHES = [
-  "Ready to conquer your schedule?",
-  "Let's make today remarkably productive.",
-  "Your time is your most valuable asset.",
-  "Focus on what matters, we'll handle the rest.",
-  "A clear calendar is a clear mind.",
-  "Seize the day, one meeting at a time.",
+  "Strategic Oversight",
+  "Synchronized Precision",
+  "High-Density Productivity",
+  "Sovereign Schedule Management",
+  "Operational Excellence",
+  "Optimized Workflow Momentum",
+  "Architectural Focus",
 ];
 
 export const CharmingHeader: React.FC<CharmingHeaderProps> = ({ userName, upcomingCount = 0 }) => {
-  const [greeting, setGreeting] = useState("Good morning");
+  const [greeting, setGreeting] = useState("Status");
   const [wish, setWish] = useState(WISHES[0]);
 
   useEffect(() => {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) setGreeting("Good morning");
-    else if (hour >= 12 && hour < 17) setGreeting("Good afternoon");
-    else if (hour >= 17 && hour < 22) setGreeting("Good evening");
-    else setGreeting("Good night");
+    if (hour >= 5 && hour < 12) setGreeting("Morning Briefing");
+    else if (hour >= 12 && hour < 17) setGreeting("Afternoon Pulse");
+    else if (hour >= 17 && hour < 22) setGreeting("Evening Review");
+    else setGreeting("Night Operations");
 
-    // Randomize wish for a 'charming' experience on refresh
     setWish(WISHES[Math.floor(Math.random() * WISHES.length)]);
   }, []);
+
+  const initial = userName?.charAt(0).toUpperCase() || "G";
 
   const container = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: { staggerChildren: 0.12 },
+      transition: { staggerChildren: 0.1 },
     },
   };
 
   const item = {
-    hidden: { opacity: 0, y: 12, filter: "blur(4px)" },
+    hidden: { opacity: 0, y: 8, filter: "blur(4px)" },
     visible: { opacity: 1, y: 0, filter: "blur(0px)" },
   };
 
@@ -52,50 +54,54 @@ export const CharmingHeader: React.FC<CharmingHeaderProps> = ({ userName, upcomi
       variants={container}
       initial="hidden"
       animate="visible"
-      className="relative flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2"
+      className="relative flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b border-white/[0.04]"
     >
-      <div className="space-y-1.5 transition-all">
+      {/* Abstract Background Letter */}
+      <div className="absolute top-0 -left-6 md:-left-12 pointer-events-none select-none opacity-[0.03] text-[180px] md:text-[240px] font-black italic tracking-tighter leading-none text-white transition-all">
+        {initial}
+      </div>
+
+      <div className="relative z-10 space-y-1 transition-all">
         <motion.div variants={item} className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/10 border border-indigo-500/20">
-            <Sparkles className="w-3 h-3 text-indigo-400" />
+          <div className="flex h-5 w-5 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+            <Sparkles className="w-2.5 h-2.5 text-indigo-400" />
           </div>
-          <span className="text-indigo-400 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em]">
-            {greeting}, {userName} ✨
+          <span className="text-indigo-400 text-[9px] font-black underline decoration-indigo-500/30 underline-offset-4 uppercase tracking-[0.25em]">
+            {greeting} // {userName}
           </span>
         </motion.div>
 
         <motion.h1 
           variants={item}
-          className="text-4xl sm:text-5xl md:text-6xl font-bold text-white tracking-tighter leading-tight"
+          className="font-serif text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight"
         >
-          {wish}
+          <span className="bg-gradient-to-r from-white via-white to-white/50 bg-clip-text text-transparent">
+            {wish}
+          </span>
         </motion.h1>
 
-        <motion.div variants={item} className="flex items-center gap-4 text-slate-500 font-medium text-sm pt-2">
-           <div className="flex items-center gap-1.5 font-bold text-slate-400">
-             <Calendar className="w-4 h-4 text-indigo-500/60" />
-             <span>{upcomingCount} upcoming</span>
+        <motion.div variants={item} className="flex items-center gap-3 text-slate-500 font-bold text-[11px] pt-1 uppercase tracking-widest">
+           <div className="flex items-center gap-1.5 text-slate-400">
+             <Calendar className="w-3.5 h-3.5 text-indigo-500/60" />
+             <span>{upcomingCount} ACTIVE</span>
            </div>
-           <span className="h-4 w-px bg-slate-800" />
+           <span className="h-3 w-px bg-slate-800" />
            <p className="flex items-center gap-1.5">
-             <Clock className="w-4 h-4" />
+             <Clock className="w-3.5 h-3.5" />
              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
            </p>
         </motion.div>
       </div>
 
-      <motion.div variants={item} className="shrink-0 pb-1">
+      <motion.div variants={item} className="relative z-10 shrink-0 pb-0.5">
         <Link 
           href="/dashboard/calendar"
-          className="group relative flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-white text-black font-extrabold text-[13px] transition-all hover:bg-slate-200 active:scale-95 shadow-[0_20px_40px_-10px_rgba(255,255,255,0.15)]"
+          className="group relative flex items-center gap-2.5 px-5 py-3 rounded-xl bg-white text-black font-black text-[11px] uppercase tracking-wider transition-all hover:bg-slate-200 active:scale-95 shadow-xl shadow-white/5"
         >
-          <span>Schedule New</span>
-          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          <span>Initiate Event</span>
+          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
         </Link>
       </motion.div>
-      
-      {/* Subtle background glow for 'Charming' feel */}
-      <div className="absolute -top-12 -left-12 w-64 h-64 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none -z-10" />
     </motion.div>
   );
 };

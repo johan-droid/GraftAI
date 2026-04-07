@@ -185,12 +185,7 @@ const FAQS = [
   { q: "What AI model powers the scheduling?", a: "GraftAI uses a fine-tuned scheduling model built on top of frontier LLMs, optimized specifically for calendar context and multi-party coordination." },
 ];
 
-const MOBILE_TAB_LINKS = [
-  { id: "home", label: "Home", href: "#top", icon: Zap },
-  { id: "features", label: "Features", href: "#features", icon: Sparkles },
-  { id: "pricing", label: "Pricing", href: "#pricing", icon: Crown },
-  { id: "faq", label: "FAQ", href: "#faq", icon: Shield },
-];
+// ─── Data ──────────────────────────────────────────────────────
 
 const MOBILE_SHEET_LINKS = [
   { label: "Features", href: "#features" },
@@ -209,20 +204,12 @@ const PREVIEW_CHIPS = [
 export default function Home() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [activeMobileTab, setActiveMobileTab] = useState("home");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [showAllPricing, setShowAllPricing] = useState(false);
 
   useEffect(() => {
     const onScroll = () => {
       setScrolled(window.scrollY > 20);
-      const triggerY = window.scrollY + window.innerHeight * 0.38;
-      const order = ["faq", "pricing", "features"];
-      const active = order.find((id) => {
-        const el = document.getElementById(id);
-        return el ? triggerY >= el.offsetTop : false;
-      });
-      setActiveMobileTab(active ?? "home");
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -236,7 +223,7 @@ export default function Home() {
   }, [mobileOpen]);
 
   return (
-    <div id="top" className="min-h-screen overflow-x-hidden bg-[#070711] pb-[calc(86px+env(safe-area-inset-bottom))] text-slate-200 selection:bg-indigo-500/30 md:pb-0">
+    <div id="top" className="min-h-screen overflow-x-hidden bg-[#070711] text-slate-200 selection:bg-indigo-500/30">
 
       {/* ── Ambient BG ──────────────────────────────── */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
@@ -352,46 +339,7 @@ export default function Home() {
         </AnimatePresence>
       </header>
 
-      {/* ── Mobile Bottom Nav ──────────────────────── */}
-      <div className="mobile-safe-bottom fixed inset-x-0 bottom-0 z-50 px-3 pb-2 md:hidden">
-        <nav className="mx-auto flex h-[68px] max-w-md items-center rounded-[24px] border border-white/[0.14] bg-[#040915]/90 px-1.5 backdrop-blur-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
-          {MOBILE_TAB_LINKS.map((tab) => {
-            const isActive = activeMobileTab === tab.id;
-            return (
-              <Link
-                key={tab.id}
-                href={tab.href}
-                onClick={() => setActiveMobileTab(tab.id)}
-                className={`relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide active:scale-95 transition-transform ${
-                  isActive ? "text-indigo-300" : "text-slate-400"
-                }`}
-              >
-                {isActive && (
-                  <motion.span
-                    layoutId="home-mobile-tab"
-                    className="absolute inset-1 -z-10 rounded-2xl border border-indigo-400/25 bg-indigo-500/18"
-                  />
-                )}
-                <tab.icon className="h-[21px] w-[21px]" />
-                <span>{tab.label}</span>
-              </Link>
-            );
-          })}
-
-          <button
-            onClick={() => setMobileOpen(true)}
-            aria-expanded={mobileOpen ? "true" : "false"}
-            aria-label="Open quick menu"
-            className={`relative flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold tracking-wide active:scale-95 transition-transform ${
-              mobileOpen ? "text-indigo-300" : "text-slate-400"
-            }`}
-          >
-            {mobileOpen && <span className="absolute inset-1 -z-10 rounded-2xl border border-indigo-400/25 bg-indigo-500/18" />}
-            <Menu className="h-[21px] w-[21px]" />
-            <span>Menu</span>
-          </button>
-        </nav>
-      </div>
+      {/* Mobile Drawer Triggered from Header Menu */}
 
       <main className="touch-pan-y relative z-10 overscroll-y-contain">
 

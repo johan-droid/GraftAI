@@ -51,7 +51,7 @@ interface SuggestedAction {
 }
 
 interface CalendarEvent {
-  id: number;
+  id: string | number;
   title: string;
   start_time: string;
   end_time: string;
@@ -82,28 +82,53 @@ const getSuggestionIcon = (iconName?: string) => {
 
 const buildCalendarAwareSuggestions = (events: CalendarEvent[]): SuggestedAction[] => {
   const suggestions: SuggestedAction[] = [];
-  const nextEvent = events[0];
+  
+  // Sort events by time
+  const sorted = [...events].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+  
+  const now = new Date();
+  let lastEnd = now;
 
+  // 1. DASHBOARD INTELLIGENCE: Find gaps in the user's schedule for precision suggestions
+  for (const event of sorted) {
+    const start = new Date(event.start_time);
+    const end = new Date(event.end_time);
+    
+    // Check if there's a gap before this event starting from now (or last event)
+    if (start > lastEnd) {
+      const diffMs = start.getTime() - lastEnd.getTime();
+      const diffMin = Math.floor(diffMs / (1000 * 60));
+
+      if (diffMin >= 30 && diffMin < 240) { // Found a meaningful slot (30m - 4hrs)
+        const startTimeStr = lastEnd.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        suggestions.push({
+          id: `gap-${start.getTime()}`,
+          type: "query",
+          label: "Book focus session",
+          description: `You're free until ${event.title} (${startTimeStr}). Want to block focus time?`,
+          icon: "zap",
+          data: { 
+            prompt: `I have a ${diffMin} minute gap before "${event.title}". Help me schedule a focused work session starting at ${startTimeStr}.` 
+          },
+        });
+      }
+    }
+    // Update lastEnd to the end of the current event if it's later than our current tracking
+    if (end > lastEnd) lastEnd = end;
+  }
+
+  // 2. Fallback to standard high-value actions if needed
+  const nextEvent = sorted.find(e => new Date(e.start_time) > now);
   if (nextEvent) {
     const nextEventTime = formatEventTime(nextEvent.start_time);
     suggestions.push({
       id: "prep-next-event",
       type: "query",
       label: `Prep for ${nextEvent.title}`,
-      description: `Generate a quick prep checklist before ${nextEventTime}`,
+      description: `Generate a checklist for your ${nextEventTime} meeting`,
       icon: "zap",
       data: {
-        prompt: `Give me a concise preparation checklist for "${nextEvent.title}" before ${nextEventTime}.`,
-      },
-    });
-    suggestions.push({
-      id: "optimize-day-around-event",
-      type: "query",
-      label: "Optimize my day",
-      description: "Protect focus blocks around upcoming meetings",
-      icon: "chart",
-      data: {
-        prompt: `Reorganize the rest of my day around "${nextEvent.title}" at ${nextEventTime}. Suggest focused work blocks and breaks.`,
+        prompt: `Give me a concise prep checklist for "${nextEvent.title}" at ${nextEventTime}.`,
       },
     });
   }
@@ -124,22 +149,14 @@ const buildCalendarAwareSuggestions = (events: CalendarEvent[]): SuggestedAction
       description: "Detect available windows for deep work",
       icon: "lightbulb",
       data: { prompt: "What are my free time slots today for 60-90 minute focus sessions?" },
-    },
-    {
-      id: "schedule-meeting",
-      type: "schedule",
-      label: "Schedule a meeting",
-      description: "Create an event in the best available slot",
-      icon: "calendar",
-      data: { prompt: "I need to schedule a new meeting. Find the best slot and suggest options." },
     }
   );
 
-  const deduped = suggestions.filter(
+  const dedupedByLabel = suggestions.filter(
     (item, index, arr) => arr.findIndex((candidate) => candidate.label === item.label) === index
   );
 
-  return deduped.slice(0, 4);
+  return dedupedByLabel.slice(0, 4);
 };
 
 export default function AICopilotChat() {
@@ -274,7 +291,7 @@ export default function AICopilotChat() {
     if (!textToSend.trim() || isTyping) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       role: "user",
       content: textToSend,
       timestamp: new Date(),
@@ -296,7 +313,7 @@ export default function AICopilotChat() {
       const data = await sendAiChat(userMessage.content, contextArray, timezone);
 
       const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         role: "ai",
         content: data.result || "I apologize, but I couldn't process that request.",
         timestamp: new Date(),
@@ -331,7 +348,7 @@ export default function AICopilotChat() {
     } catch (error) {
       console.error(error);
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: `err-${Date.now()}`,
         role: "ai",
         content: "I'm experiencing difficulty connecting to my reasoning engine. Please try again in a moment.",
         timestamp: new Date(),
@@ -498,14 +515,14 @@ export default function AICopilotChat() {
             transition={{ duration: 0.4, delay: 0.25 }}
             className="mt-8 w-full max-w-2xl px-2"
           >
-            <form onSubmit={handleSubmit} className="relative rounded-2xl border border-white/[0.1] bg-white/[0.03] p-4 transition-all focus-within:border-indigo-500/30 focus-within:bg-white/[0.05] hover:border-white/[0.15] shadow-lg shadow-black/10">
+            <form onSubmit={handleSubmit} className="relative rounded-2xl border border-slate-700/80 bg-slate-950/80 p-4 transition-all focus-within:border-slate-500/70 focus-within:bg-slate-950/90 hover:border-slate-600/80 shadow-md shadow-black/20">
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask anything about your schedule..."
-                className="w-full resize-none border-0 bg-transparent text-white placeholder:text-slate-500 focus:ring-0 sm:text-base outline-none min-h-[44px] text-[15px]"
+                className="w-full resize-none border-0 bg-transparent text-slate-100 placeholder:text-slate-500 focus:ring-0 sm:text-base outline-none min-h-[44px] text-[15px]"
                 rows={1}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
@@ -514,17 +531,15 @@ export default function AICopilotChat() {
                 }}
               />
               <div className="mt-2 flex items-center justify-between">
-                <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-slate-300 transition-colors">
-                  <span className="text-sm font-medium">+</span>
-                </button>
+                <div />
                 <button
                   type="submit"
                   disabled={!hasText || isTyping}
                   className={cn(
                     "inline-flex items-center justify-center rounded-xl p-2 transition-all duration-200",
                     hasText
-                      ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500"
-                      : "text-slate-500 hover:bg-white/[0.06]",
+                      ? "bg-slate-700 text-slate-100 shadow-sm shadow-black/20 hover:bg-slate-600"
+                      : "text-slate-500 hover:bg-slate-800",
                     "disabled:opacity-40 disabled:cursor-not-allowed"
                   )}
                 >
@@ -567,9 +582,9 @@ export default function AICopilotChat() {
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto w-full" style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
              <div className="mx-auto max-w-3xl py-6 h-full px-3 sm:px-4">
                 <AnimatePresence initial={false}>
-                  {messages.map((msg) => (
+                  {messages.map((msg, idx) => (
                     <motion.div
-                      key={msg.id}
+                      key={msg.id || `msg-${idx}`}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
@@ -598,9 +613,9 @@ export default function AICopilotChat() {
                               
                               {msg.suggestedActions && msg.suggestedActions.length > 0 && (
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                  {msg.suggestedActions.map((action) => (
+                                  {msg.suggestedActions.map((action, actionIdx) => (
                                     <button
-                                      key={action.id}
+                                      key={action.id || `action-${actionIdx}`}
                                       onClick={() => handleSuggestedAction(action)}
                                       className="suggestion-chip rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/[0.08] hover:border-white/[0.14] transition-all"
                                     >
@@ -645,14 +660,14 @@ export default function AICopilotChat() {
                       </div>
                     </motion.div>
                   )}
-                  <div ref={messagesEndRef} className="h-4" />
+                  <div key="scroll-anchor" ref={messagesEndRef} className="h-4" />
                 </AnimatePresence>
              </div>
           </div>
           
           {/* Composer (conversation mode) — Frosted glass pinned bottom */}
           <div className="mobile-composer mx-auto w-full max-w-3xl px-3 sm:px-4 py-3">
-            <form onSubmit={handleSubmit} className="relative rounded-2xl border border-white/[0.1] bg-white/[0.04] p-3 transition-all focus-within:border-indigo-500/25 focus-within:bg-white/[0.06] shadow-lg shadow-black/10">
+            <form onSubmit={handleSubmit} className="relative rounded-2xl border border-white/[0.1] bg-white/[0.04] p-3 transition-all focus-within:border-white/20 focus-within:bg-white/[0.06] shadow-lg shadow-black/10">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -668,9 +683,7 @@ export default function AICopilotChat() {
                 }}
               />
               <div className="mt-1.5 flex items-center justify-between">
-                <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-slate-300 transition-colors">
-                  <span className="text-sm font-medium">+</span>
-                </button>
+                <div />
                 <button
                   type="submit"
                   disabled={!hasText || isTyping}

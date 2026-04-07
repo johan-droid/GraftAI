@@ -213,36 +213,36 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white selection:bg-primary/30">
+    <div className="min-h-screen bg-[#030712] text-white selection:bg-indigo-500/30 selection:text-white">
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       
-      {/* Dynamic Background Elements */}
+      {/* Dynamic Sovereign Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full animate-pulse" style={{ background: "radial-gradient(circle, rgba(79,70,229,0.15) 0%, rgba(0,0,0,0) 70%)" }} />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full" style={{ background: "radial-gradient(circle, rgba(99,102,241,0.1) 0%, rgba(0,0,0,0) 70%)" }} />
+        <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-500/10 blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full bg-violet-600/10 blur-[100px]" />
       </div>
 
       <div className="page-with-floating-nav relative z-10 max-w-7xl mx-auto px-6 pb-24 lg:pb-32">
-        <div className="text-center mb-20 space-y-4">
-          <div className="flex justify-center gap-4 mb-4">
+        <div className="text-center pt-20 mb-20 space-y-4">
+          <div className="flex justify-center gap-2 mb-8">
             <button 
               onClick={() => setRegion("US")}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase transition-all ${region === 'US' ? 'bg-primary text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}
+              className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${region === 'US' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 ring-1 ring-white/20' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}
             >
               $ Global
             </button>
             <button 
               onClick={() => setRegion("IN")}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase transition-all ${region === 'IN' ? 'bg-primary text-white border-primary shadow-[0_0_15px_rgba(79,70,229,0.2)]' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}
+              className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${region === 'IN' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 ring-1 ring-white/20' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}
             >
               ₹ India
             </button>
           </div>
 
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-black uppercase tracking-widest"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-widest"
           >
             <Sparkles className="w-3 h-3" /> {region === 'IN' ? 'Competitive Indian Pricing' : 'Global Premium SaaS'}
           </motion.div>
@@ -250,7 +250,7 @@ export default function PricingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-5xl md:text-7xl font-black tracking-tight mb-6 bg-gradient-to-b from-white to-slate-500 bg-clip-text text-transparent"
+            className="font-serif text-5xl md:text-8xl font-black tracking-tight mb-6 bg-gradient-to-b from-white via-white to-slate-500 bg-clip-text text-transparent leading-[1.1]"
           >
             Reclaim Your Time.
           </motion.h1>
@@ -258,7 +258,7 @@ export default function PricingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-lg md:text-xl text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed"
+            className="text-[17px] md:text-lg text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed"
           >
             Simple, transparent pricing for power users. {region === 'IN' ? 'Optimized for the Indian market.' : 'No organizations, no seat minimums.'} Just pure productivity.
           </motion.p>
@@ -280,24 +280,24 @@ export default function PricingPage() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 * idx + 0.3 }}
-              className={`relative flex flex-col p-8 rounded-3xl border transition-all duration-500 group ${
+              className={`relative flex flex-col p-8 rounded-[2.5rem] transition-all duration-700 group glass-panel ${
                 tier.highlight 
-                ? "bg-slate-900/60 border-primary/40 shadow-2xl shadow-primary/10 scale-105 z-20 hover:border-primary hover:shadow-primary/30" 
-                : "bg-slate-950/40 border-slate-800/60 hover:border-slate-700 hover:bg-slate-900/40 z-10"
+                ? "bg-indigo-600/[0.04] border-indigo-500/40 shadow-2xl shadow-indigo-500/10 scale-105 z-20 hover:border-indigo-500 hover:shadow-indigo-500/30" 
+                : "bg-white/[0.01] border-white/[0.06] hover:border-white/20 z-10"
               }`}
             >
               {tier.highlight && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-primary/40">
-                  Most Popular
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-5 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg shadow-indigo-600/40 ring-1 ring-white/20">
+                  Sovereign Choice
                 </div>
               )}
 
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className={`p-2 rounded-lg ${tier.highlight ? 'bg-primary/20 text-primary' : 'bg-slate-900 text-slate-400'}`}>
+              <div className="mb-10">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className={`p-2.5 rounded-xl ${tier.highlight ? 'bg-indigo-500/20 text-indigo-400 ring-1 ring-indigo-500/30' : 'bg-white/5 text-slate-500'}`}>
                     {tier.icon}
                   </div>
-                  <h3 className="text-xl font-bold text-white">{tier.name}</h3>
+                  <h3 className="text-2xl font-black text-white tracking-tight">{tier.name}</h3>
                 </div>
                 <div className="flex items-baseline gap-1 mb-4">
                   <span className="text-5xl font-black text-white">{getPrice(tier.id)}</span>

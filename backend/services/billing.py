@@ -37,7 +37,10 @@ async def create_checkout_session(db: AsyncSession, user_id: str, tier: str) -> 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    price_id = STRIPE_PRICE_PRO if tier == "pro" else STRIPE_PRICE_ELITE
+    if tier not in [UserTier.PRO, UserTier.ELITE]:
+        tier = UserTier.PRO
+
+    price_id = STRIPE_PRICE_PRO if tier == UserTier.PRO else STRIPE_PRICE_ELITE
     if not price_id:
         raise HTTPException(status_code=400, detail=f"Invalid or unconfigured tier: {tier}")
 
@@ -90,10 +93,14 @@ async def handle_webhook_event(db: AsyncSession, payload: bytes, sig_header: str
 
     event_id = event["id"]
     from backend.models.tables import ProcessedWebhook
+    from sqlalchemy.exc import IntegrityError
 
-    # 1. Check for duplicate webhook events
-    result = await db.execute(select(ProcessedWebhook).where(ProcessedWebhook.event_id == event_id))
-    if result.scalars().first():
+    # 1. Atomic Idempotency check via Unique Constraint (Prevents TOCTOU Race Condition)
+    try:
+        db.add(ProcessedWebhook(event_id=event_id, provider="stripe"))
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
         logger.warning(f"⏩ Skipping already processed Stripe event: {event_id}")
         return {"status": "already_processed"}
 
@@ -108,8 +115,7 @@ async def handle_webhook_event(db: AsyncSession, payload: bytes, sig_header: str
     elif event_type == "customer.subscription.deleted":
         await _handle_subscription_deleted(db, data_object)
 
-    # 3. Log as processed and commit once
-    db.add(ProcessedWebhook(event_id=event_id, provider="stripe"))
+    # 3. Commit transaction
     await db.commit()
 
     return {"status": "success"}
@@ -127,8 +133,21 @@ async def _handle_checkout_completed(db: AsyncSession, session: Dict[str, Any]):
     if user:
         user.stripe_customer_id = customer_id
         user.subscription_status = "active"
-        user.tier = session.get("metadata", {}).get("tier", UserTier.PRO)
-        logger.info(f"✅ User {user_id} upgraded to {user.tier}")
+        
+        # Validate Tier mapping to prevent pollution
+        raw_tier = session.get("metadata", {}).get("tier", UserTier.PRO)
+        validated_tier = raw_tier if raw_tier in [UserTier.PRO, UserTier.ELITE] else UserTier.PRO
+        user.tier = validated_tier
+        
+        # Grant AI Credits based on Tier Automation
+        from backend.models.tables import UserProfile
+        profile_res = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+        profile = profile_res.scalars().first()
+        if profile:
+            profile.monthly_ai_credits = 2000 if validated_tier == UserTier.ELITE else 500
+            profile.used_ai_credits = 0 # Reset credits upon fresh subscription
+
+        logger.info(f"✅ User {user_id} upgraded to {validated_tier}")
 
 async def _handle_subscription_updated(db: AsyncSession, subscription: Dict[str, Any]):
     customer_id = subscription.get("customer")

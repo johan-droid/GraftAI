@@ -1,8 +1,9 @@
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.services import ai
 from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
 
 @pytest.mark.asyncio
@@ -16,24 +17,24 @@ async def test_proactive_context_injection():
         "backend.services.scheduler.get_events_for_range", new_callable=AsyncMock
     ) as mock_get:
         mock_get.return_value = [
-            AsyncMock(title="Existing Sync", start_time=datetime.now())
+            SimpleNamespace(id=1, title="Existing Sync", start_time=datetime.now(timezone.utc), end_time=datetime.now(timezone.utc))
         ]
 
         # Test AI Request
-        request = ai.AIRequest(prompt="What does my day look like?", timezone="UTC")
+        request = ai.AIRequest(prompt="Give me a strategic summary for the next 48 hours.", timezone="UTC")
 
         # Mock Cache
         with patch("backend.services.ai.get_cache", return_value=None), patch(
             "backend.services.ai.set_cache"
         ), patch(
-            "backend.services.ai._generate_with_groq", new_callable=AsyncMock
+            "backend.services.ai._generate_with_groq_response", new_callable=AsyncMock
         ) as mock_gen:
 
-            mock_gen.return_value = "You have a sync."
+            mock_gen.return_value = ("You have a sync.", "llama-3.3-70b-versatile")
             await ai.ai_chat(request, user_id=user_id, db=db_mock)
 
             # Verify the system prompt sent to the LLM contains our 'GROUND TRUTH'
-            # In new ai_chat, _generate_with_groq args are (system_reasoning, user_input)
+            # In ai_chat, _generate_with_groq_response args are (system_reasoning, user_input)
             # Access args safely regardless of mock type
             called_args = mock_gen.call_args[0] if mock_gen.call_args else []
             if not called_args and mock_gen.await_args:
@@ -41,7 +42,7 @@ async def test_proactive_context_injection():
             
             if called_args:
                 system_prompt = called_args[0]
-                assert "Your Real-Time Schedule (GROUND TRUTH):" in system_prompt
+                assert "AUTHORITATIVE CONTEXT" in system_prompt
             else:
                 pytest.fail("mock_gen was not called correctly")
 
@@ -57,7 +58,10 @@ async def test_multi_action_parsing():
         "backend.services.ai.set_cache"
     ), patch(
         "backend.services.ai._generate_with_groq", new_callable=AsyncMock
-    ) as mock_gen:
+    ) as mock_gen, patch(
+        "backend.services.ai._resolve_event_id", new_callable=AsyncMock
+    ) as mock_resolve:
+        mock_resolve.return_value = None
 
         mock_gen.return_value = 'Rescheduling. ACTION:UPDATE_MEETING:{"event_id": 1, "new_start_time": "2026-03-25T16:00:00"}'
 
@@ -67,3 +71,38 @@ async def test_multi_action_parsing():
             await ai.ai_chat(request, user_id=user_id, db=db_mock)
             # Ensure the call was made despite any extra text in the AI response
             mock_update.assert_called_once()
+
+
+def test_extract_json_payload_from_prefixed_text():
+    raw = 'Rescheduling now. ACTION:UPDATE_MEETING:{"event_id": 42, "new_start_time": "2026-03-25T16:00:00"}'
+    payload = ai._extract_json_payload(raw)
+    assert isinstance(payload, dict)
+    assert payload.get("event_id") == 42
+
+
+@pytest.mark.asyncio
+async def test_offline_update_still_works_when_groq_unavailable():
+    db_mock = AsyncMock(spec=AsyncSession)
+    prompt = "Update event 15 to tomorrow at 4pm"
+
+    updated_event = SimpleNamespace(
+        id=15,
+        start_time=datetime(2026, 4, 8, 16, 0, tzinfo=timezone.utc),
+    )
+
+    with patch("backend.services.ai._generate_with_groq", new_callable=AsyncMock) as mock_groq, patch(
+        "backend.services.scheduler.update_event", new_callable=AsyncMock
+    ) as mock_update:
+        mock_groq.side_effect = RuntimeError("provider unavailable")
+        mock_update.return_value = updated_event
+
+        result_text, action = await ai._offline_assistant_response(
+            prompt=prompt,
+            user_timezone="UTC",
+            db=db_mock,
+            user_id="u_1",
+        )
+
+        assert "Updated event #15" in result_text
+        assert action.get("type") == "update"
+        mock_update.assert_called_once()

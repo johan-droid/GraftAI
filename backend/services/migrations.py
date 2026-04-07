@@ -34,6 +34,7 @@ def _canonical_migration_plan() -> list[Path]:
         root / "backend" / "models" / "migrations" / "add_tenant_id.sql",
         root / "backend" / "models" / "migrations" / "2026_04_06_add_notifications_is_read.pgsql",
         root / "backend" / "models" / "migrations" / "2026_04_07_add_quota_warning_columns.pgsql",
+        root / "backend" / "models" / "migrations" / "2026_04_08_add_events_source_index.pgsql",
     ]
 
     discovered_pgsql = [

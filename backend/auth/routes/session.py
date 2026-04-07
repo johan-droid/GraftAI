@@ -223,8 +223,12 @@ async def refresh_token(request: Request, payload: Optional[RefreshTokenRequest]
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-    await client.delete(f"refresh:{refresh_token_value}")
+    # SEC-029: Implement a 30-second grace window for refresh tokens.
+    # This prevents race conditions where multiple concurrent requests (e.g. from the same burst) 
+    # would fail with 401 if the token was deleted instantly.
+    await client.expire(f"refresh:{refresh_token_value}", 30)
     await client.srem(f"user_tokens:{user_id}", refresh_token_value)
+    
     token_data = await create_jwt_token(user_id)
     response = JSONResponse(content={"message": "Token refreshed successfully"})
     attach_jwt_cookies(response, token_data, request)

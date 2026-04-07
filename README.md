@@ -63,6 +63,7 @@
 * **Production Pre-flight Audit**: Automatic startup verification of Database, Redis, and Environment availability.
 - **SSL Resilience**: Hardened database connection pooling (Tuned for Render/Neon instability).
 * **Worker-Centric Reminders**: Atomic 'Scan-Mark-Send' pattern to prevent duplicate event notifications.
+* **Security & Observability (SEC-03/07)**: Strict IP validation against trusted proxies and PII redaction in Sentry telemetry.
 
 ---
 

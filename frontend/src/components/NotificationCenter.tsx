@@ -41,6 +41,16 @@ export default function NotificationCenter() {
       setItems(res || []);
     } catch (e) {
       console.warn("Failed to load notifications", e);
+      // If this failure is due to an expired session, redirect to login so the
+      // user can re-authenticate immediately instead of repeatedly seeing
+      // failed API attempts.
+      try {
+        if (e && typeof e === "object" && "status" in (e as any) && (e as any).status === 401) {
+          router.replace("/login");
+        }
+      } catch (err) {
+        /* ignore redirect errors */
+      }
     } finally {
       setLoading(false);
     }

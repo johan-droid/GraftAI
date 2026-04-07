@@ -1,12 +1,15 @@
 import logging
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.responses import JSONResponse
 from backend.utils.db import get_db
 from backend.services.bg_tasks import enqueue_account_deletion
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
-from backend.auth.schemes import get_current_user_id
+from backend.auth.schemes import get_current_user_id, get_current_user_id_optional
+from backend.models.tables import UserTable
 from backend.services import passwordless, fido2_did, access_control
 from backend.auth.logic import (
     get_rate_limiter,
@@ -48,16 +51,20 @@ async def _passwordless_verify(
 
 
 @router.get("/fido2/register")
-def _fido2_start(user_id: str = Depends(get_current_user_id)):
-    return fido2_did.start_fido2_registration(user_id)
+async def _fido2_start(user_id: str = Depends(get_current_user_id)):
+    return await fido2_did.start_fido2_registration(user_id)
 
 @router.post("/fido2/register")
-def _fido2_complete(attestation: dict, user_id: str = Depends(get_current_user_id)):
-    if not fido2_did.complete_fido2_registration(user_id, attestation):
+async def _fido2_complete(attestation: dict, user_id: str = Depends(get_current_user_id)):
+    if not await fido2_did.complete_fido2_registration(user_id, attestation):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="FIDO2 registration failed"
         )
     return {"status": "registered"}
+
+class Fido2AssertionRequest(BaseModel):
+    email: EmailStr
+    assertion: dict
 
 @router.post("/fido2/verify")
 def _fido2_verify(assertion: dict, user_id: str = Depends(get_current_user_id)):
@@ -67,13 +74,94 @@ def _fido2_verify(assertion: dict, user_id: str = Depends(get_current_user_id)):
         )
     return {"status": "verified"}
 
+@router.get("/fido2/register/start")
+async def _fido2_register_start(
+    email: Optional[EmailStr] = None,
+    current_user_id: Optional[str] = Depends(get_current_user_id_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    if not email and not current_user_id:
+        raise HTTPException(status_code=400, detail="Email or authenticated user required")
+
+    if email:
+        result = await db.execute(select(UserTable).where(UserTable.email == email))
+        user = result.scalars().first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user_id = str(user.id)
+    else:
+        user_id = current_user_id
+
+    data = await fido2_did.start_fido2_registration(user_id)
+    if not data:
+        raise HTTPException(status_code=500, detail="Unable to initialize passkey registration")
+    return data
+
+@router.post("/fido2/register/complete")
+async def _fido2_register_complete(
+    email: Optional[EmailStr] = None,
+    attestation: dict = None,
+    current_user_id: Optional[str] = Depends(get_current_user_id_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    if not attestation:
+        raise HTTPException(status_code=400, detail="Attestation payload is required")
+
+    if not email and not current_user_id:
+        raise HTTPException(status_code=400, detail="Email or authenticated user required")
+
+    if email:
+        result = await db.execute(select(UserTable).where(UserTable.email == email))
+        user = result.scalars().first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user_id = str(user.id)
+    else:
+        user_id = current_user_id
+
+    if not await fido2_did.complete_fido2_registration(user_id, attestation):
+        raise HTTPException(status_code=400, detail="FIDO2 registration failed")
+
+    return {"status": "registered"}
+
+@router.get("/fido2/login/start")
+async def _fido2_login_start(email: EmailStr, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserTable).where(UserTable.email == email))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    data = await fido2_did.start_fido2_authentication(str(user.id))
+    if not data:
+        raise HTTPException(status_code=404, detail="No passkey registered for this account")
+    return data
+
+@router.post("/fido2/login/complete")
+async def _fido2_login_complete(
+    payload: Fido2AssertionRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(UserTable).where(UserTable.email == payload.email))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not await fido2_did.verify_fido2_assertion(str(user.id), payload.assertion):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="FIDO2 assertion failed")
+
+    token_data = await create_jwt_token(str(user.id), email=user.email)
+    response = JSONResponse(content={"message": "Login successful", "access_token": token_data["access_token"], "refresh_token": token_data["refresh_token"], "token_type": token_data["token_type"], "expires_in": token_data["expires_in"]})
+    attach_jwt_cookies(response, token_data)
+    return response
+
 @router.post("/did/issue")
-def _did_issue(user_id: str = Depends(get_current_user_id)):
-    return {"did": fido2_did.issue_decentralized_id(user_id)}
+async def _did_issue(user_id: str = Depends(get_current_user_id)):
+    return {"did": await fido2_did.issue_decentralized_id(user_id)}
 
 @router.post("/did/verify")
-def _did_verify(payload: DIDVerifyRequest, user_id: str = Depends(get_current_user_id)):
-    return {"status": "valid"}
+async def _did_verify(payload: DIDVerifyRequest, user_id: str = Depends(get_current_user_id)):
+    valid = await fido2_did.verify_decentralized_id(user_id, payload.did)
+    return {"status": "valid" if valid else "invalid"}
 
 @router.get("/access-control/check-role")
 async def check_role(

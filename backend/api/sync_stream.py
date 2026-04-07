@@ -25,10 +25,11 @@ async def status_event_generator(request: Request, user_id: str):
                 if isinstance(data, bytes):
                     data = data.decode('utf-8')
                 
-                # Relay the JSON data directly as an SSE event
+                # Relay the JSON/String data directly as an SSE event
+                # This catches 'SYNC_STATUS' objects or generic 'QUOTA_UPDATE' drops natively.
                 yield f"data: {data}\n\n"
             
-            await asyncio.sleep(0.01) # Yield control
+            await asyncio.sleep(0.02) # Yield control
     except Exception as e:
         logger.error(f"SSE stream error for {user_id}: {e}")
         yield f"data: {json.dumps({'event': 'ERROR', 'detail': str(e)})}\n\n"
@@ -43,8 +44,8 @@ async def sync_stream(
     token: str = Query(None) # Added for EventSource compatibility
 ):
     """
-    Server-Sent Events (SSE) endpoint to stream calendar sync status updates.
-    Supports token in query string for browser EventSource clients.
+    Server-Sent Events (SSE) Global Stream Endpoint.
+    Acts as a persistent socket to push realtime Quotas, Billing, and Calendar changes.
     """
     return StreamingResponse(
         status_event_generator(request, user_id),

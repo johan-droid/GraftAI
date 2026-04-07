@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta, timezone, tzinfo
+import asyncio
 import json
 import logging
 import os
 import re
 from typing import Optional, Any, Dict
 from zoneinfo import ZoneInfo
+from functools import lru_cache
 
 import inspect
 from fastapi import APIRouter, Depends
@@ -46,6 +48,60 @@ class AIResponse(BaseModel):
     action: Optional[Dict[str, Any]] = None
 
 
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name, str(default)).strip()
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name, str(default)).strip()
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _candidate_groq_models() -> list[str]:
+    configured = [
+        m.strip()
+        for m in os.getenv(
+            "GROQ_MODELS",
+            "llama-3.3-70b-versatile,llama-3.1-70b-versatile,llama-3.1-8b-instant",
+        ).split(",")
+        if m.strip()
+    ]
+    preferred = os.getenv("GROQ_MODEL", "").strip()
+    if preferred:
+        configured.insert(0, preferred)
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for model_name in configured:
+        if model_name not in seen:
+            deduped.append(model_name)
+            seen.add(model_name)
+
+    if not deduped:
+        deduped.append("llama-3.3-70b-versatile")
+
+    return deduped
+
+
+@lru_cache(maxsize=1)
+def _get_groq_client() -> Any:
+    if AsyncGroq is None:
+        raise RuntimeError("Groq SDK not installed")
+
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY not configured")
+
+    return AsyncGroq(api_key=api_key)
+
+
 def _safe_zoneinfo(name: str) -> tzinfo:
     if not name:
         return timezone.utc
@@ -57,6 +113,19 @@ def _safe_zoneinfo(name: str) -> tzinfo:
             return ZoneInfo("Etc/UTC")
         except Exception:
             return timezone.utc
+
+
+def to_utc(dt: datetime) -> datetime:
+    """High-performance timezone normalization."""
+    if dt is None: return dt
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+@lru_cache(maxsize=1)
+def _get_utc():
+    return timezone.utc
 
 
 def _extract_duration_minutes(prompt: str) -> int:
@@ -112,14 +181,45 @@ def _parse_update_action_payload(action_text: str, user_timezone: str) -> tuple[
     return event_id_value, parsed.astimezone(timezone.utc)
 
 
+def _extract_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw_text, str):
+        return None
+
+    text = raw_text.strip()
+    if not text:
+        return None
+
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+
+    if not text.startswith("{"):
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            text = text[start : end + 1]
+
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        return None
+
+    if isinstance(parsed, dict):
+        return parsed
+    return None
+
+
 def _extract_title(prompt: str) -> str:
     quoted = re.search(r"['\"]([^'\"]{3,120})['\"]", prompt)
     if quoted:
         return quoted.group(1).strip()
 
     cleaned = re.sub(r"\s+", " ", prompt).strip()
+    # Remove time markers like 8pm, 8:00, 8:30pm
+    cleaned = re.sub(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b", "", cleaned, flags=re.IGNORECASE)
+    # Remove standard scheduling verbs and prepositions
     cleaned = re.sub(
-        r"\b(schedule|book|add|create|meeting|call|for|at|on|today|tomorrow|next)\b",
+        r"\b(schedule|book|add|create|meeting|call|for|at|on|today|tomorrow|next|week|month|day)\b",
         "",
         cleaned,
         flags=re.IGNORECASE,
@@ -192,17 +292,17 @@ def _detect_intent(prompt: str) -> str:
     lower = prompt.lower()
     
     # 1. Structural matching for common phrases (optimized order)
-    if any(k in lower for k in ["what do i have", "my schedule", "agenda", "upcoming", "this week"]):
+    if any(k in lower for k in ["what do i have", "my schedule", "agenda", "upcoming", "this week", "today's plan", "what is on my calendar", "look like"]):
         return "list"
-    if any(k in lower for k in ["schedule", "book", "create", "add"]):
+    if any(k in lower for k in ["schedule", "book", "create", "add", "block", "make a meeting"]):
         return "schedule"
-    if any(k in lower for k in ["delete", "remove", "cancel"]):
+    if any(k in lower for k in ["delete", "remove", "cancel", "drop"]):
         return "delete"
-    if any(k in lower for k in ["reschedule", "move", "update", "change"]):
+    if any(k in lower for k in ["reschedule", "move", "update", "change", "shift"]):
         return "update"
             
     # 2. Fallback secondary phrase detection
-    if "what is on my calendar" in lower:
+    if "what is on my calendar" in lower or "show me my day" in lower:
         return "list"
         
     return "none"
@@ -240,7 +340,7 @@ async def _resolve_event_id(db: AsyncSession, user_id: str, prompt: str) -> Opti
 
 def _format_events(events: list[Any], user_timezone: str) -> str:
     if not events:
-        return "No events found in this time window."
+        return ""
 
     tz = _safe_zoneinfo(user_timezone)
     lines = []
@@ -293,8 +393,7 @@ def _format_events_compact(events: list[Any], user_timezone: str) -> str:
         start = getattr(event, "start_time", None)
         if inspect.isawaitable(start) or not isinstance(start, datetime):
             continue
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
+        start = to_utc(start)
         start_tz = start.astimezone(tz)
         
         end = getattr(event, "end_time", start + timedelta(minutes=30))
@@ -384,6 +483,7 @@ async def _offline_assistant_response(
         # Robust extraction for updates if simple resolution fails
         if not event_id or "to" in prompt.lower() or "at" in prompt.lower():
             action_hint = ""
+            payload: Optional[Dict[str, Any]] = None
             try:
                 system_instruction = (
                     "You are a precise data extraction engine. "
@@ -398,24 +498,29 @@ async def _offline_assistant_response(
                     prompt,
                     json_mode=True
                 )
-                
-                payload = json.loads(action_hint)
-                
-                if payload.get("event_id"):
-                    event_id = int(payload["event_id"])
-                    
-                if payload.get("new_start_time"):
-                    parsed = datetime.fromisoformat(payload["new_start_time"].strip().replace("Z", "+00:00"))
-                    if parsed.tzinfo is None:
-                        parsed = parsed.replace(tzinfo=_safe_zoneinfo(user_timezone))
-                    new_start_override = parsed.astimezone(timezone.utc)
-            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                payload = _extract_json_payload(action_hint)
+            except Exception as e:
+                logger.warning(f"Provider extraction unavailable for update action: {e}")
+
+            if payload:
+                try:
+                    if payload.get("event_id"):
+                        event_id = int(payload["event_id"])
+
+                    if payload.get("new_start_time"):
+                        parsed = datetime.fromisoformat(payload["new_start_time"].strip().replace("Z", "+00:00"))
+                        if parsed.tzinfo is None:
+                            parsed = parsed.replace(tzinfo=_safe_zoneinfo(user_timezone))
+                        new_start_override = parsed.astimezone(timezone.utc)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Structured update payload parse failed: {e}")
+
+            if action_hint and (event_id is None or new_start_override is None):
                 parsed_event_id, parsed_start = _parse_update_action_payload(action_hint, user_timezone)
                 if parsed_event_id is not None:
                     event_id = parsed_event_id
                 if parsed_start is not None:
                     new_start_override = parsed_start
-                logger.warning(f"Precision extraction fallback for update: {e}")
 
         if not event_id:
             return (
@@ -477,30 +582,58 @@ async def _offline_assistant_response(
     )
 
 
+async def _generate_with_groq_response(
+    system_prompt: str,
+    user_input: str,
+    json_mode: bool = False,
+) -> tuple[str, str]:
+    client = _get_groq_client()
+    timeout_seconds = max(2.0, _env_float("GROQ_TIMEOUT_SECONDS", 18.0))
+    max_retries = max(1, _env_int("GROQ_MAX_RETRIES", 2))
+    temperature = _env_float("GROQ_TEMPERATURE", 0.2)
+
+    last_error: Optional[Exception] = None
+
+    for model_name in _candidate_groq_models():
+        for attempt in range(1, max_retries + 1):
+            kwargs: Dict[str, Any] = {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_input},
+                ],
+                "temperature": 0.0 if json_mode else temperature,
+            }
+            if json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+
+            try:
+                response = await asyncio.wait_for(
+                    client.chat.completions.create(**kwargs),
+                    timeout=timeout_seconds,
+                )
+                content = (response.choices[0].message.content or "").strip()
+                if content:
+                    return content, model_name
+                raise RuntimeError("Empty response from Groq model")
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "Groq request failed model=%s attempt=%s/%s json_mode=%s error=%s",
+                    model_name,
+                    attempt,
+                    max_retries,
+                    json_mode,
+                    type(exc).__name__,
+                )
+
+    error_detail = f"{type(last_error).__name__}: {last_error}" if last_error else "unknown"
+    raise RuntimeError(f"All configured Groq model attempts failed ({error_detail})")
+
+
 async def _generate_with_groq(system_prompt: str, user_input: str, json_mode: bool = False) -> str:
-    if AsyncGroq is None:
-        raise RuntimeError("Groq SDK not installed")
-
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY not configured")
-
-    client = AsyncGroq(api_key=api_key)
-    
-    kwargs = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input},
-        ],
-        "temperature": 0.2,
-    }
-    
-    if json_mode:
-        kwargs["response_format"] = {"type": "json_object"}
-
-    response = await client.chat.completions.create(**kwargs)
-    return (response.choices[0].message.content or "").strip()
+    content, _ = await _generate_with_groq_response(system_prompt, user_input, json_mode=json_mode)
+    return content
 
 
 @router.post("/chat", response_model=AIResponse)
@@ -521,14 +654,17 @@ async def ai_chat(
         return AIResponse(result="Please provide a message.", model_used="graftai-assistant")
 
     intent = _detect_intent(prompt)
-
     match intent:
         case "list" | "schedule" | "update" | "delete":
             try:
                 result_text, action = await _offline_assistant_response(prompt, request.timezone, db, user_id)
+            except ValueError as ve:
+                logger.warning(f"Offline action logic failure: {ve}")
+                result_text = f"⚠️ {str(ve)}"
+                action = {"type": intent, "status": "conflict"}
             except Exception as exc:
-                logger.error(f"Offline action fail: {exc}")
-                result_text = "Action failed. Try again."
+                logger.error(f"Offline system fail: {exc}", exc_info=True)
+                result_text = "I encountered an internal error processing that request. Please try again."
                 action = {"type": intent, "status": "error"}
             
             await increment_usage(db, user_id, "ai_messages")
@@ -543,12 +679,16 @@ async def ai_chat(
         return AIResponse(result=cached, model_used="graftai-assistant-cache", action={"type": "none"})
 
     now = datetime.now(timezone.utc)
-    events = await scheduler.get_events_for_range(db, user_id, now, now + timedelta(days=3))
+    
+    # 2a. Parallel context fetching (O(1) latency boost)
+    events_task = scheduler.get_events_for_range(db, user_id, now, now + timedelta(days=3))
+    emails_task = get_recent_emails(db, user_id, limit=3)
+    
     try:
-        email_items = await get_recent_emails(db, user_id, limit=3)
+        events, email_items = await asyncio.gather(events_task, emails_task)
     except Exception as exc:
-        logger.warning(f"Email context unavailable: {exc}")
-        email_items = []
+        logger.warning(f"Partial context failure: {exc}")
+        events, email_items = [], []
 
     email_context = "\n".join(
         [f"- {item.get('subject', 'No subject')}" for item in email_items]
@@ -584,16 +724,33 @@ async def ai_chat(
 
     # 3. Call AI with Circuit Breaker (Resilience Layer)
     try:
-        result_text = await groq_breaker(_generate_with_groq, system_prompt, user_input)
-        model_used = "graftai-assistant-online"
+        result_text, selected_model = await groq_breaker(
+            _generate_with_groq_response,
+            system_prompt,
+            user_input,
+        )
+        model_used = f"graftai-assistant-online:{selected_model}"
     except Exception as e:
         logger.warning(f"🚨 Groq AI is UNAVAILABLE (Circuit Tripped): {e}")
-        # Graceful Degradation Fallback
-        result_text = (
-            "I'm currently in High-Stability mode due to a provider service outage. "
-            "I can still see your local calendar data, but my natural language reasoning is temporarily restricted. "
-            "How can I help with your existing schedule?"
-        )
+        # Graceful Degradation Fallback: Provide immediate value even in failure
+        try:
+            now_local = datetime.now(_safe_zoneinfo(request.timezone))
+            window_end = now_local + timedelta(hours=48)
+            events = await scheduler.get_events_for_range(db, user_id, now_local, window_end)
+            agenda = _format_events(events, request.timezone)
+            
+            result_text = (
+                "I'm in High-Stability mode due to a provider service outage. "
+                "I've retrieved your agenda for the next 48 hours to keep you on track:\n\n"
+                f"{agenda}\n\n"
+                "I can still perform specific actions like 'schedule', 'delete', or 'update' if you use clear commands."
+            )
+        except Exception:
+            result_text = (
+                "I'm currently in High-Stability mode due to a provider service outage. "
+                "I can still see your local calendar data, but my natural language reasoning is temporarily restricted. "
+                "How can I help with your existing schedule?"
+            )
         model_used = "graftai-assistant-fallback"
 
     if not result_text:

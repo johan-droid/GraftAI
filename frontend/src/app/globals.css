@@ -10,9 +10,12 @@
   --primary-glow: rgba(79, 70, 229, 0.22);
   --surface: rgba(255, 255, 255, 0.82);
   --surface-elevated: rgba(255, 255, 255, 0.92);
-  --border: rgba(15, 23, 42, 0.12);
+  --border: color-mix(in srgb, var(--foreground) 12%, transparent);
   --font-sans: var(--font-dm-sans), system-ui, -apple-system, sans-serif;
   --font-serif: var(--font-dm-serif), Georgia, serif;
+
+  /* Ambient Effects */
+  --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: dark) {
@@ -35,6 +38,19 @@
   --color-primary: var(--primary);
   --font-sans: var(--font-sans);
   --font-mono: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+
+  /* Mobile-first breakpoints */
+  --breakpoint-xs: 375px;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+
+  /* Touch-friendly spacing helpers */
+  --spacing-safe-top: env(safe-area-inset-top);
+  --spacing-safe-bottom: env(safe-area-inset-bottom);
+  --spacing-safe-left: env(safe-area-inset-left);
+  --spacing-safe-right: env(safe-area-inset-right);
 }
 
 /* Base reset */
@@ -70,6 +86,26 @@ body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
   touch-action: manipulation;
+  position: relative;
+  
+  /* GPU Acceleration for mobile body */
+  @media (max-width: 768px) {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: var(--noise);
+  opacity: 0.024;
+  pointer-events: none;
+  z-index: 9999;
 }
 
 /* Keep text selectable while UI controls remain app-like */
@@ -164,6 +200,8 @@ a,
     border-color 160ms ease, color 160ms ease;
   transform: translateZ(0);
   will-change: transform, opacity;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 @media (hover: none) and (pointer: coarse) {
@@ -258,10 +296,18 @@ a,
 
 .glass-panel {
   background: var(--surface);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(32px) saturate(160%) brightness(1.08);
+  backdrop-filter: blur(32px) saturate(160%) brightness(1.08);
   border: 0.5px solid var(--border);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+  box-shadow: 
+    0 12px 36px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+
+  /* Performance optimization: scale down expensive filters on mobile */
+  @media (max-width: 768px) {
+    -webkit-backdrop-filter: blur(12px) saturate(1.4);
+    backdrop-filter: blur(12px) saturate(1.4);
+  }
 }
 
 .text-gradient {
@@ -409,10 +455,10 @@ a,
 
 /* ── Mobile: bottom-nav safe padding for page content ── */
 @media (max-width: 767px) {
-  /* Landing page main bottom clearance handled by pb-[] on outer div */
-  /* Dashboard chat composer clear above bottom nav */
+  /* Landing page main bottom clearance removed */
+  /* Dashboard chat composer and main content cleared of legacy bottom nav gap */
   .dashboard-main-scroll {
-    padding-bottom: calc(68px + env(safe-area-inset-bottom, 12px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 12px));
   }
 }
 

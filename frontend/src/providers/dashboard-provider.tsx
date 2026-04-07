@@ -10,15 +10,17 @@ interface DashboardContextType {
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
-  const [isPrivacyMode, setIsPrivacyMode] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("graftai_privacy_mode") === "true";
-  });
+  const [isPrivacyMode, setIsPrivacyMode] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    const stored = window.localStorage.getItem("graftai_privacy_mode");
+    setIsPrivacyMode(stored === "true");
+  }, []);
 
   const togglePrivacyMode = () => {
     setIsPrivacyMode((prev) => {
       const next = !prev;
-      localStorage.setItem("graftai_privacy_mode", String(next));
+      window.localStorage.setItem("graftai_privacy_mode", String(next));
       return next;
     });
   };

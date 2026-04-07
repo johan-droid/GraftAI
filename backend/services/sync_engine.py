@@ -212,17 +212,37 @@ async def sync_google_events(db: AsyncSession, token_record: UserTokenTable):
         if next_sync_token:
             token_record.sync_token = next_sync_token
         
-        await db.commit()
+        await db.flush()
         logger.info(f"Google Sync completed for user {user_id}. Synced {len(items)} items.")
         
     except Exception as e:
-        logger.error(f"Google Sync FAILED for user {user_id}: {e}")
-        await db.rollback()
+        logger.error(f"❌ Google Sync FAILED for user {user_id}: {e}")
+        
+        # PRO-SYNC: Atomic deactivation for revoked/expired tokens
+        # We handle this BEFORE the main rollback to ensure we don't keep retrying broken tokens
+        error_msg = str(e).lower()
+        if "invalid_grant" in error_msg or "token has been revoked" in error_msg:
+            logger.warning(f"⚠️ Revocation detected for Google user {user_id}. Deactivating token atomically.")
+            try:
+                # We update the flag and commit immediately to bypass the general error rollback
+                token_record.is_active = False
+                await db.commit() 
+                logger.info(f"✅ Token for user {user_id} successfully deactivated.")
+            except Exception as commit_err:
+                logger.error(f"Failed to commit token deactivation: {commit_err}")
+                await db.rollback()
+        else:
+            await db.rollback()
+
         # Trigger business-grade error notification
-        from backend.services.bg_tasks import enqueue_sync_error_alert
-        user = await db.get(UserTable, user_id)
-        if user:
-            await enqueue_sync_error_alert(user.email, str(e))
+        try:
+            from backend.services.bg_tasks import enqueue_sync_error_alert
+            # Start a new session for the alert if the current one is dead
+            user = await db.get(UserTable, user_id)
+            if user:
+                await enqueue_sync_error_alert(user.email, str(e))
+        except Exception as alert_err:
+            logger.warning(f"Could not send sync error alert: {alert_err}")
 
 async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
     """
@@ -278,17 +298,34 @@ async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
         if next_delta_link:
             token_record.sync_token = next_delta_link
             
-        await db.commit()
+        await db.flush()
         logger.info(f"Microsoft Sync completed for user {user_id}. Synced {len(items)} items.")
         
     except Exception as e:
-        logger.error(f"Microsoft Sync FAILED for user {user_id}: {e}")
-        await db.rollback()
+        logger.error(f"❌ Microsoft Sync FAILED for user {user_id}: {e}")
+        
+        # PRO-SYNC: Atomic deactivation for revoked/expired tokens
+        error_msg = str(e).lower()
+        if "invalid_grant" in error_msg or "interaction_required" in error_msg:
+            logger.warning(f"⚠️ Revocation/Expiration detected for MS user {user_id}. Deactivating token atomically.")
+            try:
+                token_record.is_active = False
+                await db.commit()
+                logger.info(f"✅ MS Token for user {user_id} successfully deactivated.")
+            except Exception as commit_err:
+                logger.error(f"Failed to commit MS token deactivation: {commit_err}")
+                await db.rollback()
+        else:
+            await db.rollback()
+
         # Trigger business-grade error notification
-        from backend.services.bg_tasks import enqueue_sync_error_alert
-        user = await db.get(UserTable, user_id)
-        if user:
-            await enqueue_sync_error_alert(user.email, str(e))
+        try:
+            from backend.services.bg_tasks import enqueue_sync_error_alert
+            user = await db.get(UserTable, user_id)
+            if user:
+                await enqueue_sync_error_alert(user.email, str(e))
+        except Exception as alert_err:
+            logger.warning(f"Could not send MS sync error alert: {alert_err}")
 
 import sentry_sdk
 from backend.utils.cache import acquire_lock, release_lock, get_redis_client

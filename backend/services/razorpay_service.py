@@ -57,7 +57,10 @@ async def create_subscription(db: AsyncSession, user_id: str, tier: str) -> Dict
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    plan_id = RZP_PLAN_PRO if tier == "pro" else RZP_PLAN_ELITE
+    if tier not in [UserTier.PRO, UserTier.ELITE]:
+        tier = UserTier.PRO
+
+    plan_id = RZP_PLAN_PRO if tier == UserTier.PRO else RZP_PLAN_ELITE
     if not plan_id:
         raise HTTPException(status_code=400, detail=f"Invalid or unconfigured Razorpay tier: {tier}")
 
@@ -164,18 +167,21 @@ async def handle_webhook_event(db: AsyncSession, event_data: Dict[str, Any]):
         return await _process_razorpay_event(db, event_data)
 
     from backend.models.tables import ProcessedWebhook
+    from sqlalchemy.exc import IntegrityError
 
-    # 1. Check for duplicate webhook events
-    result = await db.execute(select(ProcessedWebhook).where(ProcessedWebhook.event_id == event_id))
-    if result.scalars().first():
+    # 1. Atomic Idempotency Check (Prevents TOCTOU Race Condition)
+    try:
+        db.add(ProcessedWebhook(event_id=event_id, provider="razorpay"))
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
         logger.warning(f"⏩ Skipping already processed Razorpay event: {event_id}")
         return {"status": "already_processed"}
 
     # 2. Process event
     response = await _process_razorpay_event(db, event_data)
 
-    # 3. Log as processed and commit once
-    db.add(ProcessedWebhook(event_id=event_id, provider="razorpay"))
+    # 3. Commit transaction
     await db.commit()
 
     return response
@@ -209,8 +215,21 @@ async def _handle_subscription_activated(db: AsyncSession, subscription: Dict[st
     if user:
         user.razorpay_subscription_id = sub_id
         user.subscription_status = "active"
-        user.tier = tier
-        logger.info(f"✅ User {user.id} upgraded to {tier} via Razorpay")
+        
+        # Validate Tier mapping to prevent pollution
+        raw_tier = subscription.get("notes", {}).get("tier", UserTier.PRO)
+        validated_tier = raw_tier if raw_tier in [UserTier.PRO, UserTier.ELITE] else UserTier.PRO
+        user.tier = validated_tier
+        
+        # Grant AI Credits based on Tier Automation
+        from backend.models.tables import UserProfile
+        profile_res = await db.execute(select(UserProfile).where(UserProfile.user_id == user.id))
+        profile = profile_res.scalars().first()
+        if profile:
+            profile.monthly_ai_credits = 2000 if validated_tier == UserTier.ELITE else 500
+            profile.used_ai_credits = 0 # Reset credits upon fresh subscription
+
+        logger.info(f"✅ User {user.id} upgraded to {validated_tier} via Razorpay")
 
 async def _handle_subscription_cancelled(db: AsyncSession, subscription: Dict[str, Any]):
     sub_id = subscription.get("id")

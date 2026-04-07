@@ -54,6 +54,22 @@ export async function submitDeletionFeedback(payload: { reason: string; details?
   return apiClient.delete<{ message: string }>("/auth/account", { json: payload });
 }
 
+export async function requestMagicLink(email: string) {
+  return apiClient.post<{ email: string; code?: string; expires_at?: string; message: string }>(
+    "/auth/passwordless/request",
+    null,
+    { params: { email } }
+  );
+}
+
+export async function verifyMagicLink(email: string, code: string) {
+  return apiClient.post<{ access_token: string; refresh_token: string; token_type: string; expires_in: number }>(
+    "/auth/passwordless/verify",
+    null,
+    { params: { email, code } }
+  );
+}
+
 export async function updateUserProfile(data: { 
   full_name?: string; 
   timezone?: string;

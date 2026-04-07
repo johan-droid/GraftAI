@@ -31,13 +31,13 @@ function colorForCategory(cat?: string | null) {
 export default function TimelineLineChart({ data, height = 140, className = "" }: Props) {
   const points = useMemo(() => data || [], [data]);
 
-  const padding = { left: 22, right: 12, top: 12, bottom: 28 };
-  const vw = Math.max(300, Math.max(1, points.length - 1) * 48 + padding.left + padding.right);
+  const padding = { left: 40, right: 30, top: 40, bottom: 45 };
+  const vw = 1000;
   const vh = height;
   const innerW = vw - padding.left - padding.right;
   const innerH = vh - padding.top - padding.bottom;
 
-  const maxVal = Math.max(1, ...points.map((p) => p.meetings));
+  const maxVal = Math.max(3, ...points.map((p) => p.meetings));
 
   const coords = points.map((p, i) => {
     const x = padding.left + (points.length === 1 ? innerW / 2 : (i * innerW) / Math.max(1, points.length - 1));
@@ -59,7 +59,20 @@ export default function TimelineLineChart({ data, height = 140, className = "" }
     }
   });
 
-  const pathForPoints = (pts: typeof coords) => pts.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`).join(' ');
+  const pathForPoints = (pts: typeof coords) => {
+    if (pts.length === 0) return '';
+    if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y} L ${pts[0].x} ${pts[0].y}`;
+    
+    // Smooth cubic Bezier path
+    let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i];
+      const p1 = pts[i + 1];
+      const cpX = (p0.x + p1.x) / 2;
+      d += ` C ${cpX.toFixed(2)} ${p0.y.toFixed(2)}, ${cpX.toFixed(2)} ${p1.y.toFixed(2)}, ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`;
+    }
+    return d;
+  };
 
   const areaPathForPoints = (pts: typeof coords) => {
     if (pts.length === 0) return '';
@@ -70,8 +83,8 @@ export default function TimelineLineChart({ data, height = 140, className = "" }
   };
 
   return (
-    <div className={`w-full ${className}`}>
-      <svg width="100%" height={vh} viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="none">
+    <div className={`w-full overflow-hidden ${className}`}>
+      <svg width="100%" height={vh} viewBox={`0 0 ${vw} ${vh}`}>
         <defs>
           <linearGradient id="fade" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.12" />
@@ -79,10 +92,16 @@ export default function TimelineLineChart({ data, height = 140, className = "" }
           </linearGradient>
         </defs>
 
-        {/* draw grid lines */}
-        {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+        {/* draw grid lines and Y axis scale */}
+        {[0, 0.5, 1].map((t) => {
           const y = padding.top + innerH * t;
-          return <line key={t} x1={padding.left} x2={vw - padding.right} y1={y} y2={y} stroke="#ffffff09" strokeWidth={1} />;
+          const label = Math.round(maxVal * (1 - t));
+          return (
+            <g key={t}>
+              <line x1={padding.left} x2={vw - padding.right} y1={y} y2={y} stroke="#ffffff08" strokeWidth={1} strokeDasharray="4 4" />
+              <text x={padding.left - 10} y={y + 3} fontSize={10} fill="#64748b" textAnchor="end" fontWeight="600">{label}</text>
+            </g>
+          );
         })}
 
         {/* segments area + line */}
@@ -127,7 +146,7 @@ export default function TimelineLineChart({ data, height = 140, className = "" }
             >
               <title>{`${c.p.bucket}: ${c.p.meetings} meetings`}</title>
             </motion.circle>
-            <text x={c.x} y={vh - 8} fontSize={9} fill="#94a3b8" textAnchor="middle">
+            <text x={c.x} y={vh - 12} fontSize={10} fill="#64748b" textAnchor="middle" fontWeight="bold">
               {c.p.bucket}
             </text>
           </g>

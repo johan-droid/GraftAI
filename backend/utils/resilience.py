@@ -24,8 +24,13 @@ class CircuitBreaker:
         self.failures = 0
         self.state = CircuitState.CLOSED
         self.last_failure_time = 0
+        import os
+        self.enabled = os.getenv("ENABLE_CIRCUIT_BREAKERS", "true").lower() == "true"
 
     async def __call__(self, func: Callable, *args, **kwargs) -> Any:
+        if not self.enabled:
+            return await func(*args, **kwargs)
+            
         # 1. Check if we should fail fast
         if self.state == CircuitState.OPEN:
             if time.time() - self.last_failure_time > self.recovery_timeout:

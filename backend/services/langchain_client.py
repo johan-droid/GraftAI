@@ -34,14 +34,16 @@ class LocalAssistantModel:
     """Deterministic local assistant for offline operation."""
 
     def invoke(self, messages: Any, **kwargs: Any) -> Any:
-        prompt = str(messages or "").strip()
-        if not prompt:
-            text = "Local assistant is ready. Ask me to list, schedule, update, or delete events."
-        else:
+        # Optimized for High-Stability fallback
+        msg_str = str(messages).lower()
+        if "authoritative context" in msg_str:
             text = (
-                "Local assistant is active. I can process calendar intents in offline mode "
-                "including listing, scheduling, updating, and deleting events."
+                "I'm currently in High-Stability mode. I have access to your calendar data "
+                "and can perform specific actions (list, add, update, delete). "
+                "How would you like to proceed with your schedule?"
             )
+        else:
+            text = "Local offline engine active. No cloud connection required for basic scheduling."
         return SimpleNamespace(content=text)
 
     async def ainvoke(self, messages: Any, **kwargs: Any) -> Any:
@@ -61,6 +63,20 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "scheduler-context")
 
 
+def _safe_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)).strip())
+    except Exception:
+        return default
+
+
+def _safe_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)).strip())
+    except Exception:
+        return default
+
+
 def _try_init() -> None:
     """Initializes provider-backed engines when configured; otherwise retains local engines."""
     global llm, vector_store
@@ -69,7 +85,11 @@ def _try_init() -> None:
         try:
             from langchain_openai import ChatOpenAI  # type: ignore
 
-            llm = ChatOpenAI()
+            llm = ChatOpenAI(
+                model=OPENAI_MODEL,
+                temperature=_safe_float("OPENAI_TEMPERATURE", 0.2),
+                max_retries=max(1, _safe_int("OPENAI_MAX_RETRIES", 2)),
+            )
             logger.info(f"Assistant model initialized: {OPENAI_MODEL}")
         except Exception as exc:
             logger.warning(f"Assistant model initialization failed ({type(exc).__name__}); continuing in local mode")

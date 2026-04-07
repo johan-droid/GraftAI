@@ -156,14 +156,17 @@ async def task_provision_meeting(ctx, event_id: int, user_id: str, platform: str
                 "start_time": event.start_time,
                 "end_time": event.end_time,
             }
-            # 1. Generate meeting link
-            link = await _generate_meeting_link(db, user_id, platform, event_details)
+            # 1. Generate meeting link and push to external provider in parallel
+            # (They are independent I/O operations once user token is fetched)
+            import asyncio
+            link_task = _generate_meeting_link(db, user_id, platform, event_details)
+            ext_task = _push_to_external(db, event, action="create")
+            
+            link, ext_id = await asyncio.gather(link_task, ext_task)
+            
             event.meeting_link = link
             event.is_meeting = True
             event.meeting_platform = platform
-            
-            # 2. Push to external provider (Google/Microsoft Calendar)
-            ext_id = await _push_to_external(db, event, action="create")
             if ext_id:
                 event.external_id = ext_id
             

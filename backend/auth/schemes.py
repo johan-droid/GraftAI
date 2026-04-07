@@ -72,6 +72,15 @@ async def decode_token(token: str) -> Optional[dict]:
     try:
         header = jwt.get_unverified_header(token)
         alg = header.get("alg")
+        
+        # SEC-09: Explicitly reject disallowed/weak algorithms before any decoding
+        # Note: Alg is unverified here, but we use it to route to the correct verification call.
+        ALLOWED_ALGORITHMS = {"HS256", "RS256"}
+        if alg not in ALLOWED_ALGORITHMS:
+            logger.warning(f"JWT with disallowed algorithm '{alg}' rejected (SEC-09)")
+            return None
+            
+        # Perform a non-verifying decode just to check structure before delegating
         jwt.decode(token, options={"verify_signature": False})
     except Exception:
         return None
@@ -177,9 +186,7 @@ async def get_current_user(
             if x_auth:
                 token = x_auth[7:].strip() if x_auth.lower().startswith("bearer ") else x_auth.strip()
 
-        if not token:
-            token = request.query_params.get("token") or request.query_params.get("access_token")
-
+        # SEC-02: Removed query parameter token extraction to prevent logging sensitive creds.
         if not token:
             token = _get_cookie_token(request)
 
@@ -206,18 +213,38 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # JWT Path
     if await is_token_blacklisted(token):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has been revoked",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        # Fallback to cookie if Bearer is blacklisted
+        token = _get_cookie_token(request)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     payload = await decode_token(token)
+    
+    # If Bearer token is invalid/expired, try reading from cookies as a secondary source.
+    # This prevents the "Token Desync" issue where localStorage has a stale token 
+    # but the browser still has a valid HttpOnly session cookie.
+    if not payload:
+        cookie_token = _get_cookie_token(request)
+        if cookie_token and cookie_token != token:
+            logger.info("Bearer token invalid/expired. Attempting cookie fallback.")
+            if cookie_token.count(".") != 2:
+                payload = await verify_better_auth_session(cookie_token, db)
+            else:
+                payload = await decode_token(cookie_token)
+            
+            if payload:
+                token = cookie_token # Proceed with the valid cookie token
+
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
+            detail="Invalid or expired session token",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

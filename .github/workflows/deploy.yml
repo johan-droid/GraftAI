@@ -44,6 +44,10 @@ jobs:
           SECRET_KEY: "testsecret"
           DATABASE_URL: "sqlite+aiosqlite:///:memory:" # Use in-memory mock for tests
           REDIS_URL: redis://localhost:6379/0
+          RAZORPAY_KEY_ID: rzp_test_mock
+          RAZORPAY_KEY_SECRET: mock_secret
+          RAZORPAY_PLAN_PRO_ID: plan_pro
+          GROQ_API_KEY: mock_groq
 
   # 2. Deployment (Automatic trigger to Render)
   deploy:

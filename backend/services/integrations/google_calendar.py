@@ -11,6 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from backend.models.user_token import UserTokenTable
+from backend.services.integrations.token_service import ensure_valid_token
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -20,22 +21,23 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 
 async def get_google_service(db: AsyncSession, user_id: str):
-    """Builds an authenticated Google Calendar service for the given user."""
-    stmt = select(UserTokenTable).where(
-        (UserTokenTable.user_id == user_id)
-        & (UserTokenTable.provider == "google")
-        & (UserTokenTable.is_active == True)
-    )
-    result = await db.execute(stmt)
-    token = result.scalars().first()
-    if not token:
-        logger.info(f"No active Google token found for user {user_id}")
+    """Builds an authenticated Google Calendar service for the given user with JIT rotation."""
+    access_token = await ensure_valid_token(db, user_id, "google")
+    if not access_token:
         return None
 
+    # Reconstruct credentials object for the Google Client Library
+    # Pull the full record briefly to get the refresh_token if needed for the discovery doc
+    stmt = select(UserTokenTable).where(
+        (UserTokenTable.user_id == user_id) & (UserTokenTable.provider == "google")
+    )
+    res = await db.execute(stmt)
+    token = res.scalars().first()
+    
     token_data = {
-        "access_token": token.access_token,
-        "refresh_token": token.refresh_token,
-        "scopes": token.scopes or "",
+        "access_token": access_token,
+        "refresh_token": token.refresh_token if token else None,
+        "scopes": token.scopes if token else "",
     }
     creds = get_google_credentials(token_data)
     return build("calendar", "v3", credentials=creds)

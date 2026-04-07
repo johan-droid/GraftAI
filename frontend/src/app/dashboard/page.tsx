@@ -248,8 +248,8 @@ export default function Dashboard() {
   const timezoneString = Intl.DateTimeFormat().resolvedOptions().timeZone.split("/").pop()?.replace("_", " ") || "Local";
 
   return (
-    <div className="p-4 sm:p-8 md:p-14 max-w-7xl mx-auto space-y-10">
-      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-12">
+    <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto space-y-6">
+      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-8">
         
         {/* Charming Greeting Engine */}
         <CharmingHeader 
@@ -257,14 +257,20 @@ export default function Dashboard() {
           upcomingCount={upcomingMeetings.length} 
         />
 
-        <motion.div variants={ITEM} className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 pt-4">
+        <motion.div variants={ITEM} className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {[
             { label: "Analytic Period", value: stats.meetings, sub: "Last 30 days", icon: Calendar, color: "indigo" },
             { label: "Active Momentum", value: `${stats.hours}h`, sub: "Workload intensity", icon: Clock, color: "violet" },
             { label: "Risk Mitigation", value: stats.cancellations, sub: "Conflict prevention", icon: Zap, color: "emerald" },
             { label: "Forward View", value: upcomingMeetings.length, sub: "Next 14 days", icon: Activity, color: "cyan" },
           ].map((stat) => (
-            <div key={stat.label} className="group relative overflow-hidden rounded-3xl border border-white/[0.04] bg-white/[0.015] backdrop-blur-xl p-5 sm:p-6 hover:bg-white/[0.035] transition-all hover:border-indigo-500/20 active:scale-[0.98]">
+            <motion.div 
+              key={stat.label} 
+              whileHover={{ y: -5, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+              className="group relative overflow-hidden rounded-2xl border border-white/[0.04] bg-white/[0.015] backdrop-blur-xl p-4 sm:p-5 hover:bg-white/[0.035] transition-all hover:border-indigo-500/20 active:scale-[0.98]"
+            >
               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[50px] group-hover:bg-indigo-500/10 transition-all rounded-full pointer-events-none" />
               <div className={`${STAT_COLOR_CLASSES[stat.color]} w-8 h-8 sm:w-10 sm:h-10 rounded-2xl mb-4 sm:mb-6 flex items-center justify-center border transition-all group-hover:scale-110 shadow-lg`}>
                 <stat.icon className="w-4 h-4 sm:w-5 sm:h-5 text-current" />
@@ -275,11 +281,11 @@ export default function Dashboard() {
                 <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
                 <p className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">{stat.sub}</p>
               </div>
-            </div>
+            </motion.div>
           ))}
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 sm:gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
           <motion.div variants={ITEM}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-white tracking-tight">Upcoming meetings</h2>
@@ -359,74 +365,60 @@ export default function Dashboard() {
             </div>
           </motion.div>
 
-          <div className="space-y-5 min-h-[120px]">
+          <div className="space-y-6">
             <motion.div variants={ITEM}>
-              <h2 className="text-base font-bold text-white mb-3">Event types</h2>
-              <div className="touch-pan-x -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth px-1 pb-2 md:mx-0 md:grid md:grid-cols-1 md:gap-2 md:overflow-visible md:px-0 md:pb-0 scrollbar-hide">
+              <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">Templates</h2>
+              <div className="grid grid-cols-1 gap-1.5">
                 {QUICK_LINKS.map((ql) => (
                   <button
                     key={ql.slug}
                     onClick={() => router.push("/dashboard/calendar")}
-                    className="group flex min-w-[220px] snap-start items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] p-3 text-left transition-all hover:border-white/10 hover:bg-white/[0.05] md:min-w-0"
+                    className="group flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.01] p-2.5 text-left transition-all hover:border-white/10 hover:bg-white/[0.03]"
                     aria-label={`Create ${ql.label}`}
                   >
-                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${ql.color}`}>
-                      <ql.icon className="h-4 w-4 text-white" />
+                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${ql.color}`}>
+                      <ql.icon className="h-3.5 w-3.5 text-white" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold text-slate-200">{ql.label}</p>
-                      <p className="font-mono text-[11px] text-slate-500">Calendar event template</p>
+                      <p className="text-[12px] font-bold text-slate-200">{ql.label}</p>
                     </div>
-                    <ArrowUpRight className="h-3.5 w-3.5 text-slate-600 transition-colors group-hover:text-slate-300" />
+                    <ArrowUpRight className="h-3 w-3 text-slate-600 transition-colors group-hover:text-slate-300" />
                   </button>
                 ))}
-                <Link
-                  href="/dashboard/calendar"
-                  className="flex min-w-[220px] snap-start items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 p-3 text-[13px] font-medium text-slate-500 transition-all hover:border-white/20 hover:text-slate-300 md:min-w-0"
-                >
-                  + New event type
-                </Link>
               </div>
             </motion.div>
 
             {aiSuggestion && (
-              <motion.div variants={ITEM} className="p-4 rounded-xl border border-violet-500/20 bg-violet-500/5">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                  <span className="text-[11px] font-bold text-violet-300 uppercase tracking-wide">AI Insight</span>
+              <motion.div variants={ITEM} className="p-3.5 rounded-xl border border-violet-500/20 bg-violet-500/5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Sparkles className="w-3 h-3 text-violet-400" />
+                  <span className="text-[9px] font-black text-violet-300 uppercase tracking-widest">AI Synopsis</span>
                 </div>
-                <p className="text-[13px] text-slate-300 leading-relaxed">{aiSuggestion}</p>
+                <p className="text-[12px] text-slate-300 leading-relaxed font-medium">{aiSuggestion}</p>
               </motion.div>
             )}
 
             <motion.div variants={ITEM}>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-white">Activity</h2>
-                <Link href="/dashboard/analytics" className="text-xs text-indigo-400 hover:text-indigo-300">
-                  Analytics →
+              <div className="flex items-center justify-between mb-3 border-b border-white/[0.04] pb-2">
+                <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Audit Trail</h2>
+                <Link href="/dashboard/analytics" className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 uppercase tracking-tighter">
+                  History →
                 </Link>
               </div>
               <div className="space-y-3">
-                {activityItems.length === 0 && (
-                  <div className="text-xs text-slate-500 rounded-lg border border-white/10 bg-white/[0.02] p-3">
-                    Activity will appear here after calendar events are created or synced.
-                  </div>
-                )}
-
-                {activityItems.map((item) => (
+                {activityItems.slice(0, 4).map((item) => (
                   <div key={item.id} className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/8 flex items-center justify-center shrink-0 mt-0.5">
+                    <div className="w-5 h-5 rounded overflow-hidden bg-white/5 border border-white/8 flex items-center justify-center shrink-0 mt-0.5">
                       {item.is_upcoming ? (
-                        <Calendar className="w-3 h-3 text-slate-400" />
+                        <Calendar className="w-2.5 h-2.5 text-slate-500" />
                       ) : (
-                        <Globe className="w-3 h-3 text-slate-400" />
+                        <Globe className="w-2.5 h-2.5 text-slate-500" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-semibold text-slate-300 truncate">{item.title}</p>
-                      <p className="text-[11px] text-slate-500">{formatEventTimeLabel(item.start_time)}</p>
+                      <p className="text-[11px] font-bold text-slate-300 truncate tracking-tight">{item.title}</p>
+                      <p className="text-[10px] text-slate-500 font-mono">{formatEventTimeLabel(item.start_time)}</p>
                     </div>
-                    <span className="text-[10px] text-slate-600 shrink-0">{formatRelativeTime(item.start_time)}</span>
                   </div>
                 ))}
               </div>

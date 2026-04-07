@@ -30,7 +30,7 @@ export const DayCell = React.memo(({
       whileHover={{ scale: isCurrentMonth ? 1.02 : 1 }}
       onClick={() => isCurrentMonth && onSelect(day)}
       className={cn(
-        "relative flex flex-col p-2 rounded-xl cursor-pointer min-h-[80px] md:min-h-[100px] transition-all border",
+        "relative flex flex-col p-1.5 rounded-xl cursor-pointer min-h-[56px] sm:min-h-[80px] md:min-h-[100px] transition-all border",
         isSelected
           ? "border-indigo-500/60 bg-indigo-600/10"
           : isCurrentMonth

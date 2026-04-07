@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { DM_Sans, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/app/providers/auth-provider";
 import { NotificationProvider } from "@/providers/notification-provider";
-import ServiceWorkerLoader from "@/components/sw-loader";
 import { Toaster } from "sonner";
 
 const dmSans = DM_Sans({
@@ -45,6 +45,7 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "GraftAI",
   },
+  manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {
@@ -60,11 +61,13 @@ export const viewport: Viewport = {
   interactiveWidget: "resizes-content",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get("x-nonce") || "";
+
   return (
     <html
       lang="en"
@@ -78,7 +81,6 @@ export default function RootLayout({
       >
         <NotificationProvider>
           <AuthProvider>
-            <ServiceWorkerLoader />
             {children}
             <Toaster position="top-right" expand={false} richColors closeButton theme="dark" />
           </AuthProvider>

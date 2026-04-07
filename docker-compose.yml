@@ -46,6 +46,7 @@ services:
       # CORS origins must trust the load balancer and frontend
       CORS_ORIGINS: http://localhost:8000,http://localhost:3000
       ENABLED_AUTH_METHODS: "sso,passwordless,mfa"
+      TRUSTED_PROXY_IPS: "127.0.0.1,load_balancer"
 
   # Custom Load Balancer (Nginx)
   load_balancer:

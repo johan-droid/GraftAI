@@ -1,6 +1,7 @@
 import os
 import logging
 import inspect
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from dotenv import load_dotenv
 
 # Initialize logger
@@ -9,6 +10,8 @@ logger = logging.getLogger(__name__)
 # Ensure backend/.env is loaded when app is run from project root
 if not os.environ.get("TESTING"):
     load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=False)
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 AsyncSessionLocal = None
 
 if DATABASE_URL:

@@ -99,11 +99,7 @@ def check_usage_limit(feature: str):
         db: AsyncSession = Depends(get_db)
     ) -> bool:
         redis = await get_redis_client()
-        
-        # BYPASS: For testing purposes, we return True immediately to ignore quota limits.
-        # User will restore this after verification.
-        return True
-        
+
         # 2. Local/DB Fallback Path (If Redis is down or key expired)
         stmt = select(UserTable).where(UserTable.id == user_id)
         user = (await db.execute(stmt)).scalars().first()

@@ -3,15 +3,16 @@ import sys
 import pytest
 import asyncio
 
+# Ensure deterministic behavior for AI service unit tests using stubbed LLM path 
+os.environ['FORCE_GROQ'] = '1'
+os.environ['TESTING'] = '1'
+os.environ['DISABLE_CSRF'] = '1'
+os.environ['DATABASE_URL'] = 'sqlite+aiosqlite:///:memory:'
+
 # Add the backend package root to PYTHONPATH so tests can import with 'import backend.*'
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
-
-# Ensure deterministic behavior for AI service unit tests using stubbed LLM path
-os.environ.setdefault('FORCE_GROQ', '1')
-os.environ.setdefault('TESTING', '1')
-os.environ.setdefault('DISABLE_CSRF', '1')
 
 @pytest.fixture(scope="session")
 def event_loop():

@@ -7,16 +7,8 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 # Ensure backend/.env is loaded when app is run from project root
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
-
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    logger.warning("⚠ DATABASE_URL not set — using SQLite in-memory fallback for local/test.")
-    DATABASE_URL = "sqlite+aiosqlite:///:memory:"
-
-engine = None
+if not os.environ.get("TESTING"):
+    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=False)
 AsyncSessionLocal = None
 
 if DATABASE_URL:

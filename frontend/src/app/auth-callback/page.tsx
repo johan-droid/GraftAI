@@ -5,11 +5,9 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { composeEndpoint } from "@/lib/api-client";
-import { useAuthContext } from "@/app/providers/auth-provider";
 
 function AuthCallbackInner() {
   const searchParams = useSearchParams();
-  const { login } = useAuthContext();
   const [status, setStatus] = useState("Processing...");
 
   const code = searchParams.get("code");
@@ -34,16 +32,15 @@ function AuthCallbackInner() {
         if (accessToken) {
           setStatus("Completing SSO login...");
 
-          try {
-            window.sessionStorage.setItem("graftai_access_token", accessToken);
-            window.localStorage.setItem("graftai_access_token", accessToken);
-            if (refreshToken) {
-              window.sessionStorage.setItem("graftai_refresh_token", refreshToken);
-              window.localStorage.setItem("graftai_refresh_token", refreshToken);
-            }
-            await login(accessToken);
-          } catch (err) {
-            console.error("Auth bridge login failed:", err);
+          window.sessionStorage.setItem("token", accessToken);
+          window.localStorage.setItem("token", accessToken);
+          window.sessionStorage.setItem("graftai_access_token", accessToken);
+          window.localStorage.setItem("graftai_access_token", accessToken);
+          if (refreshToken) {
+            window.sessionStorage.setItem("refresh_token", refreshToken);
+            window.localStorage.setItem("refresh_token", refreshToken);
+            window.sessionStorage.setItem("graftai_refresh_token", refreshToken);
+            window.localStorage.setItem("graftai_refresh_token", refreshToken);
           }
 
           setStatus("Login successful! Redirecting...");
@@ -92,8 +89,16 @@ function AuthCallbackInner() {
 
           if (data.token?.access_token) {
             setStatus("Login successful! Redirecting to dashboard...");
-            // Login will store the token and refresh the session
-            await login(data.token.access_token);
+            window.sessionStorage.setItem("token", data.token.access_token);
+            window.localStorage.setItem("token", data.token.access_token);
+            window.sessionStorage.setItem("graftai_access_token", data.token.access_token);
+            window.localStorage.setItem("graftai_access_token", data.token.access_token);
+            if (data.token.refresh_token) {
+              window.sessionStorage.setItem("refresh_token", data.token.refresh_token);
+              window.localStorage.setItem("refresh_token", data.token.refresh_token);
+              window.sessionStorage.setItem("graftai_refresh_token", data.token.refresh_token);
+              window.localStorage.setItem("graftai_refresh_token", data.token.refresh_token);
+            }
             // Use the redirect_to from backend, default to /dashboard
             safeReplace(data.redirect_to || "/dashboard");
             return;
@@ -120,7 +125,7 @@ function AuthCallbackInner() {
     };
 
     handleSync();
-  }, [accessToken, code, login, redirectTo, refreshToken, state]);
+  }, [accessToken, code, redirectTo, refreshToken, state]);
 
   return (
     <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">

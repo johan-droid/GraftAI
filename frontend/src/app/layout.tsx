@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { DM_Sans, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/app/providers/auth-provider";
+import { AuthProvider } from "@/providers/auth-provider";
 import { NotificationProvider } from "@/providers/notification-provider";
 import { Toaster } from "sonner";
 

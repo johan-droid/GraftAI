@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.user_token import UserTokenTable
+from backend.models.tables import UserTokenTable
 from backend.utils.http_client import get_client, ClientProxy
 from backend.services.integrations.token_service import ensure_valid_token
 
@@ -135,26 +135,101 @@ async def list_ms_events(access_token: str, delta_link: Optional[str] = None) ->
             headers=headers
         )
 
-        resp = await proxy.get(url)
-        
-        if resp.status_code == 410:
-            # Delta token expired, restart sync
-            logger.warning("🔄 Microsoft Delta link expired (410), restarting sync.")
-            from datetime import timedelta, timezone
-            start = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-            end = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
-            url = f"/me/calendar/calendarView/delta?startDateTime={start}&endDateTime={end}"
+        items = []
+        delta_link_result = None
+
+        while url:
             resp = await proxy.get(url)
 
-        if resp.status_code != 200:
-            logger.error(f"❌ MS Graph list_events error: {resp.status_code} - {resp.text}")
-            raise RuntimeError(f"MS Graph list_events failed: {resp.status_code}")
-            
-        return resp.json()
-            
+            if resp.status_code == 410:
+                logger.warning("🔄 Microsoft Delta link expired (410), restarting full-sync delta sequence.")
+                from datetime import timedelta, timezone
+                start = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+                end = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
+                url = f"/me/calendar/calendarView/delta?startDateTime={start}&endDateTime={end}"
+                items = []
+                delta_link_result = None
+                continue
+
+            if resp.status_code != 200:
+                logger.error(f"❌ MS Graph list_events error: {resp.status_code} - {resp.text}")
+                raise RuntimeError(f"MS Graph list_events failed: {resp.status_code}")
+
+            data = resp.json()
+            items.extend(data.get("value", []))
+            delta_link_result = data.get("@odata.deltaLink") or delta_link_result
+            url = data.get("@odata.nextLink")
+
+        return {"value": items, "@odata.deltaLink": delta_link_result}
+
     except Exception as e:
         logger.error(f"❌ Unexpected error in MS Graph list_events: {e}")
         raise e
+
+
+async def get_ms_user_principal_name(access_token: str) -> Optional[str]:
+    try:
+        client = await get_client()
+        proxy = ClientProxy(
+            client=client,
+            base_url="https://graph.microsoft.com/v1.0",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+        )
+
+        resp = await proxy.get("/me")
+        if resp.status_code != 200:
+            return None
+
+        data = resp.json()
+        return data.get("mail") or data.get("userPrincipalName")
+    except Exception as e:
+        logger.warning(f"Failed to fetch Microsoft user principal name: {e}")
+        return None
+
+
+async def get_ms_busy_times(access_token: str, user_principal_name: str, start_time: datetime, end_time: datetime) -> list[dict]:
+    try:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "Prefer": 'outlook.timezone="UTC"',
+        }
+        client = await get_client()
+        proxy = ClientProxy(
+            client=client,
+            base_url="https://graph.microsoft.com/v1.0",
+            headers=headers,
+        )
+
+        payload = {
+            "schedules": [user_principal_name],
+            "startTime": {"dateTime": start_time.isoformat(), "timeZone": "UTC"},
+            "endTime": {"dateTime": end_time.isoformat(), "timeZone": "UTC"},
+            "availabilityViewInterval": 30,
+        }
+
+        resp = await proxy.post("/me/calendar/getSchedule", json=payload)
+        if resp.status_code != 200:
+            logger.error(f"❌ MS Graph busy-time fetch failed: {resp.status_code} - {resp.text}")
+            raise RuntimeError(f"MS Graph busy-time fetch failed: {resp.status_code}")
+
+        data = resp.json()
+        busy_times = []
+        for item in data.get("value", []):
+            for slot in item.get("scheduleItems", []):
+                if slot.get("status") not in {"free", "unknown"}:
+                    busy_times.append({
+                        "start": slot.get("start", {}).get("dateTime"),
+                        "end": slot.get("end", {}).get("dateTime"),
+                        "provider": "microsoft",
+                    })
+        return busy_times
+    except Exception as e:
+        logger.error(f"❌ Microsoft busy-time fetch failed: {e}")
+        raise
 
 async def create_ms_event(token_data: dict, event_details: dict) -> dict:
     """

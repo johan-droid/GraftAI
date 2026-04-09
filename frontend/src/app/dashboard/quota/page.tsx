@@ -1,8 +1,8 @@
 "use client";
 
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { 
   BarChart3, 
   Sparkles, 
@@ -12,19 +12,16 @@ import {
 } from "lucide-react";
 
 export default function QuotaPage() {
-  const { user, refresh } = useAuthContext();
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const { user } = useAuth();
   const [liveStatus, setLiveStatus] = useState("Live tracking active");
 
-  useEffect(() => {
-    let active = true;
-    const now = new Date();
-    setLastSyncedAt(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    
-    return () => {
-      active = false;
-    };
-  }, [user]);
+  const lastSyncedAt = useMemo(
+    () =>
+      user
+        ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        : null,
+    [user]
+  );
 
   const stats = user ? {
     tier: user.tier || 'free',

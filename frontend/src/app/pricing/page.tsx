@@ -42,7 +42,7 @@ declare global {
 }
 
 import { useState, useEffect } from "react";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { motion } from "framer-motion";
 import { 
   Check, 
@@ -114,7 +114,7 @@ export default function PricingPage() {
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [region, setRegion] = useState<"US" | "IN">("US"); // Default to Global
-  const { user } = useAuthContext();
+  const { user } = useAuth();
 
   // IP-based Region Detection
   useEffect(() => {

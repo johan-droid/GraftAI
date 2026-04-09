@@ -1,27 +1,57 @@
+import os
 from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.utils.db import get_db as _get_db
-from backend.auth.schemes import get_current_user_id
+from sqlalchemy import select
+from jose import jwt, JWTError
 
-async def get_db():
-    async for session in _get_db():
-        yield session
+from backend.utils.db import get_db
+from backend.models.tables import UserTable
 
-def require_role(role: str):
-    """
-    Returns a dependency that validates the current user has the required role.
-    """
-    async def role_checker(
-        db: AsyncSession = Depends(get_db),
-        user_id: str = Depends(get_current_user_id)
-    ):
-        from backend.services.access_control import check_user_role
-        if not await check_user_role(db, user_id, role):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Missing required role: {role}"
-            )
+# This tells FastAPI where the login route is, so Swagger UI knows how to get the token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+
+SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-college-project-key-change-in-prod")
+ALGORITHM = "HS256"
+
+async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> str:
+    """Helper to get just the user ID from the token."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
         return user_id
-    
-    return role_checker
+    except JWTError:
+        raise credentials_exception
 
+async def get_current_user(
+    token: str = Depends(oauth2_scheme), 
+    db: AsyncSession = Depends(get_db)
+) -> UserTable:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+        
+    stmt = select(UserTable).where(UserTable.id == user_id)
+    user = (await db.execute(stmt)).scalars().first()
+    
+    if user is None:
+        raise credentials_exception
+        
+    return user

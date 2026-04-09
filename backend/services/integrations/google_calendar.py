@@ -10,7 +10,7 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from backend.models.user_token import UserTokenTable
+from backend.models.tables import UserTokenTable
 from backend.services.integrations.token_service import ensure_valid_token
 
 # Initialize logger
@@ -67,14 +67,15 @@ def get_google_credentials(token_data: dict) -> Credentials:
         scopes=scopes,
     )
     
-    # Refresh if expired and we have what we need
+    # ⚡ [RESILIENCE] Refresh if expired and we have the necessary material
     try:
         if creds and creds.expired and creds.refresh_token:
-            if not client_id or not client_secret:
-                logger.warning("Attempting to refresh Google token without Client ID/Secret. This will likely fail.")
-            creds.refresh(Request())
+            if not client_id or not client_secret or not creds.token_uri:
+                logger.warning("⚠️ Skipping auto-refresh: missing client credentials or token_uri.")
+            else:
+                creds.refresh(Request())
     except Exception as e:
-        logger.warning(f"Failed to refresh Google credentials: {e}")
+        logger.warning(f"⚠️ Failed to refresh Google credentials: {e}")
         
     return creds
 
@@ -184,36 +185,74 @@ async def create_google_event(token_data: dict, event_details: dict) -> dict:
 
 async def list_google_events(token_data: dict, calendar_id: str = "primary", sync_token: Optional[str] = None) -> dict:
     """
-    Lists events from Google Calendar. 
-    Supports incremental sync via sync_token.
+    Lists events from Google Calendar.
+    Supports incremental sync via sync_token and handles pagination transparently.
     """
     try:
         creds = get_google_credentials(token_data)
         service = build("calendar", "v3", credentials=creds)
 
-        if sync_token:
-            request = service.events().list(
-                calendarId=calendar_id,
-                syncToken=sync_token,
-                showDeleted=True,
-                singleEvents=False,
-            )
-        else:
-            request = service.events().list(
-                calendarId=calendar_id,
-                singleEvents=True,
-                orderBy="startTime",
-            )
+        all_items = []
+        next_sync_token = None
+        page_token = None
 
-        return request.execute()
+        while True:
+            params = {
+                "calendarId": calendar_id,
+                "singleEvents": False if sync_token else True,
+                "orderBy": "startTime" if not sync_token else None,
+                "showDeleted": True if sync_token else False,
+            }
+            if sync_token:
+                params["syncToken"] = sync_token
+            if page_token:
+                params["pageToken"] = page_token
+
+            response = service.events().list(**{k: v for k, v in params.items() if v is not None}).execute()
+            all_items.extend(response.get("items", []) or [])
+            next_sync_token = response.get("nextSyncToken") or next_sync_token
+            page_token = response.get("nextPageToken")
+
+            if not page_token:
+                break
+
+        return {"items": all_items, "nextSyncToken": next_sync_token}
     except HttpError as error:
         if error.resp.status == 410:
             logger.warning(f"🔄 Google Sync token expired (410), performing full sync for {calendar_id}")
             service = build("calendar", "v3", credentials=get_google_credentials(token_data))
-            return service.events().list(calendarId=calendar_id, singleEvents=True, orderBy="startTime").execute()
+            response = service.events().list(calendarId=calendar_id, singleEvents=True, orderBy="startTime").execute()
+            return {"items": response.get("items", []) or [], "nextSyncToken": response.get("nextSyncToken")}
 
         logger.error(f"❌ Google list_events failed: {error}")
         raise error
+
+
+async def get_google_busy_times(token_data: dict, start_time: datetime, end_time: datetime, calendar_id: str = "primary") -> list[dict]:
+    """Fetches busy windows from Google Calendar freebusy."""
+    try:
+        creds = get_google_credentials(token_data)
+        service = build("calendar", "v3", credentials=creds)
+        response = service.freebusy().query(
+            requestBody={
+                "timeMin": start_time.isoformat(),
+                "timeMax": end_time.isoformat(),
+                "items": [{"id": calendar_id}],
+            }
+        ).execute()
+
+        busy_entries = response.get("calendars", {}).get(calendar_id, {}).get("busy", [])
+        return [
+            {
+                "start": busy.get("start"),
+                "end": busy.get("end"),
+                "provider": "google",
+            }
+            for busy in busy_entries
+        ]
+    except HttpError as error:
+        logger.error(f"❌ Google busy-time fetch failed: {error}")
+        raise
 
 async def update_google_event(token_data: dict, external_id: str, event_details: dict) -> dict:
     """Updates an existing Google Calendar event."""

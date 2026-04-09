@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { updateUserProfile, syncUserTimezone } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
@@ -55,7 +55,7 @@ function SettingRow({ icon: Icon, label, description, children }: {
 }
 
 export default function ProfilePage() {
-  const { user, refresh } = useAuthContext();
+  const { user, refresh } = useAuth();
 
   const [editingName, setEditingName] = useState(false);
   const [editingBio, setEditingBio] = useState(false);

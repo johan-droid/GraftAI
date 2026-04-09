@@ -13,10 +13,10 @@ import {
   Sparkles,
   BarChart3
 } from "lucide-react";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/providers/auth-provider";
 
 export default function BillingPage() {
-  const { user } = useAuthContext();
+  const { user } = useAuth();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
 

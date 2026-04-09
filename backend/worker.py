@@ -1,347 +1,318 @@
-import os
 import logging
-from arq.connections import RedisSettings
-from dotenv import load_dotenv
-
-# Load env before any local imports
-load_dotenv()
-
-# Initialize Logger
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Import background-capable services
+import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, and_
-from backend.models.tables import EventTable, UserTable
-from backend.services.sync_engine import sync_user_calendar
-from backend.services.mail_service import send_email, render_template
-from backend.services.notifications import notify_welcome_email, notify_event_reminder
-from backend.utils.arq_utils import publish_event
+from sqlalchemy.orm import selectinload
 
-# Registry for automatic discovery
+from backend.utils.db import AsyncSessionLocal
+from backend.utils.webhook_signing import generate_webhook_signature
+from backend.models.tables import UserTable, EventTable, BookingTable, WebhookLogTable
+from backend.services.scheduler import push_event_to_external_calendar
+from backend.services.sync_engine import sync_user_calendar
+from backend.services.calendar_sync import sync_calendar_for_user
+from backend.services.notifications import notify_event_created, notify_event_updated, notify_event_deleted
+from backend.services.mail_service import send_email
+from backend.services.queue_monitoring import start_queue_monitoring
+from backend.utils.http_client import get_client
+
+logger = logging.getLogger(__name__)
+
 REGISTERED_TASKS = []
-REGISTERED_CRONS = []
 
 def task(func):
-    """Decorator to register a function as an arq worker task."""
+    """Decorator to register a function as a worker task."""
     REGISTERED_TASKS.append(func)
     return func
 
-def cron(minute='*', hour='*', run_at_startup=False):
-    """Decorator to register a function as a periodic cron job."""
-    def decorator(func):
-        REGISTERED_CRONS.append({
-            'function': func,
-            'minute': minute,
-            'hour': hour,
-            'run_at_startup': run_at_startup
-        })
-        return func
-    return decorator
-
 @task
-async def task_notify_welcome(ctx, user_email: str, full_name: str):
-    """Worker task to send a welcome email to a new user."""
-    logger.info(f"[WORKER] ✉️ Sending welcome email to {user_email}")
-    await notify_welcome_email(user_email, full_name)
+async def task_sync_all_users(ctx):
+    """Simple loop through users to trigger sync."""
+    async with AsyncSessionLocal() as db:
+        # STRIPPED: Simplified user fetch without status filters
+        stmt = select(UserTable)
+        users = (await db.execute(stmt)).scalars().all()
+        
+        for user in users:
+            try:
+                # Note: sync_user_calendar handles its own session/commits if needed
+                # but here we pass the current session.
+                await sync_user_calendar(db, str(user.id))
+            except Exception as e:
+                logger.error(f"Sync failed for {user.email}: {e}")
 
 @task
 async def task_sync_calendar(ctx, user_id: str):
-    """Worker task to perform an initial or periodic calendar sync."""
-    logger.info(f"[WORKER] 🗓 Syncing calendar for user {user_id}")
-    async with ctx['db_session_factory']() as db:
-        await sync_user_calendar(db, user_id)
+    async with AsyncSessionLocal() as db:
+        try:
+            await sync_user_calendar(db, user_id)
+            await sync_calendar_for_user(db, user_id)
+        except Exception as e:
+            logger.error(f"Calendar sync failed for user {user_id}: {e}")
 
-@cron(minute='*', run_at_startup=True)
-async def task_process_event_reminders(ctx):
-    """
-    Precision Reminder Engine:
-    Processes upcoming events with sub-minute accuracy.
-    Optimized for massive crowds via covering index-first query.
-    """
-    async with ctx['db_session_factory']() as db:
+
+@task
+async def task_process_reminders(ctx):
+    """Check for events starting in the next 60 minutes and send emails."""
+    async with AsyncSessionLocal() as db:
         now = datetime.now(timezone.utc)
-        # Narrow window (28-32 mins) matches the cron frequency to avoid misses
-        min_t, max_t = now + timedelta(minutes=28), now + timedelta(minutes=32)
+        lookahead = now + timedelta(minutes=60)
         
-        stmt = (
-            select(EventTable, UserTable.email, UserTable.full_name)
-            .join(UserTable, EventTable.user_id == UserTable.id)
-            .where(
-                and_(
-                    EventTable.start_time.between(min_t, max_t),
-                    EventTable.is_reminded == False,
-                    EventTable.status == "confirmed"
-                )
+        stmt = select(EventTable).where(
+            and_(
+                EventTable.start_time >= now,
+                EventTable.start_time <= lookahead,
+                EventTable.is_reminded == False
             )
         )
-        result = await db.execute(stmt)
-        rows = result.all()
+        events = (await db.execute(stmt)).scalars().all()
         
-        for event, user_email, user_name in rows:
-            try:
-                # MARK-THEN-SEND pattern ensures zero double-notifications
-                event.is_reminded = True
-                await db.flush() 
-                
-                await notify_event_reminder(user_email, [], {
-                    "id": event.id,
-                    "title": event.title,
-                    "start_time": event.start_time.strftime("%I:%M %p"),
-                    "meeting_platform": event.meeting_platform,
-                    "meeting_link": event.meeting_link,
-                    "full_name": user_name
-                })
-                
-                await db.commit()
-            except Exception as e:
-                await db.rollback()
-                logger.error(f"[WORKER] ❌ Reminder failed for {event.id}: {e}")
-
-@task
-async def task_notify_event(ctx, to_email: str, template_name: str, subject: str, context: dict):
-    """Unified worker task to render and send any email from a template."""
-    logger.info(f"[WORKER] ✉️ Sending lifecycle email ({template_name}) to {to_email}")
-    try:
-        html_body = render_template(template_name, context)
-        await send_email(to_email, subject, html_body)
-    except Exception as e:
-        logger.error(f"[WORKER] ❌ Failed to send email {template_name}: {e}")
-
-@task
-async def task_background_ai_sync(ctx, event_id: int, user_id: str, action: str = "upsert"):
-    """Worker task to perform Pinecone operations in the background."""
-    from backend.services.ai_sync import sync_event_to_vector_store, purge_event_from_vector_store
-    if action == "delete":
-        await purge_event_from_vector_store(event_id, user_id)
-        return
-    async with ctx['db_session_factory']() as db:
-        stmt = select(EventTable).where(EventTable.id == event_id)
-        result = await db.execute(stmt)
-        event = result.scalars().first()
-        if event:
-            await sync_event_to_vector_store(event)
-
-@task
-async def task_provision_meeting(ctx, event_id: int, user_id: str, platform: str):
-    """
-    Deferred I/O Task: Handles slow third-party API calls (Google/MS) 
-    in the background to keep initial response times under 100ms.
-    """
-    from backend.services.scheduler import _generate_meeting_link, _push_to_external
-    # import json -> Using binary streams instead
-    
-    logger.info(f"[WORKER] 🚀 Provisioning meeting link for event {event_id} on {platform}")
-    
-    async with ctx['db_session_factory']() as db:
-        stmt = select(EventTable).where(EventTable.id == event_id)
-        res = await db.execute(stmt)
-        event = res.scalars().first()
+        for event in events:
+            user = await db.get(UserTable, event.user_id)
+            if user:
+                try:
+                    await send_email(
+                        user.email,
+                        f"Reminder: {event.title}",
+                        f"Hi {user.full_name or 'there'}, your meeting '{event.title}' starts soon at {event.start_time}."
+                    )
+                    event.is_reminded = True
+                except Exception as e:
+                    logger.error(f"Failed to send reminder for event {event.id}: {e}")
         
+        await db.commit()
+
+@task
+async def task_send_email(ctx, booking_id: str, email_type: str, extra: dict = None):
+    async with AsyncSessionLocal() as db:
+        stmt = select(BookingTable).options(selectinload(BookingTable.event)).where(BookingTable.id == booking_id)
+        booking = (await db.execute(stmt)).scalars().first()
+        if not booking:
+            logger.warning(f"Email job failed: booking {booking_id} not found")
+            return
+
+        event = booking.event
         if not event:
-            logger.error(f"[WORKER] ❌ Event {event_id} not found for provisioning.")
+            logger.warning(f"Email job failed: event for booking {booking_id} not found")
+            return
+
+        payload = {
+            "id": event.id,
+            "title": event.title,
+            "start_time": event.start_time.strftime("%A, %B %d at %I:%M %p"),
+            "end_time": event.end_time.strftime("%A, %B %d at %I:%M %p"),
+            "meeting_link": event.meeting_url,
+            "is_meeting": event.is_meeting,
+            **(extra or {}),
+        }
+
+        try:
+            if email_type == "confirmation":
+                await notify_event_created([booking.email], [], payload)
+            elif email_type == "new_booking":
+                organizer_email = payload.get("organizer_email")
+                if organizer_email:
+                    await send_custom_notification(
+                        organizer_email,
+                        f"New booking for {event.title}",
+                        f"A new booking has been scheduled for {event.title} on {payload['start_time']}.",
+                        html_body=f"<p>A new booking has been scheduled for <strong>{event.title}</strong> on {payload['start_time']}.</p>",
+                    )
+                else:
+                    logger.warning(f"Missing organizer_email for new_booking job {booking_id}")
+            elif email_type == "reminder":
+                await notify_event_updated([booking.email], [], payload)
+            elif email_type == "cancellation":
+                await notify_event_deleted([booking.email], [], payload)
+            else:
+                logger.warning(f"Unknown email_type '{email_type}' for booking {booking_id}")
+        except Exception as e:
+            logger.error(f"Failed to send {email_type} email for booking {booking_id}: {e}")
+
+@task
+async def task_send_booking_confirmation(ctx, booking_id: str):
+    async with AsyncSessionLocal() as db:
+        stmt = select(BookingTable).options(selectinload(BookingTable.event)).where(BookingTable.id == booking_id)
+        booking = (await db.execute(stmt)).scalars().first()
+        if not booking:
+            logger.warning(f"Booking confirmation failed: booking {booking_id} not found")
+            return
+
+        event = booking.event
+        if not event:
+            logger.warning(f"Booking confirmation failed: event for booking {booking_id} not found")
+            return
+
+        notification_data = {
+            "id": event.id,
+            "title": event.title,
+            "start_time": event.start_time.strftime("%A, %B %d at %I:%M %p"),
+            "end_time": event.end_time.strftime("%A, %B %d at %I:%M %p"),
+            "meeting_link": event.meeting_url,
+            "is_meeting": event.is_meeting,
+        }
+
+        try:
+            await notify_event_created([booking.email], [], notification_data)
+        except Exception as e:
+            logger.error(f"Failed to send booking confirmation for {booking_id}: {e}")
+
+@task
+async def task_send_webhook(
+    ctx,
+    url: str,
+    event: str,
+    data: dict,
+    attempt: int = 1,
+    webhook_id: str | None = None,
+    log_id: str | None = None,
+    secret: str | None = None,
+):
+    created_at = datetime.now(timezone.utc)
+    payload = {
+        "event": event,
+        "createdAt": created_at.isoformat(),
+        "data": data,
+    }
+    headers = {"Content-Type": "application/json"}
+    if secret:
+        signature = generate_webhook_signature(secret, payload)
+        headers["X-Cal-Signature"] = signature
+        headers["X-Cal-Timestamp"] = str(int(created_at.timestamp() * 1000))
+
+    attempt = getattr(ctx, "job_try", None) if hasattr(ctx, "job_try") else ctx.get("job_try", 1)
+    if attempt is None:
+        attempt = 1
+
+    try:
+        client = await get_client()
+        response = await client.post(url, json=payload, headers=headers, timeout=10.0)
+        status = response.status_code
+
+        if log_id:
+            async with AsyncSessionLocal() as db:
+                log = await db.get(WebhookLogTable, log_id)
+                if log:
+                    log.request_status = status
+                    log.request_error = None
+                    log.attempts = max(log.attempts or 1, attempt)
+                    log.next_retry_at = None
+                    await db.commit()
+
+        if status >= 400:
+            raise RuntimeError(f"Webhook failed with status {status}")
+        logger.info(
+            "Webhook delivered successfully to %s (status=%s, webhook_id=%s, attempt=%s)",
+            url,
+            status,
+            webhook_id,
+            attempt,
+        )
+    except Exception as e:
+        if log_id:
+            async with AsyncSessionLocal() as db:
+                log = await db.get(WebhookLogTable, log_id)
+                if log:
+                    log.request_status = 0
+                    log.request_error = str(e)
+                    log.attempts = max(log.attempts or 1, attempt)
+                    log.next_retry_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+                    await db.commit()
+
+        logger.error(
+            "Webhook delivery failed (webhook_id=%s, attempt=%s) to %s: %s",
+            webhook_id,
+            attempt,
+            url,
+            e,
+            exc_info=True,
+        )
+        if attempt < 5:
+            raise
+        logger.error(
+            "Webhook permanently failed after %s attempts for webhook_id=%s url=%s",
+            attempt,
+            webhook_id,
+            url,
+        )
+
+@task
+async def task_track_analytics(ctx, event: str, properties: dict):
+    logger.info(f"Analytics event queued: {event} properties={properties}")
+
+@task
+async def task_create_calendar_event(ctx, event_id: str):
+    async with AsyncSessionLocal() as db:
+        event = await db.get(EventTable, event_id)
+        if not event:
+            logger.warning(f"Calendar create failed: event {event_id} not found")
+            return
+
+        if not event.meeting_provider:
+            logger.info(f"Calendar create skipped: event {event_id} has no meeting provider")
+            return
+
+        if event.external_id:
+            logger.info(f"Calendar create skipped: event {event_id} already has external_id")
             return
 
         try:
-            # Notify frontend provisioning started via Reliable Stream
-            await publish_event(f"stream:sync:{user_id}", "SYNC_STATUS", {
-                "status": "syncing", 
-                "message": f"Provisioning secure {platform} link..."
-            })
-            
-            event_details = {
-                "title": event.title,
-                "description": event.description,
-                "start_time": event.start_time,
-                "end_time": event.end_time,
-            }
-            # 1. Generate meeting link and push to external provider in parallel
-            # (They are independent I/O operations once user token is fetched)
-            import asyncio
-            link_task = _generate_meeting_link(db, user_id, platform, event_details)
-            ext_task = _push_to_external(db, event, action="create")
-            
-            link, ext_id = await asyncio.gather(link_task, ext_task)
-            
-            event.meeting_link = link
-            event.is_meeting = True
-            event.meeting_platform = platform
-            if ext_id:
-                event.external_id = ext_id
-            
-            await db.commit()
-            
-            # Notify frontend success
-            await publish_event(f"stream:sync:{user_id}", "SYNC_STATUS", {
-                "status": "idle", 
-                "message": f"Meeting link ready: {platform}"
-            })
-            logger.info(f"[WORKER] ✅ Successfully provisioned link for event {event_id}")
-            
+            await push_event_to_external_calendar(db, event_id)
         except Exception as e:
-            logger.error(f"[WORKER] ❌ Provisioning failed for event {event_id}: {e}")
-            await publish_event(f"stream:sync:{user_id}", "SYNC_STATUS", {
-                "status": "error", 
-                "message": f"Failed to provision {platform} link."
-            })
-
-@cron(hour=0, minute=0)
-async def task_purge_expired_accounts(ctx):
-    """
-    Daily Retention Worker: Permanently purges accounts soft-deleted >30 days ago.
-    This fulfills both GDPR right-to-erasure and business retention policies.
-    """
-    logger.info("[WORKER] 🧹 Starting Daily Retention Audit...")
-    from backend.models.tables import UserTable
-    from sqlalchemy import delete
-    
-    async with ctx['db_session_factory']() as db:
-        retention_threshold = datetime.now(timezone.utc) - timedelta(days=30)
-        
-        # Find and Delete (Cascades will handle child records: events, sessions, etc.)
-        stmt = delete(UserTable).where(
-            and_(
-                UserTable.deleted_at is not None,
-                UserTable.deleted_at < retention_threshold
-            )
-        )
-        result = await db.execute(stmt)
-        await db.commit()
-        
-        # rowcount represents how many users were purged
-        count = result.rowcount
-        if count > 0:
-            logger.info(f"✅ [WORKER] Successfully purged {count} expired accounts (GDPR Cycle).")
-        else:
-            logger.info("✅ [WORKER] Retention audit complete. No accounts eligible for purge.")
-
-@cron(hour=1, minute=0)
-async def task_purge_old_events(ctx):
-    """
-    7-Day Mandate Content Purge: Deletes past events older than 7 days.
-    Prevents database memory bloat and keeps context relevant.
-    """
-    logger.info("[WORKER] 🧹 Scrubbing events older than 7 days...")
-    from sqlalchemy import delete
-    
-    async with ctx['db_session_factory']() as db:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-        stmt = delete(EventTable).where(EventTable.end_time < cutoff)
-        result = await db.execute(stmt)
-        await db.commit()
-        logger.info(f"✅ [WORKER] Purged {result.rowcount} old calendar events.")
-
-@cron(hour={3, 9, 15, 21}, minute=0)
-async def task_sync_all_calendars(ctx):
-    """
-    Distributed Sync Orchestrator (ScaleReady):
-    Splits the global sync load into chunks of 100 users per worker task.
-    Prevents CPU bursts and Redis connection bottlenecks.
-    """
-    from backend.models.user_token import UserTokenTable
-    redis = ctx['redis']
-    async with ctx['db_session_factory']() as db:
-        stmt = select(UserTokenTable.user_id).where(UserTokenTable.is_active == True).distinct()
-        result = await db.execute(stmt)
-        user_ids = result.scalars().all()
-        
-        # Partitioning by 100 for stable worker concurrency
-        CHUNK_SIZE = 100
-        for i in range(0, len(user_ids), CHUNK_SIZE):
-            chunk = user_ids[i:i + CHUNK_SIZE]
-            await redis.enqueue_job("task_sync_batch", chunk)
-            logger.info(f"[WORKER] 📦 Enqueued segment batch {i//CHUNK_SIZE + 1} ({len(chunk)} users)")
+            logger.error(f"Failed to push event {event_id} to external calendar: {e}")
 
 @task
-async def task_sync_batch(ctx, user_ids: list[str]):
-    """Internal task to process a small batch of synchronizations."""
-    redis = ctx['redis']
-    for uid in user_ids:
-        await redis.enqueue_job("task_sync_calendar", uid)
+async def task_update_calendar_event(ctx, event_id: str, update_data: dict = None):
+    async with AsyncSessionLocal() as db:
+        event = await db.get(EventTable, event_id)
+        if not event:
+            logger.warning(f"Calendar update failed: event {event_id} not found")
+            return
+
+        try:
+            await update_event(db, event_id, event.user_id, update_data or {})
+        except Exception as e:
+            logger.error(f"Failed to update calendar event {event_id}: {e}")
 
 @task
-async def task_renew_user_webhook(ctx, user_id: str):
-    """Worker task to renew a specific user's webhooks."""
-    from backend.services.integrations.webhook_manager import register_user_webhooks
-    logger.info(f"[WORKER] ♻️ Renewing webhooks for user {user_id}")
-    async with ctx['db_session_factory']() as db:
-        await register_user_webhooks(db, user_id)
+async def task_delete_calendar_event(ctx, event_id: str):
+    async with AsyncSessionLocal() as db:
+        event = await db.get(EventTable, event_id)
+        if not event:
+            logger.warning(f"Calendar delete failed: event {event_id} not found")
+            return
 
-@cron(hour={0, 12}, minute=0)
-async def task_renew_webhooks(ctx):
-    """Periodic task to enqueue renewal jobs for Google and Microsoft push notification subscriptions."""
-    from backend.models.tables import WebhookSubscriptionTable
-    redis = ctx['redis']
-    async with ctx['db_session_factory']() as db:
-        stmt = select(WebhookSubscriptionTable.user_id).distinct()
-        result = await db.execute(stmt)
-        user_ids = result.scalars().all()
-        for uid in user_ids:
-            await redis.enqueue_job("task_renew_user_webhook", uid)
-
-USAGE_FLUSH_INTERVAL = os.getenv("USAGE_FLUSH_INTERVAL_MINUTES", "5")
-
-@cron(minute=f"*/{USAGE_FLUSH_INTERVAL}")
-async def task_persist_usage_to_db(ctx):
-    """
-    Write-Behind Sync Logic:
-    Collects users with usage activity and flushes their counts 
-    to Postgres in a single transaction. Reduces DB write-load by ~90%.
-    """
-    from backend.models.tables import UserTable
-    from sqlalchemy import update
-    redis = ctx['redis']
-    
-    user_ids = await redis.smembers("usage:flush_queue")
-    if not user_ids: return
-
-    logger.info(f"[WORKER] 💾 Flushing usage for {len(user_ids)} active users to DB...")
-    async with ctx['db_session_factory']() as db:
-        for uid_raw in user_ids:
-            uid = uid_raw.decode() if hasattr(uid_raw, 'decode') else uid_raw
-            ai_count = await redis.get(f"usage:{uid}:ai_messages")
-            sync_count = await redis.get(f"usage:{uid}:calendar_syncs")
-            
-            if ai_count is not None or sync_count is not None:
-                await db.execute(update(UserTable).where(UserTable.id == uid).values(
-                    daily_ai_count=int(ai_count or 0),
-                    daily_sync_count=int(sync_count or 0)
-                ))
-        
-        await db.commit()
-        await redis.srem("usage:flush_queue", *user_ids)
-    logger.info("✅ [WORKER] Usage persistence complete.")
+        try:
+            await delete_event(db, event_id, event.user_id)
+        except Exception as e:
+            logger.error(f"Failed to delete calendar event {event_id}: {e}")
 
 @task
-async def task_emit_quota_update(ctx, user_id: str, feature: str, count: int):
-    """
-    Real-Time Event Publisher:
-    Uses MessagePack binary format for high-throughput delivery via Redis Streams.
-    """
-    await publish_event(f"stream:user:{user_id}", "QUOTA_UPDATE", {
-        "feature": feature,
-        "count": count
-    })
+async def task_send_sms(ctx, phone_number: str, message: str):
+    logger.info(f"SMS queue placeholder: {phone_number} msg={message}")
 
-async def startup(ctx):
-    from backend.utils.db import AsyncSessionLocal
-    ctx['db_session_factory'] = AsyncSessionLocal
-    sentry_dsn = os.getenv("SENTRY_DSN")
-    if sentry_dsn:
-        import sentry_sdk
-        sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=0.1)
-    logger.info("[WORKER] 🚀 Background worker started.")
+@task
+async def task_update_crm(ctx, booking_id: str):
+    logger.info(f"CRM update placeholder queued for booking {booking_id}")
 
-async def shutdown(ctx):
-    logger.info("[WORKER] 🛑 Background worker shutting down.")
+@task
+async def task_daily_cleanup(ctx):
+    """Purge old logs or expired data."""
+    logger.info("Running daily cleanup...")
+
+# ── Arq Worker Settings ───────────────────────────────────────────────────────
+
+async def _worker_startup(ctx):
+    logger.info("Worker started.")
+    start_queue_monitoring()
+
 
 class WorkerSettings:
-    """Settings for the arq worker with automatic discovery."""
-    redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-    functions = list(set(REGISTERED_TASKS)) 
-    cron_jobs = REGISTERED_CRONS
-    on_startup = startup
-    on_shutdown = shutdown
-    max_jobs = 10
-    job_timeout = 300 
+    """Standard Arq configuration."""
+    functions = REGISTERED_TASKS
+    on_startup = _worker_startup
+    cron_jobs = [
+        {"coroutine": task_sync_all_users, "minute": {0, 30}},
+        {"coroutine": task_process_reminders, "minute": "*"},
+        {"coroutine": task_daily_cleanup, "hour": 3, "minute": 0},
+    ]

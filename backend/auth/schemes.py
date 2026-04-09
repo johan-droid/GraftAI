@@ -1,310 +1,65 @@
-from fastapi.security import OAuth2PasswordBearer
-from fastapi import Depends, HTTPException, status, Request
-import hashlib
-import jwt
-from jwt import PyJWTError as JWTError
 import os
-import json
-import logging
-from datetime import datetime, timezone
-from pathlib import Path
-from dotenv import load_dotenv
-from typing import Optional
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.utils.db import get_db
-from backend.services.redis_client import get_redis as get_redis_service
-from backend.utils.redis_singleton import safe_get, safe_set
+from backend.models.tables import UserTable
 
-# Initialize logger
-logger = logging.getLogger(__name__)
+# This tells FastAPI where the login route is, so Swagger UI knows how to get the token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
-# Ensure environment variables are loaded from backend/.env first
-project_root = Path(__file__).resolve().parents[1]
-load_dotenv(project_root / ".env")
-
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY environment variable is required")
+SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-college-project-key-change-in-prod")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
-AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")
-AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
-SESSION_CACHE_TTL = 300  # 5 minutes
-
-
-async def blacklist_token(token: str, expires_in: int) -> None:
-    await safe_set(f"token:blacklist:{token}", "1", ex=expires_in)
-
-
-async def is_token_blacklisted(token: str) -> bool:
-    res = await safe_get(f"token:blacklist:{token}")
-    return res is not None
-
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
-
-
-# ── JWKS helpers ──────────────────────────────────────────────────────────────
-
-async def _get_auth0_jwk(token: str) -> dict:
-    unverified_header = jwt.get_unverified_header(token)
-    kid = unverified_header.get("kid")
-    if not kid:
-        raise JWTError("Missing kid in token header")
-    jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
+async def decode_token(token: str) -> dict:
     try:
-        from backend.utils.http_client import get_client
-        client = await get_client()
-        response = await client.get(jwks_url)
-        response.raise_for_status()
-        jwks = response.json()
-    except Exception as exc:
-        raise JWTError(f"Unable to fetch JWKS from Auth0: {exc}")
-    for key in jwks.get("keys", []):
-        if key.get("kid") == kid:
-            return key
-    raise JWTError("Appropriate key not found in Auth0 JWKS")
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not decode token",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
 
-
-async def decode_token(token: str) -> Optional[dict]:
+async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> str:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
-        header = jwt.get_unverified_header(token)
-        alg = header.get("alg")
-        
-        # SEC-09: Explicitly reject disallowed/weak algorithms before any decoding
-        # Note: Alg is unverified here, but we use it to route to the correct verification call.
-        ALLOWED_ALGORITHMS = {"HS256", "RS256"}
-        if alg not in ALLOWED_ALGORITHMS:
-            logger.warning(f"JWT with disallowed algorithm '{alg}' rejected (SEC-09)")
-            return None
-            
-        # Perform a non-verifying decode just to check structure before delegating
-        jwt.decode(token, options={"verify_signature": False})
-    except Exception:
-        return None
-
-    if alg == "RS256":
-        try:
-            issuer = jwt.decode(token, options={"verify_signature": False}).get("iss", "")
-            if AUTH0_DOMAIN and "auth0.com" in issuer:
-                jwk = await _get_auth0_jwk(token)
-                return jwt.decode(token, key=jwk, algorithms=["RS256"], audience=AUTH0_AUDIENCE)
-        except JWTError as exc:
-            logger.error(f"External JWT validation failed: {exc}")
-            return None
-
-    if alg == "HS256":
-        try:
-            return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        except JWTError:
-            return None
-
-    return None
-
-
-# ── Better Auth session with Redis caching ───────────────────────────────────
-
-async def verify_better_auth_session(token: str, db: AsyncSession) -> Optional[dict]:
-    cache_key = f"session:ba:{token[-32:]}"
-    cached = await safe_get(cache_key)
-    if cached:
-        try:
-            return json.loads(cached)
-        except Exception:
-            pass
-
-    from sqlalchemy import text
-
-    try:
-        result = await db.execute(
-            text('SELECT "userId", "expiresAt" FROM public.session WHERE token = :t'),
-            {"t": token},
-        )
-        row = result.fetchone()
-        if not row:
-            return None
-
-        user_id, expires_at = row
-        if expires_at is None:
-            return None
-
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-
-        if expires_at < datetime.now(timezone.utc):
-            return None
-
-        # Audit: Explicitly block Soft-Deleted users from accessing the API.
-        user_res = await db.execute(
-            text('SELECT id, email, name, deleted_at FROM public.users WHERE id = :uid'),
-            {"uid": user_id},
-        )
-        user = user_res.fetchone()
-        if not user:
-            return None
-            
-        # Hard Lockout: If deleted_at is set, session is revoked instantly
-        if user[3] is not None:
-            logger.warning(f"🔒 Blocked access attempt for Soft-Deleted user: {user[1]}")
-            return None
-
-        payload = {"sub": str(user[0]), "email": user[1], "name": user[2], "type": "better-auth"}
-        await safe_set(cache_key, json.dumps(payload), ex=SESSION_CACHE_TTL)
-        return payload
-    except Exception as exc:
-        logger.error(f"Better Auth session verification failed: {exc}")
-        return None
-
-
-def _session_cache_key(token: str) -> str:
-    digest = hashlib.sha256(str(token).encode()).hexdigest()[:32]
-    return f"active_session:{digest}"
-
-
-def _get_cookie_token(request: Request) -> Optional[str]:
-    for cookie_name in ("graftai_access_token", "better-auth.session_token"):
-        token = request.cookies.get(cookie_name)
-        if token:
-            return token
-    return None
-
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+        return user_id
+    except JWTError:
+        raise credentials_exception
 
 async def get_current_user(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme),
+    token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
-):
-    if not token:
-        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
-        if auth_header and auth_header.lower().startswith("bearer "):
-            token = auth_header[7:].strip()
-
-        if not token:
-            x_auth = request.headers.get("X-Authorization") or request.headers.get("x-authorization")
-            if x_auth:
-                token = x_auth[7:].strip() if x_auth.lower().startswith("bearer ") else x_auth.strip()
-
-        # SEC-02: Removed query parameter token extraction to prevent logging sensitive creds.
-        if not token:
-            token = _get_cookie_token(request)
-
-    if token and isinstance(token, str):
-        token = token.strip().strip('"').strip("'")
-        if token.lower().startswith("bearer "):
-            token = token[7:].strip()
-
-    if not token:
-        logger.warning("Authentication failed: no token found")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session not found or expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if token.count(".") != 2:
-        payload = await verify_better_auth_session(token, db)
-        if payload:
-            return payload
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session not found or expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # JWT Path
-    if await is_token_blacklisted(token):
-        # Fallback to cookie if Bearer is blacklisted
-        token = _get_cookie_token(request)
-        if not token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token has been revoked",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-    payload = await decode_token(token)
-    
-    # If Bearer token is invalid/expired, try reading from cookies as a secondary source.
-    # This prevents the "Token Desync" issue where localStorage has a stale token 
-    # but the browser still has a valid HttpOnly session cookie.
-    if not payload:
-        cookie_token = _get_cookie_token(request)
-        if cookie_token and cookie_token != token:
-            logger.info("Bearer token invalid/expired. Attempting cookie fallback.")
-            if cookie_token.count(".") != 2:
-                payload = await verify_better_auth_session(cookie_token, db)
-            else:
-                payload = await decode_token(cookie_token)
-            
-            if payload:
-                token = cookie_token # Proceed with the valid cookie token
-
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if payload.get("type") != "access":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token type",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    session_key = _session_cache_key(token)
+) -> UserTable:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
-        redis_client = await get_redis_service()
-        if await redis_client.get(session_key) is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session has expired or was revoked",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    except Exception:
-        if await safe_get(session_key) is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session has expired or was revoked",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
 
-    return payload
+    stmt = select(UserTable).where(UserTable.id == user_id)
+    user = (await db.execute(stmt)).scalars().first()
 
+    if user is None:
+        raise credentials_exception
 
-def get_current_user_id(current_user: dict = Depends(get_current_user)) -> str:
-    user_id = current_user.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User identity (sub) missing from token",
-        )
-    return str(user_id)
-
-
-async def is_admin_user(
-    db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id)
-) -> str:
-    from backend.services.access_control import check_user_role
-    if not await check_user_role(db, user_id, "admin"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Administrative privileges required",
-        )
-    return user_id
-
-
-async def get_current_user_id_optional(request: Request) -> Optional[str]:
-    token = request.cookies.get("graftai_access_token")
-    if not token or await is_token_blacklisted(token):
-        return None
-
-    payload = await decode_token(token)
-    if not payload:
-        return None
-
-    return payload.get("sub")
+    return user

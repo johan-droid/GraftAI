@@ -13,14 +13,15 @@ from sqlalchemy import select
 from dotenv import load_dotenv
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+from backend.utils.logger import configure_logging
+configure_logging()
 logger = logging.getLogger("sync-worker")
 
 # Load environment
 env_path = ROOT_DIR / ".env"
 load_dotenv(env_path)
 
-from backend.models.user_token import UserTokenTable
+from backend.models.tables import UserTokenTable
 from backend.services.sync_engine import sync_google_events, sync_ms_graph_events
 
 # Connection logic for Neon (SSL)
@@ -95,7 +96,25 @@ async def worker_loop():
     Main worker loop that runs forever.
     """
     logger.info("🚀 GraftAI Smart Sync Worker started.")
-    
+    # Ensure compatibility with older DB schemas (add description column if missing)
+    try:
+        from backend.utils.db import engine, DATABASE_URL
+        from sqlalchemy import text
+
+        if engine is not None and DATABASE_URL is not None:
+            async with engine.begin() as conn:
+                if DATABASE_URL.startswith("sqlite"):
+                    result = await conn.execute(text("PRAGMA table_info(events);"))
+                    rows = result.fetchall()
+                    columns = [r[1] for r in rows]
+                    if "description" not in columns:
+                        await conn.execute(text("ALTER TABLE events ADD COLUMN description TEXT;"))
+                else:
+                    await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS description TEXT;"))
+    except Exception:
+        # Best-effort only: continue even if this check fails
+        pass
+
     stop_event = asyncio.Event()
 
     def signal_handler():

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { deleteAccount, setConsent, syncUserTimezone, updateUserProfile, getEmailDiagnostic, sendTestEmail } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
@@ -113,7 +113,7 @@ function SettingRow({ icon: Icon, label, description, children }: {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, logout } = useAuthContext();
+  const { user, logout } = useAuth();
   const typedUser = user as UserProfile | null;
 
   const [consents, setConsents] = useState({ analytics: true, notifications: true, ai_training: false });

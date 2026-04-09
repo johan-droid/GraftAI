@@ -39,6 +39,7 @@ groq_breaker = get_breaker("groq", threshold=3, recovery_timeout=60)
 
 class AIRequest(BaseModel):
     prompt: str
+    context: Optional[list[str]] = None
     timezone: str = "UTC"
 
 
@@ -428,21 +429,51 @@ async def _offline_assistant_response(
         )
 
     if intent == "schedule":
-        start_time = _extract_datetime(prompt, user_timezone)
-        duration = _extract_duration_minutes(prompt)
-        title = _extract_title(prompt)
-        
-        # Determine meeting platform (Google Meet is default)
-        meeting_platform = "google"
+        # Check platform preference
+        meeting_platform = None
         if "zoom" in prompt.lower():
             meeting_platform = "zoom"
-        elif any(k in prompt.lower() for k in ["teams", "microsoft"]):
+        elif any(k in prompt.lower() for k in ["teams", "microsoft", "ms teams"]):
             meeting_platform = "microsoft"
+        elif "google" in prompt.lower() or "meet" in prompt.lower():
+            meeting_platform = "google"
+            
+        if not meeting_platform:
+            return (
+                "Please provide the meeting details in this format to continue:\n\n"
+                "- **Title**: (e.g., Sync)\n"
+                "- **Time**: (e.g., Tomorrow at 3pm)\n"
+                "- **Platform**: (Google Meet, Zoom, or Teams)\n"
+                "- **Agenda**: (Brief points or topic)",
+                {"type": "clarify", "action": "select_platform"},
+            )
+
+        start_time = _extract_datetime(prompt, user_timezone)
+        duration = _extract_duration_minutes(prompt)
+        
+        # New: Agenda Extraction
+        agenda = None
+        agenda_match = re.search(r"agenda[:\s]+(.*?)(?:\.|$)", prompt, flags=re.IGNORECASE)
+        if agenda_match:
+            agenda = agenda_match.group(1).strip()
+        
+        # Use LLM for high-precision title extraction
+        try:
+            title_prompt = (
+                "Extract a concise meeting title. "
+                "If no title is clear or just 'meeting' is mentioned, returns 'Quick Sync'. "
+                "Output ONLY the title string."
+            )
+            title = await _generate_with_groq(title_prompt, prompt)
+            title = title.strip().strip("'\"")
+        except Exception:
+            title = _extract_title(prompt)
 
         event_data = {
             "user_id": user_id,
             "title": title,
-            "description": "Created by GraftAI Sovereign Assistant",
+            "agenda": agenda,
+            "description": f"Agenda: {agenda}" if agenda else "Created by GraftAI Sovereign Assistant",
             "category": "meeting",
             "start_time": start_time,
             "end_time": start_time + timedelta(minutes=duration),
@@ -666,8 +697,12 @@ async def ai_chat(
                 logger.error(f"Offline system fail: {exc}", exc_info=True)
                 result_text = "I encountered an internal error processing that request. Please try again."
                 action = {"type": intent, "status": "error"}
-            
-            await increment_usage(db, user_id, "ai_messages")
+
+            try:
+                await increment_usage(db, user_id, "ai_messages")
+            except Exception as exc:
+                logger.warning(f"AI usage bookkeeping failed (offline): {exc}", exc_info=True)
+
             return AIResponse(result=result_text, model_used="graftai-offline", action=action)
         case _:
             pass # Continue to online mode
@@ -675,7 +710,10 @@ async def ai_chat(
     cache_key = f"ai:chat:{user_id}:{hash((prompt, request.timezone))}"
     cached = await get_cache(cache_key)
     if isinstance(cached, str) and cached.strip():
-        await increment_usage(db, user_id, "ai_messages")
+        try:
+            await increment_usage(db, user_id, "ai_messages")
+        except Exception as exc:
+            logger.warning(f"AI usage bookkeeping failed (cache hit): {exc}", exc_info=True)
         return AIResponse(result=cached, model_used="graftai-assistant-cache", action={"type": "none"})
 
     now = datetime.now(timezone.utc)
@@ -704,12 +742,20 @@ async def ai_chat(
         "Do not apologize for limitations; simply provide the best possible path forward. "
         "You have full visibility into the user's calendar through the AUTHORITATIVE CONTEXT below.\n\n"
         "STRICT DIRECTIVES:\n"
-        "1. Use event IDs (e.g. #42) when referencing specific meetings.\n"
-        "2. When suggesting times, favor clarity over conversational fluff.\n"
-        "3. If a conflict is detected, highlight it immediately.\n"
-        "4. Identify the user's meeting platform preference (Zoom, Google Meet, or MS Teams) from the prompt. "
-        "   If they ask for a 'Zoom' meeting, explicitly mention it will be scheduled as such.\n"
-        "5. Never mention third-party AI provider names."
+        "1. Response format MUST be minimalistic. Strictly use markdown bullet points and data tables.\n"
+        "2. Absolutely ZERO conversational pleasantries, greetings, or filler text. No 'Hello', 'Sure', 'I can help'.\n"
+        "3. Use event IDs (e.g. #42) when referencing specific meetings.\n"
+        "4. If a conflict is detected, highlight it immediately in a warning bullet.\n"
+        "5. If scheduling information is missing (Title, Time, or Agenda), output ONLY this exact block:\n"
+        "   - **Title**: [Brief meeting name]\n"
+        "   - **Time**: [Date/Time]\n"
+        "   - **Platform**: [Google Meet / Zoom / Teams]\n"
+        "   - **Agenda**: [Key discussion points]\n"
+        "6. Never mention third-party AI provider names.\n"
+        "7. 3-TIER AUTOMATION LOGIC: Base suggestions clearly on:\n"
+        "   - Tier 1 (Draft): Present draft constraints for user confirmation.\n"
+        "   - Tier 2 (Trusted): Auto-schedule and strictly notify.\n"
+        "   - Tier 3 (Full Auto): Process without UI blocker if calendar permits.\n"
     )
     user_input = (
         f"### AUTHORITATIVE CONTEXT (C-Table: ID|Title|Day|TimeRange)\n{compact_context}\n\n"
@@ -775,5 +821,8 @@ async def ai_chat(
         )
 
     await set_cache(cache_key, result_text, 120)
-    await increment_usage(db, user_id, "ai_messages")
+    try:
+        await increment_usage(db, user_id, "ai_messages")
+    except Exception as exc:
+        logger.warning(f"AI usage bookkeeping failed (online): {exc}", exc_info=True)
     return AIResponse(result=result_text, model_used=model_used, action={"type": "none"})

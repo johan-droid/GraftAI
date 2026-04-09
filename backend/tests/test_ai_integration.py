@@ -48,6 +48,33 @@ async def test_proactive_context_injection():
 
 
 @pytest.mark.asyncio
+async def test_ai_chat_returns_response_when_usage_increment_fails():
+    user_id = 999
+    db_mock = AsyncMock(spec=AsyncSession)
+    request = ai.AIRequest(prompt="Summarize my next 3 meetings.", timezone="UTC")
+
+    with patch("backend.services.ai.get_cache", return_value=None), patch(
+        "backend.services.ai.set_cache"
+    ), patch("backend.services.ai._generate_with_groq_response", new_callable=AsyncMock) as mock_gen, patch(
+        "backend.services.ai.increment_usage", new_callable=AsyncMock
+    ) as mock_usage, patch(
+        "backend.services.scheduler.get_events_for_range", new_callable=AsyncMock
+    ) as mock_events, patch(
+        "backend.services.ai.get_recent_emails", new_callable=AsyncMock
+    ) as mock_emails:
+        mock_gen.return_value = ("Here are your upcoming meetings.", "llama-3.3-70b-versatile")
+        mock_usage.side_effect = RuntimeError("usage db unavailable")
+        mock_events.return_value = []
+        mock_emails.return_value = []
+
+        response = await ai.ai_chat(request, user_id=user_id, db=db_mock)
+
+        assert response.result == "Here are your upcoming meetings."
+        assert response.model_used.startswith("graftai-assistant-online")
+        mock_usage.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_multi_action_parsing():
     user_id = 999
     db_mock = AsyncMock(spec=AsyncSession)

@@ -1,3 +1,4 @@
+import fnmatch
 import os
 import logging
 from typing import Any
@@ -69,3 +70,51 @@ async def get_cache(key: str):
             except Exception:
                 return value
     return value
+
+
+async def delete_cache(key: str):
+    r = await _get_redis()
+    if r:
+        try:
+            await r.delete(key)
+            return
+        except Exception:
+            pass
+    _fallback_cache.pop(key, None)
+
+
+async def delete_cache_pattern(pattern: str):
+    r = await _get_redis()
+    if r:
+        try:
+            cursor = 0
+            while True:
+                cursor, keys = await r.scan(cursor=cursor, match=pattern, count=100)
+                if keys:
+                    await r.delete(*keys)
+                if cursor == 0:
+                    break
+            return
+        except Exception:
+            pass
+
+    keys_to_delete = [k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)]
+    for k in keys_to_delete:
+        _fallback_cache.pop(k, None)
+
+
+async def delete_cache_pattern(pattern: str):
+    r = await _get_redis()
+    if r:
+        try:
+            cursor = b"0"
+            while cursor != 0:
+                cursor, keys = await r.scan(cursor=cursor, match=pattern, count=100)
+                if keys:
+                    await r.delete(*keys)
+            return
+        except Exception:
+            pass
+    keys_to_delete = [k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)]
+    for k in keys_to_delete:
+        _fallback_cache.pop(k, None)

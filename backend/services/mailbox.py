@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from anyio import to_thread
 
-from backend.models.user_token import UserTokenTable
+from backend.models.tables import UserTokenTable
 from backend.utils.db import unwrap_result
 from backend.services.integrations.google_calendar import get_google_credentials
 from backend.services.integrations.ms_graph import get_ms_graph_token

@@ -22,10 +22,19 @@ import {
   Zap,
   BarChart3,
   ArrowUp,
+  CloudOff,
+  Wifi,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sendAiChat, getEvents } from "@/lib/api";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Input } from "@/components/ui/Input";
+import { useAuth } from "@/providers/auth-provider";
+
+import { useSyncEngine } from "@/hooks/useSyncEngine";
+import { db } from "@/lib/db";
 
 interface Message {
   id: string;
@@ -143,12 +152,12 @@ const buildCalendarAwareSuggestions = (events: CalendarEvent[]): SuggestedAction
       data: { prompt: "Summarize my day in timeline format with recommended priorities." },
     },
     {
-      id: "find-free-slots",
+      id: "schedule-with-agenda",
       type: "query",
-      label: "Find free slots",
-      description: "Detect available windows for deep work",
-      icon: "lightbulb",
-      data: { prompt: "What are my free time slots today for 60-90 minute focus sessions?" },
+      label: "Schedule with agenda",
+      description: "Set up a structured meeting with goal points",
+      icon: "calendar",
+      data: { prompt: "Schedule a 30m sync on Google Meet for tomorrow at 3pm. Agenda: 1. Goal alignment, 2. Roadmap review." },
     }
   );
 
@@ -160,7 +169,7 @@ const buildCalendarAwareSuggestions = (events: CalendarEvent[]): SuggestedAction
 };
 
 export default function AICopilotChat() {
-  const { user } = useAuthContext();
+  const { user } = useAuth();
   const displayUser = user as { name?: string; email?: string } | null;
   const displayName = displayUser?.name?.split(" ")[0] ?? displayUser?.email?.split("@")[0] ?? "there";
   
@@ -181,6 +190,7 @@ export default function AICopilotChat() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const { isOnline } = useSyncEngine();
   const calendarAwareSuggestions = useMemo(() => buildCalendarAwareSuggestions(upcomingEvents), [upcomingEvents]);
 
   const scrollToBottom = () => {
@@ -297,6 +307,31 @@ export default function AICopilotChat() {
       timestamp: new Date(),
     };
 
+    if (!isOnline) {
+       const aiMessage: Message = {
+        id: `ai-offline-${Date.now()}`,
+        role: "ai",
+        content: "I've saved your request locally. It will auto-sync and schedule when your connection is restored.",
+        timestamp: new Date()
+      };
+      
+      try {
+        await db.chats.add({
+          id: userMessage.id,
+          role: 'user',
+          content: textToSend,
+          metadata: { intent: 'offline_schedule', payload: textToSend },
+          timestamp: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error("Dexie queue error", err);
+      }
+
+      setMessages((prev) => [...prev, userMessage, aiMessage]);
+      setInput("");
+      return;
+    }
+
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
@@ -387,15 +422,26 @@ export default function AICopilotChat() {
       {/* Top Header — Minimal on mobile */}
       <div className="flex h-14 shrink-0 items-center justify-between px-3 sm:px-6 pb-2">
         <div className="flex items-center gap-3">
+            {isOnline ? (
+              <Badge variant="secondary" className="flex items-center gap-1.5 px-2 py-1 text-emerald-400 bg-emerald-400/10 border-emerald-500/20">
+                 <Wifi className="h-3 w-3" /> Online
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="flex items-center gap-1.5 px-2 py-1 text-amber-400 bg-amber-400/10 border-amber-500/20">
+                 <CloudOff className="h-3 w-3" /> Offline Mode
+              </Badge>
+            )}
             {/* Context Dropdown Button */}
             <div className="relative" ref={dropdownRef}>
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowContextDropdown(!showContextDropdown)}
-                className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-slate-400 transition hover:bg-white/[0.08] focus:outline-none"
+                className="flex items-center gap-2"
               >
                 <Calendar className="h-4 w-4" />
                 <span className="hidden sm:inline">Context & Events ({upcomingEvents.length})</span>
-              </button>
+              </Button>
               
               {/* Dropdown Content */}
               <AnimatePresence>
@@ -434,18 +480,22 @@ export default function AICopilotChat() {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={clearConversation}
-            className="rounded-xl p-2.5 text-slate-500 hover:bg-white/[0.06] hover:text-slate-200 transition-colors"
+            className="text-muted-foreground hover:text-foreground"
             title="New Chat"
           >
             <RefreshCw className="h-4 w-4" />
-          </button>
-          <button
-            className="rounded-xl p-2.5 text-slate-500 hover:bg-white/[0.06] hover:text-slate-200 transition-colors"
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
           >
             <MoreHorizontal className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -491,20 +541,22 @@ export default function AICopilotChat() {
               transition={{ duration: 0.4, delay: 0.2 }}
               className="mt-6 w-full max-w-md"
             >
-              <div className="flex items-center gap-3 rounded-2xl border border-indigo-500/15 bg-indigo-500/[0.06] px-4 py-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15">
-                  <Calendar className="h-4 w-4 text-indigo-400" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-white truncate">{upcomingEvents[0].title}</p>
-                  <p className="text-xs text-slate-400">
-                    Next up · {formatEventTime(upcomingEvents[0].start_time)}
-                  </p>
-                </div>
-                <span className="text-xs font-medium text-indigo-400/80">
-                  {upcomingEvents[0].category}
-                </span>
-              </div>
+              <Card className="bg-primary/5 border-primary/10 shadow-none">
+                <CardContent className="flex items-center gap-3 p-4">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                    <Calendar className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{upcomingEvents[0].title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Next up · {formatEventTime(upcomingEvents[0].start_time)}
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15">
+                    {upcomingEvents[0].category}
+                  </Badge>
+                </CardContent>
+              </Card>
             </motion.div>
           )}
 
@@ -515,14 +567,14 @@ export default function AICopilotChat() {
             transition={{ duration: 0.4, delay: 0.25 }}
             className="mt-8 w-full max-w-2xl px-2"
           >
-            <form onSubmit={handleSubmit} className="relative rounded-2xl border border-slate-700/80 bg-slate-950/80 p-4 transition-all focus-within:border-slate-500/70 focus-within:bg-slate-950/90 hover:border-slate-600/80 shadow-md shadow-black/20">
+            <form onSubmit={handleSubmit} className="relative rounded-xl border bg-card p-3 shadow-sm transition-all focus-within:ring-1 focus-within:ring-primary/20">
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask anything about your schedule..."
-                className="w-full resize-none border-0 bg-transparent text-slate-100 placeholder:text-slate-500 focus:ring-0 sm:text-base outline-none min-h-[44px] text-[15px]"
+                className="w-full resize-none border-0 bg-transparent text-foreground placeholder:text-muted-foreground focus:ring-0 focus:outline-none sm:text-base outline-none min-h-[44px] text-sm"
                 rows={1}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
@@ -532,19 +584,17 @@ export default function AICopilotChat() {
               />
               <div className="mt-2 flex items-center justify-between">
                 <div />
-                <button
+                <Button
                   type="submit"
+                  size="icon"
                   disabled={!hasText || isTyping}
                   className={cn(
-                    "inline-flex items-center justify-center rounded-xl p-2 transition-all duration-200",
-                    hasText
-                      ? "bg-slate-700 text-slate-100 shadow-sm shadow-black/20 hover:bg-slate-600"
-                      : "text-slate-500 hover:bg-slate-800",
-                    "disabled:opacity-40 disabled:cursor-not-allowed"
+                    "rounded-lg transition-all duration-200",
+                    hasText ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted text-muted-foreground hover:bg-muted"
                   )}
                 >
                   {isTyping ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-                </button>
+                </Button>
               </div>
             </form>
           </motion.div>
@@ -667,14 +717,14 @@ export default function AICopilotChat() {
           
           {/* Composer (conversation mode) — Frosted glass pinned bottom */}
           <div className="mobile-composer mx-auto w-full max-w-3xl px-3 sm:px-4 py-3">
-            <form onSubmit={handleSubmit} className="relative rounded-2xl border border-white/[0.1] bg-white/[0.04] p-3 transition-all focus-within:border-white/20 focus-within:bg-white/[0.06] shadow-lg shadow-black/10">
+            <form onSubmit={handleSubmit} className="relative rounded-xl border bg-card p-3 shadow-lg transition-all focus-within:ring-1 focus-within:ring-primary/20">
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Type your message..."
-                className="w-full resize-none border-0 bg-transparent text-white placeholder:text-slate-500 focus:ring-0 sm:text-base outline-none min-h-[44px] text-[15px]"
+                className="w-full resize-none border-0 bg-transparent text-foreground placeholder:text-muted-foreground focus:ring-0 focus:outline-none sm:text-base outline-none min-h-[44px] text-sm"
                 rows={1}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
@@ -684,19 +734,17 @@ export default function AICopilotChat() {
               />
               <div className="mt-1.5 flex items-center justify-between">
                 <div />
-                <button
+                <Button
                   type="submit"
+                  size="icon"
                   disabled={!hasText || isTyping}
                   className={cn(
-                    "inline-flex items-center justify-center rounded-xl p-2 transition-all duration-200",
-                    hasText
-                      ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500"
-                      : "text-slate-500 hover:bg-white/[0.06]",
-                    "disabled:opacity-40 disabled:cursor-not-allowed"
+                    "rounded-lg transition-all duration-200",
+                    hasText ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted text-muted-foreground hover:bg-muted"
                   )}
                 >
                   {isTyping ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

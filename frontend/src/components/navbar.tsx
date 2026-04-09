@@ -3,24 +3,23 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { Cpu, Calendar, Bot, LogIn, Command, Menu, X, ArrowRight } from "lucide-react";
+import { Cpu, Calendar, Bot, LogIn, Command, Menu, X, ArrowRight, Zap } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/providers/auth-provider";
 import PulsePing from "./ui/pulse-ping";
 import { useNotificationContext } from "@/providers/notification-provider";
 import { AnimatePresence } from "framer-motion";
 
 const NAV_ITEMS = [
-  { name: "Dashboard", href: "/dashboard", icon: Command },
+  { name: "Dashboard", href: "/dashboard/calendar", icon: Command },
   { name: "Features", href: "/#features", icon: Bot },
-  { name: "Pricing", href: "/pricing", icon: Calendar },
 ];
 
 export function Navbar() {
   const pathname = usePathname();
-  const { isAuthenticated } = useAuthContext();
+  const { user, logout } = useAuth();
   const { activePing } = useNotificationContext();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isAuthPage = pathname === "/login" || pathname === "/register" || pathname === "/auth-callback";
@@ -35,7 +34,7 @@ export function Navbar() {
   }, [mobileOpen]);
 
   const visibleNavItems = NAV_ITEMS.filter(item => {
-    if (item.href === "/dashboard") return isAuthenticated;
+    if (item.href.startsWith("/dashboard")) return !!user;
     return true;
   });
 
@@ -44,12 +43,9 @@ export function Navbar() {
   return (
     <nav className="floating-nav">
       <Link href="/" className="flex items-center gap-2 pr-3 border-r border-white/10 group">
-        <motion.div 
-          whileHover={{ rotate: 5, scale: 1.05 }}
-          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all overflow-hidden"
-        >
-          <Image src="/assets/logo.png" alt="GraftAI" width={40} height={40} className="object-contain" />
-        </motion.div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/25">
+          <Zap className="w-5 h-5 text-white fill-white" />
+        </div>
         <span className="hidden sm:inline-block font-bold text-sm tracking-tight text-white/90 group-hover:text-white transition-colors">
           GraftAI
         </span>
@@ -74,7 +70,7 @@ export function Navbar() {
                 {isActive && (
                   <motion.div 
                     layoutId="nav-underline"
-                    className="absolute -bottom-1 left-2 right-2 h-0.5 bg-primary rounded-full"
+                    className="absolute -bottom-1 left-2 right-2 h-0.5 bg-indigo-500 rounded-full"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
@@ -91,15 +87,27 @@ export function Navbar() {
         </button>
       </div>
 
-      {!isAuthenticated ? (
-        <Link
-          href="/login"
-          className="hidden sm:flex ml-auto px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-black uppercase tracking-tighter transition-all items-center gap-2 group"
-        >
-          <LogIn className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-          <span>Sync</span>
-        </Link>
-      ) : null}
+      <div className="hidden sm:flex ml-auto items-center gap-4">
+        {user ? (
+          <div className="flex items-center gap-4 pl-4 border-l border-white/10">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{user.email}</span>
+            <button
+              onClick={logout}
+              className="px-4 py-1.5 rounded-full bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 text-slate-400 hover:text-red-400 text-[10px] font-black uppercase tracking-widest transition-all"
+            >
+              Logout
+            </button>
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="px-4 py-1.5 rounded-full bg-white text-black text-xs font-black uppercase tracking-tighter transition-all flex items-center gap-2 group hover:bg-slate-200 active:scale-95"
+          >
+            <LogIn className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+            <span>Sign In</span>
+          </Link>
+        )}
+      </div>
 
       <AnimatePresence>
         {mobileOpen && (
@@ -142,8 +150,21 @@ export function Navbar() {
                 ))}
               </div>
 
-              <div className="mt-auto pt-6 border-t border-white/10">
-                {!isAuthenticated && (
+              <div className="mt-auto pt-6 border-t border-white/10 space-y-3">
+                {user ? (
+                  <>
+                    <div className="px-4 py-3 rounded-xl bg-white/[0.03] text-center">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Signed in as</p>
+                      <p className="text-xs font-bold text-white truncate">{user.email}</p>
+                    </div>
+                    <button
+                      onClick={() => { logout(); setMobileOpen(false); }}
+                      className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-bold active:scale-[0.98] transition-all"
+                    >
+                      Logout
+                    </button>
+                  </>
+                ) : (
                   <Link
                     href="/login"
                     onClick={() => setMobileOpen(false)}

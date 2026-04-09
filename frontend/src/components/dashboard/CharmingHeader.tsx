@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, Calendar, Clock, ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -21,18 +21,15 @@ const WISHES = [
 ];
 
 export const CharmingHeader: React.FC<CharmingHeaderProps> = ({ userName, upcomingCount = 0 }) => {
-  const [greeting, setGreeting] = useState("Status");
-  const [wish, setWish] = useState(WISHES[0]);
-
-  useEffect(() => {
+  const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) setGreeting("Morning Briefing");
-    else if (hour >= 12 && hour < 17) setGreeting("Afternoon Pulse");
-    else if (hour >= 17 && hour < 22) setGreeting("Evening Review");
-    else setGreeting("Night Operations");
-
-    setWish(WISHES[Math.floor(Math.random() * WISHES.length)]);
+    if (hour >= 5 && hour < 12) return "Morning Briefing";
+    if (hour >= 12 && hour < 17) return "Afternoon Pulse";
+    if (hour >= 17 && hour < 22) return "Evening Review";
+    return "Night Operations";
   }, []);
+
+  const [wish] = useState(() => WISHES[Math.floor(Math.random() * WISHES.length)]);
 
   const initial = userName?.charAt(0).toUpperCase() || "G";
 
@@ -67,11 +64,11 @@ export const CharmingHeader: React.FC<CharmingHeaderProps> = ({ userName, upcomi
             <Sparkles className="w-2.5 h-2.5 text-indigo-400" />
           </div>
           <span className="text-indigo-400 text-[9px] font-black underline decoration-indigo-500/30 underline-offset-4 uppercase tracking-[0.25em]">
-            {greeting} // {userName}
+            {greeting} {/* {userName} */}
           </span>
         </motion.div>
 
-        <motion.h1 
+        <motion.h1
           variants={item}
           className="font-serif text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight"
         >

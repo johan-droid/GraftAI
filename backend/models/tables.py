@@ -1,272 +1,167 @@
 import uuid
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Boolean,
-    DateTime,
-    JSON,
-    ForeignKey,
-    func,
-    Text,
-    UniqueConstraint,
-    Index,
-)
-from sqlalchemy.dialects.postgresql import JSONB
+from datetime import datetime, timezone
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, JSON, UniqueConstraint, Integer
 from sqlalchemy.orm import relationship
-import enum
-from .base import Base
+from .base import Base # Re-using central Base for consistency
 
-class UserTier(str, enum.Enum):
-    FREE = "free"
-    PRO = "pro"
-    ELITE = "elite"
+def generate_uuid():
+    return str(uuid.uuid4())
 
 class UserTable(Base):
+    """Core user account. Stripped of complex multi-tenant organization IDs."""
     __tablename__ = "users"
 
-    id = Column(String(100), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String(255), unique=True, index=True, nullable=False)
-
-    # Better Auth native columns (snake_case)
-    name = Column(String(255))
-    email_verified = Column(Boolean, default=False)
-    image = Column(String(1024))
-
-    # Custom / legacy columns — nullable so Better Auth users don't need them
-    full_name = Column(String(255))
-    is_active = Column(Boolean, default=True, nullable=False)
-    is_superuser = Column(Boolean, default=False, nullable=False)
-    hashed_password = Column(String(512))
-    tenant_id = Column(Integer, index=True)
-    
-    # RBAC & Security (Phase 1)
-    role = Column(String(20), default="member", nullable=False) # admin, member, service_account
-    mfa_enabled = Column(Boolean, default=False, nullable=False)
-    mfa_secret = Column(String(128)) # Encrypted TOTP secret
-
-    # User Profile Detailing
-    bio = Column(Text)
-    job_title = Column(String(255))
-    location = Column(String(255))
-
-    # SaaS & Billing
-    tier = Column(String(20), default=UserTier.FREE, nullable=False)
-    stripe_customer_id = Column(String(255), index=True)
-    razorpay_customer_id = Column(String(255), index=True)
-    razorpay_subscription_id = Column(String(255), index=True)
-    subscription_status = Column(String(50), default="inactive") # active, trialing, past_due, canceled
-    
-    # Daily Usage Tracking
-    daily_ai_count = Column(Integer, default=0, nullable=False)
-    daily_sync_count = Column(Integer, default=0, nullable=False)
-    last_usage_reset = Column(DateTime(timezone=True), server_default=func.now())
-    timezone = Column(String(50), default="UTC", nullable=False)
-
-    # Quota Alert State
-    ai_quota_warning_sent = Column(Boolean, default=False, nullable=False)
-    sync_quota_warning_sent = Column(Boolean, default=False, nullable=False)
-    last_quota_warning_at = Column(DateTime(timezone=True))
-
-    # Consent Preferences
-    consent_analytics = Column(Boolean, default=True, nullable=False)
-    consent_notifications = Column(Boolean, default=True, nullable=False)
-    consent_ai_training = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    deleted_at = Column(DateTime(timezone=True), index=True) # Soft-delete timestamp
-    
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
+    id = Column(String, primary_key=True, default=generate_uuid)
+    email = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String, unique=True, index=True, nullable=True)
+    full_name = Column(String, nullable=True)
+    timezone = Column(String, nullable=True, default="UTC")
+    hashed_password = Column(String, nullable=False) # Enforced non-nullable for Monolith
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    events = relationship(
-        "EventTable", back_populates="user", cascade="all, delete-orphan"
-    )
-    sessions = relationship(
-        "SessionTable", back_populates="user", cascade="all, delete-orphan"
-    )
-    profile = relationship(
-        "UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"
-    )
-    accounts = relationship(
-        "AccountTable", cascade="all, delete-orphan"
-    )
-    webhook_subscriptions = relationship(
-        "WebhookSubscriptionTable", back_populates="user", cascade="all, delete-orphan"
-    )
-    notifications = relationship(
-        "NotificationTable", back_populates="user", cascade="all, delete-orphan"
-    )
+    tokens = relationship("UserTokenTable", back_populates="user", cascade="all, delete-orphan")
+    events = relationship("EventTable", back_populates="user", cascade="all, delete-orphan")
+    event_types = relationship("EventTypeTable", back_populates="user", cascade="all, delete-orphan")
+    bookings = relationship("BookingTable", back_populates="user", cascade="all, delete-orphan")
+    webhooks = relationship("WebhookSubscriptionTable", back_populates="user", cascade="all, delete-orphan")
 
 
-class SessionTable(Base):
-    __tablename__ = "session"
+class UserTokenTable(Base):
+    """Holds OAuth tokens for Google Calendar / MS Graph."""
+    __tablename__ = "user_tokens"
 
-    id = Column(String(255), primary_key=True)
-    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    token = Column(String(255), unique=True, index=True, nullable=False)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    ip_address = Column(String(255))
-    user_agent = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    user = relationship("UserTable", back_populates="sessions")
-
-
-class UserProfile(Base):
-    __tablename__ = "user_profiles"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
-    subscription_tier = Column(String(50), default="free")
-    monthly_ai_credits = Column(Integer, default=100)
-    used_ai_credits = Column(Integer, default=0)
-    onboarding_complete = Column(Boolean, default=False)
-    preferred_locale = Column(String(20), default="en-US")
-    avatar_url = Column(String(1024))
-
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    user = relationship("UserTable", back_populates="profile")
-
-
-class AccountTable(Base):
-    __tablename__ = "account"
-
-    id = Column(String(255), primary_key=True)
-    userId = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    accountId = Column(String(255), nullable=False)
-    providerId = Column(String(255), nullable=False)
-    accessToken = Column(Text)
-    refreshToken = Column(Text)
-    idToken = Column(Text)
-    accessTokenExpiresAt = Column(DateTime(timezone=True))
-    refreshTokenExpiresAt = Column(DateTime(timezone=True))
-    createdAt = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String, nullable=False)  # e.g., 'google' or 'microsoft'
     
-    user = relationship("UserTable", back_populates="accounts")
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Used by the sync engine to fetch only new events
+    sync_token = Column(String, nullable=True)  
+    is_active = Column(Boolean, default=True)
+
+    user = relationship("UserTable", back_populates="tokens")
 
 
 class EventTable(Base):
-    """
-    Sovereign Scheduling Table
-    Supports high-density meeting management and category-based visualization.
-    """
-
+    """Unified table for both local schedule blocks and external synced events."""
     __tablename__ = "events"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(
-        String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    event_type_id = Column(String, ForeignKey("event_types.id", ondelete="SET NULL"), nullable=True, index=True)
     
-    __table_args__ = (
-        UniqueConstraint("user_id", "external_id", name="uq_user_external_id"),
-        Index("idx_events_user_time_range", "user_id", "start_time", "end_time"),
-    )
-
-    title = Column(String(512), nullable=False)
-    description = Column(Text)
-    category = Column(
-        String(50), default="meeting", index=True
-    )  # meeting, event, birthday, task
-    color = Column(String(20), default="#8A2BE2")
-
-    start_time = Column(DateTime(timezone=True), nullable=False, index=True)
-    end_time = Column(DateTime(timezone=True), nullable=False, index=True)
-
-    # Advanced metadata for AI integration (e.g. priority, required participants, location)
-    metadata_payload = Column(JSONB().with_variant(JSON, "sqlite"), default={}, nullable=False)
-
-    is_remote = Column(Boolean, default=True)
-    status = Column(String(50), default="confirmed")  # confirmed, pending, canceled
-    is_reminded = Column(Boolean, default=False, nullable=False)
-    
-    # SaaS Meeting Integration
+    external_id = Column(String, nullable=True, index=True) # ID from Google/MSFT
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=False)
+    source = Column(String, nullable=False) # 'google', 'microsoft', or 'local'
+    location = Column(String, nullable=True)
+    meeting_url = Column(Text, nullable=True)
     is_meeting = Column(Boolean, default=False, nullable=False)
-    meeting_platform = Column(String(50))  # google_meet, zoom, teams
-    meeting_link = Column(String(1024))
-    attendees = Column(JSONB().with_variant(JSON, "sqlite"), default=[], nullable=False)
-    agenda = Column(Text)
+    meeting_provider = Column(String, nullable=True)
+    attendees = Column(JSON, nullable=True)
+    metadata_payload = Column(JSON, nullable=True)
+    
+    # We kept the fingerprint to detect changes easily without complex diffing
+    fingerprint = Column(String, nullable=False, index=True) 
+    
+    # Used by the Arq worker to trigger the simple email reminder
+    is_reminded = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    # Smart Sync Engine Fields
-    external_id = Column(String(512), index=True) # ID from Google/Microsoft/Zoom
-    fingerprint = Column(String(256), index=True) # deduplication hash
-    source = Column(String(50), default="local", index=True) # google, microsoft, zoom, local
+    user = relationship("UserTable", back_populates="events")
+    event_type = relationship("EventTypeTable", back_populates="events")
+    booking = relationship("BookingTable", back_populates="event", uselist=False)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+
+class BookingTable(Base):
+    __tablename__ = "bookings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "start_time", "end_time", name="uq_bookings_user_start_end"),
     )
 
-    # Relationships
-    user = relationship("UserTable", back_populates="events")
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type_id = Column(String, ForeignKey("event_types.id", ondelete="SET NULL"), nullable=True, index=True)
+    event_id = Column(String, ForeignKey("events.id", ondelete="SET NULL"), nullable=True, index=True)
 
-class ProcessedWebhook(Base):
-    """
-    Idempotency table for tracking processed Stripe/Razorpay webhook events.
-    Prevents duplicate processing of retried webhooks.
-    """
-    __tablename__ = "processed_webhooks"
-    
-    event_id = Column(String(255), primary_key=True)
-    provider = Column(String(50), nullable=False) # stripe, razorpay
-    processed_at = Column(DateTime(timezone=True), server_default=func.now())
+    full_name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    time_zone = Column(String, nullable=True)
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=False)
+    status = Column(String, nullable=False, default="confirmed")
+    questions = Column(JSON, nullable=True)
+    metadata_payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("UserTable", back_populates="bookings")
+    event_type = relationship("EventTypeTable")
+    event = relationship("EventTable", back_populates="booking")
+
 
 class WebhookSubscriptionTable(Base):
-    """
-    Tracks active push notification subscriptions for Google and MS Graph.
-    Ensures 'Perfect Sync' by enabling proactive renewal before expiration.
-    """
     __tablename__ = "webhook_subscriptions"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(
-        String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    provider = Column(String(50), nullable=False) # google, microsoft
-    
-    # Provider-specific tracking
-    external_subscription_id = Column(String(255), unique=True, index=True, nullable=False)
-    resource_id = Column(String(255), index=True) # Used by Google for renewals/stopping
-    
-    client_state = Column(String(255)) # Secret token for verification
-    expiration_at = Column(DateTime(timezone=True), nullable=False, index=True)
-    
-    is_active = Column(Boolean, default=True, nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-    
-    __table_args__ = (
-        Index("idx_webhook_expiry", "expiration_at", "is_active"),
-    )
-    
-    # Relationship (Audit: Back-populates for clean cascaded delete)
-    user = relationship("UserTable", back_populates="webhook_subscriptions")
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    url = Column(String, nullable=False)
+    events = Column(JSON, nullable=False)
+    active = Column(Boolean, default=True, nullable=False)
+    secret = Column(String, nullable=False)
+    external_subscription_id = Column(String, nullable=True, index=True)
+    client_state = Column(String, nullable=True)
+    last_triggered = Column(DateTime(timezone=True), nullable=True)
+    last_status = Column(Integer, nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    user = relationship("UserTable", back_populates="webhooks")
+    logs = relationship("WebhookLogTable", back_populates="webhook", cascade="all, delete-orphan")
 
 
-class NotificationTable(Base):
-    __tablename__ = "notifications"
+class WebhookLogTable(Base):
+    __tablename__ = "webhook_logs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(
-        String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    type = Column(String(50), default="event", index=True)  # event, reminder, system
-    title = Column(String(255), nullable=False)
-    body = Column(Text)
-    recipient = Column(String(255), default="", nullable=False)
-    data = Column(JSONB().with_variant(JSON, "sqlite"), default={}, nullable=False)
-    is_read = Column(Boolean, default=False, nullable=False, index=True)
+    id = Column(String, primary_key=True, default=generate_uuid)
+    webhook_id = Column(String, ForeignKey("webhook_subscriptions.id", ondelete="CASCADE"), nullable=False, index=True)
+    event = Column(String, nullable=False)
+    payload = Column(JSON, nullable=False)
+    request_status = Column(Integer, nullable=False, default=0)
+    request_error = Column(Text, nullable=True)
+    attempts = Column(Integer, nullable=False, default=1)
+    next_retry_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    webhook = relationship("WebhookSubscriptionTable", back_populates="logs")
 
-    # Relationship (Audit: Back-populates for clean cascaded delete)
-    user = relationship("UserTable", back_populates="notifications")
+
+class EventTypeTable(Base):
+    __tablename__ = "event_types"
+    __table_args__ = (UniqueConstraint("user_id", "slug", name="uq_user_event_type_slug"),)
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    slug = Column(String, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    duration_minutes = Column(Integer, nullable=False, default=60)
+    meeting_provider = Column(String, nullable=True)
+    is_public = Column(Boolean, default=True)
+    buffer_before_minutes = Column(Integer, nullable=True)
+    buffer_after_minutes = Column(Integer, nullable=True)
+    minimum_notice_minutes = Column(Integer, nullable=True, default=0)
+    availability = Column(JSON, nullable=True)
+    exceptions = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("UserTable", back_populates="event_types")
+    events = relationship("EventTable", back_populates="event_type", cascade="all, delete-orphan")

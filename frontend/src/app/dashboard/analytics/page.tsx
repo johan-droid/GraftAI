@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   TrendingUp,
@@ -12,7 +11,9 @@ import {
   Zap,
   Loader2,
 } from "lucide-react";
-import { getAnalyticsRealtime, type AnalyticsRealtimeResponse } from "@/lib/api";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import TimelineLineChart from "@/components/TimelineLineChart";
 import { cn } from "@/lib/utils";
 import { isMobile } from "react-device-detect";
@@ -26,18 +27,31 @@ const ITEM = {
   visible: { opacity: 1, y: 0 },
 };
 
-const KPI_STYLES: Record<string, { bg: string; border: string; icon: string }> = {
-  indigo: { bg: "bg-indigo-500/10", border: "border-indigo-500/20", icon: "text-indigo-400" },
-  violet: { bg: "bg-violet-500/10", border: "border-violet-500/20", icon: "text-violet-400" },
-  cyan: { bg: "bg-cyan-500/10", border: "border-cyan-500/20", icon: "text-cyan-400" },
-  emerald: { bg: "bg-emerald-500/10", border: "border-emerald-500/20", icon: "text-emerald-400" },
-};
+interface AnalyticsMeetingType {
+  label: string;
+  pct: number;
+}
+
+interface AnalyticsTotals {
+  meetings: number;
+  hours: number;
+  growth: number;
+  unique_attendees: number;
+  cancellations: number;
+}
+
+interface AnalyticsData {
+  meeting_types?: AnalyticsMeetingType[];
+  summary?: string;
+  series?: Array<Record<string, unknown>>;
+  totals?: AnalyticsTotals;
+}
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<AnalyticsRealtimeResponse | null>(null);
+  const [data, setData] = useState<AnalyticsData | null>(null);
 
   const handleRangeChange = (nextRange: "7d" | "30d" | "90d") => {
     setError(null);
@@ -78,22 +92,22 @@ export default function AnalyticsPage() {
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-5">
-        <motion.div variants={ITEM} className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <motion.div variants={ITEM} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Analytics</h1>
-            <p className="text-slate-500 text-[13px] mt-1 line-clamp-1">Advanced scheduling intelligence and workspace metrics.</p>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Analytics</h1>
+            <p className="text-slate-400 text-sm mt-1">Advanced scheduling intelligence and workspace metrics.</p>
           </div>
-          <div className="sm:ml-auto flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/8 backdrop-blur-md">
+          <div className="flex items-center gap-2">
             {(["7d", "30d", "90d"] as const).map((r) => (
-              <button
+              <Button
                 key={r}
+                variant={range === r ? "default" : "outline"}
+                size="sm"
                 onClick={() => handleRangeChange(r)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  range === r ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
-                }`}
+                className={range === r ? "shadow-lg shadow-indigo-600/20" : ""}
               >
-                {r === "7d" ? "7D" : r === "30d" ? "30D" : "90D"}
-              </button>
+                {r === "7d" ? "7 Days" : r === "30d" ? "30 Days" : "90 Days"}
+              </Button>
             ))}
           </div>
         </motion.div>
@@ -106,89 +120,82 @@ export default function AnalyticsPage() {
 
         <motion.div variants={ITEM} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Scheduled Meetings", value: totals.meetings.toString(), icon: "/assets/icon-meetings.png", color: "indigo", sub: "Currently active" },
-            { label: "Focus Time", value: `${totals.hours}h`, icon: "/assets/icon-focus.png", color: "violet", sub: "All calendars" },
-            { label: "Client Contacts", value: totals.unique_attendees.toString(), icon: "/assets/icon-network.png", color: "cyan", sub: "Network depth" },
-            { label: "Success Rate", value: `${Math.max(0, 100 - (totals.cancellations * 5))}%`, icon: "/assets/icon-integrity.png", color: "emerald", sub: "Integrity" },
+            { label: "Scheduled Meetings", value: totals.meetings.toString(), icon: Calendar, color: "indigo", sub: "Currently active" },
+            { label: "Focus Time", value: `${totals.hours}h`, icon: Clock, color: "violet", sub: "All calendars" },
+            { label: "Client Contacts", value: totals.unique_attendees.toString(), icon: Users, color: "cyan", sub: "Network depth" },
+            { label: "Success Rate", value: `${Math.max(0, 100 - (totals.cancellations * 5))}%`, icon: Zap, color: "emerald", sub: "Integrity" },
           ].map((kpi) => {
-            const styles = KPI_STYLES[kpi.color];
+            const Icon = kpi.icon;
             return (
-              <div key={kpi.label} className="relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d1424]/60 p-4 transition-all hover:bg-[#0d1424]/80 hover:border-white/20">
-                {/* Subtle Glow - Disabled on mobile for performance */}
-                {!isMobile && (
-                  <div className={`absolute -right-8 -top-8 w-24 h-24 blur-[40px] opacity-20 group-hover:opacity-40 transition-opacity bg-current ${styles.icon.replace('text-', 'bg-')}`} />
-                )}
-                
-                <div className="flex items-start justify-between">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 group-hover:scale-110 transition-all p-1.5 overflow-hidden`}>
-                    <Image src={kpi.icon} alt={kpi.label} width={48} height={48} className="object-contain" />
+              <Card key={kpi.label} className="relative overflow-hidden group hover:border-white/20 transition-all">
+                <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
+                  <div className="p-2 bg-white/5 rounded-lg">
+                    <Icon className="h-5 w-5 text-slate-300" />
                   </div>
-                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full leading-none tracking-wide">Live</span>
-                </div>
-                
-                <div className="mt-4">
+                  <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20">Live</Badge>
+                </CardHeader>
+                <CardContent className="p-4 pt-2">
                   {loading ? (
-                    <div className="h-8 w-16 rounded-lg bg-white/10 animate-pulse mb-1" />
+                    <div className="h-8 w-16 bg-white/10 rounded animate-pulse" />
                   ) : (
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-3xl font-extrabold text-white tracking-tighter">{kpi.value}</p>
-                    </div>
+                    <div className="text-3xl font-bold text-white">{kpi.value}</div>
                   )}
-                  <p className="text-[13px] font-bold text-slate-300">{kpi.label}</p>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{kpi.sub}</p>
-                </div>
-              </div>
+                  <p className="text-sm text-slate-400 mt-1">{kpi.label}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mt-2">{kpi.sub}</p>
+                </CardContent>
+              </Card>
             );
           })}
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <motion.div variants={ITEM} className="rounded-2xl border border-white/[0.08] bg-[#0d1424]/40 p-5 backdrop-blur-md relative overflow-hidden group">
-            <div className="flex items-center justify-between mb-4">
-              <div>
+          <motion.div variants={ITEM} className="col-span-1">
+            <Card className="p-6 h-full">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
+                  <BarChart3 className="w-4 h-4 text-indigo-400" />
                   Meetings timeline
                 </h2>
+                <Badge variant="outline" className="text-slate-500 uppercase">Live</Badge>
               </div>
-              <div className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] font-bold text-slate-500 uppercase">Live</div>
-            </div>
 
-            {loading ? (
-              <div className="min-h-[8rem] flex items-center justify-center">
-                <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
-              </div>
-            ) : (
-              <div>
-                <TimelineLineChart data={series.slice(-10)} height={240} />
-
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 items-center border-t border-white/5 pt-3">
-                  {((data?.meeting_types) || []).map((t) => {
-                    const colorMap: Record<string, string> = {
-                      meeting: "bg-violet-600",
-                      event: "bg-cyan-500",
-                      birthday: "bg-orange-500",
-                      task: "bg-emerald-500",
-                      other: "bg-slate-400",
-                    };
-                    const color = colorMap[t.label] ?? colorMap.other;
-                    return (
-                      <div key={t.label} className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                        <span className={cn("w-2 h-2 rounded-full", color)} />
-                        <span className="capitalize">{t.label}</span>
-                        <span className="text-slate-500 font-medium">{t.pct}%</span>
-                      </div>
-                    );
-                  })}
+              {loading ? (
+                <div className="min-h-[8rem] flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
                 </div>
-              </div>
-            )}
+              ) : (
+                <div>
+                  <TimelineLineChart data={series.slice(-10)} height={240} />
+
+                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 items-center border-t border-white/5 pt-4">  
+                    {((data?.meeting_types) || []).map((t) => {
+                      const colorMap: Record<string, string> = {
+                        meeting: "bg-violet-600",
+                        event: "bg-cyan-500",
+                        birthday: "bg-orange-500",
+                        task: "bg-emerald-500",
+                        other: "bg-slate-400",
+                      };
+                      const color = colorMap[t.label] ?? colorMap.other;
+                      return (
+                        <div key={t.label} className="flex items-center gap-1.5 text-xs text-slate-400">       
+                          <span className={cn("w-2.5 h-2.5 rounded-full", color)} />
+                          <span className="capitalize">{t.label}</span>
+                          <span className="text-slate-500 font-medium">{t.pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </Card>
           </motion.div>
 
           {!isMobile && (
             <div className="space-y-4">
-              <motion.div variants={ITEM} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
-                <h2 className="text-xs font-bold text-white mb-3">Meeting types</h2>
+              <motion.div variants={ITEM}> 
+                <Card className="p-4 bg-white/[0.02]">
+                  <h2 className="text-xs font-bold text-white mb-3">Meeting types</h2>
                 <div className="space-y-2.5">
                   {(data?.meeting_types || []).slice(0, 4).map((type) => (
                     <div key={type.label}>
@@ -206,15 +213,18 @@ export default function AnalyticsPage() {
                       </div>
                     </div>
                   ))}
-                </div>
+                  </div>
+                </Card>
               </motion.div>
 
-              <motion.div variants={ITEM} className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
-                <div className="flex items-center gap-2 mb-1.5">
+              <motion.div variants={ITEM}>
+                <Card className="p-4 border-violet-500/20 bg-violet-500/5">
+                  <div className="flex items-center gap-2 mb-1.5">
                   <TrendingUp className="w-3 h-3 text-violet-400" />
                   <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wide">Summary</span>
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-3">{data?.summary || "No analytics summary available yet."}</p>
+                </Card>
               </motion.div>
             </div>
           )}

@@ -2,9 +2,7 @@ import logging
 import os
 from typing import Optional
 from backend.services.mail_service import send_email, render_template
-from backend.services.redis_client import publish
-from backend.utils.db import AsyncSessionLocal
-from backend.models.tables import NotificationTable
+# Removed: redis_client and NotificationTable deleted
 
 logger = logging.getLogger(__name__)
 
@@ -108,29 +106,12 @@ async def _send_notification(recipient_emails: list[str], user_player_ids: list[
         except Exception as e:
             logger.warning(f"Push notification failed: {e}")
 
-    # Realtime pub/sub
-    try:
-        channel = f"user_notifications_{event_data.get('user_id')}"
-        payload = {"type": f"event_{content_type}", "event": event_data}
-        await publish(channel, str(payload))
-    except Exception as e:
-        logger.warning(f"Realtime publish failed: {e}")
+    # Realtime pub/sub REMOVED
+    pass
 
     # Persist an in-app notification record for the user
-    try:
-        # create a DB session and write notification
-        async with AsyncSessionLocal() as session:
-            notif = NotificationTable(
-                user_id=str(event_data.get("user_id")),
-                type=("event" if event_data.get("id") is not None else "system"),
-                title=(event_data.get("title") or "Notification"),
-                body=event_data.get("message") or "",
-                data=event_data,
-            )
-            session.add(notif)
-            await session.commit()
-    except Exception as e:
-        logger.warning(f"Failed to persist in-app notification: {e}")
+    # REMOVED: NotificationTable deleted in bare-minimum schema refactor.
+    return
 
 
 async def notify_event_created(recipient_emails: list[str], user_player_ids: list[str], event_data: dict):
@@ -202,29 +183,8 @@ async def notify_quota_warning(
 
     await send_custom_notification(user_email, subject, text_body, html_body, text_body)
 
-    # Persist an in-app quota warning for the user
-    try:
-        async with AsyncSessionLocal() as session:
-            notif = NotificationTable(
-                user_id=user_id,
-                type="quota",
-                title=f"Quota alert: {feature_label} at {usage_percent}%",
-                body=(
-                    f"Your {feature_label} usage is at {current_count}/{limit} today. "
-                    "Upgrade your plan to continue without interruption."
-                ),
-                data={
-                    "feature": feature,
-                    "current_count": current_count,
-                    "limit": limit,
-                    "usage_percent": usage_percent,
-                    "upgrade_url": template_context["upgrade_url"],
-                },
-            )
-            session.add(notif)
-            await session.commit()
-    except Exception as e:
-        logger.warning(f"Failed to persist quota warning notification: {e}")
+    # Persist an in-app quota warning REMOVED
+    return
 
 
 async def notify_welcome_email(user_email: str, full_name: str):

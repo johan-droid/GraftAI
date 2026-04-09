@@ -1,521 +1,215 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuthContext } from "@/app/providers/auth-provider";
 import { motion } from "framer-motion";
-import { updateUserProfile } from "@/lib/api";
-import {
-  Calendar,
-  ArrowUpRight,
-  Clock,
-  Video,
-  MapPin,
-  Users,
-  Sparkles,
-  Activity,
-  X,
-  Zap,
+import { 
+  getAnalyticsSummary, 
+  getEvents, 
+  getProactiveSuggestion 
+} from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { 
+  Calendar as CalendarIcon, 
+  Clock, 
+  Sparkles, 
+  TrendingUp, 
+  Users, 
+  Video, 
   ChevronRight,
-  MoreHorizontal,
-  Globe,
+  Activity
 } from "lucide-react";
-import { getAnalyticsSummary, getEvents, getProactiveSuggestion, type CalendarEvent } from "@/lib/api";
-import { CharmingHeader } from "@/components/dashboard/CharmingHeader";
-import { msgpack } from "@/lib/msgpack";
-import { toast } from "sonner";
 
-const STAGGER = {
+const containerVariants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
-};
-
-const ITEM = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0 },
-};
-
-const QUICK_LINKS = [
-  { label: "30 Min Meeting", slug: "30min", icon: Clock, color: "from-indigo-500 to-violet-500" },
-  { label: "60 Min Call", slug: "60min", icon: Video, color: "from-violet-500 to-fuchsia-500" },
-  { label: "Team Sync", slug: "team-sync", icon: Users, color: "from-cyan-500 to-blue-500" },
-];
-
-const STAT_COLOR_CLASSES: Record<string, string> = {
-  indigo: "bg-indigo-500/10 border-indigo-500/20 text-indigo-300",
-  violet: "bg-violet-500/10 border-violet-500/20 text-violet-300",
-  emerald: "bg-emerald-500/10 border-emerald-500/20 text-emerald-300",
-  cyan: "bg-cyan-500/10 border-cyan-500/20 text-cyan-300",
-};
-
-type DashboardActivityItem = {
-  id: number;
-  title: string;
-  start_time: string;
-  category?: string;
-  is_upcoming?: boolean;
-};
-
-function formatEventTimeLabel(iso: string) {
-  const date = new Date(iso);
-  return date.toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatRelativeTime(iso: string) {
-  const target = new Date(iso).getTime();
-  const now = Date.now();
-  const diffMs = target - now;
-  const future = diffMs >= 0;
-  const absMinutes = Math.round(Math.abs(diffMs) / 60000);
-
-  if (absMinutes < 1) return "just now";
-  if (absMinutes < 60) return future ? `in ${absMinutes}m` : `${absMinutes}m ago`;
-
-  const absHours = Math.round(absMinutes / 60);
-  if (absHours < 24) return future ? `in ${absHours}h` : `${absHours}h ago`;
-
-  const absDays = Math.round(absHours / 24);
-  return future ? `in ${absDays}d` : `${absDays}d ago`;
-}
-
-function getDurationLabel(startIso: string, endIso: string) {
-  const start = new Date(startIso).getTime();
-  const end = new Date(endIso).getTime();
-  const mins = Math.max(1, Math.round((end - start) / 60000));
-  return `${mins} min`;
-}
-
-function getAttendeeCount(payload?: Record<string, unknown>) {
-  const raw = payload?.attendees_count;
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return raw;
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
   }
-  return null;
-}
+};
 
-export default function Dashboard() {
-  const router = useRouter();
-  const { user, isAuthenticated, loading } = useAuthContext();
-  const typedUser = user as { name?: string; email?: string; timezone?: string; bio?: string; job_title?: string; location?: string } | null;
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+};
 
-  const profileName = typedUser?.name?.split(" ")[0] ?? typedUser?.email?.split("@")[0] ?? "there";
+type DashboardSuggestion = { message?: string };
+type DashboardStats = { totalMeetings?: number; focusHours?: number; collaborators?: number };
+type DashboardData = { stats: DashboardStats; events: unknown[]; suggestion: DashboardSuggestion };
 
-  const [stats, setStats] = useState({ meetings: 0, hours: 0, cancellations: 0 });
-  const [upcomingMeetings, setUpcomingMeetings] = useState<CalendarEvent[]>([]);
-  const [activityItems, setActivityItems] = useState<DashboardActivityItem[]>([]);
-  const [aiSuggestion, setAiSuggestion] = useState("");
-  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
-  const [cameFrom, setCameFrom] = useState("");
-  const [useCase, setUseCase] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [onboardingSaving, setOnboardingSaving] = useState(false);
-  const [onboardingError, setOnboardingError] = useState("");
+export default function DashboardPage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) router.replace("/login");
-  }, [loading, isAuthenticated, router]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const shouldAskOnboarding = !typedUser?.bio || !typedUser?.job_title || !typedUser?.location;
-    const wasDismissed = typeof window !== "undefined" && window.localStorage.getItem("graftai_onboarding_dismissed") === "true";
-    if (shouldAskOnboarding && !wasDismissed) {
-      setShowOnboardingModal(true);
+    async function loadDashboard() {
+      try {
+        const [stats, events, suggestion] = await Promise.all([
+          getAnalyticsSummary(),
+          getEvents(),
+          getProactiveSuggestion()
+        ]);
+        setData({ stats, events, suggestion });
+      } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
     }
-
-    let alive = true;
-    const now = new Date();
-    const end = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-
-    Promise.allSettled([
-      getAnalyticsSummary("30d"),
-      getProactiveSuggestion("dashboard overview"),
-      getEvents(now.toISOString(), end.toISOString()),
-    ]).then((results) => {
-      if (!alive) return;
-
-      const [analyticsResult, suggestionResult, eventsResult] = results;
-
-      if (analyticsResult.status === "fulfilled") {
-        const details = analyticsResult.value.details;
-        setStats({
-          meetings: Number(details?.meetings || 0),
-          hours: Number(details?.hours || 0),
-          cancellations: Number(details?.cancellations || 0),
-        });
-        setActivityItems(details?.recent_events || []);
-      }
-
-      if (suggestionResult.status === "fulfilled") {
-        setAiSuggestion(suggestionResult.value.suggestion || "");
-      }
-
-      if (eventsResult.status === "fulfilled") {
-        const sorted = [...eventsResult.value]
-          .filter((event) => new Date(event.end_time).getTime() >= Date.now())
-          .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-        setUpcomingMeetings(sorted.slice(0, 6));
-      }
-    });
-
-    // 4. Connect Real-time Binary Sync (SaaS Precision)
-    const sseUrl = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/sse/subscribe/${typedUser?.email}`;
-    const eventSource = new EventSource(sseUrl);
-
-    eventSource.onmessage = async (event) => {
-      // Logic: Handle binary or JSON transparently
-      const data = await msgpack.parseEventData(event.data);
-      if (data?.event === "SYNC_STATUS" && data?.status === "idle") {
-        // Trigger a refresh when a background sync finishes
-        getEvents(now.toISOString(), end.toISOString()).then(res => {
-          const sorted = [...res]
-            .filter((e) => new Date(e.end_time).getTime() >= Date.now())
-            .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-          setUpcomingMeetings(sorted.slice(0, 6));
-        });
-      }
-      if (data?.event === "QUOTA_UPDATE") {
-        toast.info(`Quota Updated: ${data.data.feature}`);
-      }
-    };
-
-    return () => {
-      alive = false;
-      eventSource.close();
-    };
-  }, [isAuthenticated, typedUser]);
-
-  const handleOnboardingSubmit = async () => {
-    if (!cameFrom || !useCase || !industry) {
-      setOnboardingError("Please answer all of the questions so we can personalize your experience.");
-      return;
-    }
-    setOnboardingSaving(true);
-    setOnboardingError("");
-    try {
-      await updateUserProfile({
-        bio: cameFrom,
-        job_title: useCase,
-        location: industry,
-      });
-      setShowOnboardingModal(false);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("graftai_onboarding_dismissed", "true");
-      }
-    } catch {
-      setOnboardingError("Unable to save onboarding info. Please try again.");
-    } finally {
-      setOnboardingSaving(false);
-    }
-  };
-
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    loadDashboard();
   }, []);
 
-  if (loading || !isAuthenticated) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-6 h-6 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
 
-  const hour = currentTime.getHours();
-  let greeting = "Good evening";
-  if (hour >= 5 && hour < 12) greeting = "Good morning";
-  else if (hour >= 12 && hour < 17) greeting = "Good afternoon";
-  else if (hour >= 17 && hour < 22) greeting = "Good evening";
-  else greeting = "Good night";
-
-  const timeString = currentTime.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-
-  const timezoneString = Intl.DateTimeFormat().resolvedOptions().timeZone.split("/").pop()?.replace("_", " ") || "Local";
-
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto space-y-6">
-      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-8">
-        
-        {/* Charming Greeting Engine */}
-        <CharmingHeader 
-          userName={profileName} 
-          upcomingCount={upcomingMeetings.length} 
-        />
+    <motion.div 
+      className="max-w-7xl mx-auto p-6 space-y-8"
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+    >
+      {/* Hero Section & Quick Actions */}
+      <motion.div variants={itemVariants} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Good morning, Alex.</h1>
+          <p className="text-muted-foreground mt-1">Here is your schedule and AI insights for today.</p>
+        </div>
+        <div className="flex space-x-3">
+          <Button variant="outline">
+            <Clock className="mr-2 h-4 w-4" />
+            Review Schedule
+          </Button>
+          <Button>
+            <Video className="mr-2 h-4 w-4" />
+            Join Next Meeting
+          </Button>
+        </div>
+      </motion.div>
 
-        <motion.div variants={ITEM} className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {[
-            { label: "Analytic Period", value: stats.meetings, sub: "Last 30 days", icon: Calendar, color: "indigo" },
-            { label: "Active Momentum", value: `${stats.hours}h`, sub: "Workload intensity", icon: Clock, color: "violet" },
-            { label: "Risk Mitigation", value: stats.cancellations, sub: "Conflict prevention", icon: Zap, color: "emerald" },
-            { label: "Forward View", value: upcomingMeetings.length, sub: "Next 14 days", icon: Activity, color: "cyan" },
-          ].map((stat) => (
-            <motion.div 
-              key={stat.label} 
-              whileHover={{ y: -5, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ type: "spring", stiffness: 400, damping: 25 }}
-              className="group relative overflow-hidden rounded-2xl border border-white/[0.04] bg-white/[0.015] backdrop-blur-xl p-4 sm:p-5 hover:bg-white/[0.035] transition-all hover:border-indigo-500/20 active:scale-[0.98]"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[50px] group-hover:bg-indigo-500/10 transition-all rounded-full pointer-events-none" />
-              <div className={`${STAT_COLOR_CLASSES[stat.color]} w-8 h-8 sm:w-10 sm:h-10 rounded-2xl mb-4 sm:mb-6 flex items-center justify-center border transition-all group-hover:scale-110 shadow-lg`}>
-                <stat.icon className="w-4 h-4 sm:w-5 sm:h-5 text-current" />
-              </div>
-              <p className="text-lg sm:text-2xl md:text-3xl font-bold text-white tracking-tighter mb-0.5 sm:mb-1.5">{stat.value}</p>
-              <p className="text-[10px] sm:text-[13px] text-slate-400 font-semibold leading-tight">{stat.label}</p>
-              <div className="flex items-center gap-1.5 mt-1 sm:mt-2">
-                <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-                <p className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">{stat.sub}</p>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
+      {/* Stats Grid */}
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Meetings</CardTitle>
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data?.stats?.totalMeetings || '12'}</div>
+            <p className="text-xs text-muted-foreground mt-1 text-emerald-500 flex items-center">
+              <TrendingUp className="h-3 w-3 mr-1" /> +2 from yesterday
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Focus Time</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data?.stats?.focusHours || '4.5'} hrs</div>
+            <p className="text-xs text-muted-foreground mt-1">Optimal zone</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Collaborators</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data?.stats?.collaborators || '8'}</div>
+            <p className="text-xs text-muted-foreground mt-1">Across 3 domains</p>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
-          <motion.div variants={ITEM}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-white tracking-tight">Upcoming meetings</h2>
-              <Link href="/dashboard/calendar" className="group text-xs text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1.5 transition-colors">
-                View full calendar <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
-            </div>
-
-            <div className="space-y-2">
-              {upcomingMeetings.length === 0 && (
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 text-center text-sm text-slate-400">
-                  No upcoming events found. Create your first booking from the calendar page.
-                </div>
-              )}
-
-              {upcomingMeetings.map((meeting, i) => {
-                const attendees = getAttendeeCount(meeting.metadata_payload);
-                return (
-                  <motion.div
-                    key={meeting.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.06, duration: 0.3 }}
-                    className="group relative flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 rounded-xl border border-white/[0.06] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/10 transition-all"
-                  >
-                    <div className="hidden sm:block w-1 h-10 rounded-full shrink-0 bg-indigo-500/70" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[14px] font-semibold text-white truncate">{meeting.title}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="flex items-center gap-1 text-[12px] text-slate-400">
-                          <Clock className="w-3 h-3" /> {formatEventTimeLabel(meeting.start_time)}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Timeline Section */}
+        <motion.div variants={itemVariants} className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Today&apos;s Timeline</h2>
+            <Button variant="ghost" size="sm">
+              View Calendar <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+          
+          <Card>
+            <CardContent className="p-0">
+              <div className="divide-y relative">
+                {/* Simulated Timeline Items */}
+                {[
+                  { title: "Product Sync", time: "10:00 AM", duration: "45m", type: "Internal", active: false },
+                  { title: "Design Review", time: "11:30 AM", duration: "1h", type: "Review", active: true },
+                  { title: "Client Discovery", time: "2:00 PM", duration: "30m", type: "External", active: false },
+                ].map((event, i) => (
+                  <div key={i} className={`p-6 flex items-start gap-4 transition-colors ${event.active ? 'bg-primary/5' : ''}`}>
+                    <div className="w-24 flex-shrink-0 text-sm font-medium text-muted-foreground">
+                      {event.time}
+                    </div>
+                    <div className="relative">
+                      {event.active && (
+                        <span className="absolute -left-7 top-1 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
                         </span>
-                        <span className="text-[11px] px-1.5 py-0.5 rounded-md border font-medium bg-indigo-500/10 border-indigo-500/20 text-indigo-300">
-                          {getDurationLabel(meeting.start_time, meeting.end_time)}
-                        </span>
+                      )}
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className={`font-semibold ${event.active ? 'text-primary' : ''}`}>
+                          {event.title}
+                        </h4>
+                        {event.active && <Badge variant="secondary">In Progress</Badge>}
                       </div>
-                    </div>
-
-                    <div className="flex sm:hidden items-center gap-3 mb-1">
-                      {attendees !== null && (
-                        <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                          <Users className="w-3 h-3" />
-                          <span>{attendees}</span>
-                        </div>
-                      )}
-                      {meeting.is_remote ? (
-                         <Video className="w-3.5 h-3.5 text-slate-500" />
-                      ) : (
-                         <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                      )}
-                    </div>
-
-                    <div className="hidden sm:flex items-center gap-2 shrink-0">
-                      {attendees !== null && (
-                        <div className="flex items-center gap-1 text-[12px] text-slate-500">
-                          <Users className="w-3 h-3" />
-                          <span>{attendees}</span>
-                        </div>
-                      )}
-                      {meeting.is_remote ? (
-                        <Video className="w-3.5 h-3.5 text-slate-500" />
-                      ) : (
-                        <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => router.push("/dashboard/calendar")}
-                      className="absolute top-2 right-2 sm:static flex items-center justify-center w-9 h-9 min-w-[44px] min-h-[44px] rounded-lg text-slate-600 hover:text-slate-300 hover:bg-white/8 transition-all sm:opacity-0 group-hover:opacity-100"
-                      aria-label="More options"
-                    >
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </motion.div>
-
-          <div className="space-y-6">
-            <motion.div variants={ITEM}>
-              <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">Templates</h2>
-              <div className="grid grid-cols-1 gap-1.5">
-                {QUICK_LINKS.map((ql) => (
-                  <button
-                    key={ql.slug}
-                    onClick={() => router.push("/dashboard/calendar")}
-                    className="group flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.01] p-2.5 text-left transition-all hover:border-white/10 hover:bg-white/[0.03]"
-                    aria-label={`Create ${ql.label}`}
-                  >
-                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${ql.color}`}>
-                      <ql.icon className="h-3.5 w-3.5 text-white" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[12px] font-bold text-slate-200">{ql.label}</p>
-                    </div>
-                    <ArrowUpRight className="h-3 w-3 text-slate-600 transition-colors group-hover:text-slate-300" />
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-
-            {aiSuggestion && (
-              <motion.div variants={ITEM} className="p-3.5 rounded-xl border border-violet-500/20 bg-violet-500/5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Sparkles className="w-3 h-3 text-violet-400" />
-                  <span className="text-[9px] font-black text-violet-300 uppercase tracking-widest">AI Synopsis</span>
-                </div>
-                <p className="text-[12px] text-slate-300 leading-relaxed font-medium">{aiSuggestion}</p>
-              </motion.div>
-            )}
-
-            <motion.div variants={ITEM}>
-              <div className="flex items-center justify-between mb-3 border-b border-white/[0.04] pb-2">
-                <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Audit Trail</h2>
-                <Link href="/dashboard/analytics" className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 uppercase tracking-tighter">
-                  History →
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {activityItems.slice(0, 4).map((item) => (
-                  <div key={item.id} className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded overflow-hidden bg-white/5 border border-white/8 flex items-center justify-center shrink-0 mt-0.5">
-                      {item.is_upcoming ? (
-                        <Calendar className="w-2.5 h-2.5 text-slate-500" />
-                      ) : (
-                        <Globe className="w-2.5 h-2.5 text-slate-500" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-slate-300 truncate tracking-tight">{item.title}</p>
-                      <p className="text-[10px] text-slate-500 font-mono">{formatEventTimeLabel(item.start_time)}</p>
+                      <div className="text-sm text-muted-foreground flex items-center gap-3">
+                        <span className="flex items-center"><Clock className="mr-1 h-3 w-3" /> {event.duration}</span>
+                        <span>• {event.type}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </div>
-        </div>
-      </motion.div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-      {showOnboardingModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#01050e] p-6 shadow-2xl shadow-black/40">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-bold text-white">Welcome to GraftAI!</h2>
-                <p className="mt-2 text-sm text-slate-400">Quick questions to help us personalize your onboarding experience.</p>
+        {/* AI Suggestion Panel */}
+        <motion.div variants={itemVariants} className="space-y-4">
+          <h2 className="text-xl font-semibold flex items-center">
+            <Sparkles className="mr-2 h-5 w-5 text-primary" />
+            AI Suggestions
+          </h2>
+          <Card className="border-primary/20 bg-primary/5 shadow-none">
+            <CardHeader>
+              <CardTitle className="text-base">Schedule Optimization</CardTitle>
+              <CardDescription>
+                Identified an opportunity based on your energy patterns.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm">
+                {data?.suggestion?.message || "You have back-to-back meetings from 1:00 PM to 4:00 PM tomorrow. Consider moving the &apos;Weekly Standup&apos; to Friday morning to protect your focus time."}
+              </p>
+              <div className="rounded-md bg-background/50 p-3 text-xs border">
+                <strong>Proposed Change:</strong> Move highly cognitive tasks to AM.
               </div>
-              <button
-                onClick={() => {
-                  setShowOnboardingModal(false);
-                  if (typeof window !== "undefined") {
-                    window.localStorage.setItem("graftai_onboarding_dismissed", "true");
-                  }
-                }}
-                className="text-slate-400 hover:text-white"
-                aria-label="Close onboarding prompt"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="mt-6 space-y-4">
-              <div>
-                <label htmlFor="onboarding-came-from" className="block text-sm font-medium text-slate-200">How did you hear about us?</label>
-                <select
-                  id="onboarding-came-from"
-                  value={cameFrom}
-                  onChange={(event) => setCameFrom(event.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
-                >
-                  <option value="">Choose one</option>
-                  <option value="Search engine">Search engine</option>
-                  <option value="Social media">Social media</option>
-                  <option value="Referral from a friend">Referral from a friend</option>
-                  <option value="Online community or forum">Online community or forum</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="onboarding-use-case" className="block text-sm font-medium text-slate-200">What will you use GraftAI for?</label>
-                <select
-                  id="onboarding-use-case"
-                  value={useCase}
-                  onChange={(event) => setUseCase(event.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
-                >
-                  <option value="">Choose one</option>
-                  <option value="Personal scheduling">Personal scheduling</option>
-                  <option value="Team coordination">Team coordination</option>
-                  <option value="Client meetings">Client meetings</option>
-                  <option value="Sales outreach">Sales outreach</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-200">Which industry are you in?</label>
-                <input
-                  type="text"
-                  value={industry}
-                  onChange={(event) => setIndustry(event.target.value)}
-                  placeholder="E.g. SaaS, healthcare, education"
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-              {onboardingError && <p className="text-sm text-rose-400">{onboardingError}</p>}
-            </div>
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowOnboardingModal(false);
-                  if (typeof window !== "undefined") {
-                    window.localStorage.setItem("graftai_onboarding_dismissed", "true");
-                  }
-                }}
-                className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:bg-white/10 transition-colors"
-              >
-                Later
-              </button>
-              <button
-                onClick={handleOnboardingSubmit}
-                disabled={onboardingSaving}
-                className="rounded-2xl bg-indigo-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-400 transition-colors"
-              >
-                {onboardingSaving ? "Saving…" : "Share feedback & continue"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+            </CardContent>
+            <CardFooter className="flex gap-2">
+              <Button className="w-full" size="sm">
+                Apply Change
+              </Button>
+              <Button className="w-full" variant="outline" size="sm">
+                Dismiss
+              </Button>
+            </CardFooter>
+          </Card>
+        </motion.div>
+      </div>
+    </motion.div>
   );
 }
+

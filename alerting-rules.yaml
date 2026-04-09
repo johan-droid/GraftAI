@@ -1,0 +1,26 @@
+# Critical alerts
+- name: BookingFailureRate
+  condition: booking.create.error > 10 in 5m
+  severity: critical
+  action: page_oncall
+
+- name: QueueBacklog
+  condition: queue.email.depth > 10000
+  severity: critical
+  action: page_oncall
+
+- name: ExternalServiceDown
+  condition: external.google_calendar.error > 100 in 5m
+  severity: high
+  action: page_oncall
+
+# Warning alerts
+- name: SlowAvailabilityCalculation
+  condition: availability.calculate.duration p95 > 5000ms
+  severity: warning
+  action: slack_alert
+
+- name: CacheMissRate
+  condition: cache.miss / (cache.hit + cache.miss) > 0.5
+  severity: warning
+  action: slack_alert

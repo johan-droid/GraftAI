@@ -1,54 +1,36 @@
 services:
-  # 1. GraftAI API (FastAPI)
+  # 1. GraftAI Monolith API
   - type: web
-    name: graftai-api
+    name: graftai-monolith
     runtime: docker
     dockerfilePath: backend/Dockerfile
-    region: oregon 
+    region: oregon
     plan: starter
-    preDeployCommand: "python -m backend.services.migrations"
+    # Automatically run migrations before deployment
+    preDeployCommand: "cd backend && alembic upgrade head"
     envVars:
       - key: ENV
         value: production
+      - key: PYTHONPATH
+        value: .
       - key: DATABASE_URL
         fromDatabase:
           name: graftai-db
           property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: graftai-redis
-          property: connectionString
-      # Pull other secrets from Render Dashboard (e.g. STRIPE_API_KEY, RAZORPAY_KEY_ID, GOOGLE_CLIENT_ID)
-      - fromGroup: graftai-secrets
+      # Secrets should be set in the Render Dashboard
+      - key: SECRET_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
 
-  # 2. Arq Background Worker
-  - type: worker
-    name: graftai-worker
-    runtime: docker
-    dockerfilePath: backend/Dockerfile
-    # Overriding the default CMD for the worker
-    dockerCommand: arq backend.worker.WorkerSettings
+# Managed Postgres
+databases:
+  - name: graftai-db
+    plan: free
     region: oregon
-    plan: starter
-    envVars:
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: graftai-redis
-          property: connectionString
-      - fromGroup: graftai-secrets
-
-  # 3. Redis Instance (Rate Limiting & Tasks)
-  - type: redis
-    name: graftai-redis
-    region: oregon
-    plan: starter
-    ipAllowList: [] # Redis 6.2+ VPC only by default on Render
-
-# 4. Managed Postgres (Optional if already using Neon, but here for completeness)
-# If using Neon, remove this and provide NEON_DATABASE_URL in graftai-secrets
-# databases:
-#   - name: graftai-db
-#     plan: free
-#     region: oregon

@@ -27,33 +27,14 @@ def _repo_root() -> Path:
 
 def _canonical_migration_plan() -> list[Path]:
     root = _repo_root()
-    manual_only = {"neon_schema_update.sql", "auth_schema.sql"}
+    scripts = [root / "backend" / "scripts" / "users_compat_patch.sql"]
+    migration_dir = root / "backend" / "models" / "migrations"
 
-    explicit_plan = [
-        root / "backend" / "scripts" / "users_compat_patch.sql",
-        root / "backend" / "models" / "migrations" / "add_tenant_id.sql",
-        root / "backend" / "models" / "migrations" / "2026_04_06_add_notifications_is_read.pgsql",
-        root / "backend" / "models" / "migrations" / "2026_04_07_add_quota_warning_columns.pgsql",
-        root / "backend" / "models" / "migrations" / "2026_04_08_add_events_source_index.pgsql",
-    ]
+    sql_migrations = sorted(
+        [p for p in migration_dir.glob("*.pgsql") if p.is_file()]
+    )
 
-    discovered_pgsql = [
-        p
-        for p in sorted((root / "backend" / "models" / "migrations").glob("*.pgsql"))
-    ]
-
-    discovered_sql = [
-        p
-        for p in sorted((root / "backend" / "models" / "migrations").glob("*.sql"))
-        if p.name not in manual_only
-    ]
-
-    discovered = discovered_pgsql + discovered_sql
-
-    planned_set = {p.resolve() for p in explicit_plan}
-    extras = [p for p in discovered if p.resolve() not in planned_set]
-
-    return [p for p in explicit_plan if p.exists()] + extras
+    return [p for p in scripts + sql_migrations if p.exists()]
 
 
 def _file_checksum(content: str) -> str:

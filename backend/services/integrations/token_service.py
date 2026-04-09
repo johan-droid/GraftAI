@@ -4,8 +4,8 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
-from backend.models.user_token import UserTokenTable
-from backend.models.tables import NotificationTable
+from backend.models.tables import UserTokenTable
+# Removed: NotificationTable deleted
 from backend.services.sso import get_provider_config
 from backend.utils.http_client import get_client
 
@@ -19,39 +19,14 @@ _PROVIDER_LABELS = {
 }
 
 
-async def _fire_reconnect_notification(db: AsyncSession, user_id: str, provider: str) -> None:
-    """
-    Persists an in-app 'Action Required' notification prompting the user
-    to re-connect their provider account.
-    """
-    label = _PROVIDER_LABELS.get(provider, provider.capitalize())
-    try:
-        notif = NotificationTable(
-            user_id=user_id,
-            type="system",
-            title=f"⚠️ Action Required: Re-connect {label}",
-            body=(
-                f"Your {label} session has expired and could not be automatically renewed. "
-                f"Please re-connect your {label} account from Settings to restore full functionality."
-            ),
-            data={"provider": provider, "action": "reconnect"},
-        )
-        db.add(notif)
-        await db.commit()
-        logger.info(f"[TOKEN] 🔔 Reconnect notification fired for {provider} (User: {user_id})")
-    except Exception as e:
-        logger.error(f"[TOKEN] ❌ Failed to create reconnect notification: {e}")
-
-
 async def _deactivate_token(db: AsyncSession, token_record: UserTokenTable, user_id: str, provider: str) -> None:
-    """Marks the token inactive and fires the reconnect notification."""
+    """Marks the token inactive."""
     token_record.is_active = False
-    token_record.updated_at = datetime.now(timezone.utc)
+    logger.warning(f"[TOKEN] 🚫 Terminally deactivated {provider} for user {user_id}")
     try:
         await db.commit()
     except Exception:
         await db.rollback()
-    await _fire_reconnect_notification(db, user_id, provider)
 
 
 async def ensure_valid_token(db: AsyncSession, user_id: str, provider: str) -> Optional[str]:

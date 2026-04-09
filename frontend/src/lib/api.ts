@@ -1,19 +1,19 @@
 import { apiClient } from "./api-client";
-import { getSessionSafe, invalidateSessionCache } from "./auth-client";
 
 // Re-exporting API_BASE_URL for backward compatibility if needed
 export { API_BASE_URL } from "./api-client";
-export { invalidateSessionCache };
 
 // ──────────────────────────────────────
 // Auth: Session Check
 // ──────────────────────────────────────
 export async function refreshSession() {
-  const session = await getSessionSafe();
-  if (!session?.data?.session) {
-    throw new Error("No session to refresh");
+  // Verifies the current JWT by fetching the user profile
+  try {
+    const user = await apiClient.get("/users/me");
+    return { user };
+  } catch (error) {
+    throw new Error("No valid session to refresh");
   }
-  return session.data;
 }
 
 // ──────────────────────────────────────
@@ -216,13 +216,13 @@ export interface IntegrationProviderStatus {
   last_connected_at?: string | null;
 }
 
-export interface IntegrationStatusResponse {
+export interface AuthIntegrationStatusResponse {
   connections: Record<string, boolean>;
   providers: IntegrationProviderStatus[];
 }
 
-export async function getIntegrationStatus() {
-  return apiClient.get<IntegrationStatusResponse>("/auth/integrations/status");
+export async function getAuthIntegrationStatus() {
+  return apiClient.get<AuthIntegrationStatusResponse>("/auth/integrations/status");
 }
 
 // ──────────────────────────────────────
@@ -293,8 +293,8 @@ export interface CalendarEvent {
   updated_at?: string;
 }
 
-export async function getEvents(start: string, end: string) {
-  return apiClient.get<CalendarEvent[]>(`/calendar/events`, { params: { start, end } });
+export async function getEvents(start: string, end: string, options?: any) {
+  return apiClient.get<CalendarEvent[]>(`/calendar/events`, { ...options, params: { start, end } });
 }
 
 export async function createEvent(data: Partial<CalendarEvent>) {
@@ -318,10 +318,9 @@ export async function uploadFile(file: File) {
 
   // We bypass apiClient.post for multipart/form-data to let the browser set the boundary
   const { API_BASE_URL: BASE } = await import("./api-client");
-  const { getToken } = await import("./auth-client");
 
   const headers: Record<string, string> = {};
-  const token = getToken();
+  const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE}/api/v1/uploads`, {
@@ -351,12 +350,86 @@ export async function getAvailableSlots(date: string, duration: number = 60, tar
   );
 }
 
+export interface PublicEventDetailsResponse {
+  title: string;
+  description?: string;
+  duration_minutes: number;
+  meeting_provider?: string;
+  username: string;
+  event_type_slug: string;
+  timezone: string;
+}
+
+export interface PublicAvailabilityResponse {
+  availability: Record<string, string[]>;
+}
+
+export interface PublicBookingConfirmation {
+  success: boolean;
+  booking_id: string;
+  event_id: string;
+  organizer_start_time: string;
+  organizer_end_time: string;
+  invitee_start_time: string;
+  invitee_end_time: string;
+  invitee_zone: string;
+  meeting_url?: string;
+}
+
+export async function getPublicEventDetails(username: string, eventType: string) {
+  return apiClient.get<PublicEventDetailsResponse>(
+    `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}`
+  );
+}
+
+export async function getPublicEventAvailability(
+  username: string,
+  eventType: string,
+  month: string,
+  timeZone?: string
+) {
+  const params: Record<string, string> = { month };
+  if (timeZone) params.time_zone = timeZone;
+  return apiClient.get<PublicAvailabilityResponse>(
+    `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/availability`,
+    { params }
+  );
+}
+
+export async function bookPublicEvent(
+  username: string,
+  eventType: string,
+  payload: {
+    full_name: string;
+    email: string;
+    start_time: string;
+    end_time: string;
+    time_zone?: string;
+    questions?: Record<string, any>;
+    metadata?: Record<string, any>;
+  }
+) {
+  return apiClient.post<PublicBookingConfirmation>(
+    `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/book`,
+    payload
+  );
+}
+
 export async function mfaVerify(userId: number, code: string) {
   return apiClient.post<{ status: string }>(`/auth/mfa/verify`, null, { params: { token: code } });
 }
 
 export async function manualSync() {
-  return apiClient.post<{ status: string; message: string; synced_user: string }>("/calendar/sync");
+  return apiClient.post<{ status: string; message: string; synced_providers?: string[] }>("/calendar/sync");
+}
+
+export interface IntegrationsStatusResponse {
+  active_providers: string[];
+  inactive_providers: string[];
+}
+
+export async function getIntegrationStatus() {
+  return apiClient.get<IntegrationsStatusResponse>("/users/me/integrations");
 }
 
 export async function getEmailDiagnostic() {

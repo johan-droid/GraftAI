@@ -32,9 +32,9 @@ class GraftAIDB extends Dexie {
 
   constructor() {
     super('GraftAIOfflineCache');
-    this.version(1).stores({
+    this.version(2).stores({
       events: 'id, user_id, start_time, sync_status',
-      chats: 'id, timestamp'
+      chats: 'id, timestamp, metadata.intent'
     });
   }
 }

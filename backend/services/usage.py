@@ -1,64 +1,78 @@
-import inspect
 import logging
-from datetime import datetime, timezone
-from fastapi import Depends
+from datetime import datetime, timezone, timedelta
+from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth.schemes import get_current_user_id
 from backend.models.tables import UserTable
-from backend.utils.cache import get_redis_client as _get_redis_client
 from backend.utils.db import get_db
 
 logger = logging.getLogger(__name__)
 
-# STRIPPED DOWN: Muted for monolithic stability
-# We no longer enforce daily limits in this simplified architecture.
-
-
-def get_redis_client():
-    return _get_redis_client()
-
+async def get_user_quota(db: AsyncSession, user_id: str) -> UserTable:
+    result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+    user = result.scalars().first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    now = datetime.now(timezone.utc)
+    
+    # Reset quotas if quota_reset_at is passed or not set
+    if not user.quota_reset_at or now >= user.quota_reset_at:
+        user.daily_ai_count = 0
+        user.daily_sync_count = 0
+        
+        # Calculate next midnight UTC
+        next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        user.quota_reset_at = next_midnight
+        
+        await db.commit()
+        await db.refresh(user)
+        
+    return user
 
 def check_usage_limit(feature: str):
-    """No-op dependency factory for simplified architecture.
-
-    Returns an async dependency callable that always allows the request.
-    """
+    """Enforces limits based on user's tier and features."""
     async def _check_limit(
-        *,
-        user_id: str = None,
+        user_id: str = Depends(get_current_user_id),
         db: AsyncSession = Depends(get_db),
-        **kwargs,
     ) -> bool:
+        user = await get_user_quota(db, user_id)
+        
+        if feature == "ai_messages":
+            limit = user.daily_ai_limit if user.daily_ai_limit is not None else (2000 if user.tier == 'elite' else (200 if user.tier == 'pro' else 10))
+            if user.daily_ai_count >= limit:
+                raise HTTPException(status_code=429, detail=f"AI Copilot usage limit reached. Upgrade to Pro for more.")
+        elif feature == "calendar_syncs":
+            limit = user.daily_sync_limit if user.daily_sync_limit is not None else (500 if user.tier == 'elite' else (50 if user.tier == 'pro' else 3))
+            if user.daily_sync_count >= limit:
+                raise HTTPException(status_code=429, detail=f"Manual sync limit reached. Upgrade to Pro for more.")
+        
         return True
 
     return _check_limit
 
 async def increment_usage(db: AsyncSession, user_id: str, feature: str):
-    """Increment the user's usage counters without enforcing a hard quota."""
-    result = await db.execute(select(UserTable).where(UserTable.id == user_id))
-    scalar_result = result.scalars()
-    if inspect.isawaitable(scalar_result):
-        scalar_result = await scalar_result
-
-    user = scalar_result.first()
-    if inspect.isawaitable(user):
-        user = await user
-
-    if user is None:
-        return
+    """Increment the user's usage counters."""
+    user = await get_user_quota(db, user_id)
 
     if feature == "ai_messages":
-        user.daily_ai_count = getattr(user, "daily_ai_count", 0) + 1
+        user.daily_ai_count += 1
     elif feature == "calendar_syncs":
-        user.daily_sync_count = getattr(user, "daily_sync_count", 0) + 1
+        user.daily_sync_count += 1
     else:
         logger.debug(f"Unknown usage feature: {feature}")
 
     await db.commit()
 
 def get_next_quota_reset() -> datetime:
-    return datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    return now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
 def get_trial_days_left(created_at: datetime) -> int:
-    return 999
+    trial_end = created_at + timedelta(days=14)
+    now = datetime.now(timezone.utc)
+    diff = (trial_end - now).days
+    return max(0, diff)

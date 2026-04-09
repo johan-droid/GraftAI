@@ -12,6 +12,7 @@ from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable, UserTokenTable
 from backend.services.scheduler import get_events_for_range, create_event, update_event, delete_event
 from backend.services.sync_engine import sync_user_calendar
+from backend.services.usage import check_usage_limit, increment_usage
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,8 @@ async def delete_event_route(
 @router.post("/sync")
 async def trigger_calendar_sync(
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
+    _usage_check: bool = Depends(check_usage_limit("calendar_syncs"))
 ):
     """
     Triggers a sync with external calendars (Google/Microsoft).
@@ -153,6 +155,7 @@ async def trigger_calendar_sync(
 
     try:
         await sync_user_calendar(db, current_user.id)
+        await increment_usage(db, current_user.id, "calendar_syncs")
         return {
             "status": "success",
             "message": "Calendar sync completed.",

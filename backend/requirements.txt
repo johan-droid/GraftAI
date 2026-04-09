@@ -37,6 +37,7 @@ gunicorn>=21.2.0
 sentry-sdk[fastapi,sqlalchemy,redis,arq]>=2.10.0
 stripe>=11.0.0
 razorpay>=1.4.2
+python-dateutil>=2.9.0
 cachetools>=5.5.0
 msgpack>=1.1.0
 python3-saml>=1.16.0

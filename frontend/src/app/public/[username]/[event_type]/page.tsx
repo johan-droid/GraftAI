@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   bookPublicEvent,
+  confirmPublicPaymentIntent,
+  createPublicPaymentIntent,
   getPublicEventAvailability,
   getPublicEventDetails,
   PublicAvailabilityResponse,
   PublicBookingConfirmation,
   PublicEventDetailsResponse,
 } from "@/lib/api";
+import BookingReceipt from "@/components/booking/BookingReceipt";
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
@@ -42,6 +45,10 @@ export default function PublicBookingPage({ params }: { params: { username: stri
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [fullName, setFullName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
+  const [questionAnswers, setQuestionAnswers] = useState<Record<string, string | boolean>>({});
+  const [paymentIntent, setPaymentIntent] = useState<{ payment_intent_id: string; amount: number; currency: string; status: string; client_secret?: string } | null>(null);
+  const [paymentConfirmed, setPaymentConfirmed] = useState<boolean>(false);
+  const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [submissionState, setSubmissionState] = useState<{ success: boolean; message: string } | null>(null);
   const [bookingResult, setBookingResult] = useState<PublicBookingConfirmation | null>(null);
@@ -122,13 +129,29 @@ export default function PublicBookingPage({ params }: { params: { username: stri
     setLoading(true);
 
     try {
-      const bookingResponse = await bookPublicEvent(params.username, params.event_type, {
+      const payload: Record<string, unknown> = {
         full_name: fullName,
         email,
         start_time: startTime,
         end_time: endTime,
         time_zone: browserTimezone,
-      });
+      };
+
+      if (Object.keys(questionAnswers).length > 0) {
+        payload.questions = questionAnswers;
+      }
+
+      if (eventDetails?.requires_payment) {
+        if (!paymentConfirmed) {
+          throw new Error("Please confirm payment before booking this paid event.");
+        }
+        payload.metadata = {
+          payment_status: "paid",
+          payment_verified: true,
+        };
+      }
+
+      const bookingResponse = await bookPublicEvent(params.username, params.event_type, payload);
 
       setBookingResult(bookingResponse);
       setSubmissionState({ success: true, message: "Booking confirmed!" });
@@ -138,6 +161,38 @@ export default function PublicBookingPage({ params }: { params: { username: stri
       setLoading(false);
     }
   };
+
+  async function createPaymentIntent() {
+    if (!eventDetails || !eventDetails.requires_payment) return;
+    setPaymentLoading(true);
+    try {
+      const intent = await createPublicPaymentIntent(params.username, params.event_type);
+      setPaymentIntent(intent);
+      setPaymentConfirmed(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to create payment intent.");
+    } finally {
+      setPaymentLoading(false);
+    }
+  }
+
+  async function confirmPaymentIntent() {
+    if (!eventDetails || !paymentIntent) return;
+    setPaymentLoading(true);
+    try {
+      const confirmation = await confirmPublicPaymentIntent(params.username, params.event_type, {
+        payment_intent_id: paymentIntent.payment_intent_id,
+        payment_method: "simulated_card",
+      });
+      if (confirmation.success && confirmation.payment_status === "paid") {
+        setPaymentConfirmed(true);
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Payment confirmation failed.");
+    } finally {
+      setPaymentLoading(false);
+    }
+  }
 
   if (loading && !eventDetails) {
     return (
@@ -275,7 +330,129 @@ export default function PublicBookingPage({ params }: { params: { username: stri
                 {eventDetails?.duration_minutes ? (
                   <p>Duration: {eventDetails.duration_minutes} minutes</p>
                 ) : null}
+                {eventDetails?.requires_attendee_confirmation ? (
+                  <p className="text-slate-700">This booking requires organizer confirmation and will be marked pending until approved.</p>
+                ) : null}
+                {eventDetails?.requires_payment ? (
+                  <p className="text-slate-700">Payment required: {eventDetails.payment_amount?.toFixed(2)} {eventDetails.payment_currency || "USD"}</p>
+                ) : null}
+                {eventDetails?.custom_questions && eventDetails.custom_questions.length > 0 ? (
+                  <p className="text-slate-700">Additional questions are required for this booking.</p>
+                ) : null}
               </div>
+
+              {eventDetails?.custom_questions && eventDetails.custom_questions.length > 0 ? (
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                  <h3 className="text-lg font-semibold text-slate-900">Additional questions</h3>
+                  <div className="mt-4 space-y-4">
+                    {eventDetails.custom_questions.map((question, index) => {
+                      const questionId = String(question.id || question.question || `question-${index}`);
+                      const questionLabel = String(question.question || questionId);
+                      const questionType = String((question.type || "text")).toLowerCase();
+                      const required = Boolean(question.required);
+                      const answer = questionAnswers[questionId] ?? "";
+
+                      return (
+                        <div key={questionId} className="space-y-2">
+                          <label className="block text-sm font-medium text-slate-700" htmlFor={questionId}>
+                            {questionLabel}{required ? " *" : ""}
+                          </label>
+                          {questionType === "textarea" ? (
+                            <textarea
+                              id={questionId}
+                              value={String(answer)}
+                              onChange={(event) => setQuestionAnswers({ ...questionAnswers, [questionId]: event.target.value })}
+                              rows={4}
+                              className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                              required={required}
+                            />
+                          ) : questionType === "checkbox" ? (
+                            <label className="inline-flex items-center gap-3 text-sm text-slate-700">
+                              <input
+                                id={questionId}
+                                type="checkbox"
+                                checked={Boolean(answer)}
+                                onChange={(event) => setQuestionAnswers({ ...questionAnswers, [questionId]: event.target.checked })}
+                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              {questionLabel}
+                            </label>
+                          ) : questionType === "select" && Array.isArray(question.options) ? (
+                            <select
+                              id={questionId}
+                              value={String(answer)}
+                              onChange={(event) => setQuestionAnswers({ ...questionAnswers, [questionId]: event.target.value })}
+                              className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                              required={required}
+                            >
+                              <option value="">Select an answer</option>
+                              {question.options.map((option: any) => (
+                                <option key={String(option)} value={String(option)}>{String(option)}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              id={questionId}
+                              type="text"
+                              value={String(answer)}
+                              onChange={(event) => setQuestionAnswers({ ...questionAnswers, [questionId]: event.target.value })}
+                              className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                              required={required}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {eventDetails?.requires_payment ? (
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                  <h3 className="text-lg font-semibold text-slate-900">Payment</h3>
+                  <p className="mt-3 text-sm text-slate-600">
+                    This event requires payment before booking can complete. Use the checkout flow below.
+                  </p>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                      <p className="font-medium">Amount</p>
+                      <p>{eventDetails.payment_amount?.toFixed(2) ?? "0.00"} {eventDetails.payment_currency || "USD"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                      <p className="font-medium">Status</p>
+                      <p>{paymentConfirmed ? "Paid" : paymentIntent ? "Ready to confirm" : "Pending"}</p>
+                    </div>
+                  </div>
+
+                  {!paymentIntent ? (
+                    <button
+                      type="button"
+                      onClick={createPaymentIntent}
+                      disabled={paymentLoading}
+                      className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      {paymentLoading ? "Initializing payment..." : "Start checkout"}
+                    </button>
+                  ) : !paymentConfirmed ? (
+                    <div className="space-y-3 mt-5">
+                      <p className="text-sm text-slate-600">Payment intent created: {paymentIntent.payment_intent_id}</p>
+                      <button
+                        type="button"
+                        onClick={confirmPaymentIntent}
+                        disabled={paymentLoading}
+                        className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        {paymentLoading ? "Confirming payment..." : "Confirm payment"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+                      Payment confirmed, you may submit the booking.
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               {submissionState ? (
                 <div className={`rounded-2xl px-4 py-3 text-sm ${submissionState.success ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
@@ -284,14 +461,22 @@ export default function PublicBookingPage({ params }: { params: { username: stri
               ) : null}
 
               {bookingResult ? (
-                <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                  <p className="font-semibold">Booking confirmed</p>
-                  <p>{bookingResult.invitee_start_time} — {bookingResult.invitee_end_time} ({bookingResult.invitee_zone})</p>
-                  <p>Organizer time: {bookingResult.organizer_start_time} — {bookingResult.organizer_end_time}</p>
-                  {bookingResult.meeting_url ? (
-                    <p className="mt-2">Meeting link: <a href={bookingResult.meeting_url} className="text-indigo-600 underline">Open meeting</a></p>
-                  ) : null}
-                </div>
+                <BookingReceipt
+                  bookingId={bookingResult.booking_id}
+                  fullName={fullName}
+                  email={email}
+                  eventTitle={eventDetails?.title || "Booking"}
+                  organizerName={eventDetails?.username || "Organizer"}
+                  organizerStartTime={bookingResult.organizer_start_time}
+                  organizerEndTime={bookingResult.organizer_end_time}
+                  inviteeStartTime={bookingResult.invitee_start_time}
+                  inviteeEndTime={bookingResult.invitee_end_time}
+                  inviteeZone={bookingResult.invitee_zone}
+                  meetingUrl={bookingResult.meeting_url ?? undefined}
+                  confirmationEmail={email}
+                  rescheduleUrl={bookingResult.reschedule_url ?? undefined}
+                  cancelUrl={bookingResult.cancel_url ?? undefined}
+                />
               ) : null}
 
               {errorMessage && bookingResult === null ? (
@@ -300,7 +485,7 @@ export default function PublicBookingPage({ params }: { params: { username: stri
 
               <button
                 type="submit"
-                disabled={!selectedSlot || loading}
+                disabled={!selectedSlot || loading || (eventDetails?.requires_payment && !paymentConfirmed)}
                 className="inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {loading ? "Booking..." : "Confirm booking"}

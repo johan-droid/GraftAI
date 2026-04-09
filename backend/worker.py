@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta, timezone
+import pytz
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 
@@ -9,7 +10,13 @@ from backend.models.tables import UserTable, EventTable, BookingTable, WebhookLo
 from backend.services.scheduler import push_event_to_external_calendar, update_event, delete_event
 from backend.services.sync_engine import sync_user_calendar
 from backend.services.calendar_sync import sync_calendar_for_user
-from backend.services.notifications import notify_event_created, notify_event_updated, notify_event_deleted, send_custom_notification
+from backend.services.notifications import (
+    notify_event_created,
+    notify_event_updated,
+    notify_event_deleted,
+    send_booking_reminder_to_organizer,
+    send_custom_notification,
+)
 from backend.services.mail_service import send_email
 from backend.services.queue_monitoring import start_queue_monitoring
 from backend.utils.http_client import get_client
@@ -79,6 +86,80 @@ async def task_process_reminders(ctx):
                     logger.error(f"Failed to send reminder for event {event.id}: {e}")
         
         await db.commit()
+
+
+@task
+async def task_send_booking_reminders(ctx):
+    """Send organizer reminders for bookings that start ~24 hours from now."""
+    async with AsyncSessionLocal() as db:
+        now = datetime.now(timezone.utc)
+        reminder_target = now + timedelta(hours=24)
+        window_start = reminder_target - timedelta(minutes=30)
+        window_end = reminder_target + timedelta(minutes=30)
+
+        stmt = (
+            select(BookingTable)
+            .options(
+                selectinload(BookingTable.user),
+                selectinload(BookingTable.event),
+                selectinload(BookingTable.event_type),
+            )
+            .where(
+                and_(
+                    BookingTable.status.in_(["confirmed", "rescheduled", "accepted"]),
+                    BookingTable.start_time >= window_start,
+                    BookingTable.start_time <= window_end,
+                    BookingTable.is_reminder_sent == False,
+                )
+            )
+        )
+
+        bookings = (await db.execute(stmt)).scalars().all()
+        if not bookings:
+            return
+
+        sent = 0
+        for booking in bookings:
+            organizer = booking.user
+            if not organizer:
+                continue
+
+            tz_name = organizer.timezone or "UTC"
+            try:
+                organizer_tz = pytz.timezone(tz_name)
+            except Exception:
+                organizer_tz = pytz.UTC
+                tz_name = "UTC"
+
+            event_title = "Booked Meeting"
+            if booking.event and booking.event.title:
+                event_title = booking.event.title
+            elif booking.event_type and booking.event_type.name:
+                event_title = booking.event_type.name
+
+            organizer_start_time = booking.start_time.astimezone(organizer_tz).strftime("%Y-%m-%d %I:%M %p")
+            organizer_end_time = booking.end_time.astimezone(organizer_tz).strftime("%Y-%m-%d %I:%M %p")
+
+            try:
+                await send_booking_reminder_to_organizer(
+                    organizer_email=organizer.email,
+                    organizer_name=organizer.full_name or organizer.username or organizer.email,
+                    attendee_name=booking.full_name,
+                    attendee_email=booking.email,
+                    event_title=event_title,
+                    organizer_start_time=organizer_start_time,
+                    organizer_end_time=organizer_end_time,
+                    organizer_timezone=tz_name,
+                    booking_id=booking.id,
+                )
+                booking.is_reminder_sent = True
+                sent += 1
+            except Exception as e:
+                logger.error(f"Failed to send booking reminder for booking {booking.id}: {e}")
+
+        if sent:
+            await db.commit()
+            logger.info("Booking reminders sent: %s", sent)
 
 @task
 async def task_send_email(ctx, booking_id: str, email_type: str, extra: dict = None):
@@ -312,5 +393,6 @@ class WorkerSettings:
     cron_jobs = [
         {"coroutine": task_sync_all_users, "minute": {0, 30}},
         {"coroutine": task_process_reminders, "minute": "*"},
+        {"coroutine": task_send_booking_reminders, "minute": 5},
         {"coroutine": task_daily_cleanup, "hour": 3, "minute": 0},
     ]

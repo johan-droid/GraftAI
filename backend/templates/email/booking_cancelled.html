@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card" style="border-top-color: #ef4444;">
+    <div class="badge badge-alert">Cancelled</div>
+    <h1>Booking cancelled</h1>
+    <p>Hello {{ full_name }}, this booking has been cancelled by {{ cancelled_by }}.</p>
+
+    <div style="background-color: #450a0a; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #991b1b;">
+        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700; text-decoration: line-through;">{{ event_title }}</p>
+        <p style="margin-bottom: 0; font-size: 13px; color: #fca5a5;">Original time: {{ original_time }}</p>
+        {% if cancellation_reason %}
+        <p style="margin-top: 8px; margin-bottom: 0; font-size: 13px; color: #fecaca;">Reason: {{ cancellation_reason }}</p>
+        {% endif %}
+    </div>
+
+    <center>
+        <a href="{{ reschedule_url }}" class="button">Book a New Time</a>
+    </center>
+</div>
+{% endblock %}

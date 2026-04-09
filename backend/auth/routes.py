@@ -2,7 +2,7 @@ import os
 import secrets
 import logging
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, unquote_plus
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -19,13 +19,32 @@ from backend.utils.db import get_db
 from backend.models.tables import UserTable, UserTokenTable
 from backend.auth.schemes import get_current_user_id
 from backend.services.usage import get_next_quota_reset, get_trial_days_left
+from backend.services.notifications import send_email_verification_code
 from backend.services import google_auth, microsoft_auth, zoom_auth
+from backend.services.sso import get_provider_config
 from backend.utils.rate_limit import rate_limit, api_limits
 
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "https://www.graftai.tech")).rstrip("/")
 
 def _frontend_redirect_token(access_token: str, redirect_to: str = "/dashboard"):
     return f"{FRONTEND_BASE_URL}/auth-callback?access_token={quote_plus(access_token)}&redirect={quote_plus(redirect_to)}"
+
+
+def _build_oauth_state(user_id: Optional[str], redirect_to: Optional[str] = "/dashboard") -> str:
+    safe_redirect_to = quote_plus(redirect_to or "/dashboard")
+    return f"{secrets.token_urlsafe(16)}|{user_id or ''}|{safe_redirect_to}"
+
+
+def _parse_oauth_state(state: str) -> tuple[Optional[str], str]:
+    user_id = None
+    redirect_to = "/dashboard"
+    if state and "|" in state:
+        parts = state.split("|")
+        if len(parts) >= 2:
+            user_id = parts[1] if parts[1] else None
+        if len(parts) >= 3:
+            redirect_to = unquote_plus(parts[2]) or "/dashboard"
+    return user_id, redirect_to
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Authentication"])
@@ -170,6 +189,12 @@ class UserRegisterSchema(BaseModel):
             raise ValueError('Full name must be less than 100 characters')
         return v.strip()
 
+
+class EmailVerificationSchema(BaseModel):
+    email: EmailStr
+    code: str
+
+
 # --- Helper Functions ---
 
 def create_access_token(data: dict):
@@ -192,25 +217,96 @@ async def register_user(user: UserRegisterSchema, request: Request, db: AsyncSes
     
     stmt = select(UserTable).where(UserTable.email == email)
     existing_user = (await db.execute(stmt)).scalars().first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+
+    code = str(secrets.randbelow(900000) + 100000)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
     try:
+        if existing_user:
+            if existing_user.email_verified:
+                raise HTTPException(status_code=400, detail="Email already registered")
+
+            existing_user.full_name = user.full_name or existing_user.full_name
+            existing_user.hashed_password = get_password_hash(user.password)
+            existing_user.email_verification_code = code
+            existing_user.email_verification_expires_at = expires_at
+            await db.commit()
+            await db.refresh(existing_user)
+            await send_email_verification_code(email, existing_user.full_name or email, code)
+            logger.info(f"Resent verification code to unverified user: {email}")
+            return {"message": "Verification code resent to your email", "email": email}
+
         new_user = UserTable(
             email=email,
             full_name=user.full_name,
-            hashed_password=get_password_hash(user.password)
+            hashed_password=get_password_hash(user.password),
+            email_verified=False,
+            email_verification_code=code,
+            email_verification_expires_at=expires_at,
         )
         db.add(new_user)
         await db.commit()
         await db.refresh(new_user)
-        
+
+        await send_email_verification_code(email, user.full_name, code)
         logger.info(f"New user registered: {email}")
-        return {"message": "User registered successfully", "user_id": new_user.id}
+        return {"message": "Verification code sent to your email", "email": email}
+    except HTTPException:
+        raise
     except Exception as e:
         await db.rollback()
         logger.error(f"Registration error: {e}")
         raise HTTPException(status_code=500, detail="Registration failed")
+
+
+@router.post("/verify-email")
+async def verify_email(payload: EmailVerificationSchema, db: AsyncSession = Depends(get_db)):
+    email = payload.email.lower().strip()
+    stmt = select(UserTable).where(UserTable.email == email)
+    user = (await db.execute(stmt)).scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.email_verified:
+        return {"message": "Email already verified"}
+    if not user.email_verification_code or not user.email_verification_expires_at:
+        raise HTTPException(status_code=400, detail="No verification code found. Please request a new code.")
+
+    now = datetime.now(timezone.utc)
+    if user.email_verification_expires_at < now:
+        raise HTTPException(status_code=400, detail="Verification code expired. Please request a new code.")
+    if user.email_verification_code != payload.code.strip():
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    user.email_verified = True
+    user.email_verification_code = None
+    user.email_verification_expires_at = None
+    await db.commit()
+    return {"message": "Email verified successfully"}
+
+
+@router.post("/resend-verification")
+async def resend_verification(payload: dict, db: AsyncSession = Depends(get_db)):
+    email = payload.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    email = email.lower().strip()
+    stmt = select(UserTable).where(UserTable.email == email)
+    user = (await db.execute(stmt)).scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.email_verified:
+        raise HTTPException(status_code=400, detail="Email is already verified")
+
+    code = str(secrets.randbelow(900000) + 100000)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    user.email_verification_code = code
+    user.email_verification_expires_at = expires_at
+    await db.commit()
+    await send_email_verification_code(user.email, user.full_name or user.email, code)
+
+    return {"message": "Verification code resent to your email"}
+
 
 async def _authenticate_user(form_data: OAuth2PasswordRequestForm, db: AsyncSession) -> UserTable:
     # Normalize email for lookup
@@ -226,6 +322,13 @@ async def _authenticate_user(form_data: OAuth2PasswordRequestForm, db: AsyncSess
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.email_verified:
+        logger.warning(f"Login attempt for unverified email: {email}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address is not verified. Please verify your email before signing in.",
         )
     
     if not user.hashed_password:
@@ -392,7 +495,11 @@ async def logout(response: Response):
 # --- Google OAuth ---
 
 @router.get("/google/login")
-async def google_login(token: Optional[str] = None):
+async def google_login(
+    token: Optional[str] = None,
+    redirect_to: Optional[str] = "/dashboard",
+    force_consent: bool = False,
+):
     """Starts Google OAuth flow. Can take an optional JWT to link to an existing user."""
     try:
         user_id = None
@@ -402,10 +509,12 @@ async def google_login(token: Optional[str] = None):
                 user_id = payload.get("sub")
             except Exception:
                 pass
-                
-        # We embed user_id in state so the callback knows who triggered this connect flow
-        state = f"{secrets.token_urlsafe(16)}|{user_id if user_id else ''}"
-        auth_url = await google_auth.get_google_auth_url(state)
+
+        state = _build_oauth_state(user_id, redirect_to)
+        auth_url = await google_auth.get_google_auth_url(
+            state,
+            prompt="consent" if force_consent else None,
+        )
         return RedirectResponse(url=auth_url)
     except ValueError as e:
         logger.error(f"Google OAuth Configuration Error: {e}")
@@ -428,11 +537,7 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
         
         # 2. Parse state to find who this belongs to
-        user_id = None
-        if "|" in state:
-            parts = state.split("|")
-            if len(parts) == 2:
-                user_id = parts[1] if parts[1] else None
+        user_id, redirect_to = _parse_oauth_state(state)
 
         data = await google_auth.fetch_google_tokens(code)
         email = data.get("email")
@@ -457,11 +562,18 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             user = UserTable(
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
-                hashed_password=get_password_hash(secrets.token_urlsafe(32))
+                hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+                email_verified=True,
+                email_verification_code=None,
+                email_verification_expires_at=None,
             )
             db.add(user)
             await db.flush()
             logger.info(f"New user created via Google OAuth: {email}")
+        elif not user.email_verified:
+            user.email_verified = True
+            user.email_verification_code = None
+            user.email_verification_expires_at = None
 
         # 4. Upsert Tokens
         token_info = data.get("token", {})
@@ -492,7 +604,7 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         
         # 5. Finalize Login
         access_token = create_access_token(data={"sub": user.id})
-        return RedirectResponse(url=_frontend_redirect_token(access_token))
+        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
         
     except ValueError as e:
         logger.error(f"Google OAuth Configuration Error: {e}")
@@ -521,10 +633,33 @@ async def sync_timezone(payload: dict):
         raise HTTPException(status_code=400, detail="Missing timezone")
     return {"status": "updated", "timezone": timezone}
 
+@router.get("/sso/start")
+async def sso_start(
+    provider: str,
+    redirect_to: Optional[str] = "/dashboard",
+    token: Optional[str] = None,
+):
+    """Start a generic SSO connection flow for the given provider."""
+    provider = provider.lower()
+    if get_provider_config(provider) is None:
+        raise HTTPException(status_code=400, detail="Unsupported SSO provider")
+
+    query_parts = []
+    if redirect_to:
+        query_parts.append(f"redirect_to={quote_plus(redirect_to)}")
+    if token:
+        query_parts.append(f"token={quote_plus(token)}")
+
+    target_url = f"/api/v1/auth/{provider}/login"
+    if query_parts:
+        target_url = f"{target_url}?{'&'.join(query_parts)}"
+
+    return RedirectResponse(url=target_url)
+
 # --- Microsoft OAuth ---
 
 @router.get("/microsoft/login")
-async def microsoft_login(token: Optional[str] = None):
+async def microsoft_login(token: Optional[str] = None, redirect_to: Optional[str] = "/dashboard"):
     """Starts Microsoft OAuth flow. Can take an optional JWT to link to an existing user."""
     try:
         user_id = None
@@ -535,8 +670,7 @@ async def microsoft_login(token: Optional[str] = None):
             except Exception:
                 pass
                 
-        # Embed user_id in state
-        state = f"{secrets.token_urlsafe(16)}|{user_id if user_id else ''}"
+        state = _build_oauth_state(user_id, redirect_to)
         auth_url = await microsoft_auth.get_microsoft_auth_url(state)
         return RedirectResponse(url=auth_url)
     except ValueError as e:
@@ -560,11 +694,7 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
         
         # 2. Parse state
-        user_id = None
-        if "|" in state:
-            parts = state.split("|")
-            if len(parts) == 2:
-                user_id = parts[1] if parts[1] else None
+        user_id, redirect_to = _parse_oauth_state(state)
 
         data = await microsoft_auth.fetch_microsoft_tokens(code)
         email = data.get("email")
@@ -588,11 +718,18 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
             user = UserTable(
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
-                hashed_password=get_password_hash(secrets.token_urlsafe(32))
+                hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+                email_verified=True,
+                email_verification_code=None,
+                email_verification_expires_at=None,
             )
             db.add(user)
             await db.flush()
             logger.info(f"New user created via Microsoft OAuth: {email}")
+        elif not user.email_verified:
+            user.email_verified = True
+            user.email_verification_code = None
+            user.email_verification_expires_at = None
 
         # 4. Upsert Tokens
         token_info = data.get("token", {})
@@ -622,7 +759,7 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         logger.info(f"Microsoft OAuth successful for user: {email}")
         
         access_token = create_access_token(data={"sub": user.id})
-        return RedirectResponse(url=_frontend_redirect_token(access_token))
+        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
         
     except ValueError as e:
         logger.error(f"Microsoft OAuth Configuration Error: {e}")
@@ -642,7 +779,7 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
 
 
 @router.get("/zoom/login")
-async def zoom_login(token: Optional[str] = None):
+async def zoom_login(token: Optional[str] = None, redirect_to: Optional[str] = "/dashboard"):
     """Starts Zoom OAuth flow. Can take an optional JWT to link to an existing user."""
     try:
         user_id = None
@@ -653,7 +790,7 @@ async def zoom_login(token: Optional[str] = None):
             except Exception:
                 pass
 
-        state = f"{secrets.token_urlsafe(16)}|{user_id if user_id else ''}"
+        state = _build_oauth_state(user_id, redirect_to)
         auth_url = await zoom_auth.get_zoom_auth_url(state)
         return RedirectResponse(url=auth_url)
     except ValueError as e:
@@ -668,11 +805,7 @@ async def zoom_login(token: Optional[str] = None):
 async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     """Handles Zoom callback and upserts tokens."""
     try:
-        user_id = None
-        if state and "|" in state:
-            user_id = state.split("|")[1]
-            if not user_id:
-                user_id = None
+        user_id, redirect_to = _parse_oauth_state(state or "")
 
         data = await zoom_auth.fetch_zoom_tokens(code)
         email = data["email"]
@@ -688,10 +821,17 @@ async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession
             user = UserTable(
                 email=email,
                 full_name=data["full_name"],
-                hashed_password=get_password_hash(secrets.token_urlsafe(32))
+                hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+                email_verified=True,
+                email_verification_code=None,
+                email_verification_expires_at=None,
             )
             db.add(user)
             await db.flush()
+        elif not user.email_verified:
+            user.email_verified = True
+            user.email_verification_code = None
+            user.email_verification_expires_at = None
 
         token_info = data["token"]
         stmt = select(UserTokenTable).where(UserTokenTable.user_id == user.id, UserTokenTable.provider == "zoom")
@@ -706,7 +846,7 @@ async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession
 
         await db.commit()
         access_token = create_access_token(data={"sub": user.id})
-        return RedirectResponse(url=_frontend_redirect_token(access_token))
+        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
 
     except ValueError as e:
         logger.error(f"Zoom OAuth Configuration Error: {e}")

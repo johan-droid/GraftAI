@@ -74,7 +74,19 @@ export default function PluginsPage() {
 
     const currentPath = typeof window !== "undefined" ? window.location.pathname : "/dashboard/plugins";
     const callbackPath = currentPath || "/dashboard/plugins";
-    const url = `${composeEndpoint("/auth/sso/start", true)}?provider=${encodeURIComponent(plugin.id)}&redirect_to=${encodeURIComponent(callbackPath)}`;
+    const token = typeof window !== "undefined"
+      ? window.localStorage.getItem("token") || window.localStorage.getItem("graftai_access_token") || window.sessionStorage.getItem("token") || window.sessionStorage.getItem("graftai_access_token")
+      : null;
+
+    const params = new URLSearchParams({
+      provider: plugin.id,
+      redirect_to: callbackPath,
+    });
+    if (token) {
+      params.append("token", token);
+    }
+
+    const url = `${composeEndpoint("/auth/sso/start", true)}?${params.toString()}`;
     window.location.assign(url);
   };
 

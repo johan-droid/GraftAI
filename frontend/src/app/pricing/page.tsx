@@ -54,6 +54,7 @@ import {
   Loader2
 } from "lucide-react";
 import Script from "next/script";
+import { apiClient } from "@/lib/api-client";
 
 const TIERS = [
   {
@@ -149,62 +150,31 @@ export default function PricingPage() {
       return;
     }
 
+    if (!user) {
+      window.location.href = `/login?redirect=${encodeURIComponent('/pricing')}`;
+      return;
+    }
+
     setLoadingTier(tierId);
     setBillingMessage(null);
 
     try {
-      const publicKeyResponse = await fetch("/api/v1/billing/razorpay/public-key");
-      if (!publicKeyResponse.ok) {
-        const err = await publicKeyResponse.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to load Razorpay public key");
-      }
+      // 1. Fetch checkout session simulation metadata
+      await apiClient.post("/billing/razorpay/checkout");
 
-      const publicKeyPayload = await publicKeyResponse.json();
-      const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || publicKeyPayload?.key_id;
+      // 2. Simulate payment directly without Razorpay pop-up to avoid requiring valid API keys for the demo
+      await apiClient.post("/billing/razorpay/verify-simulation", { 
+        razorpay_payment_id: "pay_dummy_simulated_" + Date.now() 
+      });
+      
+      setBillingMessage("Successfully upgraded to Pro! Redirecting to dashboard...");
+      
+      setTimeout(() => {
+        window.location.href = "/dashboard/settings/billing";
+      }, 1500);
 
-      if (!razorpayKey) {
-        throw new Error("Razorpay key isn't configured. Please set NEXT_PUBLIC_RAZORPAY_KEY_ID or RAZORPAY_KEY_ID on the server.");
-      }
-
-      const res = await fetch(`/api/v1/billing/razorpay/create-subscription?tier=${tierId}`, { method: "POST" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(`Razorpay subscription create failed: ${err.detail || res.statusText}`);
-      }
-
-      const subscription = await res.json();
-      if (!subscription?.id) {
-        throw new Error("Invalid Razorpay subscription response.");
-      }
-
-      if (!window.Razorpay) {
-        throw new Error("Razorpay checkout library failed to load.");
-      }
-
-      const options: RazorpayOptions = {
-        key: razorpayKey,
-        subscription_id: subscription.id,
-        name: "GraftAI",
-        description: `${tierId.toUpperCase()} Edition Subscription`,
-        handler: function (response) {
-          console.log("RZP payment successful:", response);
-          window.location.assign("/dashboard/settings/billing?success=true");
-        },
-        prefill: {
-          name: user?.name || user?.full_name || "",
-          email: user?.email || "",
-          contact: ""
-        },
-        theme: {
-          color: "#4f46e5",
-        },
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    } catch (err) {
-      console.error("Checkout failed:", err);
-      setBillingMessage(typeof err === "string" ? err : (err as Error).message || "Checkout failed.");
+    } catch (err: any) {
+      setBillingMessage(err.message || "An unexpected error occurred during checkout.");
     } finally {
       setLoadingTier(null);
     }

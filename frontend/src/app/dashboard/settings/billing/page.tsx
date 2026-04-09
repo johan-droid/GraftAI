@@ -10,6 +10,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
+import { apiClient } from "@/lib/api-client";
 
 export default function BillingPage() {
   const { user } = useAuth();
@@ -40,12 +41,7 @@ export default function BillingPage() {
           return;
         }
 
-        const res = await fetch("/api/v1/billing/razorpay/cancel-subscription", { method: "POST" });
-        const result = await res.json();
-        if (!res.ok) {
-          throw new Error(result.detail || "Cancellation failed");
-        }
-
+        const res = await apiClient.post("/billing/razorpay/cancel-subscription");
         setBillingMessage("Your Razorpay subscription was canceled. Your plan has been reverted to Free.");
         window.location.reload();
         return;

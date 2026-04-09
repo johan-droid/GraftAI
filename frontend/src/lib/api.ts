@@ -358,6 +358,20 @@ export interface PublicEventDetailsResponse {
   username: string;
   event_type_slug: string;
   timezone: string;
+  recurrence_rule?: string;
+  custom_questions?: Array<Record<string, unknown>>;
+  requires_attendee_confirmation?: boolean;
+  requires_payment?: boolean;
+  payment_amount?: number;
+  payment_currency?: string;
+  travel_time_before_minutes?: number;
+  travel_time_after_minutes?: number;
+}
+
+export interface PublicUserProfileResponse {
+  username: string;
+  full_name?: string;
+  timezone: string;
 }
 
 export interface PublicAvailabilityResponse {
@@ -374,11 +388,70 @@ export interface PublicBookingConfirmation {
   invitee_end_time: string;
   invitee_zone: string;
   meeting_url?: string;
+  action_token?: string;
+  manage_url?: string;
+  reschedule_url?: string;
+  cancel_url?: string;
+}
+
+export interface PublicAvailabilitySlot {
+  start: string;
+  end: string;
+  organizer_start: string;
+  organizer_end: string;
+  invitee_start: string;
+  invitee_end: string;
+  invitee_zone: string;
+}
+
+export interface PublicDailyAvailabilityResponse {
+  date: string;
+  slots: PublicAvailabilitySlot[];
+}
+
+export interface PublicBookingActionResponse {
+  success: boolean;
+  booking_id: string;
+  status: string;
+  message: string;
+  organizer_start_time?: string;
+  organizer_end_time?: string;
+  invitee_start_time?: string;
+  invitee_end_time?: string;
+  invitee_zone?: string;
+}
+
+export interface PublicBookingDetailsResponse {
+  booking_id: string;
+  status: string;
+  full_name: string;
+  email: string;
+  event_title: string;
+  organizer_name: string;
+  organizer_username: string;
+  organizer_timezone: string;
+  event_type_slug?: string;
+  duration_minutes: number;
+  organizer_start_time: string;
+  organizer_end_time: string;
+  invitee_start_time: string;
+  invitee_end_time: string;
+  invitee_zone: string;
+  meeting_url?: string;
+  action_token: string;
+  reschedule_url: string;
+  cancel_url: string;
 }
 
 export async function getPublicEventDetails(username: string, eventType: string) {
   return apiClient.get<PublicEventDetailsResponse>(
     `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}`
+  );
+}
+
+export async function getPublicUserProfile(username: string) {
+  return apiClient.get<PublicUserProfileResponse>(
+    `/public/users/${encodeURIComponent(username)}`
   );
 }
 
@@ -393,6 +466,120 @@ export async function getPublicEventAvailability(
   return apiClient.get<PublicAvailabilityResponse>(
     `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/availability`,
     { params }
+  );
+}
+
+export async function getPublicEventAvailabilityByDate(
+  username: string,
+  eventType: string,
+  date: string,
+  timeZone?: string
+) {
+  const params: Record<string, string> = { date };
+  if (timeZone) params.time_zone = timeZone;
+  return apiClient.get<PublicDailyAvailabilityResponse>(
+    `/public/users/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/availability`,
+    { params }
+  );
+}
+
+export interface EventTypePayload {
+  name: string;
+  description?: string;
+  slug?: string;
+  duration_minutes?: number;
+  meeting_provider?: string;
+  is_public?: boolean;
+  buffer_before_minutes?: number | null;
+  buffer_after_minutes?: number | null;
+  minimum_notice_minutes?: number | null;
+  availability?: Record<string, string[]>;
+  exceptions?: unknown[];
+  recurrence_rule?: string | null;
+  custom_questions?: Array<Record<string, unknown>> | null;
+  requires_attendee_confirmation?: boolean;
+  travel_time_before_minutes?: number;
+  travel_time_after_minutes?: number;
+  requires_payment?: boolean;
+  payment_amount?: number | null;
+  payment_currency?: string;
+  team_assignment_method?: string;
+}
+
+export interface EventTypeResponse extends EventTypePayload {
+  id: string;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listEventTypes() {
+  return apiClient.get<EventTypeResponse[]>("/event-types");
+}
+
+export async function createEventType(payload: EventTypePayload) {
+  return apiClient.post<EventTypeResponse>("/event-types", payload);
+}
+
+export async function updateEventType(eventTypeId: string, payload: EventTypePayload) {
+  return apiClient.patch<EventTypeResponse>(`/event-types/${encodeURIComponent(eventTypeId)}`, payload);
+}
+
+export async function deleteEventType(eventTypeId: string) {
+  return apiClient.delete<{ status: string }>(`/event-types/${encodeURIComponent(eventTypeId)}`);
+}
+
+export interface PublicPaymentIntentResponse {
+  payment_intent_id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  client_secret?: string;
+}
+
+export interface PublicPaymentConfirmationResponse {
+  success: boolean;
+  payment_intent_id: string;
+  payment_status: string;
+}
+
+export interface TeamMemberResponse {
+  id: string;
+  user_id: string;
+  username?: string;
+  assignment_method: string;
+  priority: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getEventTypeTeamMembers(eventTypeId: string) {
+  return apiClient.get<TeamMemberResponse[]>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members`);
+}
+
+export async function addEventTypeTeamMember(eventTypeId: string, payload: { username: string; assignment_method?: string; priority?: number }) {
+  return apiClient.post<TeamMemberResponse>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members`, payload);
+}
+
+export async function updateEventTypeTeamMember(eventTypeId: string, memberId: string, payload: { assignment_method?: string; priority?: number }) {
+  return apiClient.patch<TeamMemberResponse>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members/${encodeURIComponent(memberId)}`, payload);
+}
+
+export async function deleteEventTypeTeamMember(eventTypeId: string, memberId: string) {
+  return apiClient.delete<{ status: string }>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members/${encodeURIComponent(memberId)}`);
+}
+
+export async function createPublicPaymentIntent(username: string, eventType: string) {
+  return apiClient.post<PublicPaymentIntentResponse>(
+    `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/payment-intent`,
+    null
+  );
+}
+
+export async function confirmPublicPaymentIntent(username: string, eventType: string, payload: { payment_intent_id: string; payment_method?: string }) {
+  return apiClient.post<PublicPaymentConfirmationResponse>(
+    `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/payment-intent/confirm`,
+    payload
   );
 }
 
@@ -412,6 +599,32 @@ export async function bookPublicEvent(
   return apiClient.post<PublicBookingConfirmation>(
     `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/book`,
     payload
+  );
+}
+
+export async function reschedulePublicBooking(
+  bookingId: string,
+  token: string,
+  payload: { new_start_time: string; time_zone?: string }
+) {
+  return apiClient.patch<PublicBookingActionResponse>(
+    `/public/bookings/${encodeURIComponent(bookingId)}/reschedule`,
+    payload,
+    { params: { token } }
+  );
+}
+
+export async function getPublicBookingDetails(bookingId: string, token: string) {
+  return apiClient.get<PublicBookingDetailsResponse>(
+    `/public/bookings/${encodeURIComponent(bookingId)}`,
+    { params: { token } }
+  );
+}
+
+export async function cancelPublicBooking(bookingId: string, token: string, reason?: string) {
+  return apiClient.delete<PublicBookingActionResponse>(
+    `/public/bookings/${encodeURIComponent(bookingId)}`,
+    { params: { token }, json: reason ? { reason } : undefined }
   );
 }
 

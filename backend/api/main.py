@@ -1,10 +1,23 @@
+import asyncio
 import os
+import sys
+from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from typing import Optional
+
+import httpx
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
+
+# Ensure absolute imports like `backend.*` resolve even when launched from `backend/`.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.utils import db as db_utils
 from backend.utils.error_handlers import (
@@ -20,12 +33,40 @@ configure_logging()
 # Load environment variables
 load_dotenv()
 
+async def _self_ping_loop(port: str, interval_seconds: int = 240) -> None:
+    url = f"http://127.0.0.1:{port}/health"
+    async with httpx.AsyncClient() as client:
+        while True:
+            try:
+                await client.get(url, timeout=10.0)
+            except Exception:
+                pass
+            await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize DB (creates tables if they don't exist in monolith mode)
     run_migrations()
     await _ensure_event_column_migrations()
+
+    port = os.getenv("PORT", "8000")
+    ping_enabled = os.getenv("SELF_PING_ENABLED", "true").lower() not in {"0", "false", "no"}
+    ping_task = None
+    if ping_enabled:
+        ping_interval = int(os.getenv("SELF_PING_INTERVAL_SECONDS", "30"))
+        ping_task = asyncio.create_task(_self_ping_loop(port, ping_interval))
+        app.state.self_ping_task = ping_task
+
     yield
+
+    if ping_task:
+        ping_task.cancel()
+        try:
+            await ping_task
+        except asyncio.CancelledError:
+            pass
+
     # Cleanup logic (if any)
     if hasattr(db_utils, "engine"):
         await db_utils.engine.dispose()
@@ -62,6 +103,62 @@ async def _ensure_event_column_migrations():
                 user_columns = [row[1] for row in result.fetchall()]
                 if "username" not in user_columns:
                     await conn.execute(text("ALTER TABLE users ADD COLUMN username TEXT;"))
+                if "email_verified" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 0;"))
+                if "email_verification_code" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN email_verification_code TEXT;"))
+                if "email_verification_expires_at" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN email_verification_expires_at TEXT;"))
+                if "tier" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN tier TEXT NOT NULL DEFAULT 'free';"))
+                if "subscription_status" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN subscription_status TEXT NOT NULL DEFAULT 'inactive';"))
+                if "razorpay_customer_id" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN razorpay_customer_id TEXT;"))
+                if "razorpay_subscription_id" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN razorpay_subscription_id TEXT;"))
+                if "daily_ai_count" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN daily_ai_count INTEGER NOT NULL DEFAULT 0;"))
+                if "daily_ai_limit" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN daily_ai_limit INTEGER;"))
+                if "daily_sync_count" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN daily_sync_count INTEGER NOT NULL DEFAULT 0;"))
+                if "daily_sync_limit" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN daily_sync_limit INTEGER;"))
+                if "quota_reset_at" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN quota_reset_at TEXT;"))
+                if "trial_active" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN trial_active BOOLEAN NOT NULL DEFAULT 0;"))
+                if "trial_expires_at" not in user_columns:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN trial_expires_at TEXT;"))
+
+                result = await conn.execute(text("PRAGMA table_info(bookings);"))
+                booking_columns = [row[1] for row in result.fetchall()]
+                if "is_reminder_sent" not in booking_columns:
+                    await conn.execute(text("ALTER TABLE bookings ADD COLUMN is_reminder_sent BOOLEAN NOT NULL DEFAULT 0;"))
+                if "booking_code" not in booking_columns:
+                    await conn.execute(text("ALTER TABLE bookings ADD COLUMN booking_code TEXT;"))
+
+                result = await conn.execute(text("PRAGMA table_info(event_types);"))
+                event_type_columns = [row[1] for row in result.fetchall()]
+                if "recurrence_rule" not in event_type_columns:
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN recurrence_rule TEXT;"))
+                if "custom_questions" not in event_type_columns:
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN custom_questions TEXT;"))
+                if "requires_attendee_confirmation" not in event_type_columns:
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN requires_attendee_confirmation BOOLEAN NOT NULL DEFAULT 0;"))
+                if "travel_time_before_minutes" not in event_type_columns:
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN travel_time_before_minutes INTEGER NOT NULL DEFAULT 0;"))
+                if "travel_time_after_minutes" not in event_type_columns:
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN travel_time_after_minutes INTEGER NOT NULL DEFAULT 0;"))
+                if "requires_payment" not in event_type_columns:
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN requires_payment BOOLEAN NOT NULL DEFAULT 0;"))
+                if "payment_amount" not in event_type_columns:
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN payment_amount FLOAT;"))
+                if "payment_currency" not in event_type_columns:
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN payment_currency TEXT NOT NULL DEFAULT 'USD';"))
+                if "team_assignment_method" not in event_type_columns:
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN team_assignment_method TEXT NOT NULL DEFAULT 'round_robin';"))
             else:
                 await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS description TEXT;"))
                 await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS location TEXT;"))
@@ -72,6 +169,31 @@ async def _ensure_event_column_migrations():
                 await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS metadata_payload JSON;"))
                 await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS event_type_id TEXT;"))
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_code TEXT;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires_at TIMESTAMP WITH TIME ZONE;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'free';"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'inactive';"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_customer_id TEXT;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_subscription_id TEXT;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_ai_count INTEGER NOT NULL DEFAULT 0;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_ai_limit INTEGER;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_sync_count INTEGER NOT NULL DEFAULT 0;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_sync_limit INTEGER;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS quota_reset_at TIMESTAMP WITH TIME ZONE;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_active BOOLEAN NOT NULL DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_expires_at TIMESTAMP WITH TIME ZONE;"))
+                await conn.execute(text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_code TEXT;"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS recurrence_rule TEXT;"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS custom_questions JSON;"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS requires_attendee_confirmation BOOLEAN NOT NULL DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS travel_time_before_minutes INTEGER NOT NULL DEFAULT 0;"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS travel_time_after_minutes INTEGER NOT NULL DEFAULT 0;"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS requires_payment BOOLEAN NOT NULL DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS payment_amount FLOAT;"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS payment_currency TEXT NOT NULL DEFAULT 'USD';"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS team_assignment_method TEXT NOT NULL DEFAULT 'round_robin';"))
     except Exception:
         # If the DB is already in the correct state or unsupported, ignore failures here
         pass
@@ -82,6 +204,22 @@ def create_app() -> FastAPI:
         description="A bare-minimum, high-performance monolithic backend for GraftAI.",
         version="2.0.0",
         lifespan=lifespan
+    )
+
+    # Security Headers Middleware
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: https:; connect-src 'self' https:;"
+        return response
+
+    # Trusted Host
+    app.add_middleware(
+        TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "*.graftai.tech", "*.vercel.app", "*.render.com", "*"] # Allow * as fallback for local dev initially
     )
 
     # Simplified CORS for single-domain deployments
@@ -117,8 +255,10 @@ def create_app() -> FastAPI:
     from backend.api.proactive import router as proactive_router
     from backend.api.event_types import router as event_types_router
     from backend.api.public import router as public_router
+    from backend.api.plugins import router as plugins_router
     from backend.api.webhooks import router as webhooks_router
     from backend.services.ai import router as ai_router
+    from backend.api.billing import router as billing_router
 
     # Registering the new unified Authentication router
     app.include_router(auth_router, prefix="/api/v1/auth")
@@ -128,9 +268,11 @@ def create_app() -> FastAPI:
     app.include_router(notifications_router, prefix="/api/v1")
     app.include_router(proactive_router, prefix="/api/v1")
     app.include_router(event_types_router, prefix="/api/v1")
+    app.include_router(plugins_router, prefix="/api/v1")
     app.include_router(webhooks_router, prefix="/api/v1")
     app.include_router(public_router, prefix="/api")
     app.include_router(ai_router, prefix="/api/v1")
+    app.include_router(billing_router, prefix="/api/v1")
 
     @app.get("/health")
     async def health_check():

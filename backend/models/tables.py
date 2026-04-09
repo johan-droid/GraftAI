@@ -1,12 +1,27 @@
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text, JSON, UniqueConstraint, Integer
+from typing import Any, List, Optional
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base # Re-using central Base for consistency
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+
+def generate_booking_code() -> str:
+    return uuid.uuid4().hex[:10].upper()
 
 class UserTable(Base):
     """Core user account. Stripped of complex multi-tenant organization IDs."""
@@ -17,13 +32,37 @@ class UserTable(Base):
     username: Mapped[Optional[str]] = mapped_column(String, unique=True, index=True, nullable=True)
     full_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="UTC")
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    email_verification_code: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    email_verification_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
+    
+    # Billing & Quota Fields
+    tier: Mapped[str] = mapped_column(String, default="free", nullable=False)
+    subscription_status: Mapped[str] = mapped_column(String, default="inactive", nullable=False)
+    razorpay_customer_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    razorpay_subscription_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    
+    daily_ai_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    daily_ai_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    daily_sync_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    daily_sync_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    quota_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    trial_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    trial_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     tokens: Mapped[List["UserTokenTable"]] = relationship("UserTokenTable", back_populates="user", cascade="all, delete-orphan")
     events: Mapped[List["EventTable"]] = relationship("EventTable", back_populates="user", cascade="all, delete-orphan")
     event_types: Mapped[List["EventTypeTable"]] = relationship("EventTypeTable", back_populates="user", cascade="all, delete-orphan")
+    team_event_type_memberships: Mapped[List["EventTypeTeamMemberTable"]] = relationship(
+        "EventTypeTeamMemberTable",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     bookings: Mapped[List["BookingTable"]] = relationship("BookingTable", back_populates="user", cascade="all, delete-orphan")
     webhooks: Mapped[List["WebhookSubscriptionTable"]] = relationship("WebhookSubscriptionTable", back_populates="user", cascade="all, delete-orphan")
     notifications: Mapped[List["NotificationTable"]] = relationship("NotificationTable", back_populates="user", cascade="all, delete-orphan")
@@ -92,6 +131,8 @@ class BookingTable(Base):
     __tablename__ = "bookings"
     __table_args__ = (
         UniqueConstraint("user_id", "start_time", "end_time", name="uq_bookings_user_start_end"),
+        Index("ix_bookings_user_start_time", "user_id", "start_time"),
+        Index("ix_bookings_booking_code", "booking_code"),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
@@ -100,10 +141,12 @@ class BookingTable(Base):
     event_id: Mapped[Optional[str]] = mapped_column(String, ForeignKey("events.id", ondelete="SET NULL"), nullable=True, index=True)
     full_name: Mapped[str] = mapped_column(String, nullable=False)
     email: Mapped[str] = mapped_column(String, nullable=False)
+    booking_code: Mapped[Optional[str]] = mapped_column(String, nullable=True, default=generate_booking_code)
     time_zone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="confirmed")
+    is_reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     questions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     metadata_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -153,7 +196,10 @@ class WebhookLogTable(Base):
 
 class EventTypeTable(Base):
     __tablename__ = "event_types"
-    __table_args__ = (UniqueConstraint("user_id", "slug", name="uq_user_event_type_slug"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "slug", name="uq_user_event_type_slug"),
+        Index("ix_event_types_user_slug", "user_id", "slug"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -168,8 +214,55 @@ class EventTypeTable(Base):
     minimum_notice_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
     availability: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     exceptions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    recurrence_rule: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    custom_questions: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    requires_attendee_confirmation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    travel_time_before_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    travel_time_after_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    requires_payment: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    payment_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    payment_currency: Mapped[str] = mapped_column(String, default="USD", nullable=False)
+    team_assignment_method: Mapped[str] = mapped_column(String, default="round_robin", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     user: Mapped["UserTable"] = relationship("UserTable", back_populates="event_types")
     events: Mapped[List["EventTable"]] = relationship("EventTable", back_populates="event_type", cascade="all, delete-orphan")
+    team_members: Mapped[List["EventTypeTeamMemberTable"]] = relationship(
+        "EventTypeTeamMemberTable",
+        back_populates="event_type",
+        cascade="all, delete-orphan",
+    )
+
+
+class EventTypeTeamMemberTable(Base):
+    __tablename__ = "event_type_team_members"
+    __table_args__ = (
+        UniqueConstraint("event_type_id", "user_id", name="uq_event_type_team_member"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    event_type_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("event_types.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    assignment_method: Mapped[str] = mapped_column(String, default="round_robin", nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    event_type: Mapped["EventTypeTable"] = relationship("EventTypeTable", back_populates="team_members")
+    user: Mapped["UserTable"] = relationship("UserTable", back_populates="team_event_type_memberships")

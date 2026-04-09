@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import Optional
+from backend.auth.logic import create_public_action_token
 from backend.services.mail_service import send_email, render_template
 # Removed: redis_client and NotificationTable deleted
 
@@ -143,6 +144,259 @@ async def send_custom_notification(
         text_body = message
 
     await send_email(user_email, subject, html_body, text_body)
+
+
+async def send_email_verification_code(user_email: str, full_name: str, code: str):
+    subject = "Verify your GraftAI email address"
+    template_context = {
+        "full_name": full_name,
+        "code": code,
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+    }
+    html_body = render_template("verification.html", template_context)
+    text_body = (
+        f"Hello {full_name},\n\n"
+        f"Your GraftAI verification code is: {code}\n\n"
+        "Enter this code on the verification page to complete your registration. "
+        "This code expires in 15 minutes.\n\n"
+        "If you did not request this, please ignore this email.\n"
+    )
+    await send_custom_notification(user_email, subject, text_body, html_body, text_body)
+
+
+def _public_booking_links(booking_id: str, attendee_email: str) -> dict[str, str]:
+    base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+    token = create_public_action_token(booking_id, attendee_email)
+    return {
+        "token": token,
+        "manage_url": f"{base}/public/bookings/{booking_id}?token={token}",
+        "reschedule_url": f"{base}/public/bookings/{booking_id}/reschedule?token={token}",
+        "cancel_url": f"{base}/public/bookings/{booking_id}/cancel?token={token}",
+    }
+
+
+async def send_booking_confirmation_to_attendee(
+    attendee_email: str,
+    attendee_name: str,
+    organizer_name: str,
+    event_title: str,
+    attendee_start_time: str,
+    attendee_end_time: str,
+    attendee_zone: str,
+    meeting_url: Optional[str] = None,
+    booking_id: Optional[str] = None,
+):
+    links = _public_booking_links(booking_id, attendee_email) if booking_id else {
+        "manage_url": "",
+        "reschedule_url": "",
+        "cancel_url": "",
+    }
+    subject = f"Booking confirmed: {event_title}"
+    template_context = {
+        "full_name": attendee_name,
+        "organizer_name": organizer_name,
+        "event_title": event_title,
+        "start_time": attendee_start_time,
+        "end_time": attendee_end_time,
+        "attendee_zone": attendee_zone,
+        "meeting_url": meeting_url,
+        "manage_url": links.get("manage_url"),
+        "reschedule_url": links.get("reschedule_url"),
+        "cancel_url": links.get("cancel_url"),
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+    }
+    html_body = render_template("booking_confirmation_attendee.html", template_context)
+    text_body = (
+        f"Hello {attendee_name},\n\n"
+        f"Your booking with {organizer_name} is confirmed.\n"
+        f"Event: {event_title}\n"
+        f"Time: {attendee_start_time} - {attendee_end_time} ({attendee_zone})\n"
+        f"Manage booking: {links.get('manage_url', '')}\n"
+        f"Reschedule: {links.get('reschedule_url', '')}\n"
+        f"Cancel: {links.get('cancel_url', '')}\n"
+    )
+    await send_custom_notification(attendee_email, subject, text_body, html_body, text_body)
+
+
+async def send_booking_confirmation_to_organizer(
+    organizer_email: str,
+    organizer_name: str,
+    attendee_name: str,
+    attendee_email: str,
+    event_title: str,
+    organizer_start_time: str,
+    organizer_end_time: str,
+    meeting_url: Optional[str] = None,
+    booking_id: Optional[str] = None,
+):
+    links = _public_booking_links(booking_id, attendee_email) if booking_id else {
+        "manage_url": "",
+    }
+    subject = f"New booking: {event_title}"
+    template_context = {
+        "full_name": organizer_name,
+        "attendee_name": attendee_name,
+        "attendee_email": attendee_email,
+        "event_title": event_title,
+        "start_time": organizer_start_time,
+        "end_time": organizer_end_time,
+        "meeting_url": meeting_url,
+        "manage_url": links.get("manage_url"),
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+    }
+    html_body = render_template("booking_confirmation_organizer.html", template_context)
+    text_body = (
+        f"Hello {organizer_name},\n\n"
+        f"A new booking has been created.\n"
+        f"Attendee: {attendee_name} <{attendee_email}>\n"
+        f"Event: {event_title}\n"
+        f"Time: {organizer_start_time} - {organizer_end_time}\n"
+        f"Manage booking: {links.get('manage_url', '')}\n"
+    )
+    await send_custom_notification(organizer_email, subject, text_body, html_body, text_body)
+
+
+async def send_booking_rescheduled_to_both(
+    organizer_email: str,
+    organizer_name: str,
+    attendee_email: str,
+    attendee_name: str,
+    event_title: str,
+    old_time: str,
+    new_time: str,
+    meeting_url: Optional[str] = None,
+    booking_id: Optional[str] = None,
+):
+    links = _public_booking_links(booking_id, attendee_email) if booking_id else {
+        "manage_url": "",
+        "reschedule_url": "",
+        "cancel_url": "",
+    }
+    subject = f"Booking rescheduled: {event_title}"
+
+    organizer_context = {
+        "full_name": organizer_name,
+        "event_title": event_title,
+        "old_time": old_time,
+        "new_time": new_time,
+        "meeting_url": meeting_url,
+        "manage_url": links.get("manage_url"),
+        "reschedule_url": links.get("reschedule_url"),
+        "cancel_url": links.get("cancel_url"),
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+    }
+    attendee_context = {
+        **organizer_context,
+        "full_name": attendee_name,
+    }
+
+    organizer_html = render_template("booking_rescheduled.html", organizer_context)
+    attendee_html = render_template("booking_rescheduled.html", attendee_context)
+
+    organizer_text = (
+        f"Hello {organizer_name},\n\n"
+        f"Booking '{event_title}' has been rescheduled.\n"
+        f"Old: {old_time}\n"
+        f"New: {new_time}\n"
+        f"Manage booking: {links.get('manage_url', '')}\n"
+    )
+    attendee_text = (
+        f"Hello {attendee_name},\n\n"
+        f"Booking '{event_title}' has been rescheduled.\n"
+        f"Old: {old_time}\n"
+        f"New: {new_time}\n"
+        f"Manage booking: {links.get('manage_url', '')}\n"
+    )
+
+    await send_custom_notification(organizer_email, subject, organizer_text, organizer_html, organizer_text)
+    await send_custom_notification(attendee_email, subject, attendee_text, attendee_html, attendee_text)
+
+
+async def send_booking_cancelled_to_both(
+    organizer_email: str,
+    organizer_name: str,
+    attendee_email: str,
+    attendee_name: str,
+    event_title: str,
+    original_time: str,
+    cancelled_by: str,
+    cancellation_reason: Optional[str] = None,
+    booking_id: Optional[str] = None,
+):
+    links = _public_booking_links(booking_id, attendee_email) if booking_id else {
+        "reschedule_url": "",
+    }
+    subject = f"Booking cancelled: {event_title}"
+
+    organizer_context = {
+        "full_name": organizer_name,
+        "event_title": event_title,
+        "original_time": original_time,
+        "cancelled_by": cancelled_by,
+        "cancellation_reason": cancellation_reason,
+        "reschedule_url": links.get("reschedule_url"),
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+    }
+    attendee_context = {
+        **organizer_context,
+        "full_name": attendee_name,
+    }
+
+    organizer_html = render_template("booking_cancelled.html", organizer_context)
+    attendee_html = render_template("booking_cancelled.html", attendee_context)
+
+    organizer_text = (
+        f"Hello {organizer_name},\n\n"
+        f"Booking '{event_title}' at {original_time} was cancelled by {cancelled_by}.\n"
+        + (f"Reason: {cancellation_reason}.\n" if cancellation_reason else "")
+    )
+    attendee_text = (
+        f"Hello {attendee_name},\n\n"
+        f"Booking '{event_title}' at {original_time} was cancelled by {cancelled_by}.\n"
+        + (f"Reason: {cancellation_reason}.\n" if cancellation_reason else "")
+    )
+
+    await send_custom_notification(organizer_email, subject, organizer_text, organizer_html, organizer_text)
+    await send_custom_notification(attendee_email, subject, attendee_text, attendee_html, attendee_text)
+
+
+async def send_booking_reminder_to_organizer(
+    organizer_email: str,
+    organizer_name: str,
+    attendee_name: str,
+    attendee_email: str,
+    event_title: str,
+    organizer_start_time: str,
+    organizer_end_time: str,
+    organizer_timezone: str,
+    booking_id: Optional[str] = None,
+):
+    base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+    manage_url = f"{base}/dashboard/calendar"
+    subject = f"Reminder: {event_title} starts in 24 hours"
+
+    template_context = {
+        "full_name": organizer_name,
+        "attendee_name": attendee_name,
+        "attendee_email": attendee_email,
+        "event_title": event_title,
+        "start_time": organizer_start_time,
+        "end_time": organizer_end_time,
+        "organizer_timezone": organizer_timezone,
+        "booking_id": booking_id,
+        "manage_url": manage_url,
+        "frontend_url": base,
+    }
+
+    html_body = render_template("booking_reminder_organizer.html", template_context)
+    text_body = (
+        f"Hello {organizer_name},\n\n"
+        f"Reminder: '{event_title}' is scheduled for {organizer_start_time} - {organizer_end_time} ({organizer_timezone}).\n"
+        f"Attendee: {attendee_name} <{attendee_email}>\n"
+        f"Manage in dashboard: {manage_url}\n"
+    )
+
+    await send_custom_notification(organizer_email, subject, text_body, html_body, text_body)
 
 
 async def notify_quota_warning(

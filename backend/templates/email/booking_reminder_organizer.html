@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="badge">Reminder</div>
+    <h1>Upcoming booking in 24 hours</h1>
+    <p>Hello {{ full_name }}, this is your organizer reminder for an upcoming booking.</p>
+
+    <p><strong>{{ event_title }}</strong></p>
+    <p>{{ start_time }} - {{ end_time }} ({{ organizer_timezone }})</p>
+    <p>Attendee: {{ attendee_name }} ({{ attendee_email }})</p>
+
+    <center>
+        <a href="{{ manage_url }}" class="button">Open Dashboard</a>
+    </center>
+</div>
+{% endblock %}

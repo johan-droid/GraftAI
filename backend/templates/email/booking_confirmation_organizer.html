@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="badge badge-success">New Booking</div>
+    <h1>You have a new booking</h1>
+    <p>Hello {{ full_name }}, a new attendee has booked your event.</p>
+
+    <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
+        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700;">{{ event_title }}</p>
+        <p style="margin-bottom: 8px; font-size: 13px; color: #94a3b8;">{{ start_time }} - {{ end_time }}</p>
+        <p style="margin-bottom: 0; font-size: 13px; color: #94a3b8;">Attendee: {{ attendee_name }} ({{ attendee_email }})</p>
+        {% if meeting_url %}
+        <p style="margin: 8px 0 0; font-size: 13px;">Join: <a href="{{ meeting_url }}" style="color: #818cf8;">{{ meeting_url }}</a></p>
+        {% endif %}
+    </div>
+
+    <center>
+        <a href="{{ manage_url }}" class="button">Manage Booking</a>
+    </center>
+</div>
+{% endblock %}

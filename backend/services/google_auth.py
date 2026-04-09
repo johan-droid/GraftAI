@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -18,7 +19,7 @@ if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
 
 SCOPES = "openid profile email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events"
 
-async def get_google_auth_url(state: str):
+async def get_google_auth_url(state: str, prompt: Optional[str] = None):
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise ValueError(
             "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file. "
@@ -31,11 +32,16 @@ async def get_google_auth_url(state: str):
         scope=SCOPES,
         redirect_uri=GOOGLE_REDIRECT_URI,
     )
+    auth_params = {
+        "state": state,
+        "access_type": "offline",
+    }
+    if prompt:
+        auth_params["prompt"] = prompt
+
     authorization_url, _ = client.create_authorization_url(
         "https://accounts.google.com/o/oauth2/v2/auth",
-        state=state,
-        access_type="offline",
-        prompt="consent"
+        **auth_params
     )
     return authorization_url
 

@@ -2,6 +2,9 @@ from fastapi import HTTPException, status
 from starlette.requests import Request
 from typing import Callable
 from collections import defaultdict
+import hashlib
+import hmac
+import os
 import time
 
 _rate_limit_state: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
@@ -29,3 +32,24 @@ def get_rate_limiter(max_requests: int = 10, window_seconds: int = 60) -> Callab
         return True
 
     return dependency
+
+
+def _booking_action_secret() -> str:
+    # Fallback to JWT secret so token verification still works in local/dev
+    return os.getenv("BOOKING_ACTION_SECRET") or os.getenv("JWT_SECRET", "change-me-in-production")
+
+
+def create_public_action_token(booking_id: str, email: str) -> str:
+    payload = f"{booking_id}:{email.strip().lower()}".encode("utf-8")
+    return hmac.new(
+        _booking_action_secret().encode("utf-8"),
+        payload,
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def verify_public_action_token(booking_id: str, email: str, token: str) -> bool:
+    if not token:
+        return False
+    expected = create_public_action_token(booking_id, email)
+    return hmac.compare_digest(expected, token.strip())

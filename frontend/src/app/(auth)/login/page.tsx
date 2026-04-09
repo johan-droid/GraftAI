@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Zap, Mail, Lock, Globe, ArrowRight } from "lucide-react";
@@ -10,10 +10,28 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://graftai.onrender.com
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const redirectPath = useMemo(() => {
+    const target = searchParams.get("redirect");
+    if (!target || !target.startsWith("/")) {
+      return "/dashboard";
+    }
+    return target;
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (searchParams.get("verified") === "true") {
+      setInfo("Email verified successfully. You can sign in now.");
+    } else if (searchParams.get("registered") === "true") {
+      setInfo("Registration completed. Please sign in.");
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,11 +49,15 @@ export default function LoginPage() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error("Invalid credentials");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        const detail = typeof payload.detail === "string" ? payload.detail : "Invalid credentials";
+        throw new Error(detail);
+      }
 
       const data = await response.json();
       localStorage.setItem("token", data.access_token);
-      router.push("/dashboard");
+      router.push(redirectPath);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid credentials");
     } finally {
@@ -68,6 +90,16 @@ export default function LoginPage() {
         <div className="rounded-3xl border border-white/10 bg-[#0a0a14]/80 backdrop-blur-xl p-8 shadow-2xl">
           <h2 className="text-2xl font-bold text-white mb-2">Welcome back</h2>
           <p className="text-slate-400 text-sm mb-8">Sign in to your account to continue</p>
+
+          {info && !error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm font-medium text-emerald-200"
+            >
+              {info}
+            </motion.div>
+          )}
           
           {error && (
             <motion.div
@@ -108,6 +140,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
+              <p className="mt-2 text-xs text-slate-500">Use your verified account email and password.</p>
             </div>
             
             <button 
@@ -118,6 +151,10 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign In"}
               {!loading && <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />}
             </button>
+
+            <p className="text-center text-xs text-slate-500">
+              Need an account? <Link href="/register" className="text-slate-300 hover:text-white underline underline-offset-2">Create one</Link>
+            </p>
           </form>
 
           <div className="mt-6 relative">
@@ -153,16 +190,21 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <div className="mt-6 text-center text-sm text-slate-400">
-            Don't have an account?{" "}
-            <Link href="/register" className="text-indigo-400 font-semibold hover:text-indigo-300 transition">
-              Create one
-            </Link>
-          </div>
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6">
-          Protected by enterprise-grade security
+          Protected by enterprise-grade security · {" "}
+          <Link href="/docs" className="text-slate-400 hover:text-slate-200 underline underline-offset-2">
+            Docs
+          </Link>
+          {" "}· {" "}
+          <Link href="/privacy-policy" className="text-slate-400 hover:text-slate-200 underline underline-offset-2">
+            Privacy
+          </Link>
+          {" "}· {" "}
+          <Link href="/terms-of-service" className="text-slate-400 hover:text-slate-200 underline underline-offset-2">
+            Terms
+          </Link>
         </p>
       </motion.div>
     </div>

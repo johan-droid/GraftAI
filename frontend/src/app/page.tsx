@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Zap, Bot, Sparkles, Globe, Calendar, ArrowRight, Menu, X
+  Zap, Bot, Sparkles, Globe, Calendar, ArrowRight, Menu, X, Check
 } from "lucide-react";
 
 // --- Data Objects ---
@@ -37,6 +37,63 @@ const FEATURES = [
   }
 ];
 
+const PLAN_PREVIEW = [
+  {
+    name: "Standard",
+    price: "$0",
+    description: "For individuals getting started with unified scheduling.",
+    points: ["10 AI messages/day", "3 manual syncs/day", "Google + Microsoft calendar"],
+    cta: "Start Free",
+    href: "/register",
+    featured: false,
+  },
+  {
+    name: "Professional",
+    price: "$19",
+    description: "For heavy users who run their full workday through GraftAI.",
+    points: ["200 AI messages/day", "50 manual syncs/day", "Priority processing + analytics"],
+    cta: "Upgrade to Pro",
+    href: "/pricing",
+    featured: true,
+  },
+  {
+    name: "Elite Sovereign",
+    price: "$49",
+    description: "For executive workflows and advanced AI-assisted operations.",
+    points: ["High-volume AI usage", "Advanced integrations", "Concierge support model"],
+    cta: "See Full Plans",
+    href: "/pricing",
+    featured: false,
+  },
+];
+
+const FOOTER_LINK_GROUPS = [
+  {
+    title: "Product",
+    links: [
+      { label: "Features", href: "#features" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Docs", href: "/docs" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "Sign In", href: "/login" },
+      { label: "Create Account", href: "/register" },
+      { label: "Dashboard", href: "/dashboard" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { label: "Privacy Policy", href: "/privacy-policy" },
+      { label: "Terms of Service", href: "/terms-of-service" },
+      { label: "Documentation", href: "/docs" },
+    ],
+  },
+];
+
 // --- Sub-components ---
 interface NavProps {
   scrolled: boolean;
@@ -58,6 +115,7 @@ const Nav = ({ scrolled, setMobileOpen }: NavProps) => (
       <div className="hidden md:flex items-center gap-8">
         <Link href="#features" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Features</Link>
         <Link href="#pricing" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Pricing</Link>
+        <Link href="/docs" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Docs</Link>
         <Link href="/login" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Sign in</Link>
         <Link href="/register" className="group flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-black hover:bg-slate-200 transition-all active:scale-95">
           Get Started
@@ -65,7 +123,12 @@ const Nav = ({ scrolled, setMobileOpen }: NavProps) => (
         </Link>
       </div>
 
-      <button onClick={() => setMobileOpen(true)} className="md:hidden flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white">
+      <button
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open navigation menu"
+        title="Open menu"
+        className="md:hidden flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white"
+      >
         <Menu className="h-5 w-5" />
       </button>
     </nav>
@@ -202,6 +265,62 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Pricing Preview */}
+      <section id="pricing" className="px-6 pb-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-10 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Pricing</p>
+              <h2 className="mt-2 text-3xl font-black text-white md:text-5xl">Transparent plans for every stage.</h2>
+            </div>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center gap-2 self-start rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              Compare all plans
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-3">
+            {PLAN_PREVIEW.map((plan) => (
+              <article
+                key={plan.name}
+                className={`rounded-3xl border p-6 ${
+                  plan.featured
+                    ? "border-indigo-500/40 bg-indigo-500/10 shadow-xl shadow-indigo-500/10"
+                    : "border-white/10 bg-white/[0.02]"
+                }`}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{plan.name}</p>
+                <p className="mt-3 text-4xl font-black text-white">{plan.price}</p>
+                <p className="mt-3 text-sm leading-relaxed text-slate-400">{plan.description}</p>
+
+                <ul className="mt-5 space-y-2 text-sm text-slate-300">
+                  {plan.points.map((point) => (
+                    <li key={point} className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 text-indigo-400" />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Link
+                  href={plan.href}
+                  className={`mt-6 inline-flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-bold transition ${
+                    plan.featured
+                      ? "bg-white text-black hover:bg-slate-200"
+                      : "border border-white/10 bg-white/5 text-white hover:bg-white/10"
+                  }`}
+                >
+                  {plan.cta}
+                </Link>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="py-32 px-6">
         <motion.div
@@ -223,9 +342,39 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-white/[0.05] text-center">
+      <footer className="border-t border-white/[0.05] py-14">
         <div className="mx-auto max-w-6xl px-6">
-          <p className="text-xs text-slate-600 font-bold tracking-widest uppercase">© 2026 GraftAI · The Presentation Version</p>
+          <div className="grid gap-10 text-left md:grid-cols-[1.2fr_1fr_1fr_1fr]">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/25">
+                  <Zap className="h-4 w-4 fill-white text-white" />
+                </div>
+                <span className="text-sm font-black uppercase tracking-wide text-white">GraftAI</span>
+              </div>
+              <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">
+                AI-assisted scheduling infrastructure for focus-driven teams and individuals.
+              </p>
+            </div>
+
+            {FOOTER_LINK_GROUPS.map((group) => (
+              <div key={group.title}>
+                <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{group.title}</h3>
+                <div className="mt-4 flex flex-col gap-2 text-sm text-slate-300">
+                  {group.links.map((link) => (
+                    <Link key={link.label} href={link.href} className="transition hover:text-white">
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-10 flex flex-col gap-2 border-t border-white/10 pt-6 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
+            <p className="font-semibold uppercase tracking-[0.12em]">© 2026 GraftAI · The Presentation Version</p>
+            <p>Built for speed, clarity, and scheduling sovereignty.</p>
+          </div>
         </div>
       </footer>
 
@@ -238,11 +387,18 @@ export default function Home() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center p-8 text-center"
           >
-            <button onClick={() => setMobileOpen(false)} className="absolute top-8 right-8 text-white"><X className="w-8 h-8" /></button>
+            <button
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close navigation menu"
+              title="Close menu"
+              className="absolute top-8 right-8 text-white"
+            ><X className="w-8 h-8" /></button>
             <div className="flex flex-col gap-10">
                <Link onClick={() => setMobileOpen(false)} href="/login" className="text-4xl font-black text-white transition-opacity hover:opacity-70">Sign In</Link>
                <Link onClick={() => setMobileOpen(false)} href="/register" className="text-4xl font-black text-indigo-400 transition-opacity hover:opacity-70">Register</Link>
                <Link onClick={() => setMobileOpen(false)} href="#features" className="text-4xl font-black text-white transition-opacity hover:opacity-70">Features</Link>
+              <Link onClick={() => setMobileOpen(false)} href="/pricing" className="text-4xl font-black text-white transition-opacity hover:opacity-70">Pricing</Link>
+               <Link onClick={() => setMobileOpen(false)} href="/docs" className="text-4xl font-black text-white transition-opacity hover:opacity-70">Docs</Link>
             </div>
           </motion.div>
         )}

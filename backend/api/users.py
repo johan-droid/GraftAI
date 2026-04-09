@@ -29,7 +29,17 @@ async def get_my_profile(current_user: UserTable = Depends(get_current_user)):
         "id": current_user.id,
         "email": current_user.email,
         "username": current_user.username,
-        "full_name": current_user.full_name
+        "full_name": current_user.full_name,
+        "tier": current_user.tier,
+        "subscription_status": current_user.subscription_status,
+        "razorpay_subscription_id": current_user.razorpay_subscription_id,
+        "daily_ai_count": current_user.daily_ai_count,
+        "daily_ai_limit": current_user.daily_ai_limit,
+        "daily_sync_count": current_user.daily_sync_count,
+        "daily_sync_limit": current_user.daily_sync_limit,
+        "quota_reset_at": current_user.quota_reset_at.isoformat() if current_user.quota_reset_at else None,
+        "trial_active": current_user.trial_active,
+        "trial_expires_at": current_user.trial_expires_at.isoformat() if current_user.trial_expires_at else None,
     }
 
 @router.get("/me/integrations")

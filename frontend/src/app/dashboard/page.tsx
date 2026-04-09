@@ -64,14 +64,19 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadDashboard() {
       try {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
         const [stats, events, suggestion] = await Promise.all<[
           DashboardSummary,
-          unknown[],
+          any[],
           DashboardSuggestion
         ]>([
           getAnalyticsSummary(),
-          getEvents(),
-          getProactiveSuggestion()
+          getEvents(todayStart.toISOString(), todayEnd.toISOString()),
+          getProactiveSuggestion("User is viewing the main dashboard.")
         ]);
         setData({
           stats: {
@@ -132,9 +137,9 @@ export default function DashboardPage() {
             <CalendarIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data?.stats?.totalMeetings || '12'}</div>
-            <p className="text-xs text-muted-foreground mt-1 text-emerald-500 flex items-center">
-              <TrendingUp className="h-3 w-3 mr-1" /> +2 from yesterday
+            <div className="text-2xl font-bold">{data?.stats?.totalMeetings ?? 0}</div>
+            <p className="text-xs text-muted-foreground mt-1 flex items-center">
+              Active period total
             </p>
           </CardContent>
         </Card>
@@ -144,18 +149,18 @@ export default function DashboardPage() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data?.stats?.focusHours || '4.5'} hrs</div>
-            <p className="text-xs text-muted-foreground mt-1">Optimal zone</p>
+            <div className="text-2xl font-bold">{data?.stats?.focusHours ? data.stats.focusHours.toFixed(1) : '0'} hrs</div>
+            <p className="text-xs text-muted-foreground mt-1">Based on free calendar space</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Collaborators</CardTitle>
+            <CardTitle className="text-sm font-medium">Engagement</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data?.stats?.collaborators || '8'}</div>
-            <p className="text-xs text-muted-foreground mt-1">Across 3 domains</p>
+            <div className="text-2xl font-bold">{data?.stats?.collaborators ?? 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">Recent significant interactions</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -172,37 +177,48 @@ export default function DashboardPage() {
           
           <Card>
             <CardContent className="p-0">
-              <div className="divide-y relative">
-                {/* Simulated Timeline Items */}
-                {[
-                  { title: "Product Sync", time: "10:00 AM", duration: "45m", type: "Internal", active: false },
-                  { title: "Design Review", time: "11:30 AM", duration: "1h", type: "Review", active: true },
-                  { title: "Client Discovery", time: "2:00 PM", duration: "30m", type: "External", active: false },
-                ].map((event, i) => (
-                  <div key={i} className={`p-6 flex items-start gap-4 transition-colors ${event.active ? 'bg-primary/5' : ''}`}>
-                    <div className="w-24 flex-shrink-0 text-sm font-medium text-muted-foreground">
-                      {event.time}
-                    </div>
-                    <div className="relative">
-                      {event.active && (
-                        <span className="absolute -left-7 top-1 flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-                        </span>
-                      )}
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className={`font-semibold ${event.active ? 'text-primary' : ''}`}>
-                          {event.title}
-                        </h4>
-                        {event.active && <Badge variant="secondary">In Progress</Badge>}
+            <div className="divide-y relative">
+                {data?.events && data.events.length > 0 ? (
+                  data.events.map((event: any, i: number) => {
+                    const startTime = new Date(event.start_time);
+                    const endTime = new Date(event.end_time);
+                    const durationMins = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
+                    const formattedTime = startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const formattedDuration = durationMins >= 60 ? `${Math.floor(durationMins / 60)}h ${durationMins % 60}m` : `${durationMins}m`;
+                    const now = new Date();
+                    const active = now >= startTime && now <= endTime;
+
+                    return (
+                      <div key={i} className={`p-6 flex items-start gap-4 transition-colors ${active ? 'bg-primary/5' : ''}`}>
+                        <div className="w-24 flex-shrink-0 text-sm font-medium text-muted-foreground">
+                          {formattedTime}
+                        </div>
+                        <div className="relative">
+                          {active && (
+                            <span className="absolute -left-7 top-1 flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                            </span>
+                          )}
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className={`font-semibold ${active ? 'text-primary' : ''}`}>
+                              {event.title}
+                            </h4>
+                            {active && <Badge variant="secondary">In Progress</Badge>}
+                          </div>
+                          <div className="text-sm text-muted-foreground flex items-center gap-3">
+                            <span className="flex items-center"><Clock className="mr-1 h-3 w-3" /> {formattedDuration}</span>
+                            <span>• {event.category || "General"}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground flex items-center gap-3">
-                        <span className="flex items-center"><Clock className="mr-1 h-3 w-3" /> {event.duration}</span>
-                        <span>• {event.type}</span>
-                      </div>
-                    </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-6 text-center text-muted-foreground">
+                    No events scheduled for today. Take a break!
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>

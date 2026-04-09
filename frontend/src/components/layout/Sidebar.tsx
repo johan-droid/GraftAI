@@ -9,7 +9,8 @@ import {
   Bot, 
   Settings, 
   Puzzle, 
-  LogOut 
+  LogOut,
+  MapPin
 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 
@@ -20,6 +21,7 @@ export function Sidebar() {
   const NAV_ITEMS = [
     { label: "Overview", icon: LayoutDashboard, href: "/dashboard" },
     { label: "Calendar", icon: CalendarDays, href: "/dashboard/calendar" },
+    { label: "Event Types", icon: MapPin, href: "/dashboard/event-types" },
     { label: "AI Assistant", icon: Bot, href: "/dashboard/ai" },
     { label: "Plugins", icon: Puzzle, href: "/dashboard/plugins" },
     { label: "Settings", icon: Settings, href: "/dashboard/settings" },

@@ -1,16 +1,11 @@
-version: 2
-build:
-  env:
-    NEXT_PUBLIC_API_BASE_URL: "$NEXT_PUBLIC_API_BASE_URL"
-    NEXT_PUBLIC_BACKEND_URL: "$NEXT_PUBLIC_BACKEND_URL"
-    NEXT_PUBLIC_APP_URL: "$NEXT_PUBLIC_APP_URL"
-    BETTER_AUTH_URL: "$BETTER_AUTH_URL"
-    NEXT_PUBLIC_BETTER_AUTH_URL: "$NEXT_PUBLIC_BETTER_AUTH_URL"
-
-# For a monorepo, we build frontend from its own folder and deploy it.
-projects:
-  - src: "frontend"
-    use: "@vercel/next"
-
-# If you use a separate hosted API, ensure BACKEND_URL is configured in env
-# at deployment time; CORS should only allow frontend origin.
+{
+  "version": 2,
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/.next",
+  "framework": "nextjs",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://graftai.onrender.com",
+    "NEXT_PUBLIC_API_BASE_URL": "https://graftai.onrender.com/api/v1",
+    "NEXT_PUBLIC_APP_URL": "https://www.graftai.tech"
+  }
+}

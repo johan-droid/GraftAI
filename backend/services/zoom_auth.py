@@ -5,7 +5,7 @@ ZOOM_CLIENT_ID = os.getenv("ZOOM_CLIENT_ID")
 ZOOM_CLIENT_SECRET = os.getenv("ZOOM_CLIENT_SECRET")
 
 # Allow dynamic redirect URI from environment for Render/Vercel production
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+BACKEND_URL = os.getenv("BACKEND_URL", "https://graftai.onrender.com").rstrip("/")
 ZOOM_REDIRECT_URI = os.getenv("ZOOM_REDIRECT_URI", f"{BACKEND_URL}/api/v1/auth/zoom/callback")
 
 if not ZOOM_CLIENT_ID or not ZOOM_CLIENT_SECRET:

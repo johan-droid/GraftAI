@@ -2,7 +2,7 @@
 const rawApiBase =
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://localhost:8000";
+  "https://graftai.onrender.com";
 
 const normalizedBase = rawApiBase.replace(/\/+$/, "");
 const BASE_URL = normalizedBase.endsWith("/api/v1")

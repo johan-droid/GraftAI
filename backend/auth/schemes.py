@@ -1,4 +1,3 @@
-import os
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
@@ -11,8 +10,7 @@ from backend.models.tables import UserTable
 # This tells FastAPI where the login route is, so Swagger UI knows how to get the token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-college-project-key-change-in-prod")
-ALGORITHM = "HS256"
+from backend.auth.config import ALGORITHM, SECRET_KEY
 
 async def decode_token(token: str) -> dict:
     try:

@@ -1,5 +1,5 @@
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock
 
 from backend.api.main import app
@@ -20,7 +20,7 @@ async def test_send_notification_route(monkeypatch):
     }
 
     try:
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/v1/notifications/test",
                 json=payload,

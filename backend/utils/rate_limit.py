@@ -89,6 +89,9 @@ api_limits = {
     "availability": RateLimit("availability", max_requests=10, window_seconds=60),
     "create_event": RateLimit("create_event", max_requests=100, window_seconds=3600),
     "webhooks": RateLimit("webhooks", max_requests=100, window_seconds=60),
+    "login": RateLimit("login", max_requests=5, window_seconds=300),  # 5 attempts per 5 minutes
+    "register": RateLimit("register", max_requests=3, window_seconds=3600),  # 3 registrations per hour
+    "oauth_callback": RateLimit("oauth_callback", max_requests=10, window_seconds=300),  # 10 per 5 minutes
 }
 
 

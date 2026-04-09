@@ -85,13 +85,13 @@ def create_app() -> FastAPI:
     )
 
     # Simplified CORS for single-domain deployments
-    frontend_url = os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL"))
+    frontend_url = os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "https://www.graftai.tech"))
     if frontend_url:
         allow_origins = [origin.strip() for origin in frontend_url.split(",") if origin.strip()]
     else:
         allow_origins = [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
+            "https://www.graftai.tech",
+            "https://graftai.tech",
         ]
 
     app.add_middleware(
@@ -101,6 +101,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["x-xsrf-token"],
     )
 
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
@@ -112,6 +113,7 @@ def create_app() -> FastAPI:
     from backend.api.calendar import router as calendar_router
     from backend.api.users import router as users_router
     from backend.api.analytics import router as analytics_router
+    from backend.api.notifications import router as notifications_router
     from backend.api.proactive import router as proactive_router
     from backend.api.event_types import router as event_types_router
     from backend.api.public import router as public_router
@@ -123,6 +125,7 @@ def create_app() -> FastAPI:
     app.include_router(calendar_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
     app.include_router(analytics_router, prefix="/api/v1")
+    app.include_router(notifications_router, prefix="/api/v1")
     app.include_router(proactive_router, prefix="/api/v1")
     app.include_router(event_types_router, prefix="/api/v1")
     app.include_router(webhooks_router, prefix="/api/v1")

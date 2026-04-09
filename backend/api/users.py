@@ -1,18 +1,22 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, validator
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 import re
+import uuid
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable, UserTokenTable
+from backend.services.api_keys import create_user_api_key, list_user_api_keys, revoke_user_api_key
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 class UserProfileUpdateRequest(BaseModel):
     full_name: Optional[str] = None
     username: Optional[str] = None
+    preferences: Optional[dict] = None
 
     @validator("username")
     def username_must_be_valid(cls, value: Optional[str]):
@@ -22,25 +26,78 @@ class UserProfileUpdateRequest(BaseModel):
             raise ValueError("Username must be 3-30 characters and contain only letters, numbers, hyphens, or underscores.")
         return value.lower()
 
+
+class ApiKeyCreateRequest(BaseModel):
+    name: Optional[str] = None
+
+
+class OutOfOfficeBlockCreateRequest(BaseModel):
+    start_time: datetime
+    end_time: datetime
+    reason: Optional[str] = None
+
+    @validator("end_time")
+    def end_must_be_after_start(cls, value: datetime, values: Dict[str, Any]):
+        start_time = values.get("start_time")
+        if start_time and value <= start_time:
+            raise ValueError("end_time must be after start_time")
+        return value
+
+
+def _normalize_preferences(user: UserTable) -> Dict[str, Any]:
+    prefs = user.preferences or {}
+    if not isinstance(prefs, dict):
+        return {}
+    return dict(prefs)
+
+
+def _serialize_profile(user: UserTable) -> Dict[str, Any]:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "full_name": user.full_name,
+        "tier": user.tier,
+        "subscription_status": user.subscription_status,
+        "razorpay_subscription_id": user.razorpay_subscription_id,
+        "daily_ai_count": user.daily_ai_count,
+        "daily_ai_limit": user.daily_ai_limit,
+        "daily_sync_count": user.daily_sync_count,
+        "daily_sync_limit": user.daily_sync_limit,
+        "quota_reset_at": user.quota_reset_at.isoformat() if user.quota_reset_at else None,
+        "trial_active": user.trial_active,
+        "trial_expires_at": user.trial_expires_at.isoformat() if user.trial_expires_at else None,
+        "preferences": user.preferences or {},
+    }
+
+
+def _to_utc_iso(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat()
+
+
+def _extract_out_of_office_blocks(user: UserTable) -> List[Dict[str, Any]]:
+    prefs = _normalize_preferences(user)
+    blocks = prefs.get("out_of_office") or []
+    if not isinstance(blocks, list):
+        return []
+    normalized = [item for item in blocks if isinstance(item, dict)]
+    normalized.sort(key=lambda item: item.get("start_time") or "")
+    return normalized
+
+
+def _set_out_of_office_blocks(user: UserTable, blocks: List[Dict[str, Any]]) -> None:
+    prefs = _normalize_preferences(user)
+    prefs["out_of_office"] = blocks
+    user.preferences = prefs
+
 @router.get("/me")
 async def get_my_profile(current_user: UserTable = Depends(get_current_user)):
     """Fetch current user profile for the monolithic dashboard."""
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "username": current_user.username,
-        "full_name": current_user.full_name,
-        "tier": current_user.tier,
-        "subscription_status": current_user.subscription_status,
-        "razorpay_subscription_id": current_user.razorpay_subscription_id,
-        "daily_ai_count": current_user.daily_ai_count,
-        "daily_ai_limit": current_user.daily_ai_limit,
-        "daily_sync_count": current_user.daily_sync_count,
-        "daily_sync_limit": current_user.daily_sync_limit,
-        "quota_reset_at": current_user.quota_reset_at.isoformat() if current_user.quota_reset_at else None,
-        "trial_active": current_user.trial_active,
-        "trial_expires_at": current_user.trial_expires_at.isoformat() if current_user.trial_expires_at else None,
-    }
+    return _serialize_profile(current_user)
 
 @router.get("/me/integrations")
 async def get_my_integrations(
@@ -106,6 +163,13 @@ async def update_current_user_profile(
                 raise HTTPException(status_code=409, detail="Username already taken")
             user.username = username
 
+    if payload.preferences is not None:
+        # Merge new preferences with existing ones, if any
+        current_prefs = _normalize_preferences(user)
+        new_prefs = current_prefs.copy()
+        new_prefs.update(payload.preferences)
+        user.preferences = new_prefs
+
     await db.commit()
     await db.refresh(user)
 
@@ -114,5 +178,81 @@ async def update_current_user_profile(
         "email": user.email,
         "username": user.username,
         "full_name": user.full_name,
-        "created_at": user.created_at
+        "preferences": user.preferences,
+        "created_at": user.created_at,
     }
+
+
+@router.get("/me/api-keys")
+async def list_current_user_api_keys(current_user: UserTable = Depends(get_current_user)):
+    return {"items": list_user_api_keys(current_user)}
+
+
+@router.post("/me/api-keys")
+async def create_current_user_api_key(
+    payload: ApiKeyCreateRequest,
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    created_key, raw_key = create_user_api_key(current_user, payload.name)
+    await db.commit()
+    await db.refresh(current_user)
+    return {**created_key, "token": raw_key}
+
+
+@router.delete("/me/api-keys/{key_id}")
+async def revoke_current_user_api_key(
+    key_id: str,
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    changed = revoke_user_api_key(current_user, key_id)
+    if not changed:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    await db.commit()
+    await db.refresh(current_user)
+    return {"status": "revoked", "id": key_id}
+
+
+@router.get("/me/out-of-office")
+async def list_current_user_out_of_office(current_user: UserTable = Depends(get_current_user)):
+    return {"items": _extract_out_of_office_blocks(current_user)}
+
+
+@router.post("/me/out-of-office")
+async def create_current_user_out_of_office(
+    payload: OutOfOfficeBlockCreateRequest,
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    blocks = _extract_out_of_office_blocks(current_user)
+    block = {
+        "id": uuid.uuid4().hex,
+        "start_time": _to_utc_iso(payload.start_time),
+        "end_time": _to_utc_iso(payload.end_time),
+        "reason": (payload.reason or "").strip() or None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    blocks.append(block)
+    _set_out_of_office_blocks(current_user, blocks)
+    await db.commit()
+    await db.refresh(current_user)
+    return block
+
+
+@router.delete("/me/out-of-office/{block_id}")
+async def delete_current_user_out_of_office(
+    block_id: str,
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    blocks = _extract_out_of_office_blocks(current_user)
+    filtered = [item for item in blocks if item.get("id") != block_id]
+    if len(filtered) == len(blocks):
+        raise HTTPException(status_code=404, detail="Out-of-office block not found")
+
+    _set_out_of_office_blocks(current_user, filtered)
+    await db.commit()
+    await db.refresh(current_user)
+    return {"status": "deleted", "id": block_id}

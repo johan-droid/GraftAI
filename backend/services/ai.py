@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.auth.schemes import get_current_user_id
 from backend.auth.logic import get_rate_limiter
 from backend.services import scheduler
+from backend.services.llm_context import build_implementation_context
 from backend.services.langchain_client import llm
 from backend.services.mailbox import get_recent_emails
 from backend.utils.cache import get_cache, set_cache
@@ -734,6 +735,7 @@ async def ai_chat(
 
     # Use Compact C-Table for LLM context to save tokens and improve extraction speed
     compact_context = _format_events_compact(events, request.timezone)
+    implementation_context = build_implementation_context()
 
     system_prompt = (
         "You are GraftAI Sovereign, a premium high-performance scheduler assistant. "
@@ -758,6 +760,7 @@ async def ai_chat(
         "   - Tier 3 (Full Auto): Process without UI blocker if calendar permits.\n"
     )
     user_input = (
+        f"### IMPLEMENTATION CONTEXT\n{implementation_context}\n\n"
         f"### AUTHORITATIVE CONTEXT (C-Table: ID|Title|Day|TimeRange)\n{compact_context}\n\n"
         f"### RECENT EMAIL CONTEXT\n{email_context}\n\n"
         f"### USER ENVIRONMENT\nTimezone: {request.timezone}\n"
@@ -816,8 +819,9 @@ async def ai_chat(
 
     if not result_text:
         result_text = (
-            "I am running in offline scheduling mode. "
-            "You can ask me to list, schedule, update, or delete calendar events."
+            "I am running in offline scheduling mode with the local assistant fallback. "
+            "You can ask me to list, schedule, update, or delete calendar events, and I will "
+            "keep the same implementation context and timezone rules in force."
         )
 
     await set_cache(cache_key, result_text, 120)

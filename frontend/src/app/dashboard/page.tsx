@@ -6,20 +6,20 @@ import {
   getAnalyticsSummary, 
   getEvents, 
   getProactiveSuggestion,
-  ProactiveSuggestionResponse
+  ProactiveSuggestionResponse,
+  refreshSession
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { SmartActions } from "@/components/dashboard/SmartActions";
 import type { SmartAction } from "@/components/dashboard/SmartActions";
-import { 
-  Calendar as CalendarIcon, 
-  Clock, 
-  Sparkles, 
-  TrendingUp, 
-  Users, 
-  Video, 
+import {
+  Calendar as CalendarIcon,
+  Clock,
+  Sparkles,
+  Users,
+  Video,
   ChevronRight,
   Activity
 } from "lucide-react";
@@ -37,7 +37,6 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
 };
 
-type DashboardSuggestion = { suggestion?: string };
 type DashboardAnalyticsDetails = {
   meetings?: number;
   hours?: number;
@@ -58,7 +57,12 @@ type DashboardStats = {
   collaborators?: number;
 };
 
-type DashboardData = { stats: DashboardStats; events: any[]; suggestion: ProactiveSuggestionResponse };
+type DashboardData = { 
+  stats: DashboardStats; 
+  events: any[]; 
+  suggestion: ProactiveSuggestionResponse;
+  user: any;
+};
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -78,15 +82,18 @@ export default function DashboardPage() {
         const todayEnd = new Date();
         todayEnd.setHours(23, 59, 59, 999);
 
-        const [stats, events, suggestion] = await Promise.all<[
+        const [stats, events, suggestion, sessionData] = await Promise.all<[
           DashboardSummary,
           any[],
-          ProactiveSuggestionResponse
+          ProactiveSuggestionResponse,
+          any
         ]>([
           getAnalyticsSummary(),
           getEvents(todayStart.toISOString(), todayEnd.toISOString()),
-          getProactiveSuggestion("User is viewing the main dashboard.")
+          getProactiveSuggestion("User is viewing the main dashboard."),
+          refreshSession()
         ]);
+        
         setData({
           stats: {
             totalMeetings: stats.details?.meetings,
@@ -95,6 +102,7 @@ export default function DashboardPage() {
           },
           events,
           suggestion,
+          user: sessionData?.user
         });
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
@@ -123,7 +131,9 @@ export default function DashboardPage() {
       {/* Hero Section & Quick Actions */}
       <motion.div variants={itemVariants} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Good morning, Alex.</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Good morning{data?.user?.full_name ? `, ${data.user.full_name?.split(' ')[0]}` : ''}.
+          </h1>
           <p className="text-muted-foreground mt-1">Here is your schedule and AI insights for today.</p>
         </div>
         <div className="flex space-x-3">

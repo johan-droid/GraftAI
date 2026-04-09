@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import uuid
@@ -6,6 +7,7 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 _redis_client: Optional[Redis] = None
@@ -56,32 +58,46 @@ class RateLimit:
         self.window_seconds = window_seconds
 
     async def limit(self, identifier: str) -> RateLimitResult:
-        redis = await get_redis_client()
-        key = f"rate_limit:{self.name}:{identifier}"
-        now = int(time.time())
-        member = f"{now}-{uuid.uuid4().hex}"
+        try:
+            redis = await get_redis_client()
+            key = f"rate_limit:{self.name}:{identifier}"
+            now = int(time.time())
+            member = f"{now}-{uuid.uuid4().hex}"
 
-        result = await redis.eval(
-            RATE_LIMIT_LUA,
-            1,
-            key,
-            now,
-            self.window_seconds,
-            self.max_requests,
-            member,
-        )
+            result = await redis.eval(
+                RATE_LIMIT_LUA,
+                1,
+                key,
+                now,
+                self.window_seconds,
+                self.max_requests,
+                member,
+            )
 
-        success = bool(result[0])
-        count = int(result[1])
-        reset = int(result[2])
-        remaining = max(0, self.max_requests - count) if success else 0
+            success = bool(result[0])
+            count = int(result[1])
+            reset = int(result[2])
+            remaining = max(0, self.max_requests - count) if success else 0
 
-        return RateLimitResult(
-            success=success,
-            count=count,
-            remaining=remaining,
-            reset_seconds=reset,
-        )
+            return RateLimitResult(
+                success=success,
+                count=count,
+                remaining=remaining,
+                reset_seconds=reset,
+            )
+        except (RedisError, ConnectionError) as exc:
+            # Fail open when Redis is unavailable to avoid blocking traffic.
+            # Use structured logs to capture transient infrastructure issues.
+            logging.warning(
+                "Redis rate limiter unavailable, falling back to allow-all: %s",
+                exc,
+            )
+            return RateLimitResult(
+                success=True,
+                count=0,
+                remaining=self.max_requests,
+                reset_seconds=self.window_seconds,
+            )
 
 
 api_limits = {

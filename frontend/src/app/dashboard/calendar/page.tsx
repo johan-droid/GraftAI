@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
-import { manualSync } from "@/lib/api";
+import { manualSync, getProactiveSuggestion, ProactiveSuggestionResponse } from "@/lib/api";
 import { useAuth } from "@/providers/auth-provider";
-import { RefreshCcw, CheckCircle2, AlertCircle, Calendar } from "lucide-react";
+import { RefreshCcw, CheckCircle2, AlertCircle, Calendar, Sparkles } from "lucide-react";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { EventModal } from "@/components/calendar/EventModal";
 import { EventDetailModal } from "@/components/calendar/EventDetailModal";
+import { SmartActions } from "@/components/dashboard/SmartActions";
+import type { SmartAction } from "@/components/dashboard/SmartActions";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -40,6 +42,7 @@ export default function CalendarPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<"idle" | "success" | "error">("idle");
+  const [suggestion, setSuggestion] = useState<ProactiveSuggestionResponse | null>(null);
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -49,10 +52,12 @@ export default function CalendarPage() {
       const end = new Date();
       end.setMonth(end.getMonth() + 2);
 
-      const data = await apiClient.fetch(
-        `/calendar/events?start=${start.toISOString()}&end=${end.toISOString()}`
-      );
-      setEvents(data);
+      const [eventsData, suggestionData] = await Promise.all([
+        apiClient.fetch(`/calendar/events?start=${start.toISOString()}&end=${end.toISOString()}`),
+        getProactiveSuggestion("User is looking at their calendar. Provide daily and weekly schedule optimization suggestions.")
+      ]);
+      setEvents(eventsData);
+      setSuggestion(suggestionData);
     } catch (error) {
       console.error("Failed to load events", error);
     } finally {
@@ -139,8 +144,13 @@ export default function CalendarPage() {
     setIsEventModalOpen(true);
   };
 
+  const handleExecuteSmartAction = async (action: SmartAction) => {
+    // Perform AI action for daily/weekly optimization
+    console.log("Triggered Smart Action on Calendar:", action);
+  };
+
   return (
-    <motion.div 
+    <motion.div
       className="p-6 max-w-[1600px] mx-auto space-y-6"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -194,7 +204,29 @@ export default function CalendarPage() {
           </Button>
         </div>
       </div>
-      
+
+      {suggestion?.smart_actions && suggestion.smart_actions.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full"
+        >
+          <Card className="border-indigo-500/20 bg-indigo-500/5">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2 text-indigo-500 font-medium text-sm">
+                <Sparkles className="w-4 h-4" />
+                AI Schedule Optimization
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">{suggestion.suggestion}</p>
+              <SmartActions 
+                actions={suggestion.smart_actions} 
+                onExecute={handleExecuteSmartAction} 
+              />
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {syncMessage && (
         <Card className="bg-muted/50 border-primary/20">
           <CardContent className="p-4 text-sm text-muted-foreground flex items-center gap-2">

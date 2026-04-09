@@ -76,6 +76,7 @@ export async function updateUserProfile(data: {
   bio?: string;
   job_title?: string;
   location?: string;
+  preferences?: Record<string, any>;
 }) {
   return apiClient.patch<{ 
     id: string; 
@@ -85,8 +86,59 @@ export async function updateUserProfile(data: {
     bio?: string;
     job_title?: string;
     location?: string;
+    preferences?: Record<string, any>;
     created_at?: string;
   }>("/users/me", data);
+}
+
+export interface ApiKeyItem {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  is_active: boolean;
+}
+
+export interface CreatedApiKey extends ApiKeyItem {
+  token: string;
+}
+
+export async function listApiKeys() {
+  return apiClient.get<{ items: ApiKeyItem[] }>("/users/me/api-keys");
+}
+
+export async function createApiKey(name?: string) {
+  return apiClient.post<CreatedApiKey>("/users/me/api-keys", { name });
+}
+
+export async function revokeApiKey(keyId: string) {
+  return apiClient.delete<{ status: string; id: string }>(`/users/me/api-keys/${encodeURIComponent(keyId)}`);
+}
+
+export interface OutOfOfficeBlock {
+  id: string;
+  start_time: string;
+  end_time: string;
+  reason?: string | null;
+  created_at: string;
+}
+
+export async function listOutOfOfficeBlocks() {
+  return apiClient.get<{ items: OutOfOfficeBlock[] }>("/users/me/out-of-office");
+}
+
+export async function createOutOfOfficeBlock(payload: {
+  start_time: string;
+  end_time: string;
+  reason?: string;
+}) {
+  return apiClient.post<OutOfOfficeBlock>("/users/me/out-of-office", payload);
+}
+
+export async function deleteOutOfOfficeBlock(blockId: string) {
+  return apiClient.delete<{ status: string; id: string }>(`/users/me/out-of-office/${encodeURIComponent(blockId)}`);
 }
 
 // ──────────────────────────────────────

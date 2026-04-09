@@ -53,7 +53,7 @@ class UserTable(Base):
     trial_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-
+    preferences: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Relationships
     tokens: Mapped[List["UserTokenTable"]] = relationship("UserTokenTable", back_populates="user", cascade="all, delete-orphan")
     events: Mapped[List["EventTable"]] = relationship("EventTable", back_populates="user", cascade="all, delete-orphan")
@@ -222,7 +222,7 @@ class EventTypeTable(Base):
     requires_payment: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     payment_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     payment_currency: Mapped[str] = mapped_column(String, default="USD", nullable=False)
-    team_assignment_method: Mapped[str] = mapped_column(String, default="round_robin", nullable=False)
+    team_assignment_method: Mapped[str] = mapped_column(String, default="host_only", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
@@ -254,7 +254,7 @@ class EventTypeTeamMemberTable(Base):
         nullable=False,
         index=True,
     )
-    assignment_method: Mapped[str] = mapped_column(String, default="round_robin", nullable=False)
+    assignment_method: Mapped[str] = mapped_column(String, default="host_only", nullable=False)
     priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

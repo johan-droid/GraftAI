@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import sys
 from pathlib import Path
@@ -6,10 +7,12 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import httpx
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
@@ -32,6 +35,50 @@ configure_logging()
 
 # Load environment variables
 load_dotenv()
+
+
+def _parse_comma_separated_env(name: str, default: str = "") -> list[str]:
+    raw = os.getenv(name, default)
+    return [value.strip() for value in raw.split(",") if value.strip()]
+
+
+def _validate_production_env() -> None:
+    env = os.getenv("ENV", "development").lower()
+    if env != "production":
+        return
+
+    required_vars = [
+        "SECRET_KEY",
+        "DATABASE_URL",
+        "FRONTEND_URL",
+        "NEXT_PUBLIC_API_URL",
+        "REDIS_URL",
+    ]
+
+    missing = [name for name in required_vars if not os.getenv(name)]
+    if missing:
+        raise RuntimeError(
+            "Missing required production environment variables: " + ", ".join(missing)
+        )
+
+    if os.getenv("SECRET_KEY") in {"super-secret-college-project-key-change-in-prod", "your-super-secret-key-change-in-production", ""}:
+        raise RuntimeError("CRITICAL: SECRET_KEY must be changed in production.")
+
+
+def _init_sentry() -> None:
+    dsn = os.getenv("SENTRY_DSN")
+    if not dsn:
+        return
+
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=os.getenv("SENTRY_ENVIRONMENT", os.getenv("ENV", "development")),
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+    )
+
+
+_validate_production_env()
+_init_sentry()
 
 async def _self_ping_loop(port: str, interval_seconds: int = 240) -> None:
     url = f"http://127.0.0.1:{port}/health"
@@ -158,7 +205,7 @@ async def _ensure_event_column_migrations():
                 if "payment_currency" not in event_type_columns:
                     await conn.execute(text("ALTER TABLE event_types ADD COLUMN payment_currency TEXT NOT NULL DEFAULT 'USD';"))
                 if "team_assignment_method" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN team_assignment_method TEXT NOT NULL DEFAULT 'round_robin';"))
+                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN team_assignment_method TEXT NOT NULL DEFAULT 'host_only';"))
             else:
                 await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS description TEXT;"))
                 await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS location TEXT;"))
@@ -193,7 +240,7 @@ async def _ensure_event_column_migrations():
                 await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS requires_payment BOOLEAN NOT NULL DEFAULT FALSE;"))
                 await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS payment_amount FLOAT;"))
                 await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS payment_currency TEXT NOT NULL DEFAULT 'USD';"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS team_assignment_method TEXT NOT NULL DEFAULT 'round_robin';"))
+                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS team_assignment_method TEXT NOT NULL DEFAULT 'host_only';"))
     except Exception:
         # If the DB is already in the correct state or unsupported, ignore failures here
         pass
@@ -206,6 +253,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
 
+    if os.getenv("SENTRY_DSN"):
+        app.add_middleware(SentryAsgiMiddleware)
+
     # Security Headers Middleware
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next):
@@ -217,12 +267,7 @@ def create_app() -> FastAPI:
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: https:; connect-src 'self' https:;"
         return response
 
-    # Trusted Host
-    app.add_middleware(
-        TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "*.graftai.tech", "*.vercel.app", "*.render.com", "*"] # Allow * as fallback for local dev initially
-    )
-
-    # Simplified CORS for single-domain deployments
+    # Trusted Host and CORS hardening
     frontend_url = os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "https://www.graftai.tech"))
     if frontend_url:
         allow_origins = [origin.strip() for origin in frontend_url.split(",") if origin.strip()]
@@ -231,6 +276,27 @@ def create_app() -> FastAPI:
             "https://www.graftai.tech",
             "https://graftai.tech",
         ]
+
+    trusted_hosts = _parse_comma_separated_env("TRUSTED_HOSTS")
+    if not trusted_hosts:
+        env = os.getenv("ENV", "development").lower()
+        if env == "production":
+            trusted_hosts = [
+                host.split("//", 1)[-1].split("/", 1)[0]
+                for host in allow_origins
+                if host
+            ]
+        else:
+            trusted_hosts = [
+                "localhost",
+                "127.0.0.1",
+                "0.0.0.0",
+                "*.graftai.tech",
+                "*.vercel.app",
+                "*.render.com",
+            ]
+
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
 
     app.add_middleware(
         CORSMiddleware,

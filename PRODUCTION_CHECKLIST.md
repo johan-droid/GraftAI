@@ -29,6 +29,7 @@ Before deploying GraftAI to production, complete all items below:
 - [ ] Configure `ACCESS_TOKEN_EXPIRE_MINUTES` appropriately
 - [ ] Enable HTTPS/TLS for all endpoints
 - [ ] Configure CORS properly (use actual domain in `FRONTEND_URL`)
+- [ ] Set `TRUSTED_HOSTS` for FastAPI host validation
 - [ ] Set secure browser headers in `next.config.ts`
 - [ ] Install and configure SSL certificate
 

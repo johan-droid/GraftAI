@@ -36,10 +36,11 @@ class LocalAssistantModel:
     def invoke(self, messages: Any, **kwargs: Any) -> Any:
         # Optimized for High-Stability fallback
         msg_str = str(messages).lower()
-        if "authoritative context" in msg_str:
+        if "implementation context" in msg_str or "authoritative context" in msg_str:
             text = (
                 "I'm currently in High-Stability mode. I have access to your calendar data "
-                "and can perform specific actions (list, add, update, delete). "
+                "and the implementation context needed to keep scheduling behavior aligned. "
+                "I can perform specific actions (list, schedule, update, delete). "
                 "How would you like to proceed with your schedule?"
             )
         else:

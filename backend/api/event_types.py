@@ -1,22 +1,20 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi import status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable
 from backend.services.bookings import (
-    add_event_type_team_member,
     delete_event_type,
-    delete_event_type_team_member,
-    list_event_type_team_members,
     list_event_types,
     create_event_type,
     update_event_type,
-    update_event_type_team_member,
 )
 
 router = APIRouter(tags=["EventTypes"])
+SINGLE_ASSIGNMENT_METHOD = "host_only"
 
 
 class EventTypePayload(BaseModel):
@@ -110,8 +108,10 @@ async def create_event_type_route(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    payload_dict = payload.model_dump()
+    payload_dict["team_assignment_method"] = SINGLE_ASSIGNMENT_METHOD
     try:
-        event_type = await create_event_type(db, current_user.id, payload.model_dump())
+        event_type = await create_event_type(db, current_user.id, payload_dict)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     return event_type
@@ -124,8 +124,10 @@ async def update_event_type_route(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    payload_dict = payload.model_dump()
+    payload_dict["team_assignment_method"] = SINGLE_ASSIGNMENT_METHOD
     try:
-        event_type = await update_event_type(db, current_user.id, event_type_id, payload.model_dump())
+        event_type = await update_event_type(db, current_user.id, event_type_id, payload_dict)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     if not event_type:
@@ -151,8 +153,7 @@ async def get_event_type_team_members(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    members = await list_event_type_team_members(db, current_user.id, event_type_id)
-    return members
+    return []
 
 
 @router.post("/event-types/{event_type_id}/team-members", response_model=TeamMemberResponse)
@@ -162,18 +163,10 @@ async def add_event_type_team_member_route(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    try:
-        member = await add_event_type_team_member(
-            db,
-            current_user.id,
-            event_type_id,
-            payload.username,
-            payload.assignment_method or "round_robin",
-            payload.priority or 0,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    return member
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Team scheduling is disabled. Only one-to-one host-only booking is supported.",
+    )
 
 
 @router.patch("/event-types/{event_type_id}/team-members/{member_id}", response_model=TeamMemberResponse)
@@ -184,20 +177,10 @@ async def update_event_type_team_member_route(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    try:
-        member = await update_event_type_team_member(
-            db,
-            current_user.id,
-            event_type_id,
-            member_id,
-            payload.assignment_method,
-            payload.priority,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if not member:
-        raise HTTPException(status_code=404, detail="Team member not found")
-    return member
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Team scheduling is disabled. Only one-to-one host-only booking is supported.",
+    )
 
 
 @router.delete("/event-types/{event_type_id}/team-members/{member_id}")
@@ -207,7 +190,7 @@ async def delete_event_type_team_member_route(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    deleted = await delete_event_type_team_member(db, current_user.id, event_type_id, member_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Team member not found")
-    return {"status": "deleted"}
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Team scheduling is disabled. Only one-to-one host-only booking is supported.",
+    )

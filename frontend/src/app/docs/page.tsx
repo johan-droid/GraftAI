@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, BookOpenText, CalendarClock, ShieldCheck, Workflow } from "lucide-react";
+import { ArrowLeft, BookOpenText, CalendarClock, Code2, ShieldCheck, Workflow } from "lucide-react";
 
 const sections = [
   {
@@ -30,6 +30,16 @@ const sections = [
       "HSTS and strict content-type/frame policies",
       "Public action token verification (HMAC)",
       "Rate limits for booking and availability endpoints",
+    ],
+  },
+  {
+    icon: <Code2 className="h-5 w-5 text-amber-300" />,
+    title: "Embed Widget",
+    body: "Embed booking directly into external websites through the GraftAI embed loader and dedicated iframe route.",
+    bullets: [
+      "Drop-in script: /graftai-embed.js",
+      "Autoload with data-graftai-embed container",
+      "Direct route support: /embed/{username}/{eventType}",
     ],
   },
 ];
@@ -100,6 +110,14 @@ export default function DocsPage() {
             <Link href="/terms-of-service" className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 font-semibold text-white hover:bg-white/10">
               Terms of Service
             </Link>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-white/20 bg-black/20 p-4 sm:p-5">
+            <p className="text-xs uppercase tracking-[0.2em] text-indigo-200">Embed Snippet</p>
+            <pre className="mt-3 overflow-x-auto rounded-xl bg-black/40 p-3 text-xs text-indigo-100 sm:text-sm">
+{`<div data-graftai-embed data-username="jane" data-event-type="intro-call"></div>
+<script src="https://www.graftai.tech/graftai-embed.js" defer></script>`}
+            </pre>
           </div>
         </section>
       </div>

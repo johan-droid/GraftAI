@@ -242,6 +242,15 @@ tmp/
 .parcel-cache/
 .sentry-native/
 
+# Development markdown artifacts
+# These are generated working files and should not be committed as source.
+CALCOM_PARITY_*.md
+EXECUTIVE_PARITY_SUMMARY.md
+GAP_REGISTER.md
+LLM_IMPLEMENTATION_CONTEXT.md
+CALCOM_PARITY_REVIEW_PLAN.md
+CALCOM_PARITY_MATRIX_PHASE_A.md
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # BUILD & DISTRIBUTION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

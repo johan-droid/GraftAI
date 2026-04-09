@@ -44,6 +44,9 @@ export const apiClient = {
         || sessionStorage.getItem("token")
         || sessionStorage.getItem("graftai_access_token")
       : null;
+    const apiKey = typeof window !== 'undefined'
+      ? localStorage.getItem("graftai_api_key") || sessionStorage.getItem("graftai_api_key")
+      : null;
     
     // 3. Set up headers
     const headers: Record<string, string> = {
@@ -53,6 +56,8 @@ export const apiClient = {
 
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+    } else if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
     // 4. Prepare Body

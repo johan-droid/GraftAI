@@ -110,6 +110,12 @@ See [SECURITY_AUDIT.md](./SECURITY_AUDIT.md) for complete security documentation
 
 ## 📚 API Documentation
 
+### Developer API Reference
+- OpenAPI UI: `GET /docs`
+- OpenAPI schema: `GET /openapi.json`
+- Public booking endpoints: `POST /api/public/events/{username}/{event_type}/book`, `POST /api/public/bookings/{booking_id}/reschedule`, `DELETE /api/public/bookings/{booking_id}`
+- Webhook subscription management: `GET /api/v1/webhooks/subscriptions`, `POST /api/v1/webhooks/subscriptions`
+
 ### Authentication Endpoints
 ```
 POST   /api/v1/auth/register          - Create new account

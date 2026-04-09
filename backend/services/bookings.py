@@ -13,7 +13,6 @@ from backend.models.tables import (
     BookingTable,
     EventTable,
     EventTypeTable,
-    EventTypeTeamMemberTable,
     UserTable,
 )
 from backend.services.scheduler import get_events_for_range, create_event
@@ -39,8 +38,9 @@ DEFAULT_AVAILABILITY = {
     "sunday": [],
 }
 
-ASSIGNMENT_METHODS = {"round_robin", "first_available", "all_available"}
+ASSIGNMENT_METHODS = {"host_only"}
 SUPPORTED_QUESTION_TYPES = {"text", "textarea", "select", "checkbox"}
+SINGLE_ASSIGNMENT_METHOD = "host_only"
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,47 @@ def _date_is_exception(day: date_cls, exceptions: Optional[List[Union[str, Dict[
         if isinstance(item, dict) and item.get("date") == day.isoformat():
             return True
     return False
+
+
+def _parse_iso_datetime(value: str) -> Optional[datetime]:
+    normalized = (value or "").strip()
+    if not normalized:
+        return None
+
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = pytz.UTC.localize(parsed)
+
+    return parsed.astimezone(pytz.UTC)
+
+
+def _get_out_of_office_windows(user: UserTable) -> List[tuple[datetime, datetime]]:
+    preferences = user.preferences or {}
+    if not isinstance(preferences, dict):
+        return []
+
+    blocks = preferences.get("out_of_office") or []
+    if not isinstance(blocks, list):
+        return []
+
+    windows: List[tuple[datetime, datetime]] = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        start_dt = _parse_iso_datetime(str(block.get("start_time") or ""))
+        end_dt = _parse_iso_datetime(str(block.get("end_time") or ""))
+        if not start_dt or not end_dt or end_dt <= start_dt:
+            continue
+        windows.append((start_dt, end_dt))
+
+    return _merge_overlapping_windows(windows)
 
 
 def _expand_recurring_availability(
@@ -208,7 +249,17 @@ def _slots_from_windows(windows: List[tuple[datetime, datetime]], duration_minut
     return slots
 
 
+def _normalize_datetime_for_overlap(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=pytz.UTC)
+    return value
+
+
 def _overlaps(start: datetime, end: datetime, busy_start: datetime, busy_end: datetime) -> bool:
+    start = _normalize_datetime_for_overlap(start)
+    end = _normalize_datetime_for_overlap(end)
+    busy_start = _normalize_datetime_for_overlap(busy_start)
+    busy_end = _normalize_datetime_for_overlap(busy_end)
     return start < busy_end and busy_start < end
 
 
@@ -338,6 +389,9 @@ async def _build_available_slots(
     total_before = (event_type.buffer_before_minutes or 0) + (event_type.travel_time_before_minutes or 0)
     total_after = (event_type.buffer_after_minutes or 0) + (event_type.travel_time_after_minutes or 0)
     busy_windows = _apply_buffer_to_windows(busy_windows, total_before, total_after)
+    out_of_office_windows = _get_out_of_office_windows(user)
+    if out_of_office_windows:
+        busy_windows = _merge_overlapping_windows([*busy_windows, *out_of_office_windows])
     available_slots = _apply_busy_windows(base_slots, busy_windows)
 
     minimum_cutoff = _minimum_notice_cutoff(event_type.minimum_notice_minutes)
@@ -438,7 +492,7 @@ async def get_event_type_config(db: AsyncSession, user_id: str, slug: str) -> Op
         "requires_payment": event_type.requires_payment,
         "payment_amount": event_type.payment_amount,
         "payment_currency": event_type.payment_currency,
-        "team_assignment_method": event_type.team_assignment_method,
+        "team_assignment_method": SINGLE_ASSIGNMENT_METHOD,
         "is_public": event_type.is_public,
     }
     await set_cache(cache_key, config, expire_seconds=300)
@@ -448,7 +502,10 @@ async def get_event_type_config(db: AsyncSession, user_id: str, slug: str) -> Op
 async def list_event_types(db: AsyncSession, user_id: str) -> List[EventTypeTable]:
     stmt = select(EventTypeTable).where(EventTypeTable.user_id == user_id)
     result = await db.execute(stmt)
-    return result.scalars().all()
+    event_types = result.scalars().all()
+    for event_type in event_types:
+        event_type.team_assignment_method = SINGLE_ASSIGNMENT_METHOD
+    return event_types
 
 
 async def create_event_type(db: AsyncSession, user_id: str, payload: Dict[str, Any]) -> EventTypeTable:
@@ -483,7 +540,7 @@ async def create_event_type(db: AsyncSession, user_id: str, payload: Dict[str, A
         requires_payment=payload.get("requires_payment", False),
         payment_amount=payload.get("payment_amount"),
         payment_currency=payload.get("payment_currency") or "USD",
-        team_assignment_method=payload.get("team_assignment_method") or "round_robin",
+        team_assignment_method=SINGLE_ASSIGNMENT_METHOD,
     )
     db.add(event_type)
     await db.commit()
@@ -534,9 +591,10 @@ async def update_event_type(db: AsyncSession, user_id: str, event_type_id: str, 
         event_type.payment_currency = (payload.get("payment_currency") or "USD").upper()
     if "team_assignment_method" in payload and payload.get("team_assignment_method"):
         method = str(payload.get("team_assignment_method")).strip().lower()
-        if method not in ASSIGNMENT_METHODS:
-            raise ValueError("Invalid team assignment method")
-        event_type.team_assignment_method = method
+        if method != SINGLE_ASSIGNMENT_METHOD:
+            raise ValueError("Only one-to-one host-only assignment is supported.")
+
+    event_type.team_assignment_method = SINGLE_ASSIGNMENT_METHOD
     if "slug" in payload and payload.get("slug"):
         slug = _slugify(payload["slug"])
         if slug != event_type.slug:
@@ -564,24 +622,7 @@ async def delete_event_type(db: AsyncSession, user_id: str, event_type_id: str) 
 
 
 async def list_event_type_team_members(db: AsyncSession, user_id: str, event_type_id: str) -> List[Dict[str, Any]]:
-    event_type = await db.get(EventTypeTable, event_type_id)
-    if not event_type or event_type.user_id != user_id:
-        return []
-    stmt = select(EventTypeTeamMemberTable).where(EventTypeTeamMemberTable.event_type_id == event_type_id)
-    result = await db.execute(stmt)
-    members = result.scalars().all()
-    return [
-        {
-            "id": member.id,
-            "user_id": member.user_id,
-            "username": member.user.username if member.user else None,
-            "assignment_method": member.assignment_method,
-            "priority": member.priority,
-            "created_at": member.created_at,
-            "updated_at": member.updated_at,
-        }
-        for member in members
-    ]
+    return []
 
 
 async def add_event_type_team_member(
@@ -592,45 +633,7 @@ async def add_event_type_team_member(
     assignment_method: str = "round_robin",
     priority: int = 0,
 ) -> Dict[str, Any]:
-    event_type = await db.get(EventTypeTable, event_type_id)
-    if not event_type or event_type.user_id != user_id:
-        raise ValueError("Event type not found")
-
-    if assignment_method not in ASSIGNMENT_METHODS:
-        raise ValueError("Invalid assignment method")
-
-    requested_user = await get_user_by_username(db, username)
-    if not requested_user:
-        raise ValueError("User not found")
-
-    existing_stmt = select(EventTypeTeamMemberTable).where(
-        and_(
-            EventTypeTeamMemberTable.event_type_id == event_type_id,
-            EventTypeTeamMemberTable.user_id == requested_user.id,
-        )
-    )
-    existing = (await db.execute(existing_stmt)).scalars().first()
-    if existing:
-        raise ValueError("Team member already exists")
-
-    member = EventTypeTeamMemberTable(
-        event_type_id=event_type_id,
-        user_id=requested_user.id,
-        assignment_method=assignment_method,
-        priority=priority,
-    )
-    db.add(member)
-    await db.commit()
-    await db.refresh(member)
-    return {
-        "id": member.id,
-        "user_id": member.user_id,
-        "username": requested_user.username,
-        "assignment_method": member.assignment_method,
-        "priority": member.priority,
-        "created_at": member.created_at,
-        "updated_at": member.updated_at,
-    }
+    raise ValueError("Team scheduling is disabled. Only one-to-one host-only booking is supported.")
 
 
 async def update_event_type_team_member(
@@ -641,48 +644,11 @@ async def update_event_type_team_member(
     assignment_method: Optional[str] = None,
     priority: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
-    event_type = await db.get(EventTypeTable, event_type_id)
-    if not event_type or event_type.user_id != user_id:
-        return None
-
-    member = await db.get(EventTypeTeamMemberTable, member_id)
-    if not member or member.event_type_id != event_type_id:
-        return None
-
-    if assignment_method:
-        if assignment_method not in ASSIGNMENT_METHODS:
-            raise ValueError("Invalid assignment method")
-        member.assignment_method = assignment_method
-    if priority is not None:
-        member.priority = priority
-
-    member.updated_at = datetime.now(pytz.UTC)
-    await db.commit()
-    await db.refresh(member)
-
-    return {
-        "id": member.id,
-        "user_id": member.user_id,
-        "username": member.user.username if member.user else None,
-        "assignment_method": member.assignment_method,
-        "priority": member.priority,
-        "created_at": member.created_at,
-        "updated_at": member.updated_at,
-    }
+    raise ValueError("Team scheduling is disabled. Only one-to-one host-only booking is supported.")
 
 
 async def delete_event_type_team_member(db: AsyncSession, user_id: str, event_type_id: str, member_id: str) -> bool:
-    event_type = await db.get(EventTypeTable, event_type_id)
-    if not event_type or event_type.user_id != user_id:
-        return False
-
-    member = await db.get(EventTypeTeamMemberTable, member_id)
-    if not member or member.event_type_id != event_type_id:
-        return False
-
-    await db.delete(member)
-    await db.commit()
-    return True
+    return False
 
 
 def _localize_window(date: datetime, tz: pytz.BaseTzInfo) -> (datetime, datetime):
@@ -756,6 +722,10 @@ async def _is_user_available_for_range(
     booking_start: datetime,
     booking_end: datetime,
 ) -> bool:
+    out_of_office_windows = _get_out_of_office_windows(user)
+    if any(_overlaps(booking_start, booking_end, ooo_start, ooo_end) for ooo_start, ooo_end in out_of_office_windows):
+        return False
+
     windows = await _get_busy_windows_for_range(db, user, booking_start, booking_end)
     return not any(_overlaps(booking_start, booking_end, busy_start, busy_end) for busy_start, busy_end in windows)
 
@@ -766,46 +736,7 @@ async def assign_booking_to_team_member(
     booking_start: datetime,
     booking_end: datetime,
 ) -> str:
-    """Assign a booking to a team member based on assignment strategy."""
-    member_stmt = select(EventTypeTeamMemberTable).where(
-        EventTypeTeamMemberTable.event_type_id == event_type.id
-    )
-    members = (await db.execute(member_stmt)).scalars().all()
-    if not members:
-        return event_type.user_id
-
-    method = (event_type.team_assignment_method or members[0].assignment_method or "round_robin").lower()
-    if method not in ASSIGNMENT_METHODS:
-        method = "round_robin"
-
-    sorted_members = sorted(
-        members,
-        key=lambda item: (
-            item.priority or 0,
-            item.last_assigned_at or datetime(1970, 1, 1, tzinfo=pytz.UTC),
-        ),
-    )
-
-    if method == "round_robin":
-        for member in sorted_members:
-            assigned_user = await db.get(UserTable, member.user_id)
-            if not assigned_user:
-                continue
-            if await _is_user_available_for_range(db, assigned_user, booking_start, booking_end):
-                member.last_assigned_at = datetime.now(pytz.UTC)
-                return member.user_id
-        return sorted_members[0].user_id
-
-    if method in {"first_available", "all_available"}:
-        # all_available is currently resolved to the first available member.
-        for member in sorted_members:
-            assigned_user = await db.get(UserTable, member.user_id)
-            if not assigned_user:
-                continue
-            if await _is_user_available_for_range(db, assigned_user, booking_start, booking_end):
-                return member.user_id
-        return event_type.user_id
-
+    """Always assign booking to the event type owner in one-to-one mode."""
     return event_type.user_id
 
 
@@ -859,6 +790,13 @@ async def create_public_booking(
     now_utc = datetime.now(pytz.UTC)
     if booking_start_utc < now_utc:
         raise ValidationError("start_time", "Cannot book a time in the past.")
+
+    out_of_office_windows = _get_out_of_office_windows(user)
+    if any(
+        _overlaps(booking_start_utc, booking_end_utc, ooo_start, ooo_end)
+        for ooo_start, ooo_end in out_of_office_windows
+    ):
+        raise ValidationError("start_time", "Organizer is out of office during this time.")
 
     assigned_user_id = await assign_booking_to_team_member(db, event_type, booking_start_utc, booking_end_utc)
     organizer_user = user

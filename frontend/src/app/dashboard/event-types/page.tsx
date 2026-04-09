@@ -2,19 +2,16 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import {
-  addEventTypeTeamMember,
   createEventType,
   deleteEventType,
-  deleteEventTypeTeamMember,
   EventTypePayload,
   EventTypeResponse,
-  getEventTypeTeamMembers,
   listEventTypes,
   updateEventType,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Sparkles, Users, CreditCard, ShieldCheck } from "lucide-react";
+import { Sparkles, CreditCard, ShieldCheck } from "lucide-react";
 
 const defaultFormState: EventTypePayload = {
   name: "",
@@ -36,7 +33,7 @@ const defaultFormState: EventTypePayload = {
   requires_payment: false,
   payment_amount: 0,
   payment_currency: "USD",
-  team_assignment_method: "round_robin",
+  team_assignment_method: "host_only",
 };
 
 interface EventTypeItem extends EventTypeResponse {}
@@ -47,11 +44,8 @@ export default function EventTypesPage() {
   const [eventTypes, setEventTypes] = useState<EventTypeItem[]>([]);
   const [selectedEventTypeId, setSelectedEventTypeId] = useState<string | null>(null);
   const [form, setForm] = useState<EventTypePayload>(defaultEmptyFormState);
-  const [customQuestions, setCustomQuestions] = useState<Array<{ id: string; question: string; type: string; required: boolean; options?: string[] }>>(defaultEmptyFormState.custom_questions || []);
-  const [exceptionsText, setExceptionsText] = useState<string>((defaultEmptyFormState.exceptions || []).join(", ") || "");
-  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; username?: string; assignment_method: string; priority: number }>>([]);
-  const [newTeamMemberUsername, setNewTeamMemberUsername] = useState<string>("");
-  const [newTeamMemberAssignmentMethod, setNewTeamMemberAssignmentMethod] = useState<string>("round_robin");
+  const [customQuestions, setCustomQuestions] = useState<Array<{ id: string; question: string; type: string; required: boolean; options?: string[] }>>((defaultEmptyFormState.custom_questions as any) || []);
+  const [exceptionsText, setExceptionsText] = useState<string>((defaultEmptyFormState.exceptions as string[] || []).join(", ") || "");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +91,7 @@ export default function EventTypesPage() {
 
       const payload: EventTypePayload = {
         ...form,
+        team_assignment_method: "host_only",
         availability: form.availability,
         exceptions,
         custom_questions: parsedCustomQuestions,
@@ -117,8 +112,8 @@ export default function EventTypesPage() {
 
       setSelectedEventTypeId(null);
       setForm(defaultEmptyFormState);
-      setCustomQuestions(defaultEmptyFormState.custom_questions || []);
-      setExceptionsText((defaultEmptyFormState.exceptions || []).join(", "));
+      setCustomQuestions((defaultEmptyFormState.custom_questions as any) || []);
+      setExceptionsText(((defaultEmptyFormState.exceptions as string[]) || []).join(", "));
       await loadEventTypes();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save event type");
@@ -172,7 +167,7 @@ export default function EventTypesPage() {
       requires_payment: eventType.requires_payment,
       payment_amount: eventType.payment_amount || 0,
       payment_currency: eventType.payment_currency || "USD",
-      team_assignment_method: eventType.team_assignment_method || "round_robin",
+      team_assignment_method: "host_only",
     });
     setCustomQuestions(
       (eventType.custom_questions || []).map((question: any, index: number) => ({
@@ -186,67 +181,15 @@ export default function EventTypesPage() {
     setExceptionsText((eventType.exceptions || []).join(", "));
     setError(null);
     setSuccess(null);
-    loadTeamMembers(eventType.id);
-  }
-
-  async function loadTeamMembers(eventTypeId: string) {
-    try {
-      const members = await getEventTypeTeamMembers(eventTypeId);
-      setTeamMembers(members);
-    } catch (err) {
-      console.warn("Unable to load team members", err);
-      setTeamMembers([]);
-    }
   }
 
   function handleCancelEdit() {
     setSelectedEventTypeId(null);
     setForm(defaultEmptyFormState);
-    setCustomQuestions(defaultEmptyFormState.custom_questions || []);
-    setExceptionsText((defaultEmptyFormState.exceptions || []).join(", "));
+    setCustomQuestions((defaultEmptyFormState.custom_questions as any) || []);
+    setExceptionsText(((defaultEmptyFormState.exceptions as string[]) || []).join(", "));
     setError(null);
     setSuccess(null);
-    setTeamMembers([]);
-  }
-
-  async function addTeamMember() {
-    if (!selectedEventTypeId || !newTeamMemberUsername.trim()) {
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      await addEventTypeTeamMember(selectedEventTypeId, {
-        username: newTeamMemberUsername.trim(),
-        assignment_method: newTeamMemberAssignmentMethod,
-      });
-      setSuccess("Team member added successfully.");
-      setNewTeamMemberUsername("");
-      await loadTeamMembers(selectedEventTypeId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add team member");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function removeTeamMember(memberId: string) {
-    if (!selectedEventTypeId) return;
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      await deleteEventTypeTeamMember(selectedEventTypeId, memberId);
-      setSuccess("Team member removed successfully.");
-      await loadTeamMembers(selectedEventTypeId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove team member");
-    } finally {
-      setSaving(false);
-    }
   }
 
   return (
@@ -255,7 +198,7 @@ export default function EventTypesPage() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">Event Types</h1>
           <p className="mt-2 text-sm text-slate-400 max-w-2xl">
-            Create and manage your public booking pages, availability rules, payment settings, and team assignment logic from one place.
+            Create and manage your public booking pages, availability rules, and payment settings for one-to-one meetings.
           </p>
         </div>
         <Button variant="outline" onClick={loadEventTypes} disabled={loading}>
@@ -295,8 +238,8 @@ export default function EventTypesPage() {
 
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Team assignment</p>
-                          <p className="text-sm text-slate-300">{type.team_assignment_method || "round_robin"}</p>
+                          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Meeting mode</p>
+                          <p className="text-sm text-slate-300">One-to-one (host only)</p>
                         </div>
                         <div className="space-y-1">
                           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Requires confirmation</p>
@@ -453,7 +396,7 @@ export default function EventTypesPage() {
                   <label className="text-sm font-medium text-slate-200" htmlFor="recurrence_rule">Recurrence rule</label>
                   <input
                     id="recurrence_rule"
-                    value={form.recurrence_rule}
+                    value={form.recurrence_rule ?? ""}
                     onChange={(e) => setForm({ ...form, recurrence_rule: e.target.value })}
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
                     placeholder="FREQ=WEEKLY;BYDAY=MO,WE,FR"
@@ -607,7 +550,7 @@ export default function EventTypesPage() {
                       type="number"
                       min={0}
                       step={0.01}
-                      value={form.payment_amount}
+                      value={form.payment_amount ?? ""}
                       onChange={(e) => setForm({ ...form, payment_amount: Number(e.target.value) })}
                       disabled={!form.requires_payment}
                       className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-50"
@@ -634,20 +577,6 @@ export default function EventTypesPage() {
                   </label>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200" htmlFor="team_assignment_method">Team assignment</label>
-                  <select
-                    id="team_assignment_method"
-                    value={form.team_assignment_method}
-                    onChange={(e) => setForm({ ...form, team_assignment_method: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
-                  >
-                    <option value="round_robin">Round robin</option>
-                    <option value="first_available">First available</option>
-                    <option value="all_available">All available</option>
-                  </select>
-                </div>
-
                 {error && <p className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</p>}
                 {success && <p className="rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</p>}
 
@@ -663,73 +592,6 @@ export default function EventTypesPage() {
             </CardContent>
           </Card>
 
-          {selectedEventTypeId ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Team members</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
-                    <div>
-                      <label htmlFor="new-team-member-username" className="sr-only">Team member username</label>
-                      <input
-                        id="new-team-member-username"
-                        type="text"
-                        value={newTeamMemberUsername}
-                        onChange={(e) => setNewTeamMemberUsername(e.target.value)}
-                        placeholder="username"
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="new-team-member-assignment" className="sr-only">Assignment method</label>
-                      <select
-                        id="new-team-member-assignment"
-                        value={newTeamMemberAssignmentMethod}
-                        onChange={(e) => setNewTeamMemberAssignmentMethod(e.target.value)}
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
-                      >
-                        <option value="round_robin">Round robin</option>
-                        <option value="first_available">First available</option>
-                        <option value="all_available">All available</option>
-                      </select>
-                    </div>
-                  </div>
-                  <Button type="button" onClick={addTeamMember} disabled={saving || !newTeamMemberUsername.trim()}>
-                    Add team member
-                  </Button>
-
-                  {teamMembers.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-4 text-sm text-slate-400">
-                      No team members assigned yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {teamMembers.map((member) => (
-                        <div key={member.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <p className="font-semibold text-white">{member.username || member.user_id}</p>
-                              <p className="text-sm text-slate-400">{member.assignment_method} · priority {member.priority}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeTeamMember(member.id)}
-                              className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-200 transition hover:bg-red-500/20"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-
           <Card>
             <CardHeader>
               <CardTitle>What&apos;s next</CardTitle>
@@ -740,16 +602,12 @@ export default function EventTypesPage() {
                 <span>Public booking pages will use these event type definitions.</span>
               </div>
               <div className="flex items-center gap-3">
-                <Users className="h-4 w-4 text-slate-400" />
-                <span>Next, we can add team member assignments and routing rules for meetings.</span>
+                <ShieldCheck className="h-4 w-4 text-slate-400" />
+                <span>Scheduling is intentionally locked to one-to-one host-only meetings for simpler operations.</span>
               </div>
               <div className="flex items-center gap-3">
                 <CreditCard className="h-4 w-4 text-slate-400" />
                 <span>Checkout and payment flow wiring is the next step after admin creation.</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="h-4 w-4 text-slate-400" />
-                <span>Recurring availability, confirmation, and follow-up automation are already supported in the backend.</span>
               </div>
             </CardContent>
           </Card>

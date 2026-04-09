@@ -44,11 +44,11 @@ def check_usage_limit(feature: str):
         if feature == "ai_messages":
             limit = user.daily_ai_limit if user.daily_ai_limit is not None else (2000 if user.tier == 'elite' else (200 if user.tier == 'pro' else 10))
             if user.daily_ai_count >= limit:
-                raise HTTPException(status_code=429, detail=f"AI Copilot usage limit reached. Upgrade to Pro for more.")
+                raise HTTPException(status_code=429, detail="AI Copilot usage limit reached. Upgrade to Pro for more.")
         elif feature == "calendar_syncs":
             limit = user.daily_sync_limit if user.daily_sync_limit is not None else (500 if user.tier == 'elite' else (50 if user.tier == 'pro' else 3))
             if user.daily_sync_count >= limit:
-                raise HTTPException(status_code=429, detail=f"Manual sync limit reached. Upgrade to Pro for more.")
+                raise HTTPException(status_code=429, detail="Manual sync limit reached. Upgrade to Pro for more.")
         
         return True
 

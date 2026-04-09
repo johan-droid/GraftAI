@@ -2,10 +2,8 @@ import hmac
 import hashlib
 import os
 import json
-from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable

@@ -1,10 +1,8 @@
 import asyncio
-import logging
 import os
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional
 
 import httpx
 import sentry_sdk
@@ -13,7 +11,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
 

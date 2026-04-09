@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import quote_plus
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from starlette.responses import Response, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -270,7 +270,7 @@ async def integration_status(
         }
     }
 
-@router.post("/token")
+@router.post("/token", response_model=None)
 async def token(
     request: Request,
     response: Response,
@@ -288,7 +288,7 @@ async def token(
     _set_auth_cookies(response, access_token, refresh_token)
     return _build_token_response(access_token, refresh_token)
 
-@router.post("/login")
+@router.post("/login", response_model=None)
 async def login(
     request: Request,
     response: Response,
@@ -347,7 +347,7 @@ async def check(
         },
     }
 
-@router.post("/refresh")
+@router.post("/refresh", response_model=None)
 async def refresh(
     request: Request,
     response: Response,
@@ -383,7 +383,7 @@ async def refresh(
         "refresh_token": refresh_token,
     }
 
-@router.post("/logout")
+@router.post("/logout", response_model=None)
 async def logout(response: Response):
     response.delete_cookie("graftai_access_token", path="/")
     response.delete_cookie("graftai_refresh_token", path="/")

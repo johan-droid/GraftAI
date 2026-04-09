@@ -48,15 +48,16 @@ const EditEventModal = ({
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <Edit3 className="w-4 h-4 text-indigo-400" /> Edit event
           </h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-slate-500 hover:text-white transition-all">
+          <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-lg hover:bg-white/8 text-slate-500 hover:text-white transition-all">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <form onSubmit={onUpdate} className="space-y-4">
           <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Title</label>
+            <label htmlFor="edit-event-title" className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Title</label>
             <input
+              id="edit-event-title"
               type="text"
               value={event.title}
               onChange={(e) => setEditingEvent({ ...event, title: e.target.value })}
@@ -64,8 +65,9 @@ const EditEventModal = ({
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Description</label>
+            <label htmlFor="edit-event-description" className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Description</label>
             <textarea
+              id="edit-event-description"
               rows={3}
               value={event.description}
               onChange={(e) => setEditingEvent({ ...event, description: e.target.value })}
@@ -74,8 +76,9 @@ const EditEventModal = ({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Status</label>
+              <label htmlFor="edit-event-status" className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Status</label>
               <select
+                id="edit-event-status"
                 value={event.status}
                 onChange={(e) => setEditingEvent({ ...event, status: e.target.value })}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white"
@@ -86,8 +89,9 @@ const EditEventModal = ({
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Category</label>
+              <label htmlFor="edit-event-category" className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Category</label>
               <select
+                id="edit-event-category"
                 value={event.category}
                 onChange={(e) => setEditingEvent({ ...event, category: e.target.value })}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-white"
@@ -102,6 +106,7 @@ const EditEventModal = ({
           <div className="flex gap-2 pt-2">
             <button
               type="button"
+              aria-label="Delete event"
               onClick={() => onDelete(event.id)}
               className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all"
             >

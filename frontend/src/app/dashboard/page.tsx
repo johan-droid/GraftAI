@@ -5,11 +5,14 @@ import { motion } from "framer-motion";
 import { 
   getAnalyticsSummary, 
   getEvents, 
-  getProactiveSuggestion 
+  getProactiveSuggestion,
+  ProactiveSuggestionResponse
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { SmartActions } from "@/components/dashboard/SmartActions";
+import type { SmartAction } from "@/components/dashboard/SmartActions";
 import { 
   Calendar as CalendarIcon, 
   Clock, 
@@ -55,11 +58,17 @@ type DashboardStats = {
   collaborators?: number;
 };
 
-type DashboardData = { stats: DashboardStats; events: unknown[]; suggestion: DashboardSuggestion };
+type DashboardData = { stats: DashboardStats; events: any[]; suggestion: ProactiveSuggestionResponse };
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const handleExecuteSmartAction = async (action: SmartAction) => {
+    // In a real integration, we'd trigger backend execute endpoints.
+    console.log("Triggered Smart Action:", action);
+    // You could put a toast here or call the actual endpoint
+  };
 
   useEffect(() => {
     async function loadDashboard() {
@@ -72,7 +81,7 @@ export default function DashboardPage() {
         const [stats, events, suggestion] = await Promise.all<[
           DashboardSummary,
           any[],
-          DashboardSuggestion
+          ProactiveSuggestionResponse
         ]>([
           getAnalyticsSummary(),
           getEvents(todayStart.toISOString(), todayEnd.toISOString()),
@@ -234,25 +243,33 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle className="text-base">Schedule Optimization</CardTitle>
               <CardDescription>
-                Identified an opportunity based on your energy patterns.
+                Identified an opportunity based on your schedule.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm">
-                {data?.suggestion?.message || "You have back-to-back meetings from 1:00 PM to 4:00 PM tomorrow. Consider moving the &apos;Weekly Standup&apos; to Friday morning to protect your focus time."}
+                {data?.suggestion?.suggestion || "You have back-to-back meetings from 1:00 PM to 4:00 PM tomorrow. Consider moving the 'Weekly Standup' to Friday morning to protect your focus time."}
               </p>
-              <div className="rounded-md bg-background/50 p-3 text-xs border">
-                <strong>Proposed Change:</strong> Move highly cognitive tasks to AM.
-              </div>
+              
+              {data?.suggestion?.smart_actions && data.suggestion.smart_actions.length > 0 && (
+                <div className="mt-4">
+                  <SmartActions 
+                    actions={data.suggestion.smart_actions} 
+                    onExecute={handleExecuteSmartAction} 
+                  />
+                </div>
+              )}
             </CardContent>
-            <CardFooter className="flex gap-2">
-              <Button className="w-full" size="sm">
-                Apply Change
-              </Button>
-              <Button className="w-full" variant="outline" size="sm">
-                Dismiss
-              </Button>
-            </CardFooter>
+            {(!data?.suggestion?.smart_actions || data.suggestion.smart_actions.length === 0) && (
+              <CardFooter className="flex gap-2">
+                <Button className="w-full" size="sm">
+                  Apply Change
+                </Button>
+                <Button className="w-full" variant="outline" size="sm">
+                  Dismiss
+                </Button>
+              </CardFooter>
+            )}
           </Card>
         </motion.div>
       </div>

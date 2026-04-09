@@ -188,8 +188,24 @@ export async function sendAiChat(prompt: string, context?: string[], timezone?: 
 // ──────────────────────────────────────
 // Services: Proactive Suggestions
 // ──────────────────────────────────────
+export interface SmartAction {
+  id: string;
+  action_type: string;
+  title: string;
+  description: string;
+  target_entity_id?: string;
+  suggested_time?: string;
+  confidence_score: number;
+  payload?: Record<string, any>;
+}
+
+export interface ProactiveSuggestionResponse {
+  suggestion: string;
+  smart_actions?: SmartAction[];
+}
+
 export async function getProactiveSuggestion(context?: string) {
-  return apiClient.post<{ suggestion: string }>("/proactive/suggest", { context });
+  return apiClient.post<ProactiveSuggestionResponse>("/proactive/suggest", { context });
 }
 
 // ──────────────────────────────────────

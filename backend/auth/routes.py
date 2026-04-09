@@ -273,9 +273,9 @@ async def integration_status(
 @router.post("/token")
 async def token(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
-    response: Optional[Response] = None,
 ):
     """Standard OAuth2 token endpoint."""
     # Rate limiting by IP
@@ -291,9 +291,9 @@ async def token(
 @router.post("/login")
 async def login(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
-    response: Optional[Response] = None,
 ):
     """Legacy login route kept for compatibility."""
     return await token(request, form_data, db, response)

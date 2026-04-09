@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Zap, Mail, Lock, Chrome, ArrowRight } from "lucide-react";
+import { Zap, Mail, Lock, Globe, ArrowRight } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://graftai.onrender.com";
 
@@ -135,7 +135,7 @@ export default function LoginPage() {
               onClick={() => (window.location.href = `${API_URL}/api/v1/auth/google/login`)}
               className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10 transition"
             >
-              <Chrome className="h-5 w-5" />
+              <Globe className="h-5 w-5" />
               Continue with Google
             </button>
             <button

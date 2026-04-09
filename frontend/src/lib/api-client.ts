@@ -10,13 +10,18 @@ const BASE_URL = normalizedBase.endsWith("/api/v1")
   : `${normalizedBase}/api/v1`;
 export const API_BASE_URL = BASE_URL;
 
+export interface ApiRequestOptions extends RequestInit {
+  params?: Record<string, string | number | boolean | null | undefined>;
+  json?: unknown;
+}
+
 export function composeEndpoint(path: string, includeBaseUrl = false) {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return includeBaseUrl ? `${BASE_URL}${normalized}` : normalized;
 }
 
 export const apiClient = {
-  async fetch(endpoint: string, options: any = {}) {
+  async fetch(endpoint: string, options: ApiRequestOptions = {}) {
     const { params, json, ...requestInit } = options;
     
     // 1. Build URL with query params if provided
@@ -86,19 +91,19 @@ export const apiClient = {
     return response.json();
   },
 
-  get<T>(endpoint: string, options: any = {}): Promise<T> {
+  get<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
     return this.fetch(endpoint, { ...options, method: "GET" });
   },
 
-  post<T>(endpoint: string, body?: any, options: any = {}): Promise<T> {
+  post<T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}): Promise<T> {
     return this.fetch(endpoint, { ...options, method: "POST", json: body });
   },
 
-  patch<T>(endpoint: string, body?: any, options: any = {}): Promise<T> {
+  patch<T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}): Promise<T> {
     return this.fetch(endpoint, { ...options, method: "PATCH", json: body });
   },
 
-  delete<T>(endpoint: string, options: any = {}): Promise<T> {
+  delete<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
     return this.fetch(endpoint, { ...options, method: "DELETE" });
   }
 };

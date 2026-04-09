@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import Image from "next/image";
-import { Cpu, Calendar, Bot, LogIn, Command, Menu, X, ArrowRight, Zap } from "lucide-react";
+import { Bot, LogIn, Command, Menu, X, ArrowRight, Zap } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";

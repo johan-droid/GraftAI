@@ -1,33 +1,38 @@
 import { AvailabilityConfig, CalendarBusyTime } from "./compute";
 
+interface CalendarCredential {
+  type: "google_calendar" | "outlook_calendar" | "caldav";
+  [key: string]: unknown;
+}
+
 export async function getCalendarBusyTimes(config: AvailabilityConfig): Promise<CalendarBusyTime[]> {
   const busyTimes: CalendarBusyTime[] = [];
 
-  for (const credential of config.user.credentials || []) {
+  for (const credential of (config.user.credentials || []) as CalendarCredential[]) {
     if (credential.type === "google_calendar") {
-      busyTimes.push(...(await getGoogleCalendarBusy(credential)));
+      busyTimes.push(...(await getGoogleCalendarBusy()));
     }
     if (credential.type === "outlook_calendar") {
-      busyTimes.push(...(await getOutlookCalendarBusy(credential)));
+      busyTimes.push(...(await getOutlookCalendarBusy()));
     }
     if (credential.type === "caldav") {
-      busyTimes.push(...(await getCalDAVBusy(credential)));
+      busyTimes.push(...(await getCalDAVBusy()));
     }
   }
 
   return mergeAndDeduplicate(busyTimes);
 }
 
-async function getGoogleCalendarBusy(credential: any): Promise<CalendarBusyTime[]> {
+async function getGoogleCalendarBusy(): Promise<CalendarBusyTime[]> {
   // Placeholder: move actual busy time fetching to backend if credentials are not available in the browser.
   return [];
 }
 
-async function getOutlookCalendarBusy(credential: any): Promise<CalendarBusyTime[]> {
+async function getOutlookCalendarBusy(): Promise<CalendarBusyTime[]> {
   return [];
 }
 
-async function getCalDAVBusy(credential: any): Promise<CalendarBusyTime[]> {
+async function getCalDAVBusy(): Promise<CalendarBusyTime[]> {
   return [];
 }
 

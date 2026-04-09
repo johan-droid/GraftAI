@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { Bell, X, Trash2 } from "lucide-react";
 import { getNotifications, markNotification, markAllNotificationsRead, deleteNotification } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -23,6 +23,29 @@ export default function NotificationCenter() {
 
   const unreadCount = items.filter((i) => !i.is_read).length;
 
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getNotifications(25, false);
+      setItems(res || []);
+    } catch (error: unknown) {
+      console.warn("Failed to load notifications", error);
+      // If this failure is due to an expired session, redirect to login so the
+      // user can re-authenticate immediately instead of repeatedly seeing
+      // failed API attempts.
+      try {
+        const typedError = error as { status?: unknown };
+        if (typedError.status === 401) {
+          router.replace("/login");
+        }
+      } catch {
+        /* ignore redirect errors */
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -32,29 +55,7 @@ export default function NotificationCenter() {
       fetchItems();
     }
     return () => document.removeEventListener("click", onDoc);
-  }, [open]);
-
-  async function fetchItems() {
-    setLoading(true);
-    try {
-      const res = await getNotifications(25, false);
-      setItems(res || []);
-    } catch (e) {
-      console.warn("Failed to load notifications", e);
-      // If this failure is due to an expired session, redirect to login so the
-      // user can re-authenticate immediately instead of repeatedly seeing
-      // failed API attempts.
-      try {
-        if (e && typeof e === "object" && "status" in (e as any) && (e as any).status === 401) {
-          router.replace("/login");
-        }
-      } catch (err) {
-        /* ignore redirect errors */
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [open, fetchItems]);
 
   async function handleMarkRead(id: number) {
     try {

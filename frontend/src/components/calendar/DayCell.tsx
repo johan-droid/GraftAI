@@ -2,14 +2,25 @@ import React from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+interface CalendarEventSummary {
+  id: string | number;
+  title: string;
+  category?: string;
+}
+
+interface CategoryStyle {
+  bg?: string;
+  text?: string;
+}
+
 interface DayCellProps {
   day: Date;
   today: Date;
   currentDate: Date;
   selectedDate: Date | null;
-  dayEvents: any[];
+  dayEvents: CalendarEventSummary[];
   onSelect: (day: Date) => void;
-  categories: any;
+  categories: Record<string, CategoryStyle>;
 }
 
 export const DayCell = React.memo(({ 

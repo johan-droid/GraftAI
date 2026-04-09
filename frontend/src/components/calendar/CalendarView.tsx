@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,22 +27,25 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"month" | "week" | "day">("month");
 
-  const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-  const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-  const startDate = new Date(monthStart);
-  startDate.setDate(startDate.getDate() - startDate.getDay());
-  const endDate = new Date(monthEnd);
-  endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
+  const monthRange = useMemo(() => {
+    const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    const startDate = new Date(monthStart);
+    startDate.setDate(startDate.getDate() - startDate.getDay());
+    const endDate = new Date(monthEnd);
+    endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
+    return { startDate, endDate };
+  }, [currentDate]);
 
   const days = useMemo(() => {
-    const daysArray = [];
-    const current = new Date(startDate);
-    while (current <= endDate) {
+    const daysArray: Date[] = [];
+    const current = new Date(monthRange.startDate);
+    while (current <= monthRange.endDate) {
       daysArray.push(new Date(current));
       current.setDate(current.getDate() + 1);
     }
     return daysArray;
-  }, [startDate, endDate]);
+  }, [monthRange]);
 
   const getEventsForDay = (day: Date) => {
     return events.filter(event => {
@@ -66,12 +69,6 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
   const today = new Date();
   const isToday = (day: Date) => day.toDateString() === today.toDateString();
   const isCurrentMonth = (day: Date) => day.getMonth() === currentDate.getMonth();
-
-  const sourceColors = {
-    google: "bg-red-500 text-white",
-    microsoft: "bg-blue-500 text-white",
-    local: "bg-emerald-500 text-white"
-  };
 
   return (
     <div className="flex flex-col h-full lg:h-[750px] bg-transparent">

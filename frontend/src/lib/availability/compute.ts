@@ -7,7 +7,7 @@ export interface AvailabilityParams {
 }
 
 export interface EventTypeUser {
-  credentials?: Array<{ type: string; [key: string]: any }>;
+  credentials?: Array<{ type: string; [key: string]: unknown }>;
 }
 
 export interface AvailabilityConfig {
@@ -52,7 +52,7 @@ const DAY_NAMES = [
 
 export function computeAvailability(input: ComputeInput): TimeSlot[] {
   const { config, existingBookings, calendarBusyTimes, params } = input;
-  const dateRange = buildMonthRange(params.month, config.timeZone);
+  const dateRange = buildMonthRange(params.month);
   const minNoticeMinutes = params.minNoticeMinutes ?? config.minimumNoticeMinutes ?? 0;
   const nowUtc = new Date();
   const minTime = new Date(nowUtc.getTime() + minNoticeMinutes * 60 * 1000);
@@ -167,14 +167,14 @@ export function mergeBusyTimes(values: CalendarBusyTime[]): CalendarBusyTime[] {
   return merged;
 }
 
-function buildMonthRange(month: string, timeZone: string): Date[] {
+function buildMonthRange(month: string): Date[] {
   const [year, monthNumber] = month.split("-").map(Number);
   const range: Date[] = [];
   const start = new Date(Date.UTC(year, monthNumber - 1, 1));
   const nextMonth = new Date(Date.UTC(year, monthNumber - 1, 1));
   nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
 
-  let cursor = new Date(start);
+  const cursor = new Date(start);
   while (cursor < nextMonth) {
     range.push(new Date(cursor));
     cursor.setUTCDate(cursor.getUTCDate() + 1);

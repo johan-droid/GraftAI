@@ -1,4 +1,4 @@
-import { getPublicEventDetails, getPublicEventAvailability } from "@/lib/api";
+import { getPublicEventDetails } from "@/lib/api";
 import { computeAvailability, AvailabilityConfig, TimeSlot } from "./compute";
 import { getCalendarBusyTimes } from "./calendar";
 import { convertSlotToTimezone } from "./timezone";
@@ -38,9 +38,7 @@ export async function getEventTypeConfig(
   };
 }
 
-export async function getExistingBookings(
-  params: AvailabilityParams
-): Promise<TimeSlot[]> {
+export async function getExistingBookings(): Promise<TimeSlot[]> {
   // Public availability pages do not expose raw booking details.
   // Existing bookings are already reconciled by backend availability responses.
   return [];

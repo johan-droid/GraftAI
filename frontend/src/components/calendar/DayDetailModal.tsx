@@ -1,19 +1,45 @@
 import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Calendar, Clock, Edit3, Trash2, Video, Plus, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
+import { X, Calendar, Clock, Edit3, Trash2, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface CalendarEventSummary {
+  id: string | number;
+  title: string;
+  start_time: string;
+  end_time: string;
+  description?: string;
+  location?: string;
+  category?: string;
+}
 
 interface DayDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedDate: Date | null;
-  dayEvents: any[];
-  categories: any;
-  draftEvent: any;
-  setDraftEvent: (draft: any) => void;
+  dayEvents: CalendarEventSummary[];
+  categories: Record<string, { bg?: string; text?: string }>;
+  draftEvent: {
+    title: string;
+    description?: string;
+    start_time_local?: string;
+    end_time_local?: string;
+  };
+  setDraftEvent: (draft: {
+    title: string;
+    description?: string;
+    start_time_local?: string;
+    end_time_local?: string;
+  }) => void;
   handleCreate: (e?: React.FormEvent) => void;
   handleDelete: (id: string | number) => void;
-  setEditingEvent: (event: any) => void;
+  setEditingEvent: (event: {
+    id: string | number;
+    title: string;
+    description?: string;
+    status?: string;
+    category?: string;
+  }) => void;
   creating: boolean;
 }
 

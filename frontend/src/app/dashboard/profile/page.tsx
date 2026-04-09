@@ -11,7 +11,6 @@ import {
   Globe,
   Zap,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const STAGGER = {
   hidden: { opacity: 0 },
@@ -56,6 +55,7 @@ function SettingRow({ icon: Icon, label, description, children }: {
 
 export default function ProfilePage() {
   const { user, refresh } = useAuth();
+  const profileUser = user as UserProfile | null;
 
   const [editingName, setEditingName] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
@@ -79,9 +79,8 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       // Use user.full_name or user.name depending on the API mapping
-      setNameDraft(user.full_name || user.name || ""); 
-      // Need cast to access extra fields on generic User type
-      const extraUser = user as any;
+      setNameDraft(user.full_name || user.name || "");
+      const extraUser = user as UserProfile;
       setBioDraft(extraUser.bio || "");
       setJobDraft(extraUser.job_title || "");
       setLocationDraft(extraUser.location || "");
@@ -235,7 +234,7 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-300 font-medium">{(user as any)?.job_title || jobDraft || "Not set"}</span>
+                  <span className="text-sm text-slate-300 font-medium">{profileUser?.job_title || jobDraft || "Not set"}</span>
                   <button onClick={() => setEditingJob(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
                 </div>
               )}
@@ -255,7 +254,7 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-300 font-medium">{(user as any)?.location || locationDraft || "Not set"}</span>
+                  <span className="text-sm text-slate-300 font-medium">{profileUser?.location || locationDraft || "Not set"}</span>
                   <button onClick={() => setEditingLocation(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
                 </div>
               )}
@@ -278,7 +277,7 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="w-full flex items-center justify-between">
-                  <p className="text-sm text-slate-400 leading-relaxed italic pr-4 line-clamp-2 max-w-[250px] sm:max-w-md\">{(user as any)?.bio || bioDraft || "No bio set yet."}</p>
+                  <p className="text-sm text-slate-400 leading-relaxed italic pr-4 line-clamp-2 max-w-[250px] sm:max-w-md\">{profileUser?.bio || bioDraft || "No bio set yet."}</p>
                   <button onClick={() => setEditingBio(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors shrink-0">Edit Bio</button>
                 </div>
               )}

@@ -4,16 +4,12 @@ import { useState, useRef, useEffect, FormEvent, KeyboardEvent, useMemo } from "
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
-  Send,
   Sparkles,
-  User as UserIcon,
   Loader2,
   Calendar,
   CheckCircle2,
   Lightbulb,
   RefreshCw,
-  MapPin,
-  X,
   MoreHorizontal,
   Sun,
   Moon,
@@ -30,7 +26,7 @@ import { sendAiChat, getEvents } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Input } from "@/components/ui/Input";
+
 import { useAuth } from "@/providers/auth-provider";
 
 import { useSyncEngine } from "@/hooks/useSyncEngine";

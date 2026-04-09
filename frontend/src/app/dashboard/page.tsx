@@ -34,8 +34,27 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
 };
 
-type DashboardSuggestion = { message?: string };
-type DashboardStats = { totalMeetings?: number; focusHours?: number; collaborators?: number };
+type DashboardSuggestion = { suggestion?: string };
+type DashboardAnalyticsDetails = {
+  meetings?: number;
+  hours?: number;
+  growth?: number;
+  cancellations?: number;
+  recent_events?: { id: number; title: string; start_time: string; category?: string; is_upcoming?: boolean }[];
+  next_event?: { id: number; title: string; start_time: string; category?: string; is_upcoming?: boolean } | null;
+};
+
+type DashboardSummary = {
+  summary: string;
+  details?: DashboardAnalyticsDetails;
+};
+
+type DashboardStats = {
+  totalMeetings?: number;
+  focusHours?: number;
+  collaborators?: number;
+};
+
 type DashboardData = { stats: DashboardStats; events: unknown[]; suggestion: DashboardSuggestion };
 
 export default function DashboardPage() {
@@ -45,12 +64,24 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [stats, events, suggestion] = await Promise.all([
+        const [stats, events, suggestion] = await Promise.all<[
+          DashboardSummary,
+          unknown[],
+          DashboardSuggestion
+        ]>([
           getAnalyticsSummary(),
           getEvents(),
           getProactiveSuggestion()
         ]);
-        setData({ stats, events, suggestion });
+        setData({
+          stats: {
+            totalMeetings: stats.details?.meetings,
+            focusHours: stats.details?.hours,
+            collaborators: stats.details?.recent_events?.length,
+          },
+          events,
+          suggestion,
+        });
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
       } finally {

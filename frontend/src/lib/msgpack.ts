@@ -9,7 +9,7 @@ export const msgpack = {
    * Decodes a binary buffer (ArrayBuffer, Uint8Array) into a JS Object.
    * Gracefully handles JSON fallbacks for legacy or mixed-mode streams.
    */
-  decode: <T = any>(data: any): T => {
+  decode: <T = unknown>(data: unknown): T => {
     try {
       // If it's already an object/string, return it (JSON fallback)
       if (typeof data === "string" || (typeof data === "object" && !(data instanceof ArrayBuffer) && !ArrayBuffer.isView(data))) {
@@ -28,7 +28,7 @@ export const msgpack = {
   /**
    * Safe JSON-or-Binary parser for EventSource (SSE) data.
    */
-  parseEventData: <T = any>(eventData: string | Blob): Promise<T> => {
+  parseEventData: <T = unknown>(eventData: string | Blob): Promise<T> => {
     return new Promise((resolve) => {
       if (eventData instanceof Blob) {
         const reader = new FileReader();

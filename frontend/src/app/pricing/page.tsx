@@ -29,8 +29,6 @@ interface RazorpayOptions {
   };
 }
 
-"use client";
-
 interface RazorpayGlobal {
   new (options: RazorpayOptions): RazorpayInstance;
 }

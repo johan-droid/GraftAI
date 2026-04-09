@@ -11,9 +11,10 @@ import {
   Zap,
   Loader2,
 } from "lucide-react";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardContent } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { getAnalyticsRealtime, type AnalyticsRealtimeResponse } from "@/lib/api";
 import TimelineLineChart from "@/components/TimelineLineChart";
 import { cn } from "@/lib/utils";
 import { isMobile } from "react-device-detect";
@@ -27,31 +28,11 @@ const ITEM = {
   visible: { opacity: 1, y: 0 },
 };
 
-interface AnalyticsMeetingType {
-  label: string;
-  pct: number;
-}
-
-interface AnalyticsTotals {
-  meetings: number;
-  hours: number;
-  growth: number;
-  unique_attendees: number;
-  cancellations: number;
-}
-
-interface AnalyticsData {
-  meeting_types?: AnalyticsMeetingType[];
-  summary?: string;
-  series?: Array<Record<string, unknown>>;
-  totals?: AnalyticsTotals;
-}
-
 export default function AnalyticsPage() {
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [data, setData] = useState<AnalyticsRealtimeResponse | null>(null);
 
   const handleRangeChange = (nextRange: "7d" | "30d" | "90d") => {
     setError(null);

@@ -1,17 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { 
   CreditCard, 
-  Zap, 
-  Crown, 
+  Zap,
+  Crown,
   CheckCircle2, 
-  AlertCircle,
   ArrowUpRight,
   Loader2,
-  Sparkles,
-  BarChart3
 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 

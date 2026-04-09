@@ -2,13 +2,21 @@ import React from "react";
 import { motion } from "framer-motion";
 import { X, Edit3, Trash2, CheckCircle2 } from "lucide-react";
 
+interface EventPayload {
+  id: string | number;
+  title: string;
+  description?: string;
+  status: string;
+  category: string;
+}
+
 interface EditEventModalProps {
-  event: any;
+  event: EventPayload;
   onClose: () => void;
   onUpdate: (e: React.FormEvent) => void;
   onDelete: (id: string | number) => void;
-  setEditingEvent: (event: any) => void;
-  categories: any;
+  setEditingEvent: (event: EventPayload) => void;
+  categories: Record<string, string>;
 }
 
 const EditEventModal = ({

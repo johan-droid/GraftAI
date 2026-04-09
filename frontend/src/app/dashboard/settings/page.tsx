@@ -4,10 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/auth-provider";
-import { deleteAccount, setConsent, syncUserTimezone, updateUserProfile, getEmailDiagnostic, sendTestEmail } from "@/lib/api";
+import { deleteAccount, setConsent, getEmailDiagnostic, sendTestEmail } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
-  User,
   Shield,
   Bell,
   Eye,

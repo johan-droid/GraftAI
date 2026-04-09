@@ -2,18 +2,16 @@
 
 import { useAuth } from "@/providers/auth-provider";
 import { motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { 
   BarChart3, 
   Sparkles, 
   AlertCircle,
-  Zap,
-  Crown
 } from "lucide-react";
 
 export default function QuotaPage() {
   const { user } = useAuth();
-  const [liveStatus, setLiveStatus] = useState("Live tracking active");
+  const liveStatus = "Live tracking active";
 
   const lastSyncedAt = useMemo(
     () =>

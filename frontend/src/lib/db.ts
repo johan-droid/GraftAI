@@ -21,7 +21,7 @@ export interface LocalChat {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   timestamp: string;
 }
 

@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Zap, Bot, Sparkles, Globe, Calendar, ArrowRight, 
-  CheckCircle2, Clock, Star, Menu, X, ChevronDown
+  Zap, Bot, Sparkles, Globe, Calendar, ArrowRight, Menu, X
 } from "lucide-react";
 
 // --- Data Objects ---
@@ -39,7 +38,12 @@ const FEATURES = [
 ];
 
 // --- Sub-components ---
-const Nav = ({ scrolled, setMobileOpen }: any) => (
+interface NavProps {
+  scrolled: boolean;
+  setMobileOpen: (value: boolean) => void;
+}
+
+const Nav = ({ scrolled, setMobileOpen }: NavProps) => (
   <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
     scrolled ? "bg-[#070711]/80 backdrop-blur-xl border-b border-white/[0.05]" : ""
   }`}>
@@ -68,7 +72,19 @@ const Nav = ({ scrolled, setMobileOpen }: any) => (
   </header>
 );
 
-const FeatureCard = ({ f, index }: any) => (
+interface FeatureCardProps {
+  f: {
+    icon: ReactNode;
+    title: string;
+    desc: string;
+    accent: string;
+    bg: string;
+    border: string;
+  };
+  index: number;
+}
+
+const FeatureCard = ({ f, index }: FeatureCardProps) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     whileInView={{ opacity: 1, y: 0 }}

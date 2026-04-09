@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { db } from '@/lib/db';
 import { sendAiChat } from '@/lib/api';
 import { toast } from 'sonner';
@@ -7,31 +7,7 @@ export function useSyncEngine() {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
-  useEffect(() => {
-    // Initial check
-    setIsOnline(navigator.onLine);
-
-    const setOnline = () => {
-      setIsOnline(true);
-      toast.success('Back online. Syncing offline changes...');
-      syncOfflineData();
-    };
-    
-    const setOffline = () => {
-      setIsOnline(false);
-      toast.warning('You are offline. AI Chat will use template mode.');
-    };
-
-    window.addEventListener('online', setOnline);
-    window.addEventListener('offline', setOffline);
-
-    return () => {
-      window.removeEventListener('online', setOnline);
-      window.removeEventListener('offline', setOffline);
-    };
-  }, []);
-
-  const syncOfflineData = async () => {
+  const syncOfflineData = useCallback(async () => {
     if (isSyncing || !navigator.onLine) return;
     
     try {
@@ -65,7 +41,31 @@ export function useSyncEngine() {
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [isSyncing]);
+
+  useEffect(() => {
+    // Initial check
+    setIsOnline(navigator.onLine);
+
+    const setOnline = () => {
+      setIsOnline(true);
+      toast.success('Back online. Syncing offline changes...');
+      syncOfflineData();
+    };
+    
+    const setOffline = () => {
+      setIsOnline(false);
+      toast.warning('You are offline. AI Chat will use template mode.');
+    };
+
+    window.addEventListener('online', setOnline);
+    window.addEventListener('offline', setOffline);
+
+    return () => {
+      window.removeEventListener('online', setOnline);
+      window.removeEventListener('offline', setOffline);
+    };
+  }, [syncOfflineData]);
 
   return { isOnline, isSyncing, syncOfflineData };
 }

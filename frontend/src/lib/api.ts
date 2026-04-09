@@ -11,7 +11,7 @@ export async function refreshSession() {
   try {
     const user = await apiClient.get("/users/me");
     return { user };
-  } catch (error) {
+  } catch {
     throw new Error("No valid session to refresh");
   }
 }
@@ -293,7 +293,7 @@ export interface CalendarEvent {
   updated_at?: string;
 }
 
-export async function getEvents(start: string, end: string, options?: any) {
+export async function getEvents(start: string, end: string, options: Record<string, unknown> = {}) {
   return apiClient.get<CalendarEvent[]>(`/calendar/events`, { ...options, params: { start, end } });
 }
 
@@ -405,8 +405,8 @@ export async function bookPublicEvent(
     start_time: string;
     end_time: string;
     time_zone?: string;
-    questions?: Record<string, any>;
-    metadata?: Record<string, any>;
+    questions?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
   }
 ) {
   return apiClient.post<PublicBookingConfirmation>(

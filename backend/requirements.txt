@@ -41,4 +41,5 @@ cachetools>=5.5.0
 msgpack>=1.1.0
 python3-saml>=1.16.0
 resend>=2.4.0
+passlib>=1.7.0
 uvloop>=0.20.0; sys_platform != 'win32'

@@ -3,7 +3,10 @@ from authlib.integrations.httpx_client import AsyncOAuth2Client
 
 MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
 MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
-MICROSOFT_REDIRECT_URI = os.getenv("MICROSOFT_REDIRECT_URI", "http://localhost:8000/api/v1/auth/microsoft/callback")
+
+# Allow dynamic redirect URI from environment for Render/Vercel production
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+MICROSOFT_REDIRECT_URI = os.getenv("MICROSOFT_REDIRECT_URI", f"{BACKEND_URL}/api/v1/auth/microsoft/callback")
 
 # Validate Microsoft OAuth configuration
 if not MICROSOFT_CLIENT_ID or not MICROSOFT_CLIENT_SECRET:

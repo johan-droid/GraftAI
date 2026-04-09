@@ -15,7 +15,6 @@ from backend.services.webhook_subscriptions import enqueue_webhook_notifications
 from backend.utils.errors import BookingConflictError, TimezoneError, ValidationError
 from backend.utils.cache import (
     acquire_lock,
-    delete_cache,
     get_cache,
     invalidate_user_cache_pattern,
     set_cache,

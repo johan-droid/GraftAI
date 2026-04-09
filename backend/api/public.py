@@ -3,11 +3,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 import pytz
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db
-from backend.models.tables import EventTypeTable, UserTable
 from backend.services.bookings import (
     get_user_by_username,
     get_event_type,

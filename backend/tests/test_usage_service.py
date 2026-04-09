@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, Mock
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import os
 
 from backend.services import notifications
 from backend.services import usage

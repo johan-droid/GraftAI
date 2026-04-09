@@ -1,10 +1,12 @@
-import os, secrets, logging
+import os
+import secrets
+import logging
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote_plus
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -16,7 +18,7 @@ from backend.utils.db import get_db
 from backend.models.tables import UserTable, UserTokenTable
 from backend.services import google_auth, microsoft_auth, zoom_auth
 
-FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "http://localhost:3000")).rstrip("/")
 
 def _frontend_redirect_token(access_token: str, redirect_to: str = "/dashboard"):
     return f"{FRONTEND_BASE_URL}/auth-callback?access_token={quote_plus(access_token)}&redirect={quote_plus(redirect_to)}"
@@ -297,7 +299,7 @@ async def google_login(token: str = None):
             try:
                 payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
                 user_id = payload.get("sub")
-            except:
+            except Exception:
                 pass
                 
         # We embed user_id in state so the callback knows who triggered this connect flow
@@ -397,7 +399,7 @@ async def microsoft_login(token: str = None):
             try:
                 payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
                 user_id = payload.get("sub")
-            except:
+            except Exception:
                 pass
                 
         # Embed user_id in state
@@ -482,7 +484,7 @@ async def zoom_login(token: str = None):
             try:
                 payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
                 user_id = payload.get("sub")
-            except:
+            except Exception:
                 pass
 
         state = f"{secrets.token_urlsafe(16)}|{user_id if user_id else ''}"

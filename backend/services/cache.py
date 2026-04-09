@@ -101,20 +101,3 @@ async def delete_cache_pattern(pattern: str):
     keys_to_delete = [k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)]
     for k in keys_to_delete:
         _fallback_cache.pop(k, None)
-
-
-async def delete_cache_pattern(pattern: str):
-    r = await _get_redis()
-    if r:
-        try:
-            cursor = b"0"
-            while cursor != 0:
-                cursor, keys = await r.scan(cursor=cursor, match=pattern, count=100)
-                if keys:
-                    await r.delete(*keys)
-            return
-        except Exception:
-            pass
-    keys_to_delete = [k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)]
-    for k in keys_to_delete:
-        _fallback_cache.pop(k, None)

@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession

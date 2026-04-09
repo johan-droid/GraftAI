@@ -1,6 +1,4 @@
 import logging
-import asyncio
-import json
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
@@ -8,10 +6,10 @@ from sqlalchemy.orm import selectinload
 from backend.utils.db import AsyncSessionLocal
 from backend.utils.webhook_signing import generate_webhook_signature
 from backend.models.tables import UserTable, EventTable, BookingTable, WebhookLogTable
-from backend.services.scheduler import push_event_to_external_calendar
+from backend.services.scheduler import push_event_to_external_calendar, update_event, delete_event
 from backend.services.sync_engine import sync_user_calendar
 from backend.services.calendar_sync import sync_calendar_for_user
-from backend.services.notifications import notify_event_created, notify_event_updated, notify_event_deleted
+from backend.services.notifications import notify_event_created, notify_event_updated, notify_event_deleted, send_custom_notification
 from backend.services.mail_service import send_email
 from backend.services.queue_monitoring import start_queue_monitoring
 from backend.utils.http_client import get_client

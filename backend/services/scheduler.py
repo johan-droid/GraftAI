@@ -1,6 +1,6 @@
 import logging
-from datetime import datetime, timedelta
-from typing import List, Optional, Dict
+from datetime import datetime
+from typing import List, Optional
 from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_

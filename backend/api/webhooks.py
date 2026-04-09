@@ -1,7 +1,6 @@
-import hashlib
 import hmac
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Request, Response, Depends, HTTPException
@@ -9,12 +8,10 @@ from pydantic import BaseModel, AnyHttpUrl, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.api.deps import get_db, get_current_user
-from backend.models.tables import WebhookSubscriptionTable, WebhookLogTable, UserTable
+from backend.models.tables import WebhookSubscriptionTable, UserTable
 from backend.services.calendar_sync import invalidate_user_calendar_busy_cache
 from backend.services.webhook_subscriptions import (
-    ALLOWED_WEBHOOK_EVENTS,
     list_webhook_subscriptions,
-    get_webhook_subscription,
     create_webhook_subscription,
     update_webhook_subscription,
     delete_webhook_subscription,

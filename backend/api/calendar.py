@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 # We import the simplified services and models we created earlier
 from backend.api.deps import get_db, get_current_user 
-from backend.models.tables import EventTable, UserTable, UserTokenTable
+from backend.models.tables import UserTable, UserTokenTable
 from backend.services.scheduler import get_events_for_range, create_event, update_event, delete_event
 from backend.services.sync_engine import sync_user_calendar
 
@@ -19,13 +19,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
 
 # --- Pydantic Schemas for Input Validation ---
-class EventCreateSchema(BaseModel):
-    title: str
-    start_time: datetime
-    end_time: datetime
-    description: Optional[str] = None
-    location: Optional[str] = None
-
 class EventCreateSchema(BaseModel):
     title: str
     start_time: datetime

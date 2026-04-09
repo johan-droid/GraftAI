@@ -3,7 +3,6 @@ import logging
 import os
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
-from typing import Any
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_DIR = os.getenv("LOG_DIR", "logs")

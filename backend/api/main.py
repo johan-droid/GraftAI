@@ -1,6 +1,6 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -85,7 +85,7 @@ def create_app() -> FastAPI:
     )
 
     # Simplified CORS for single-domain deployments
-    frontend_url = os.getenv("FRONTEND_URL")
+    frontend_url = os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL"))
     if frontend_url:
         allow_origins = [origin.strip() for origin in frontend_url.split(",") if origin.strip()]
     else:
@@ -97,7 +97,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,
-        allow_origin_regex=r"^https?://(?:localhost|127\.0\.0\.1|(?:\d{1,3}\.){3}\d{1,3})(?::\d+)?$",
+        allow_origin_regex=r"^https?://(?:localhost|127\.0\.0\.1|(?:\d{1,3}\.){3}\d{1,3})(?::\d+)?|.*\.vercel\.app$|.*\.render\.com$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

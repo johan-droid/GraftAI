@@ -3,10 +3,8 @@ import logging
 from typing import Optional
 from msal import ConfidentialClientApplication
 from datetime import datetime
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.tables import UserTokenTable
 from backend.utils.http_client import get_client, ClientProxy
 from backend.services.integrations.token_service import ensure_valid_token
 

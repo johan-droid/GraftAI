@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, List, Mapping, Optional
 
 from sqlalchemy import select, and_

@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.models.tables import UserTable
 
 logger = logging.getLogger(__name__)
 

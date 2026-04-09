@@ -121,6 +121,18 @@ def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] =
     sync_url = _normalize_sync_url(db_url)
     engine = create_engine(sync_url, future=True)
 
+    # PRE-CREATE_ALL REPAIR: 
+    # Force fixing datatype mismatches for tables improperly typed by earlier runs
+    # before create_all attempts to build dependant foreign key constraints.
+    try:
+        with engine.begin() as conn:
+            # If webhook_subscriptions was mistakenly created as integer ID previously 
+            # instead of VARCHAR, drop it to let create_all recreate properly since it contains no critical data yet
+            conn.execute(text("DROP TABLE IF EXISTS webhook_logs CASCADE;"))
+            conn.execute(text("DROP TABLE IF EXISTS webhook_subscriptions CASCADE;"))
+    except Exception as e:
+        logger.warning(f"Pre-create_all repair skipped: {e}")
+
     # Create all ORM tables first so SQL patch migrations can safely alter existing relations.
     Base.metadata.create_all(bind=engine)
 

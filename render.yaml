@@ -2,12 +2,12 @@ services:
   # 1. GraftAI Monolith API
   - type: web
     name: graftai-monolith
-    runtime: docker
-    dockerfilePath: backend/Dockerfile
+    runtime: python
     region: oregon
     plan: starter
-    # Automatically run migrations before deployment
-    preDeployCommand: "cd backend && alembic upgrade head"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT --proxy-headers"
+    # Wait for the deploy to complete, migrations run automatically on startup via FastAPI Lifespan
     envVars:
       - key: ENV
         value: production

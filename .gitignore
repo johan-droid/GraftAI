@@ -78,6 +78,7 @@ Thumbs.db
 *.log
 *.log.*
 logs/
+backend/logs/
 
 # npm/yarn logs
 npm-debug.log*
@@ -229,6 +230,8 @@ dump.sql
 # User uploads
 uploads/
 uploads/**
+backend/uploads/
+backend/uploads/**
 temp/
 tmp/
 .tmp/
@@ -294,6 +297,7 @@ backend/audit_test.py
 backend/orig_*.txt
 backend/tmp_*.py
 backend/*_output.txt
+backend/dev_*.py
 frontend/build_log*.txt
 frontend/lint_output*.txt
 test_output.txt

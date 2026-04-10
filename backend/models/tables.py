@@ -361,7 +361,7 @@ class AuditLogTable(Base):
     failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Additional context (JSON)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
     
     # Compliance tracking
     compliance_standards: Mapped[list] = mapped_column(JSON, default=list)  # ['SOC2', 'GDPR', 'HIPAA']

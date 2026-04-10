@@ -479,7 +479,7 @@ class VideoConferenceService:
                     )
                 elif meeting.provider == "google_meet":
                     await self.http_client.delete(
-                        f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{meeting.metadata.get('google_event_id')}",
+                        f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{meeting.metadata_json.get('google_event_id')}",
                         headers={"Authorization": f"Bearer {config.access_token}"}
                     )
         except Exception:

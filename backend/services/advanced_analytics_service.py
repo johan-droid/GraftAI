@@ -337,7 +337,7 @@ class AdvancedAnalyticsService:
         # Get total revenue
         stmt = select(
             func.count(TeamBooking.id).label("total_bookings"),
-            func.sum(func.coalesce(TeamBooking.metadata["revenue"].astext.cast(Float), 0)).label("total_revenue")
+            func.sum(func.coalesce(TeamBooking.metadata_json["revenue"].astext.cast(Float), 0)).label("total_revenue")
         ).where(and_(*conditions))
         
         result = (await self.db.execute(stmt)).first()
@@ -345,7 +345,7 @@ class AdvancedAnalyticsService:
         # Get daily revenue trend
         stmt = select(
             func.date(TeamBooking.created_at).label("date"),
-            func.sum(func.coalesce(TeamBooking.metadata["revenue"].astext.cast(Float), 0)).label("revenue"),
+            func.sum(func.coalesce(TeamBooking.metadata_json["revenue"].astext.cast(Float), 0)).label("revenue"),
             func.count(TeamBooking.id).label("bookings"
             )
         ).where(and_(*conditions)).group_by(

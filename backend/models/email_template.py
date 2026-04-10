@@ -90,7 +90,7 @@ class EmailLog(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Metadata
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict)  # IP, user agent, etc.
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)  # IP, user agent, etc.
     
     __table_args__ = (
         Index('ix_email_logs_user_status', 'user_id', 'status'),

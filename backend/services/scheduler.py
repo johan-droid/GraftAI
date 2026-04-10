@@ -14,12 +14,16 @@ from backend.services.integrations.zoom import create_zoom_meeting, update_zoom_
 
 logger = logging.getLogger(__name__)
 
+
 def to_utc(dt: datetime) -> datetime:
-    if dt is None: return None
-    if dt.tzinfo is None: return pytz.UTC.localize(dt)
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return pytz.UTC.localize(dt)
     return dt.astimezone(pytz.UTC)
 
-async def _create_external_event(db: AsyncSession, user_id: str, provider: str, event_details: dict) -> Optional[dict]:
+
+async def _get_active_token(db: AsyncSession, user_id: str, provider: str) -> Optional[UserTokenTable]:
     stmt = select(UserTokenTable).where(
         and_(
             UserTokenTable.user_id == user_id,
@@ -27,17 +31,27 @@ async def _create_external_event(db: AsyncSession, user_id: str, provider: str, 
             UserTokenTable.is_active == True,
         )
     )
-    token = (await db.execute(stmt)).scalars().first()
+    return (await db.execute(stmt)).scalars().first()
+
+
+def _build_token_data(token: UserTokenTable) -> dict:
+    return {
+        "access_token": token.access_token,
+        "refresh_token": token.refresh_token,
+        "scopes": getattr(token, "scopes", None),
+    }
+
+
+async def _create_external_event(db: AsyncSession, user_id: str, provider: str, event_details: dict) -> Optional[dict]:
+    token = await _get_active_token(db, user_id, provider)
     if not token:
         return None
 
+    token_data = _build_token_data(token)
+
     try:
         if provider == "google":
-            res = await create_google_event({
-                "access_token": token.access_token,
-                "refresh_token": token.refresh_token,
-                "scopes": token.scopes if hasattr(token, "scopes") else None,
-            }, event_details)
+            res = await create_google_event(token_data, event_details)
             return {
                 "external_id": res.get("id"),
                 "meeting_url": (
@@ -45,14 +59,10 @@ async def _create_external_event(db: AsyncSession, user_id: str, provider: str, 
                     or res.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri")
                     or res.get("htmlLink")
                 ),
-                "source": "google"
+                "source": "google",
             }
         if provider == "microsoft":
-            res = await create_ms_event({
-                "access_token": token.access_token,
-                "refresh_token": token.refresh_token,
-                "scopes": token.scopes if hasattr(token, "scopes") else None,
-            }, event_details)
+            res = await create_ms_event(token_data, event_details)
             return {
                 "external_id": res.get("id"),
                 "meeting_url": (
@@ -60,26 +70,66 @@ async def _create_external_event(db: AsyncSession, user_id: str, provider: str, 
                     or res.get("onlineMeetingUrl")
                     or res.get("webLink")
                 ),
-                "source": "microsoft"
+                "source": "microsoft",
             }
         if provider == "zoom":
             res = await create_zoom_meeting(db, user_id, event_details)
             return {
                 "external_id": res.get("id"),
                 "meeting_url": res.get("join_url"),
-                "source": "zoom"
+                "source": "zoom",
             }
     except Exception as e:
         logger.error(f"External event creation failed for {provider}: {e}")
     return None
 
+
+async def _update_external_event(db: AsyncSession, user_id: str, provider: str, external_id: str, event_details: dict) -> None:
+    token = await _get_active_token(db, user_id, provider)
+    if not token:
+        logger.warning(f"No active {provider} token for user {user_id}, skipping external update")
+        return
+
+    token_data = _build_token_data(token)
+
+    try:
+        if provider == "google":
+            await update_google_event(token_data, external_id, event_details)
+        elif provider == "microsoft":
+            await update_ms_event(token_data, external_id, event_details)
+        elif provider == "zoom":
+            if external_id:
+                await update_zoom_meeting(db, user_id, external_id, event_details)
+    except Exception as e:
+        logger.error(f"External event update failed for {provider}/{external_id}: {e}")
+
+
+async def _delete_external_event(db: AsyncSession, user_id: str, provider: str, external_id: str) -> None:
+    token = await _get_active_token(db, user_id, provider)
+    if not token:
+        logger.warning(f"No active {provider} token for user {user_id}, skipping external delete")
+        return
+
+    token_data = _build_token_data(token)
+
+    try:
+        if provider == "google":
+            await delete_google_event(token_data, external_id)
+        elif provider == "microsoft":
+            await delete_ms_event(token_data, external_id)
+        elif provider == "zoom":
+            if external_id:
+                await delete_zoom_meeting(db, user_id, external_id)
+    except Exception as e:
+        logger.error(f"External event delete failed for {provider}/{external_id}: {e}")
+
+
 async def _safe_notify(db: AsyncSession, action: str, user_id: str, event: EventTable):
-    """Triggers email and in-app notifications directly."""
     try:
         user = await db.get(UserTable, user_id)
         if not user:
             return
-        
+
         recipients = [user.email]
         event_dict = {
             "id": event.id,
@@ -89,7 +139,7 @@ async def _safe_notify(db: AsyncSession, action: str, user_id: str, event: Event
             "meeting_link": event.meeting_url,
             "is_meeting": event.is_meeting,
         }
-        
+
         if action == "created":
             await notify_event_created(recipients, [], event_dict)
         elif action == "updated":
@@ -101,7 +151,6 @@ async def _safe_notify(db: AsyncSession, action: str, user_id: str, event: Event
 
 
 async def push_event_to_external_calendar(db: AsyncSession, event_id: str) -> Optional[EventTable]:
-    """Pushes a local event to the user's configured external calendar provider."""
     event = await db.get(EventTable, event_id)
     if not event or not event.meeting_provider or event.external_id:
         return event
@@ -128,20 +177,19 @@ async def push_event_to_external_calendar(db: AsyncSession, event_id: str) -> Op
 
 
 async def get_events_for_range(db: AsyncSession, user_id: str, start: datetime, end: datetime) -> List[dict]:
-    """Direct DB fetch without caching layers."""
     stmt = select(EventTable).where(
         and_(
             EventTable.user_id == user_id,
             EventTable.start_time < end,
-            EventTable.end_time > start
+            EventTable.end_time > start,
         )
     ).order_by(EventTable.start_time.asc())
-    
+
     result = await db.execute(stmt)
     events = result.scalars().all()
-    
-    # Return as simple dicts for the frontend
+
     return [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in events]
+
 
 async def create_event(
     db: AsyncSession,
@@ -151,11 +199,10 @@ async def create_event(
     perform_external: bool = True,
     notify: bool = True,
 ) -> EventTable:
-    """Synchronous-first event creation with direct conflict check."""
     user_id = event_data.get("user_id")
-    st, et = to_utc(event_data.get("start_time")), to_utc(event_data.get("end_time"))
+    st = to_utc(event_data.get("start_time"))
+    et = to_utc(event_data.get("end_time"))
 
-    # Conflict check
     conflict_stmt = select(EventTable).where(
         and_(EventTable.user_id == user_id, EventTable.start_time < et, EventTable.end_time > st)
     )
@@ -164,9 +211,10 @@ async def create_event(
 
     db_event_data = {k: v for k, v in event_data.items() if k in EventTable.__table__.columns.keys()}
     new_event = EventTable(**db_event_data)
-    new_event.start_time, new_event.end_time = st, et
+    new_event.start_time = st
+    new_event.end_time = et
     db.add(new_event)
-    await db.flush()  # Get ID
+    await db.flush()
 
     should_push_external = bool(event_data.get("is_meeting") or event_data.get("meeting_provider"))
     if perform_external and should_push_external:
@@ -197,44 +245,39 @@ async def create_event(
 
     return new_event
 
-async def update_event(db: AsyncSession, event_id: str, user_id: str, update_data: dict, background_tasks: Optional[BackgroundTasks] = None) -> Optional[EventTable]:
+
+async def update_event(
+    db: AsyncSession,
+    event_id: str,
+    user_id: str,
+    update_data: dict,
+    background_tasks: Optional[BackgroundTasks] = None,
+) -> Optional[EventTable]:
     event = await db.get(EventTable, event_id)
-    if not event or str(event.user_id) != str(user_id): return None
-    
+    if not event or str(event.user_id) != str(user_id):
+        return None
+
     for k, v in update_data.items():
-        if hasattr(event, k): setattr(event, k, v)
-    
+        if hasattr(event, k):
+            setattr(event, k, v)
+
     event.start_time = to_utc(event.start_time)
     event.end_time = to_utc(event.end_time)
-    
-    # Push update or create external event for new meeting requests
-    try:
-        if event.external_id:
-            if event.source == "google":
-                await update_google_event(db, user_id, event.external_id, update_data)
-            elif event.source == "microsoft":
-                await update_ms_event(db, user_id, event.external_id, update_data)
-            elif event.source == "zoom":
-                await update_zoom_meeting(db, user_id, event.external_id, update_data)
-        elif event.is_meeting and event.meeting_provider:
-            provider = event.meeting_provider
-            event_details = {
-                "title": event.title,
-                "description": event.description,
-                "start_time": event.start_time,
-                "end_time": event.end_time,
-                "attendees": event.attendees or [],
-                "is_meeting": True,
-            }
-            if provider == "google":
-                result = await _create_external_event(db, user_id, "google", event_details)
-            elif provider == "microsoft":
-                result = await _create_external_event(db, user_id, "microsoft", event_details)
-            elif provider == "zoom":
-                result = await _create_external_event(db, user_id, "zoom", event_details)
-            else:
-                result = None
 
+    event_details = {
+        "title": event.title,
+        "description": event.description,
+        "start_time": event.start_time,
+        "end_time": event.end_time,
+        "attendees": event.attendees or [],
+        "is_meeting": event.is_meeting,
+    }
+
+    try:
+        if event.external_id and event.source:
+            await _update_external_event(db, user_id, event.source, event.external_id, event_details)
+        elif event.is_meeting and event.meeting_provider:
+            result = await _create_external_event(db, user_id, event.meeting_provider, event_details)
             if result:
                 event.external_id = result.get("external_id")
                 event.meeting_url = result.get("meeting_url")
@@ -244,27 +287,29 @@ async def update_event(db: AsyncSession, event_id: str, user_id: str, update_dat
 
     await db.commit()
     await db.refresh(event)
-    
+
     if background_tasks:
         background_tasks.add_task(_safe_notify, db, "updated", user_id, event)
     else:
         await _safe_notify(db, "updated", user_id, event)
-        
+
     return event
 
-async def delete_event(db: AsyncSession, event_id: str, user_id: str, background_tasks: Optional[BackgroundTasks] = None) -> bool:
-    event = await db.get(EventTable, event_id)
-    if not event or str(event.user_id) != str(user_id): return False
-    
-    if event.external_id:
-        try:
-            if event.source == "google": await delete_google_event(db, user_id, event.external_id)
-            elif event.source == "microsoft": await delete_ms_event(db, user_id, event.external_id)
-            elif event.source == "zoom": await delete_zoom_meeting(db, user_id, event.external_id)
-        except Exception as e:
-            logger.error(f"External delete failed: {e}")
 
-    await _safe_notify(db, "deleted", user_id, event) # Notify before deletion
+async def delete_event(
+    db: AsyncSession,
+    event_id: str,
+    user_id: str,
+    background_tasks: Optional[BackgroundTasks] = None,
+) -> bool:
+    event = await db.get(EventTable, event_id)
+    if not event or str(event.user_id) != str(user_id):
+        return False
+
+    if event.external_id and event.source:
+        await _delete_external_event(db, user_id, event.source, event.external_id)
+
+    await _safe_notify(db, "deleted", user_id, event)
     await db.delete(event)
     await db.commit()
     return True

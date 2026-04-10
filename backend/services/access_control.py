@@ -1,25 +1,40 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.tables import UserTable
 
+
 async def check_user_role(db: AsyncSession, user_id: str, role: str) -> bool:
     """
-    Checks if a user has a specific role using the database.
-    Source of truth for Phase 1 RBAC.
+    Checks if a user has a specific role.
+    Roles are stored in user.preferences['role'] since the dedicated column was removed.
+    'admin' role is granted to users with tier='elite' as a fallback.
     """
     user = await db.get(UserTable, user_id)
     if not user:
         return False
-    
-    # Superusers always have admin access
-    if user.is_superuser:
+
+    prefs = user.preferences or {}
+    if isinstance(prefs, dict):
+        user_role = prefs.get("role", "member")
+    else:
+        user_role = "member"
+
+    if role == "admin" and user.tier in ("elite", "admin"):
         return True
-        
-    return user.role == role
+
+    return user_role == role
+
 
 async def get_user_role(db: AsyncSession, user_id: str) -> str:
-    """Retrieves the primary role of a user."""
+    """Retrieves the primary role of a user from preferences."""
     user = await db.get(UserTable, user_id)
-    return user.role if user else "member"
+    if not user:
+        return "member"
+
+    prefs = user.preferences or {}
+    if isinstance(prefs, dict):
+        return prefs.get("role", "member")
+    return "member"
+
 
 async def check_user_attribute(
     db: AsyncSession, user_id: str, attribute: str, value: str
@@ -30,6 +45,11 @@ async def check_user_attribute(
         return False
 
     attr_value = getattr(user, attribute, None)
+    if attr_value is None:
+        # Fall back to preferences dict for removed columns
+        prefs = user.preferences or {}
+        if isinstance(prefs, dict):
+            attr_value = prefs.get(attribute)
     if attr_value is None:
         return False
     return str(attr_value).lower() == str(value).lower()

@@ -34,7 +34,6 @@ except ImportError:
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
 
-# Core AI Circuit Breaker
 groq_breaker = get_breaker("groq", threshold=3, recovery_timeout=60)
 
 
@@ -118,8 +117,8 @@ def _safe_zoneinfo(name: str) -> tzinfo:
 
 
 def to_utc(dt: datetime) -> datetime:
-    """High-performance timezone normalization."""
-    if dt is None: return dt
+    if dt is None:
+        return dt
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
@@ -128,6 +127,13 @@ def to_utc(dt: datetime) -> datetime:
 @lru_cache(maxsize=1)
 def _get_utc():
     return timezone.utc
+
+
+def _get_event_attr(event: Any, key: str, default: Any = None) -> Any:
+    """Safely retrieve an attribute from either a dict or ORM object."""
+    if isinstance(event, dict):
+        return event.get(key, default)
+    return getattr(event, key, default)
 
 
 def _extract_duration_minutes(prompt: str) -> int:
@@ -199,7 +205,7 @@ def _extract_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
         start = text.find("{")
         end = text.rfind("}")
         if start != -1 and end != -1 and end > start:
-            text = text[start : end + 1]
+            text = text[start: end + 1]
 
     try:
         parsed = json.loads(text)
@@ -217,9 +223,7 @@ def _extract_title(prompt: str) -> str:
         return quoted.group(1).strip()
 
     cleaned = re.sub(r"\s+", " ", prompt).strip()
-    # Remove time markers like 8pm, 8:00, 8:30pm
     cleaned = re.sub(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b", "", cleaned, flags=re.IGNORECASE)
-    # Remove standard scheduling verbs and prepositions
     cleaned = re.sub(
         r"\b(schedule|book|add|create|meeting|call|for|at|on|today|tomorrow|next|week|month|day)\b",
         "",
@@ -292,8 +296,7 @@ def _extract_datetime(prompt: str, user_timezone: str) -> datetime:
 
 def _detect_intent(prompt: str) -> str:
     lower = prompt.lower()
-    
-    # 1. Structural matching for common phrases (optimized order)
+
     if any(k in lower for k in ["what do i have", "my schedule", "agenda", "upcoming", "this week", "today's plan", "what is on my calendar", "look like"]):
         return "list"
     if any(k in lower for k in ["schedule", "book", "create", "add", "block", "make a meeting"]):
@@ -302,11 +305,10 @@ def _detect_intent(prompt: str) -> str:
         return "delete"
     if any(k in lower for k in ["reschedule", "move", "update", "change", "shift"]):
         return "update"
-            
-    # 2. Fallback secondary phrase detection
+
     if "what is on my calendar" in lower or "show me my day" in lower:
         return "list"
-        
+
     return "none"
 
 
@@ -326,16 +328,16 @@ async def _resolve_event_id(db: AsyncSession, user_id: str, prompt: str) -> Opti
 
     try:
         def _event_start_key(event: Any) -> datetime:
-            value = getattr(event, "start_time", now)
+            value = _get_event_attr(event, "start_time", now)
             if isinstance(value, datetime):
                 return value
             return now
 
         candidate = min(events, key=_event_start_key)
-        candidate_id = getattr(candidate, "id", None)
-        if inspect.isawaitable(candidate_id):
+        candidate_id = _get_event_attr(candidate, "id")
+        if candidate_id is None:
             return None
-        return int(candidate_id) if candidate_id is not None else None
+        return int(candidate_id)
     except Exception:
         return None
 
@@ -347,20 +349,20 @@ def _format_events(events: list[Any], user_timezone: str) -> str:
     tz = _safe_zoneinfo(user_timezone)
     lines = []
     for event in events[:8]:
-        start_value = getattr(event, "start_time", None)
+        start_value = _get_event_attr(event, "start_time")
         if not isinstance(start_value, datetime):
             continue
         if start_value.tzinfo is None:
             start_value = start_value.replace(tzinfo=timezone.utc)
 
-        end_value = getattr(event, "end_time", None)
+        end_value = _get_event_attr(event, "end_time")
         if not isinstance(end_value, datetime):
             end_value = start_value + timedelta(minutes=30)
         elif end_value.tzinfo is None:
             end_value = end_value.replace(tzinfo=timezone.utc)
 
-        event_id = getattr(event, "id", "?")
-        title = getattr(event, "title", "Untitled Event")
+        event_id = _get_event_attr(event, "id", "?")
+        title = _get_event_attr(event, "title", "Untitled Event")
 
         start_local = start_value.astimezone(tz)
         end_local = end_value.astimezone(tz)
@@ -377,37 +379,32 @@ def _format_events(events: list[Any], user_timezone: str) -> str:
 def _format_events_compact(events: list[Any], user_timezone: str) -> str:
     """
     C-Table (Compact Table) format: ID|Title|Day|TimeRange
-    Optimized for LLM context injection to minimize token usage and latency.
     """
     if not events:
         return "CALENDAR_EMPTY"
-    
+
     tz = _safe_zoneinfo(user_timezone)
     rows = []
-    # Using more events (up to 20) with fewer tokens per event
     for event in events[:20]:
-        eid = getattr(event, "id", "?")
-        title_raw = getattr(event, "title", "Untitled")
-        if inspect.isawaitable(title_raw):
-            title_raw = "Untitled"
+        eid = _get_event_attr(event, "id", "?")
+        title_raw = _get_event_attr(event, "title", "Untitled")
         title = str(title_raw)[:25].strip()
 
-        start = getattr(event, "start_time", None)
-        if inspect.isawaitable(start) or not isinstance(start, datetime):
+        start = _get_event_attr(event, "start_time")
+        if not isinstance(start, datetime):
             continue
         start = to_utc(start)
         start_tz = start.astimezone(tz)
-        
-        end = getattr(event, "end_time", start + timedelta(minutes=30))
-        if inspect.isawaitable(end) or not isinstance(end, datetime):
+
+        end = _get_event_attr(event, "end_time")
+        if not isinstance(end, datetime):
             end = start + timedelta(minutes=30)
         if end.tzinfo is None:
             end = end.replace(tzinfo=timezone.utc)
         end_tz = end.astimezone(tz)
-        
-        # ID|TITLE|MON 07|09:00-10:00
+
         rows.append(f"{eid}|{title}|{start_tz.strftime('%a %d')}|{start_tz.strftime('%H:%M')}-{end_tz.strftime('%H:%M')}")
-    
+
     return "\n".join(rows)
 
 
@@ -430,7 +427,6 @@ async def _offline_assistant_response(
         )
 
     if intent == "schedule":
-        # Check platform preference
         meeting_platform = None
         if "zoom" in prompt.lower():
             meeting_platform = "zoom"
@@ -438,7 +434,7 @@ async def _offline_assistant_response(
             meeting_platform = "microsoft"
         elif "google" in prompt.lower() or "meet" in prompt.lower():
             meeting_platform = "google"
-            
+
         if not meeting_platform:
             return (
                 "Please provide the meeting details in this format to continue:\n\n"
@@ -451,18 +447,16 @@ async def _offline_assistant_response(
 
         start_time = _extract_datetime(prompt, user_timezone)
         duration = _extract_duration_minutes(prompt)
-        
-        # New: Agenda Extraction
+
         agenda = None
         agenda_match = re.search(r"agenda[:\s]+(.*?)(?:\.|$)", prompt, flags=re.IGNORECASE)
         if agenda_match:
             agenda = agenda_match.group(1).strip()
-        
-        # Use LLM for high-precision title extraction
+
         try:
             title_prompt = (
                 "Extract a concise meeting title. "
-                "If no title is clear or just 'meeting' is mentioned, returns 'Quick Sync'. "
+                "If no title is clear or just 'meeting' is mentioned, return 'Quick Sync'. "
                 "Output ONLY the title string."
             )
             title = await _generate_with_groq(title_prompt, prompt)
@@ -473,28 +467,29 @@ async def _offline_assistant_response(
         event_data = {
             "user_id": user_id,
             "title": title,
-            "agenda": agenda,
             "description": f"Agenda: {agenda}" if agenda else "Created by GraftAI Sovereign Assistant",
-            "category": "meeting",
             "start_time": start_time,
             "end_time": start_time + timedelta(minutes=duration),
+            "source": "local",
+            "fingerprint": f"ai-{start_time.timestamp()}",
             "is_meeting": True,
-            "meeting_platform": meeting_platform,
-            "status": "confirmed",
+            "meeting_provider": meeting_platform,
             "metadata_payload": {"source": "assistant_offline_engine"},
         }
 
-        # Check for conflicts
         conflicts = await scheduler.get_events_for_range(
-            db, 
-            user_id, 
-            event_data["start_time"], 
-            event_data["end_time"]
+            db,
+            user_id,
+            event_data["start_time"],
+            event_data["end_time"],
         )
-        
+
         conflict_msg = ""
         if conflicts:
-            conflict_names = ", ".join([f"'{c.title}'" for c in conflicts[:2]])
+            conflict_names = ", ".join([
+                f"'{_get_event_attr(c, 'title', 'event')}'"
+                for c in conflicts[:2]
+            ])
             conflict_msg = f"\n⚠️ NOTE: This overlaps with {conflict_names}."
 
         created = await scheduler.create_event(db, event_data)
@@ -512,7 +507,6 @@ async def _offline_assistant_response(
         event_id = await _resolve_event_id(db, user_id, prompt)
         new_start_override: Optional[datetime] = None
 
-        # Robust extraction for updates if simple resolution fails
         if not event_id or "to" in prompt.lower() or "at" in prompt.lower():
             action_hint = ""
             payload: Optional[Dict[str, Any]] = None
@@ -525,11 +519,7 @@ async def _offline_assistant_response(
                     "If a value is missing, return null for that key. "
                     "Return ONLY the JSON object."
                 )
-                action_hint = await _generate_with_groq(
-                    system_instruction,
-                    prompt,
-                    json_mode=True
-                )
+                action_hint = await _generate_with_groq(system_instruction, prompt, json_mode=True)
                 payload = _extract_json_payload(action_hint)
             except Exception as e:
                 logger.warning(f"Provider extraction unavailable for update action: {e}")
@@ -676,11 +666,6 @@ async def ai_chat(
     _usage_check: bool = Depends(check_usage_limit("ai_messages")),
     _rate_limit: bool = Depends(get_rate_limiter(max_requests=10, window_seconds=60)),
 ):
-    """
-    GraftAI Scheduler Assistant endpoint.
-    Online mode uses configured model providers.
-    Offline mode automatically executes deterministic calendar operations.
-    """
     prompt = (request.prompt or "").strip()
     if not prompt:
         return AIResponse(result="Please provide a message.", model_used="graftai-assistant")
@@ -706,7 +691,7 @@ async def ai_chat(
 
             return AIResponse(result=result_text, model_used="graftai-offline", action=action)
         case _:
-            pass # Continue to online mode
+            pass
 
     cache_key = f"ai:chat:{user_id}:{hash((prompt, request.timezone))}"
     cached = await get_cache(cache_key)
@@ -718,11 +703,10 @@ async def ai_chat(
         return AIResponse(result=cached, model_used="graftai-assistant-cache", action={"type": "none"})
 
     now = datetime.now(timezone.utc)
-    
-    # 2a. Parallel context fetching (O(1) latency boost)
+
     events_task = scheduler.get_events_for_range(db, user_id, now, now + timedelta(days=3))
     emails_task = get_recent_emails(db, user_id, limit=3)
-    
+
     try:
         events, email_items = await asyncio.gather(events_task, emails_task)
     except Exception as exc:
@@ -733,7 +717,6 @@ async def ai_chat(
         [f"- {item.get('subject', 'No subject')}" for item in email_items]
     ) or "No recent email context."
 
-    # Use Compact C-Table for LLM context to save tokens and improve extraction speed
     compact_context = _format_events_compact(events, request.timezone)
     implementation_context = build_implementation_context()
 
@@ -771,7 +754,6 @@ async def ai_chat(
     model_used = "graftai-assistant-offline"
     result_text: Optional[str] = None
 
-    # 3. Call AI with Circuit Breaker (Resilience Layer)
     try:
         result_text, selected_model = await groq_breaker(
             _generate_with_groq_response,
@@ -780,14 +762,13 @@ async def ai_chat(
         )
         model_used = f"graftai-assistant-online:{selected_model}"
     except Exception as e:
-        logger.warning(f"🚨 Groq AI is UNAVAILABLE (Circuit Tripped): {e}")
-        # Graceful Degradation Fallback: Provide immediate value even in failure
+        logger.warning(f"Groq AI is UNAVAILABLE (Circuit Tripped): {e}")
         try:
             now_local = datetime.now(_safe_zoneinfo(request.timezone))
             window_end = now_local + timedelta(hours=48)
-            events = await scheduler.get_events_for_range(db, user_id, now_local, window_end)
-            agenda = _format_events(events, request.timezone)
-            
+            fallback_events = await scheduler.get_events_for_range(db, user_id, now_local, window_end)
+            agenda = _format_events(fallback_events, request.timezone)
+
             result_text = (
                 "I'm in High-Stability mode due to a provider service outage. "
                 "I've retrieved your agenda for the next 48 hours to keep you on track:\n\n"
@@ -804,10 +785,9 @@ async def ai_chat(
 
     if not result_text:
         try:
-            # Optimised LangChain fallback with explicit message separation
             messages = [
                 SystemMessage(content=system_prompt),
-                HumanMessage(content=user_input)
+                HumanMessage(content=user_input),
             ]
             llm_response = await llm.ainvoke(messages)
             content = getattr(llm_response, "content", str(llm_response))
@@ -820,8 +800,7 @@ async def ai_chat(
     if not result_text:
         result_text = (
             "I am running in offline scheduling mode with the local assistant fallback. "
-            "You can ask me to list, schedule, update, or delete calendar events, and I will "
-            "keep the same implementation context and timezone rules in force."
+            "You can ask me to list, schedule, update, or delete calendar events."
         )
 
     await set_cache(cache_key, result_text, 120)

@@ -4,15 +4,14 @@ import inspect
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from dotenv import load_dotenv
 
-# Initialize logger
 logger = logging.getLogger(__name__)
 
-# Ensure backend/.env is loaded when app is run from project root
 if not os.environ.get("TESTING"):
     load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=False)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 AsyncSessionLocal = None
+engine = None
 
 if DATABASE_URL:
     try:
@@ -24,7 +23,6 @@ if DATABASE_URL:
         from sqlalchemy.pool import NullPool, StaticPool
 
         if DATABASE_URL.startswith("sqlite"):
-            # Keep a single connection for in-memory SQLite so metadata survives across sessions.
             sqlite_engine_kwargs = {
                 "echo": False,
                 "future": True,
@@ -45,40 +43,34 @@ if DATABASE_URL:
                 class_=AsyncSession,
             )
         else:
-            # Render & managed Postgres usually requires SSL.
-            # asyncpg does NOT support sslmode as URL query params.
             _parsed = urlparse(DATABASE_URL)
             _params = parse_qs(_parsed.query)
-            
-            # Explicit Render Detection
+
             is_render = os.getenv("RENDER") == "true" or "render.com" in DATABASE_URL
-            
+
             _needs_ssl = _params.pop("sslmode", [None])[0] in (
                 "require",
                 "verify-ca",
                 "verify-full",
                 "prefer",
             ) or is_render
-            
+
             _params.pop("channel_binding", None)
             _clean_query = urlencode({k: v[0] for k, v in _params.items()}, doseq=False)
             _clean_url = urlunparse(_parsed._replace(query=_clean_query))
- 
+
             _connect_args = {
                 "command_timeout": 30,
                 "timeout": float(os.getenv("DB_CONNECT_TIMEOUT", "30")),
-                "server_settings": {"application_name": "GraftAI-Production"}
+                "server_settings": {"application_name": "GraftAI-Production"},
             }
             if _needs_ssl:
-                # Use standard SSL context for production stability
                 _connect_args["ssl"] = "require" if is_render else True
- 
-            # Optimize for high-efficiency on low-resource (free-tier) instances
-            # Optimize for high-efficiency on production-grade instances
-            pool_size = int(os.getenv("DB_POOL_SIZE", "10")) # Increased base pool
-            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "30")) # Allow larger bursts
-            pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "110")) # Proactive reconnect for Neon
- 
+
+            pool_size = int(os.getenv("DB_POOL_SIZE", "10"))
+            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "30"))
+            pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "110"))
+
             engine = create_async_engine(
                 _clean_url,
                 echo=False,
@@ -88,7 +80,7 @@ if DATABASE_URL:
                 pool_recycle=pool_recycle,
                 pool_size=pool_size,
                 max_overflow=max_overflow,
-                pool_timeout=45, # Slightly longer wait for connections during bursts
+                pool_timeout=45,
             )
             AsyncSessionLocal = async_sessionmaker(
                 bind=engine,
@@ -96,9 +88,9 @@ if DATABASE_URL:
                 class_=AsyncSession,
             )
     except Exception as e:
-        logger.error(f"⚠ Database engine creation failed: {type(e).__name__}")
+        logger.error(f"Database engine creation failed: {type(e).__name__}")
 else:
-    logger.warning("⚠ DATABASE_URL not set — database features disabled")
+    logger.warning("DATABASE_URL not set — database features disabled")
 
 
 async def get_db():
@@ -109,10 +101,22 @@ async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
 
+
+def get_async_session_maker():
+    """Return the async session maker factory.
+
+    Used by scripts and migration helpers that need direct session access
+    outside of FastAPI dependency injection (e.g. migrate_calendar.py).
+    """
+    if AsyncSessionLocal is None:
+        raise RuntimeError(
+            "Database not configured. Set DATABASE_URL in your .env file."
+        )
+    return AsyncSessionLocal
+
+
 async def unwrap_result(value):
     """Return SQLAlchemy results uniformly across sync/async call sites."""
     if inspect.isawaitable(value):
         return await value
     return value
-
-

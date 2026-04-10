@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/consent", tags=["consent"])
 
+CONSENT_KEYS = {"analytics", "notifications", "ai_training"}
+
 
 class ConsentRequest(BaseModel):
     consent_type: str
@@ -30,13 +32,7 @@ async def set_consent(
 ):
     logger.info(f"Consent updated by user: {user_id} type={request.consent_type}")
 
-    consent_field_map = {
-        "analytics": "consent_analytics",
-        "notifications": "consent_notifications",
-        "ai_training": "consent_ai_training",
-    }
-    target_field = consent_field_map.get(request.consent_type)
-    if not target_field:
+    if request.consent_type not in CONSENT_KEYS:
         raise HTTPException(status_code=400, detail="Unsupported consent type")
 
     result = await db.execute(select(UserTable).where(UserTable.id == str(user_id)))
@@ -44,7 +40,29 @@ async def set_consent(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    setattr(user, target_field, bool(request.granted))
+    # Consent flags are stored in preferences JSON since dedicated columns were removed.
+    prefs = dict(user.preferences or {})
+    consent_key = f"consent_{request.consent_type}"
+    prefs[consent_key] = bool(request.granted)
+    user.preferences = prefs
     await db.commit()
 
     return ConsentResponse(status="updated")
+
+
+@router.get("/")
+async def get_consent(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(UserTable).where(UserTable.id == str(user_id)))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    prefs = dict(user.preferences or {})
+    return {
+        "consent_analytics": prefs.get("consent_analytics", True),
+        "consent_notifications": prefs.get("consent_notifications", True),
+        "consent_ai_training": prefs.get("consent_ai_training", False),
+    }

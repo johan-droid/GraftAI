@@ -11,24 +11,20 @@ from backend.services.integrations.ms_graph import get_ms_graph_token
 
 logger = logging.getLogger(__name__)
 
+
 async def get_recent_emails(db: AsyncSession, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
-    """
-    Retrieves recent emails from all connected providers (Google/Microsoft).
-    Used to provide context to the AI for scheduling extraction.
-    """
     emails = []
-    
-    # Fetch all active tokens for the user
+
     stmt = select(UserTokenTable).where(
         and_(
             UserTokenTable.user_id == user_id,
-            UserTokenTable.is_active == True
+            UserTokenTable.is_active == True,
         )
     )
     result = await db.execute(stmt)
     scalars = await unwrap_result(result.scalars())
     tokens = await unwrap_result(scalars.all())
-    
+
     for token in tokens:
         try:
             if token.provider == "google":
@@ -38,26 +34,24 @@ async def get_recent_emails(db: AsyncSession, user_id: str, limit: int = 5) -> L
                 ms_emails = await _fetch_outlook_recent(token, limit)
                 emails.extend(ms_emails)
         except Exception as e:
-            logger.error(f"⚠ Failed to fetch emails from {token.provider} for {user_id}: {e}")
-            
-    # Sort by date (descending) if we had actual timestamps, for now just return the combined list
+            logger.error(f"Failed to fetch emails from {token.provider} for {user_id}: {e}")
+
     return emails
 
+
 async def _fetch_gmail_recent(token: UserTokenTable, limit: int) -> List[Dict[str, Any]]:
-    """Fetch recent messages from Gmail API."""
     from googleapiclient.discovery import build
 
     token_data = {
         "access_token": token.access_token,
         "refresh_token": token.refresh_token,
-        "scopes": token.scopes
+        "scopes": getattr(token, "scopes", None),
     }
     creds = get_google_credentials(token_data)
 
     def sync_fetch() -> List[Dict[str, Any]]:
         service = build("gmail", "v1", credentials=creds)
 
-        # List recent messages
         results = service.users().messages().list(userId="me", maxResults=limit).execute()
         messages = results.get("messages", [])
 
@@ -74,49 +68,50 @@ async def _fetch_gmail_recent(token: UserTokenTable, limit: int) -> List[Dict[st
                 "subject": subject,
                 "from": sender,
                 "snippet": snippet,
-                "id": msg["id"]
+                "id": msg["id"],
             })
         return fetched_emails
 
     return await to_thread.run_sync(sync_fetch)
 
+
 async def _fetch_outlook_recent(token: UserTokenTable, limit: int) -> List[Dict[str, Any]]:
-    """Fetch recent messages from Outlook/MS Graph API."""
     token_data = {
         "access_token": token.access_token,
         "refresh_token": token.refresh_token,
-        "scopes": token.scopes
+        "scopes": getattr(token, "scopes", None),
     }
     access_token = get_ms_graph_token(token_data)
-    
+
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
-    
+
     from backend.utils.http_client import get_client
+
     client = await get_client()
-    
-    # Fetch top N messages from inbox
+
     resp = await client.get(
         f"https://graph.microsoft.com/v1.0/me/messages?$top={limit}&$select=subject,from,bodyPreview",
-        headers=headers
+        headers=headers,
     )
-    
+
     if resp.status_code != 200:
-        logger.error(f"❌ Outlook fetch error: {resp.status_code}")
+        logger.error(f"Outlook fetch error: {resp.status_code}")
         return []
-        
+
     data = resp.json()
     messages = data.get("value", [])
-    
+
     fetched_emails = []
     for msg in messages:
         fetched_emails.append({
-                "source": "outlook",
-                "subject": msg.get("subject"),
-                "from": msg.get("from", {}).get("emailAddress", {}).get("address"),
-                "snippet": msg.get("bodyPreview"),
-                "id": msg.get("id")
-            })
-        return fetched_emails
+            "source": "outlook",
+            "subject": msg.get("subject"),
+            "from": msg.get("from", {}).get("emailAddress", {}).get("address"),
+            "snippet": msg.get("bodyPreview"),
+            "id": msg.get("id"),
+        })
+
+    return fetched_emails

@@ -13,23 +13,20 @@ async def migrate_event_type_buffer_defaults(
 ) -> int:
     """Migrate existing event types to a safe buffer default value.
 
-    This is meant for old rows that predate the buffer_before_minutes/
-    buffer_after_minutes fields or whose values are NULL.
+    Sets buffer_before_minutes and buffer_after_minutes to 0 for rows that
+    predate these fields or whose values are NULL.
     """
 
-
-async def migrate(
-    db: AsyncSession,
-    batch_size: int = 100,
-) -> int:
-    """Entrypoint compatible with migration runner tests."""
-    return await migrate_event_type_buffer_defaults(db, batch_size=batch_size)
-    stmt = select(EventTypeTable).where(
-        or_(
-            EventTypeTable.buffer_before_minutes.is_(None),
-            EventTypeTable.buffer_after_minutes.is_(None),
+    stmt = (
+        select(EventTypeTable)
+        .where(
+            or_(
+                EventTypeTable.buffer_before_minutes.is_(None),
+                EventTypeTable.buffer_after_minutes.is_(None),
+            )
         )
-    ).limit(batch_size)
+        .limit(batch_size)
+    )
 
     event_types = (await db.execute(stmt)).scalars().all()
     if not event_types:
@@ -55,3 +52,11 @@ async def migrate(
         )
 
     return updated
+
+
+async def migrate(
+    db: AsyncSession,
+    batch_size: int = 100,
+) -> int:
+    """Entrypoint compatible with migration runner tests."""
+    return await migrate_event_type_buffer_defaults(db, batch_size=batch_size)

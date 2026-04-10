@@ -2,9 +2,8 @@ import logging
 import hashlib
 from pathlib import Path
 from typing import Optional
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 
-# Initialize logger
 logger = logging.getLogger(__name__)
 
 from backend.utils.db import DATABASE_URL
@@ -113,6 +112,23 @@ def _normalize_sync_url(database_url: str) -> str:
     return database_url
 
 
+def _webhook_tables_have_wrong_id_type(engine) -> bool:
+    """Check if webhook_subscriptions.id is an integer (old schema) instead of varchar."""
+    try:
+        insp = inspect(engine)
+        if "webhook_subscriptions" not in insp.get_table_names():
+            return False
+        cols = {c["name"]: c for c in insp.get_columns("webhook_subscriptions")}
+        id_col = cols.get("id")
+        if id_col is None:
+            return False
+        col_type = str(id_col["type"]).upper()
+        return "INT" in col_type and "VARCHAR" not in col_type and "TEXT" not in col_type
+    except Exception as exc:
+        logger.warning("Could not inspect webhook_subscriptions schema: %s", exc)
+        return False
+
+
 def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] = None):
     db_url = db_url or DATABASE_URL
     if not db_url:
@@ -121,17 +137,20 @@ def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] =
     sync_url = _normalize_sync_url(db_url)
     engine = create_engine(sync_url, future=True)
 
-    # PRE-CREATE_ALL REPAIR: 
-    # Force fixing datatype mismatches for tables improperly typed by earlier runs
-    # before create_all attempts to build dependant foreign key constraints.
-    try:
-        with engine.begin() as conn:
-            # If webhook_subscriptions was mistakenly created as integer ID previously 
-            # instead of VARCHAR, drop it to let create_all recreate properly since it contains no critical data yet
-            conn.execute(text("DROP TABLE IF EXISTS webhook_logs CASCADE;"))
-            conn.execute(text("DROP TABLE IF EXISTS webhook_subscriptions CASCADE;"))
-    except Exception as e:
-        logger.warning(f"Pre-create_all repair skipped: {e}")
+    # Only drop webhook tables when they exist with the wrong integer PK type from a
+    # pre-refactor schema. This is a one-time repair, not a routine drop.
+    if not sync_url.startswith("sqlite://"):
+        try:
+            if _webhook_tables_have_wrong_id_type(engine):
+                logger.warning(
+                    "webhook_subscriptions.id is integer type (legacy schema) — "
+                    "dropping and recreating with correct VARCHAR type."
+                )
+                with engine.begin() as conn:
+                    conn.execute(text("DROP TABLE IF EXISTS webhook_logs CASCADE;"))
+                    conn.execute(text("DROP TABLE IF EXISTS webhook_subscriptions CASCADE;"))
+        except Exception as exc:
+            logger.warning("Pre-create_all repair check failed (non-fatal): %s", exc)
 
     # Create all ORM tables first so SQL patch migrations can safely alter existing relations.
     Base.metadata.create_all(bind=engine)

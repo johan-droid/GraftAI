@@ -342,7 +342,7 @@ async def _refresh_calendar_events_if_needed(db: AsyncSession, user: UserTable) 
     try:
         await sync_user_calendar(db, user.id)
     except Exception as exc:
-        print(f"[Calendar Refresh] failed for {user.id}: {exc}")
+        logger.warning(f"[Calendar Refresh] failed for {user.id}: {exc}")
 
 
 def _minimum_notice_cutoff(minimum_notice_minutes: Optional[int]) -> datetime:
@@ -362,12 +362,17 @@ async def _build_available_slots(
     if event_type.recurrence_rule:
         day_start_local = organizer_tz.localize(datetime(day.year, day.month, day.day, 0, 0))
         day_end_local = day_start_local + timedelta(days=1)
-        recurring_occurrences = await _expand_recurring_availability(
-            event_type,
-            day_start_local.astimezone(pytz.UTC),
-            day_end_local.astimezone(pytz.UTC),
-            limit_slots=512,
-        )
+        # _expand_recurring_availability is a sync function — no await
+        try:
+            recurring_occurrences = _expand_recurring_availability(
+                event_type,
+                day_start_local.astimezone(pytz.UTC),
+                day_end_local.astimezone(pytz.UTC),
+                limit_slots=512,
+            )
+        except Exception as exc:
+            logger.warning("Recurrence expansion failed for event_type=%s: %s", event_type.id, exc)
+            recurring_occurrences = []
         if not recurring_occurrences:
             return []
 
@@ -651,12 +656,6 @@ async def delete_event_type_team_member(db: AsyncSession, user_id: str, event_ty
     return False
 
 
-def _localize_window(date: datetime, tz: pytz.BaseTzInfo) -> (datetime, datetime):
-    local_start = tz.localize(datetime(date.year, date.month, date.day, 9, 0))
-    local_end = tz.localize(datetime(date.year, date.month, date.day, 18, 0))
-    return local_start.astimezone(pytz.UTC), local_end.astimezone(pytz.UTC)
-
-
 async def list_available_slots(
     db: AsyncSession,
     user: UserTable,
@@ -682,8 +681,6 @@ async def list_monthly_availability(
     cache_key = f"availability:{user.id}:{event_type.slug or event_type.id}:{month}:{time_zone or 'default'}"
     cached = await get_cache(cache_key)
     if cached is not None:
-        # Warm the calendar sync in the background when a cached result is reused.
-        asyncio.create_task(_refresh_calendar_events_if_needed(db, user))
         return cached
 
     availability = await _build_availability_for_month(db, user, event_type, year, month_number, time_zone)

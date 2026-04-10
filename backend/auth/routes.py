@@ -26,6 +26,7 @@ from backend.utils.rate_limit import rate_limit, api_limits
 
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "https://www.graftai.tech")).rstrip("/")
 
+
 def _frontend_redirect_token(access_token: str, redirect_to: str = "/dashboard"):
     return f"{FRONTEND_BASE_URL}/auth-callback?access_token={quote_plus(access_token)}&redirect={quote_plus(redirect_to)}"
 
@@ -46,10 +47,10 @@ def _parse_oauth_state(state: str) -> tuple[Optional[str], str]:
             redirect_to = unquote_plus(parts[2]) or "/dashboard"
     return user_id, redirect_to
 
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Authentication"])
 
-# Configuration
 from backend.auth.config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ACCESS_TOKEN_TYPE,
@@ -58,6 +59,7 @@ from backend.auth.config import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     SECRET_KEY,
 )
+
 
 def _create_jwt_token_impl(user_id: str, token_type: str):
     now = datetime.now(timezone.utc)
@@ -128,8 +130,8 @@ def _set_auth_cookies(response: Optional[Response], access_token: str, refresh_t
 
     is_production = os.getenv("ENV", "development") == "production"
     secure = is_production
-    samesite = "none" if is_production else "lax"  # 'none' required for cross-origin in production
-    
+    samesite = "none" if is_production else "lax"
+
     cookie_kwargs = {
         "httponly": True,
         "samesite": samesite,
@@ -145,13 +147,6 @@ def _set_auth_cookies(response: Optional[Response], access_token: str, refresh_t
     response.set_cookie("graftai_refresh_token", refresh_token, **refresh_cookie_kwargs)
 
 
-async def _get_user_from_token(token: str, db: AsyncSession):
-    payload = _decode_jwt_token(token, expected_type=ACCESS_TOKEN_TYPE)
-    stmt = select(UserTable).where(UserTable.id == payload["sub"])
-    user = (await db.execute(stmt)).scalars().first()
-    return user
-
-
 def _build_token_response(access_token: str, refresh_token: str):
     return {
         "message": "Login successful",
@@ -160,33 +155,35 @@ def _build_token_response(access_token: str, refresh_token: str):
         "refresh_token": refresh_token,
     }
 
+
 import re
+
 
 class UserRegisterSchema(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    
-    @field_validator('password')
+
+    @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
         if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
-        if not re.search(r'[a-z]', v):
-            raise ValueError('Password must contain at least one lowercase letter')
-        if not re.search(r'[A-Z]', v):
-            raise ValueError('Password must contain at least one uppercase letter')
-        if not re.search(r'\d', v):
-            raise ValueError('Password must contain at least one number')
+            raise ValueError("Password must be at least 8 characters long")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one number")
         return v
-    
-    @field_validator('full_name')
+
+    @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v: str) -> str:
         if not v or len(v.strip()) < 2:
-            raise ValueError('Full name must be at least 2 characters long')
+            raise ValueError("Full name must be at least 2 characters long")
         if len(v) > 100:
-            raise ValueError('Full name must be less than 100 characters')
+            raise ValueError("Full name must be less than 100 characters")
         return v.strip()
 
 
@@ -195,26 +192,20 @@ class EmailVerificationSchema(BaseModel):
     code: str
 
 
-# --- Helper Functions ---
-
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# --- Standard Email/Password Auth ---
 
 @router.post("/register")
 async def register_user(user: UserRegisterSchema, request: Request, db: AsyncSession = Depends(get_db)):
-    """Register a new user with email and password."""
-    # Rate limiting by IP
     client_ip = request.client.host if request.client else "unknown"
     await rate_limit(client_ip, api_limits["register"])
-    
-    # Normalize email
+
     email = user.email.lower().strip()
-    
+
     stmt = select(UserTable).where(UserTable.email == email)
     existing_user = (await db.execute(stmt)).scalars().first()
 
@@ -309,14 +300,12 @@ async def resend_verification(payload: dict, db: AsyncSession = Depends(get_db))
 
 
 async def _authenticate_user(form_data: OAuth2PasswordRequestForm, db: AsyncSession) -> UserTable:
-    # Normalize email for lookup
     email = form_data.username.lower().strip()
-    
+
     stmt = select(UserTable).where(UserTable.email == email)
     user = (await db.execute(stmt)).scalars().first()
-    
+
     if not user:
-        # Use constant-time comparison to prevent timing attacks
         logger.warning(f"Failed login attempt for non-existent user: {email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -330,7 +319,7 @@ async def _authenticate_user(form_data: OAuth2PasswordRequestForm, db: AsyncSess
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Email address is not verified. Please verify your email before signing in.",
         )
-    
+
     if not user.hashed_password:
         logger.error(f"User {email} has no password set")
         raise HTTPException(
@@ -338,7 +327,7 @@ async def _authenticate_user(form_data: OAuth2PasswordRequestForm, db: AsyncSess
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not verify_password(form_data.password, user.hashed_password):
         logger.warning(f"Failed login attempt for user: {email}")
         raise HTTPException(
@@ -346,9 +335,10 @@ async def _authenticate_user(form_data: OAuth2PasswordRequestForm, db: AsyncSess
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     logger.info(f"Successful login for user: {email}")
     return user
+
 
 @router.get("/integrations/status")
 async def integration_status(
@@ -373,6 +363,7 @@ async def integration_status(
         }
     }
 
+
 @router.post("/token", response_model=None)
 async def token(
     request: Request,
@@ -380,16 +371,15 @@ async def token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    """Standard OAuth2 token endpoint."""
-    # Rate limiting by IP
     client_ip = request.client.host if request.client else "unknown"
     await rate_limit(client_ip, api_limits["login"])
-    
+
     user = await _authenticate_user(form_data, db)
     access_token = _create_access_token(user.id)
     refresh_token = _create_refresh_token(user.id)
     _set_auth_cookies(response, access_token, refresh_token)
     return _build_token_response(access_token, refresh_token)
+
 
 @router.post("/login", response_model=None)
 async def login(
@@ -398,8 +388,16 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    """Legacy login route kept for compatibility."""
-    return await token(request, form_data, db, response)
+    """Legacy login route kept for compatibility — delegates to /token logic directly."""
+    client_ip = request.client.host if request.client else "unknown"
+    await rate_limit(client_ip, api_limits["login"])
+
+    user = await _authenticate_user(form_data, db)
+    access_token = _create_access_token(user.id)
+    refresh_token = _create_refresh_token(user.id)
+    _set_auth_cookies(response, access_token, refresh_token)
+    return _build_token_response(access_token, refresh_token)
+
 
 @router.get("/check")
 async def check(
@@ -407,7 +405,6 @@ async def check(
     token: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Validate an access token and return the current session."""
     bearer = None
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.lower().startswith("bearer "):
@@ -450,6 +447,7 @@ async def check(
         },
     }
 
+
 @router.post("/refresh", response_model=None)
 async def refresh(
     request: Request,
@@ -457,7 +455,6 @@ async def refresh(
     refresh_token: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Rotate refresh token and issue a new access token."""
     token_value = refresh_token or request.query_params.get("refresh_token") or request.cookies.get("graftai_refresh_token")
     if not token_value:
         raise HTTPException(
@@ -476,15 +473,16 @@ async def refresh(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = _create_access_token(user.id)
-    refresh_token = _create_refresh_token(user.id)
-    _set_auth_cookies(response, access_token, refresh_token)
+    new_access_token = _create_access_token(user.id)
+    new_refresh_token = _create_refresh_token(user.id)
+    _set_auth_cookies(response, new_access_token, new_refresh_token)
     return {
         "message": "Token refreshed successfully",
-        "access_token": access_token,
+        "access_token": new_access_token,
         "token_type": "bearer",
-        "refresh_token": refresh_token,
+        "refresh_token": new_refresh_token,
     }
+
 
 @router.post("/logout", response_model=None)
 async def logout(response: Response):
@@ -492,7 +490,6 @@ async def logout(response: Response):
     response.delete_cookie("graftai_refresh_token", path="/")
     return {"message": "Logged out"}
 
-# --- Google OAuth ---
 
 @router.get("/google/login")
 async def google_login(
@@ -500,7 +497,6 @@ async def google_login(
     redirect_to: Optional[str] = "/dashboard",
     force_consent: bool = False,
 ):
-    """Starts Google OAuth flow. Can take an optional JWT to link to an existing user."""
     try:
         user_id = None
         if token:
@@ -518,38 +514,30 @@ async def google_login(
         return RedirectResponse(url=auth_url)
     except ValueError as e:
         logger.error(f"Google OAuth Configuration Error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.get("/google/callback")
 async def google_callback(request: Request, code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    """Handles Google callback and upserts tokens."""
-    # Rate limiting by IP
     client_ip = request.client.host if request.client else "unknown"
     await rate_limit(client_ip, api_limits["oauth_callback"])
-    
+
     try:
-        # 1. Validate state parameter to prevent CSRF
         if not state:
             logger.error("Google callback missing state parameter")
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
-        
-        # 2. Parse state to find who this belongs to
+
         user_id, redirect_to = _parse_oauth_state(state)
 
         data = await google_auth.fetch_google_tokens(code)
         email = data.get("email")
-        
+
         if not email:
             logger.error("Google OAuth returned no email")
             raise HTTPException(status_code=400, detail="Failed to retrieve email from Google")
-        
-        # Normalize email
+
         email = email.lower().strip()
-        
-        # 3. Fetch or Create User (State user_id takes priority)
+
         if user_id:
             result = await db.execute(select(UserTable).where(UserTable.id == user_id))
             user = result.scalars().first()
@@ -558,7 +546,6 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             user = result.scalars().first()
 
         if not user:
-            # Only create NEW user if we didn't come from a "Connect" flow
             user = UserTable(
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
@@ -575,37 +562,36 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             user.email_verification_code = None
             user.email_verification_expires_at = None
 
-        # 4. Upsert Tokens
         token_info = data.get("token", {})
         if not token_info.get("access_token"):
             logger.error("Google OAuth returned no access token")
             raise HTTPException(status_code=400, detail="Failed to retrieve access token")
-        
+
         stmt = select(UserTokenTable).where(
-            UserTokenTable.user_id == user.id, 
-            UserTokenTable.provider == "google"
+            UserTokenTable.user_id == user.id,
+            UserTokenTable.provider == "google",
         )
         user_token = (await db.execute(stmt)).scalars().first()
-        
+
         if not user_token:
             user_token = UserTokenTable(user_id=user.id, provider="google")
             db.add(user_token)
-        
+
         user_token.access_token = token_info["access_token"]
         user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
         user_token.expires_at = (
-            datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc) 
-            if "expires_at" in token_info else None
+            datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
+            if "expires_at" in token_info
+            else None
         )
         user_token.is_active = True
-        
+
         await db.commit()
         logger.info(f"Google OAuth successful for user: {email}")
-        
-        # 5. Finalize Login
+
         access_token = create_access_token(data={"sub": user.id})
         return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
-        
+
     except ValueError as e:
         logger.error(f"Google OAuth Configuration Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -616,22 +602,17 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         await db.rollback()
         error_msg = str(e)
         if "invalid_request" in error_msg or "unauthorized_client" in error_msg:
-            raise HTTPException(
-                status_code=400,
-                detail="Google OAuth configuration error. Please contact support."
-            )
+            raise HTTPException(status_code=400, detail="Google OAuth configuration error. Please contact support.")
         raise HTTPException(status_code=500, detail="Authentication failed")
+
 
 @router.post("/sync-timezone")
 async def sync_timezone(payload: dict):
-    """Keep the user's timezone preference in sync.
-
-    This is a lightweight endpoint for frontend sync requests.
-    """
-    timezone = payload.get("timezone")
-    if not timezone:
+    tz = payload.get("timezone")
+    if not tz:
         raise HTTPException(status_code=400, detail="Missing timezone")
-    return {"status": "updated", "timezone": timezone}
+    return {"status": "updated", "timezone": tz}
+
 
 @router.get("/sso/start")
 async def sso_start(
@@ -639,7 +620,6 @@ async def sso_start(
     redirect_to: Optional[str] = "/dashboard",
     token: Optional[str] = None,
 ):
-    """Start a generic SSO connection flow for the given provider."""
     provider = provider.lower()
     if get_provider_config(provider) is None:
         raise HTTPException(status_code=400, detail="Unsupported SSO provider")
@@ -656,11 +636,9 @@ async def sso_start(
 
     return RedirectResponse(url=target_url)
 
-# --- Microsoft OAuth ---
 
 @router.get("/microsoft/login")
 async def microsoft_login(token: Optional[str] = None, redirect_to: Optional[str] = "/dashboard"):
-    """Starts Microsoft OAuth flow. Can take an optional JWT to link to an existing user."""
     try:
         user_id = None
         if token:
@@ -669,44 +647,36 @@ async def microsoft_login(token: Optional[str] = None, redirect_to: Optional[str
                 user_id = payload.get("sub")
             except Exception:
                 pass
-                
+
         state = _build_oauth_state(user_id, redirect_to)
         auth_url = await microsoft_auth.get_microsoft_auth_url(state)
         return RedirectResponse(url=auth_url)
     except ValueError as e:
         logger.error(f"Microsoft OAuth Configuration Error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.get("/microsoft/callback")
 async def microsoft_callback(request: Request, code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    """Handles Microsoft callback and upserts tokens."""
-    # Rate limiting by IP
     client_ip = request.client.host if request.client else "unknown"
     await rate_limit(client_ip, api_limits["oauth_callback"])
-    
+
     try:
-        # 1. Validate state parameter
         if not state:
             logger.error("Microsoft callback missing state parameter")
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
-        
-        # 2. Parse state
+
         user_id, redirect_to = _parse_oauth_state(state)
 
         data = await microsoft_auth.fetch_microsoft_tokens(code)
         email = data.get("email")
-        
+
         if not email:
             logger.error("Microsoft OAuth returned no email")
             raise HTTPException(status_code=400, detail="Failed to retrieve email from Microsoft")
-        
-        # Normalize email
+
         email = email.lower().strip()
-        
-        # 3. Fetch or Create User
+
         if user_id:
             result = await db.execute(select(UserTable).where(UserTable.id == user_id))
             user = result.scalars().first()
@@ -731,36 +701,36 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
             user.email_verification_code = None
             user.email_verification_expires_at = None
 
-        # 4. Upsert Tokens
         token_info = data.get("token", {})
         if not token_info.get("access_token"):
             logger.error("Microsoft OAuth returned no access token")
             raise HTTPException(status_code=400, detail="Failed to retrieve access token")
-        
+
         stmt = select(UserTokenTable).where(
-            UserTokenTable.user_id == user.id, 
-            UserTokenTable.provider == "microsoft"
+            UserTokenTable.user_id == user.id,
+            UserTokenTable.provider == "microsoft",
         )
         user_token = (await db.execute(stmt)).scalars().first()
-        
+
         if not user_token:
             user_token = UserTokenTable(user_id=user.id, provider="microsoft")
             db.add(user_token)
-        
+
         user_token.access_token = token_info["access_token"]
         user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
         user_token.expires_at = (
-            datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc) 
-            if "expires_at" in token_info else None
+            datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
+            if "expires_at" in token_info
+            else None
         )
         user_token.is_active = True
-        
+
         await db.commit()
         logger.info(f"Microsoft OAuth successful for user: {email}")
-        
+
         access_token = create_access_token(data={"sub": user.id})
         return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
-        
+
     except ValueError as e:
         logger.error(f"Microsoft OAuth Configuration Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -771,16 +741,12 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         await db.rollback()
         error_msg = str(e)
         if "AADSTS" in error_msg or "unauthorized_client" in error_msg:
-            raise HTTPException(
-                status_code=400,
-                detail="Microsoft OAuth configuration error. Please contact support."
-            )
+            raise HTTPException(status_code=400, detail="Microsoft OAuth configuration error. Please contact support.")
         raise HTTPException(status_code=500, detail="Authentication failed")
 
 
 @router.get("/zoom/login")
 async def zoom_login(token: Optional[str] = None, redirect_to: Optional[str] = "/dashboard"):
-    """Starts Zoom OAuth flow. Can take an optional JWT to link to an existing user."""
     try:
         user_id = None
         if token:
@@ -795,15 +761,11 @@ async def zoom_login(token: Optional[str] = None, redirect_to: Optional[str] = "
         return RedirectResponse(url=auth_url)
     except ValueError as e:
         logger.error(f"Zoom OAuth Configuration Error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/zoom/callback")
 async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    """Handles Zoom callback and upserts tokens."""
     try:
         user_id, redirect_to = _parse_oauth_state(state or "")
 
@@ -842,7 +804,11 @@ async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession
 
         user_token.access_token = token_info["access_token"]
         user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
-        user_token.expires_at = datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc) if "expires_at" in token_info else None
+        user_token.expires_at = (
+            datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
+            if "expires_at" in token_info
+            else None
+        )
 
         await db.commit()
         access_token = create_access_token(data={"sub": user.id})

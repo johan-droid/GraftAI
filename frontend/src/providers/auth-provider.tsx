@@ -14,15 +14,24 @@ interface User {
   created_at?: string;
 }
 
+interface AuthResult {
+  error?: { message: string } | null;
+  data?: User | null;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  register: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  login: async () => ({ error: { message: 'Auth not initialized' } }),
+  register: async () => ({ error: { message: 'Auth not initialized' } }),
   logout: () => {},
 });
 
@@ -63,6 +72,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, [pathname, router]);
 
+  const login = async (email: string, password: string): Promise<AuthResult> => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        return { error: { message: error.detail || 'Login failed' } };
+      }
+      
+      const data = await response.json();
+      localStorage.setItem('token', data.access_token);
+      setUser(data.user);
+      return { data: data.user };
+    } catch (error) {
+      return { error: { message: 'Network error. Please try again.' } };
+    }
+  };
+
+  const register = async (name: string, email: string, password: string): Promise<AuthResult> => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        return { error: { message: error.detail || 'Registration failed' } };
+      }
+      
+      const data = await response.json();
+      localStorage.setItem('token', data.access_token);
+      setUser(data.user);
+      return { data: data.user };
+    } catch (error) {
+      return { error: { message: 'Network error. Please try again.' } };
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem("token");
     setUser(null);
@@ -79,10 +132,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export const useAuth = () => useContext(AuthContext);
+export const useAuthContext = useAuth;

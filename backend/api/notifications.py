@@ -15,12 +15,12 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 class NotificationResponse(BaseModel):
-    id: int
+    id: str
     user_id: str
     type: str
     title: str
-    body: str | None = None
-    data: dict | None = None
+    body: Optional[str] = None
+    data: Optional[dict] = None
     is_read: bool
     created_at: datetime
 
@@ -35,9 +35,20 @@ async def list_notifications(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    stmt = select(NotificationTable).where(NotificationTable.user_id == user_id).order_by(NotificationTable.created_at.desc()).limit(limit)
     if unread_only:
-        stmt = select(NotificationTable).where(NotificationTable.user_id == user_id, NotificationTable.is_read == False).order_by(NotificationTable.created_at.desc()).limit(limit)
+        stmt = (
+            select(NotificationTable)
+            .where(NotificationTable.user_id == user_id, NotificationTable.is_read == False)
+            .order_by(NotificationTable.created_at.desc())
+            .limit(limit)
+        )
+    else:
+        stmt = (
+            select(NotificationTable)
+            .where(NotificationTable.user_id == user_id)
+            .order_by(NotificationTable.created_at.desc())
+            .limit(limit)
+        )
 
     result = await db.execute(stmt)
     rows = result.scalars().all()
@@ -49,7 +60,11 @@ async def mark_all_read(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    stmt = update(NotificationTable).where(NotificationTable.user_id == user_id, NotificationTable.is_read == False).values(is_read=True)
+    stmt = (
+        update(NotificationTable)
+        .where(NotificationTable.user_id == user_id, NotificationTable.is_read == False)
+        .values(is_read=True)
+    )
     await db.execute(stmt)
     await db.commit()
     return {"status": "ok"}
@@ -57,12 +72,15 @@ async def mark_all_read(
 
 @router.patch("/{notification_id}")
 async def mark_notification(
-    notification_id: int,
+    notification_id: str,
     is_read: bool = True,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    stmt = select(NotificationTable).where(NotificationTable.id == notification_id, NotificationTable.user_id == user_id)
+    stmt = select(NotificationTable).where(
+        NotificationTable.id == notification_id,
+        NotificationTable.user_id == user_id,
+    )
     result = await db.execute(stmt)
     notif = result.scalars().first()
     if not notif:
@@ -77,11 +95,14 @@ async def mark_notification(
 
 @router.delete("/{notification_id}")
 async def delete_notification(
-    notification_id: int,
+    notification_id: str,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    stmt = select(NotificationTable).where(NotificationTable.id == notification_id, NotificationTable.user_id == user_id)
+    stmt = select(NotificationTable).where(
+        NotificationTable.id == notification_id,
+        NotificationTable.user_id == user_id,
+    )
     result = await db.execute(stmt)
     notif = result.scalars().first()
     if not notif:

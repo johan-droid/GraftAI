@@ -8,7 +8,6 @@ from typing import Optional, Any, Dict
 from zoneinfo import ZoneInfo
 from functools import lru_cache
 
-import inspect
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -40,7 +40,6 @@ Thumbs.db
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-.vscode/
 *.code-workspace
 
 # JetBrains IDEs (PyCharm, IntelliJ, etc.)
@@ -162,7 +161,6 @@ coverage.xml
 # Dependencies
 node_modules/
 **/node_modules/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 bun.lockb

@@ -1,3 +1,5 @@
+'use client';
+
 import { Box, Button, Container, Typography, Grid, Card, CardContent, AppBar, Toolbar } from '@mui/material';
 import { motion } from 'framer-motion';
 import Link from 'next/link';

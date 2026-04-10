@@ -385,7 +385,6 @@ def create_app() -> FastAPI:
     from backend.routes.calendar_routes import router as calendar_integration_router
     from backend.routes.gdpr_routes import router as gdpr_router
     from backend.api.team_routes import router as team_router
-    from backend.api.analytics_routes import router as analytics_router
     from backend.api.api_key_routes import router as api_key_router
     from backend.api.integration_routes import router as integration_router
     from backend.api.email_template_routes import router as email_template_router

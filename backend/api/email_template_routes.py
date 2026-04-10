@@ -9,14 +9,14 @@ This module provides endpoints for:
 """
 
 from typing import List, Optional, Dict
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc
+from sqlalchemy import select, and_
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable
-from backend.models.email_template import EmailTemplate, EmailLog
+from backend.models.email_template import EmailTemplate
 from backend.services.email_template_service import EmailTemplateService
 
 router = APIRouter(prefix="/email-templates", tags=["email-templates"])

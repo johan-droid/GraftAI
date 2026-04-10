@@ -2,7 +2,7 @@
 import os
 import jwt
 import requests
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend

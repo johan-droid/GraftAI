@@ -1,13 +1,12 @@
 """API routes for audit log access."""
-from typing import List, Optional
+from typing import List
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select
 from backend.auth.schemes import get_current_user_id
 from backend.utils.db import get_db
-from backend.utils.audit_logger import AuditLogger, EventCategory, Severity
 from backend.models.tables import AuditLogTable
 
 router = APIRouter(prefix="/api/v1/audit", tags=["Audit Logs"])

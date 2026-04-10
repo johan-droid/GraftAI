@@ -7,7 +7,7 @@ import io
 import logging
 import secrets
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import List
 
 import pyotp
 import qrcode

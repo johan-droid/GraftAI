@@ -23,20 +23,16 @@ Example Usage:
     print(meeting.host_url)   # URL for host to start
 """
 
-import json
-import base64
-import hashlib
 import secrets
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from backend.models.video_conference import (
     VideoConferenceConfig, VideoConferenceMeeting, 
-    VideoConferenceRecording, VideoConferenceProvider
+    VideoConferenceRecording
 )
 
 

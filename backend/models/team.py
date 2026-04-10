@@ -7,8 +7,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from .base import Base
+
+if TYPE_CHECKING:
+    from backend.models.resource import Resource
+    from backend.models.automation import AutomationRule
+    from backend.models.tables import UserTable
 
 import uuid
 

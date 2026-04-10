@@ -81,6 +81,10 @@ services:
         value: production
       - key: SENTRY_TRACES_SAMPLE_RATE
         value: "0.1"
+      
+      # Security Alerts (Slack/Discord Webhook - Optional)
+      - key: SECURITY_WEBHOOK_URL
+        sync: false
 
 # Note: Redis must be created manually in Render Dashboard
 # Then add REDIS_URL environment variable to this service

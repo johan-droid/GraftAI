@@ -6,7 +6,7 @@ Supports multiple email formats and meeting request patterns.
 """
 
 import re
-from typing import Dict, List, Optional, Any
+from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from enum import Enum

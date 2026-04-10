@@ -26,15 +26,12 @@ Example Usage:
 
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, timezone
-from collections import defaultdict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, extract, desc
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import select, func, and_, extract, desc, Float
 
-from backend.models.team import Team, TeamMember, TeamBooking
+from backend.models.team import TeamMember, TeamBooking
 from backend.models.resource import Resource, ResourceBooking
-from backend.models.tables import BookingTable, UserTable, EventTypeTable
-from backend.models.analytics import AnalyticsEvent
+from backend.models.tables import UserTable
 
 
 class AdvancedAnalyticsService:

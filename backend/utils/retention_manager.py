@@ -2,10 +2,9 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update, text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from backend.models.dsr import DataRetentionSchedule
 from backend.models.tables import EventTable, BookingTable, UserTokenTable, UserTable
@@ -224,7 +223,6 @@ class DataRetentionManager:
     
     async def get_data_inventory(self, db: AsyncSession) -> Dict[str, Any]:
         """Generate data inventory for GDPR Article 30 RoPA."""
-        from backend.models.tables import EventTable, BookingTable, UserTokenTable
         
         # Count records in each table
         event_count = (await db.execute(select(text("COUNT(*) FROM events")))).scalar() or 0

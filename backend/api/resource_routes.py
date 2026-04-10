@@ -1,16 +1,16 @@
 """API routes for resource booking (rooms, equipment, etc.)."""
 
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func, desc
+from sqlalchemy import select, and_, or_, desc
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable
-from backend.models.resource import Resource, ResourceBooking, ResourceType
-from backend.models.team import Team, TeamMember, TeamRole
+from backend.models.resource import Resource, ResourceBooking
+from backend.models.team import TeamMember, TeamRole
 
 router = APIRouter(prefix="/resources", tags=["resources"])
 

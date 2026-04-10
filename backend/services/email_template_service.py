@@ -29,6 +29,7 @@ Example Usage:
     )
 """
 
+import logging
 import re
 import html
 from typing import Dict, Tuple, Optional, List
@@ -38,7 +39,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from backend.models.email_template import EmailTemplate, EmailLog
-from backend.models.tables import UserTable
+
+logger = logging.getLogger(__name__)
 
 
 class EmailTemplateService:
@@ -550,10 +552,10 @@ class EmailTemplateService:
         
         stats = {
             "total": len(logs),
-            "sent": len([l for l in logs if l.status == "sent"]),
-            "delivered": len([l for l in logs if l.status == "delivered"]),
-            "opened": len([l for l in logs if l.opened_at]),
-            "failed": len([l for l in logs if l.status == "failed"]),
+            "sent": len([log_item for log_item in logs if log_item.status == "sent"]),
+            "delivered": len([log_item for log_item in logs if log_item.status == "delivered"]),
+            "opened": len([log_item for log_item in logs if log_item.opened_at]),
+            "failed": len([log_item for log_item in logs if log_item.status == "failed"]),
             "open_rate": 0,
             "period_days": days
         }

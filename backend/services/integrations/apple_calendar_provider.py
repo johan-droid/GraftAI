@@ -1,5 +1,5 @@
 """Apple Calendar sync provider for the calendar sync system."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
 from backend.services.integrations.calendar_provider import CalendarSyncProvider
@@ -40,7 +40,7 @@ class AppleCalendarSyncProvider(CalendarSyncProvider):
         if sync_token:
             try:
                 last_sync = datetime.fromisoformat(sync_token)
-            except:
+            except ValueError:
                 last_sync = datetime.utcnow() - timedelta(days=30)
         else:
             last_sync = datetime.utcnow() - timedelta(days=30)

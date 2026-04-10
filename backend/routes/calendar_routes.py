@@ -1,6 +1,5 @@
 """Calendar integration routes for connecting external calendars."""
 
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +7,7 @@ from sqlalchemy import select
 
 from backend.auth.schemes import get_current_user_id
 from backend.utils.db import get_db
-from backend.models.tables import UserTokenTable, UserTable
+from backend.models.tables import UserTokenTable
 
 router = APIRouter(prefix="/api/v1/calendar", tags=["Calendar Integration"])
 

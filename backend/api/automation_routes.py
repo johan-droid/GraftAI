@@ -9,7 +9,7 @@ from sqlalchemy import select, and_, desc
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable
-from backend.models.automation import AutomationRule, AutomationExecution, AutomationTemplate, AutomationRuleType
+from backend.models.automation import AutomationRule, AutomationExecution, AutomationTemplate
 
 router = APIRouter(prefix="/automation", tags=["automation"])
 

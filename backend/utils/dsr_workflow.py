@@ -3,19 +3,16 @@
 import secrets
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
-from enum import Enum
+from typing import Dict, Any, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, delete, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import select, delete, update
 
 from backend.models.dsr import (
-    DSRRecord, DSRType, DSRStatus, DSRAuditLog, 
-    DataRetentionSchedule, ConsentRecord, DataBreachRecord
+    DSRRecord, DSRType, DSRStatus, DSRAuditLog
 )
 from backend.models.tables import UserTable, EventTable, BookingTable, UserTokenTable
-from backend.utils.audit_logger import AuditLogger, EventType, EventCategory, Action, Result
+from backend.utils.audit_logger import AuditLogger, Action
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,6 @@
 from passlib.context import CryptContext
 import re
 import hashlib
-import hmac
 from typing import Set
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

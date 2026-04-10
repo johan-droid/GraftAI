@@ -1,13 +1,10 @@
 """Apple iCloud Calendar integration via CalDAV."""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Dict, Any, Optional
-from urllib.parse import urlparse
 
 import caldav
-from caldav.elements import dav, cdav
 
-from backend.services.apple_auth import refresh_apple_token
 
 logger = logging.getLogger(__name__)
 

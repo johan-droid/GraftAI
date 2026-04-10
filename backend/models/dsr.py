@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Dict, Any, List
 
 from sqlalchemy import Column, String, DateTime, Text, JSON, Enum as SQLEnum, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
@@ -78,7 +77,7 @@ class DSRRecord(Base):
     @property
     def is_overdue(self) -> bool:
         """Check if request is past deadline."""
-        if self.status in [DSRStatus.COMPLETED, DSREcho.REJECTED, DSRStatus.CANCELLED]:
+        if self.status in [DSRStatus.COMPLETED, DSRStatus.REJECTED, DSRStatus.CANCELLED]:
             return False
         return datetime.utcnow() > self.deadline_at
     

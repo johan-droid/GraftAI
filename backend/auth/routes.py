@@ -187,7 +187,6 @@ from backend.auth.config import (
     ALGORITHM,
     REFRESH_TOKEN_TYPE,
     REFRESH_TOKEN_EXPIRE_DAYS,
-    SECRET_KEY,
 )
 
 

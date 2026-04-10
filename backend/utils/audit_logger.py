@@ -1,6 +1,5 @@
 """Audit logging utility for SOC 2 compliance and security monitoring."""
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -224,7 +223,8 @@ class AuditLogger:
             logger.warning(log_message)
         elif severity == Severity.CRITICAL:
             logger.critical(log_message)
-            # TODO: Send alert to security team
+            # Send alert to security team via webhook if configured
+            await AuditLogger._send_security_alert(event_type, event_category, log_message, metadata)
         elif event_type in AuditLogger.ALERT_EVENTS:
             logger.warning(log_message)
         else:
@@ -391,6 +391,75 @@ class AuditLogger:
         
         result = await db.execute(stmt)
         return result.scalar() or 0
+    
+    @staticmethod
+    async def _send_security_alert(
+        event_type: EventType,
+        event_category: EventCategory,
+        log_message: str,
+        audit_data: Dict[str, Any]
+    ) -> None:
+        """Send security alert via webhook (Slack/Discord) for critical events."""
+        import os
+        import httpx
+        
+        webhook_url = os.getenv("SECURITY_WEBHOOK_URL")
+        if not webhook_url:
+            return  # No webhook configured, skip silently
+        
+        try:
+            # Format alert payload
+            alert_payload = {
+                "text": f"🚨 SECURITY ALERT: {event_type.value}",
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"🚨 Security Alert: {event_type.value}",
+                            "emoji": True
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "fields": [
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Category:*\n{event_category.value}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*User:*\n{audit_data.get('user_email', 'Unknown')}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*IP Address:*\n{audit_data.get('ip_address', 'Unknown')}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Timestamp:*\n{datetime.now(timezone.utc).isoformat()}"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"```{log_message}```"
+                        }
+                    }
+                ]
+            }
+            
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    webhook_url,
+                    json=alert_payload,
+                    timeout=5.0
+                )
+        except Exception as e:
+            # Don't let webhook failures break audit logging
+            logger.error(f"Failed to send security alert webhook: {e}")
 
 
 # Global audit logger instance

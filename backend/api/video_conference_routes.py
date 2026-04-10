@@ -10,7 +10,7 @@ from sqlalchemy import select, and_, desc
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable
 from backend.models.video_conference import (
-    VideoConferenceConfig, VideoConferenceMeeting, VideoConferenceRecording
+    VideoConferenceConfig, VideoConferenceMeeting
 )
 from backend.services.integrations.video_conference_service import VideoConferenceService
 

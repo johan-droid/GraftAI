@@ -21,9 +21,9 @@ if TYPE_CHECKING:
     from backend.models.dsr import DSRRecord, ConsentRecord
     from backend.models.team import TeamMember
     from backend.models.api_key import APIKey
-    from backend.models.integration import Integration, IntegrationLog
+    from backend.models.integration import Integration
     from backend.models.email_template import EmailTemplate
-    from backend.models.video_conference import VideoConferenceConfig, VideoConferenceMeeting
+    from backend.models.video_conference import VideoConferenceConfig
     from backend.models.resource import Resource, ResourceBooking
     from backend.models.automation import AutomationRule
 

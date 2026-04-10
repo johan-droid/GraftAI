@@ -1,14 +1,13 @@
 """Analytics API routes for usage metrics and insights."""
 
-from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, extract
+from sqlalchemy import select, func, and_
 from pydantic import BaseModel
 
 from backend.api.deps import get_db, get_current_user
-from backend.models.tables import UserTable, BookingTable, EventTypeTable, NotificationTable
+from backend.models.tables import UserTable, BookingTable, EventTypeTable
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 

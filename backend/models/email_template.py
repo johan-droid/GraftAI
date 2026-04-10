@@ -3,10 +3,13 @@
 from datetime import datetime, timezone
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, Index, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional, List
+from typing import Optional, TYPE_CHECKING
 import secrets
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from backend.models.tables import UserTable
 
 
 class EmailTemplate(Base):

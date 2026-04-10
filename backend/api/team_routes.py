@@ -1,11 +1,14 @@
 """Team scheduling API routes for collaborative scheduling."""
 
+import logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import secrets
+
+logger = logging.getLogger(__name__)
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable

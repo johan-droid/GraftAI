@@ -416,7 +416,7 @@ export default function AICopilotChat() {
     <div className="relative flex flex-col bg-transparent" style={{ height: "calc(100dvh - 3.5rem - env(safe-area-inset-bottom, 0px))" }}>
       
       {/* Top Header — Minimal on mobile */}
-      <div className="flex h-14 shrink-0 items-center justify-between px-3 sm:px-6 pb-2">
+      <div className="flex h-14 shrink-0 items-center justify-between px-3 pb-2 sm:px-6">
         <div className="flex items-center gap-3">
             {isOnline ? (
               <Badge variant="secondary" className="flex items-center gap-1.5 px-2 py-1 text-emerald-400 bg-emerald-400/10 border-emerald-500/20">
@@ -447,7 +447,7 @@ export default function AICopilotChat() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.97 }}
                     transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
-                    className="absolute left-0 top-full z-50 mt-2 w-72 origin-top-left rounded-2xl border border-white/[0.1] bg-[#0a0f1e]/95 p-4 shadow-2xl backdrop-blur-2xl"
+                    className="absolute left-0 top-full z-50 mt-2 w-72 origin-top-left rounded-2xl border border-white/[0.08] bg-[#0d1322]/90 p-4 shadow-xl backdrop-blur-xl"
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.14em]">Local Context</span>
@@ -506,12 +506,12 @@ export default function AICopilotChat() {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
-            className="relative mb-6"
+            className="relative mb-5"
           >
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/20">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-indigo-400/20 bg-gradient-to-br from-indigo-500/20 to-violet-500/15">
               <Sparkles className="h-7 w-7 text-indigo-400" />
             </div>
-            <div className="absolute inset-0 rounded-2xl bg-indigo-500/10 blur-xl animate-pulse" />
+            <div className="absolute inset-0 rounded-2xl bg-indigo-500/10 blur-xl" />
           </motion.div>
 
           {/* Greeting */}
@@ -521,10 +521,10 @@ export default function AICopilotChat() {
             transition={{ duration: 0.45, delay: 0.1 }}
             className="text-center"
           >
-            <h1 className="font-serif text-3xl font-medium tracking-tight text-white sm:text-[2.5rem] leading-tight">
+            <h1 className="font-serif text-3xl font-medium leading-tight tracking-tight text-white sm:text-[2.5rem]">
               {getTimeEmoji(environmentalContext.hour)} {environmentalContext.greeting}, {displayName}
             </h1>
-            <p className="mt-3 text-sm text-slate-400 sm:text-base max-w-md mx-auto">
+            <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400 sm:text-base">
               {getSubtitle()}
             </p>
           </motion.div>
@@ -563,7 +563,7 @@ export default function AICopilotChat() {
             transition={{ duration: 0.4, delay: 0.25 }}
             className="mt-8 w-full max-w-2xl px-2"
           >
-            <form onSubmit={handleSubmit} className="relative rounded-xl border bg-card p-3 shadow-sm transition-all focus-within:ring-1 focus-within:ring-primary/20">
+            <form onSubmit={handleSubmit} className="relative rounded-xl border border-white/[0.08] bg-card/90 p-3 shadow-sm transition-all focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/20">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -607,13 +607,13 @@ export default function AICopilotChat() {
                 key={`composer-${suggestion.id}`}
                 type="button"
                 onClick={() => handleSuggestedAction(suggestion)}
-                className="suggestion-chip group flex items-start gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3.5 text-left transition-all hover:bg-white/[0.06] hover:border-white/[0.14] active:scale-[0.97]"
+                className="suggestion-chip group flex items-start gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:border-white/[0.12] active:translate-y-0 active:scale-[0.99]"
               >
                 <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-slate-400 group-hover:text-indigo-400 group-hover:bg-indigo-500/10 transition-colors">
                   {getSuggestionIcon(suggestion.icon)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-200 truncate">{suggestion.label}</p>
+                  <p className="truncate text-sm font-medium text-slate-200">{suggestion.label}</p>
                   <p className="mt-0.5 text-xs text-slate-500 leading-relaxed line-clamp-2">{suggestion.description}</p>
                 </div>
               </button>
@@ -647,7 +647,7 @@ export default function AICopilotChat() {
                               <Sparkles className="h-3.5 w-3.5" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[15px] leading-[1.7] text-slate-200 whitespace-pre-wrap">
+                              <p className="whitespace-pre-wrap text-[15px] leading-[1.75] text-slate-200">
                                 {msg.content}
                               </p>
                               
@@ -676,8 +676,8 @@ export default function AICopilotChat() {
                       ) : (
                         /* User Message — Right-aligned bubble */
                         <div className="max-w-[80%]">
-                          <div className="rounded-2xl rounded-br-md bg-indigo-600/20 border border-indigo-500/20 px-4 py-3">
-                            <p className="text-[15px] leading-relaxed text-slate-100 whitespace-pre-wrap">
+                          <div className="rounded-2xl rounded-br-md border border-indigo-400/20 bg-indigo-500/18 px-4 py-3 shadow-sm shadow-indigo-950/20">
+                            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-100">
                               {msg.content}
                             </p>
                           </div>
@@ -713,7 +713,7 @@ export default function AICopilotChat() {
           
           {/* Composer (conversation mode) — Frosted glass pinned bottom */}
           <div className="mobile-composer mx-auto w-full max-w-3xl px-3 sm:px-4 py-3">
-            <form onSubmit={handleSubmit} className="relative rounded-xl border bg-card p-3 shadow-lg transition-all focus-within:ring-1 focus-within:ring-primary/20">
+            <form onSubmit={handleSubmit} className="relative rounded-xl border border-white/[0.08] bg-card/90 p-3 shadow-lg transition-all focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/20">
               <textarea
                 ref={inputRef}
                 value={input}

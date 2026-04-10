@@ -275,7 +275,7 @@ class AuditLogger:
             resource_type="user",
             resource_id=user_id,
             failure_reason=failure_reason,
-            metadata_json=metadata,
+            metadata=metadata,
             compliance_standards=["SOC2"],
         )
     
@@ -311,7 +311,7 @@ class AuditLogger:
             ip_address=ip_address,
             resource_type=resource_type,
             resource_id=resource_id,
-            metadata_json=metadata,
+            metadata=metadata,
             compliance_standards=["SOC2", "GDPR"],
             data_subjects_affected=1 if resource_type == "user" else None,
         )

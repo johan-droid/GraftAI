@@ -20,7 +20,7 @@ class AutomationRuleCreate(BaseModel):
     """Create automation rule request."""
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
-    rule_type: str = Field(..., regex="^(auto_accept|auto_decline|auto_reschedule|smart_scheduling|conflict_resolution|team_coordination|reminder_scheduling|resource_allocation)$")
+    rule_type: str = Field(..., pattern="^(auto_accept|auto_decline|auto_reschedule|smart_scheduling|conflict_resolution|team_coordination|reminder_scheduling|resource_allocation)$")
     conditions: dict = Field(default=dict)
     actions: dict = Field(default=dict)
     confidence_threshold: float = Field(default=70.0, ge=0, le=100)

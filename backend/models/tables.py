@@ -293,9 +293,6 @@ class EventTypeTeamMemberTable(Base):
 class UserMFATable(Base):
     """Multi-factor authentication settings for users (TOTP)."""
     __tablename__ = "user_mfa"
-    __table_args__ = (
-        Index("ix_user_mfa_user_id", "user_id"),
-    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
     user_id: Mapped[str] = mapped_column(
@@ -325,12 +322,6 @@ class UserMFATable(Base):
 class AuditLogTable(Base):
     """Audit log for security and compliance events (SOC 2)."""
     __tablename__ = "audit_logs"
-    __table_args__ = (
-        Index("ix_audit_logs_user_id", "user_id"),
-        Index("ix_audit_logs_event_type", "event_type"),
-        Index("ix_audit_logs_timestamp", "timestamp"),
-        Index("ix_audit_logs_ip_address", "ip_address"),
-    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
     timestamp: Mapped[datetime] = mapped_column(

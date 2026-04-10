@@ -21,7 +21,7 @@ class ResourceCreate(BaseModel):
     """Create resource request."""
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
-    resource_type: str = Field(..., regex="^(room|equipment|vehicle|desk|other)$")
+    resource_type: str = Field(..., pattern="^(room|equipment|vehicle|desk|other)$")
     location: str = Field(..., min_length=1, max_length=200)
     address: Optional[str] = None
     floor: Optional[str] = None

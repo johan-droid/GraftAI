@@ -362,7 +362,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["x-xsrf-token"],
+        expose_headers=["x-xsrf-token", "Location"],
     )
 
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)

@@ -9,7 +9,6 @@ from backend.models.tables import EventTable, UserTable, UserTokenTable
 from backend.services.calendar_utils import simple_upsert_event
 from backend.services.integrations.token_service import ensure_valid_token
 from backend.services.integrations import google_calendar, ms_graph
-from backend.services.integrations.apple_calendar_provider import AppleCalendarSyncProvider
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +199,8 @@ def get_calendar_provider_for_token(token_record: UserTokenTable) -> Optional[Ca
     if token_record.provider == "caldav":
         return CalDavCalendarSyncProvider(token_record)
     if token_record.provider == "apple":
+        from backend.services.integrations.apple_calendar_provider import AppleCalendarSyncProvider
+
         return AppleCalendarSyncProvider(token_record)
     logger.warning(f"Unsupported calendar provider: {token_record.provider}")
     return None

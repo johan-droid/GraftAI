@@ -61,8 +61,13 @@ async def fetch_google_tokens(code: str):
             code=code,
             grant_type="authorization_code",
             redirect_uri=GOOGLE_REDIRECT_URI,
+            headers={"Accept": "application/json"},
         )
-        resp = await client.get("https://www.googleapis.com/oauth2/v3/userinfo")
+        resp = await client.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Accept": "application/json"},
+        )
+        resp.raise_for_status()
         profile = resp.json()
     return {
         "email": profile.get("email"),

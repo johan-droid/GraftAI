@@ -18,7 +18,7 @@ router = APIRouter(prefix="/integrations", tags=["integrations"])
 # Pydantic Models
 
 class IntegrationCreate(BaseModel):
-    provider: str = Field(..., regex="^(zapier|slack|teams|custom)$")
+    provider: str = Field(..., pattern="^(zapier|slack|teams|custom)$")
     name: str = Field(..., min_length=1, max_length=100)
     webhook_url: HttpUrl
     events: List[str] = Field(default=["booking.created", "booking.updated"])

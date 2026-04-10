@@ -652,6 +652,11 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
     await rate_limit(client_ip, api_limits["oauth_callback"])
 
     try:
+        if request.query_params.get("error"):
+            error_desc = request.query_params.get("error_description") or request.query_params.get("error")
+            logger.error("Google OAuth returned error: %s", error_desc)
+            raise HTTPException(status_code=400, detail=f"Google OAuth error: {error_desc}")
+
         if not state:
             logger.error("Google callback missing state parameter")
             raise HTTPException(status_code=400, detail="Invalid OAuth state")

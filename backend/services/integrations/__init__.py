@@ -1,9 +1,7 @@
-from .calendar_provider import get_calendar_provider_for_token
-from .google_calendar import list_google_events
-from .ms_graph import list_ms_events
+"""Integration service package.
 
-__all__ = [
-    "get_calendar_provider_for_token",
-    "list_google_events",
-    "list_ms_events",
-]
+Avoid eager imports here to prevent circular import chains during app startup.
+Import concrete modules directly where needed.
+"""
+
+__all__: list[str] = []

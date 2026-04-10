@@ -57,3 +57,19 @@ async def get_current_user(
         raise credentials_exception
 
     return user
+
+
+async def require_admin(
+    current_user: UserTable = Depends(get_current_user),
+) -> str:
+    """Require admin privileges and return the authenticated user id."""
+    is_superuser = bool(getattr(current_user, "is_superuser", False))
+    is_admin_tier = getattr(current_user, "tier", None) == "admin"
+
+    if is_superuser or is_admin_tier:
+        return current_user.id
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Admin access required",
+    )

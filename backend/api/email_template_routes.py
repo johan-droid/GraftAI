@@ -59,14 +59,14 @@ class EmailTemplateDetail(BaseModel):
 class EmailTemplateCreate(BaseModel):
     """Create email template request."""
     name: str = Field(..., min_length=1, max_length=100)
-    slug: str = Field(..., min_length=1, max_length=100, regex="^[a-z0-9_]+$")
+    slug: str = Field(..., min_length=1, max_length=100, pattern="^[a-z0-9_]+$")
     description: Optional[str] = Field(None, max_length=500)
     subject: str = Field(..., min_length=1, max_length=500)
     html_body: str = Field(..., min_length=1)
     text_body: Optional[str] = None
     available_variables: List[str] = Field(default=[])
-    primary_color: str = Field(default="#6366f1", regex="^#[0-9a-fA-F]{6}$")
-    language: str = Field(default="en", regex="^[a-z]{2}$")
+    primary_color: str = Field(default="#6366f1", pattern="^#[0-9a-fA-F]{6}$")
+    language: str = Field(default="en", pattern="^[a-z]{2}$")
 
 
 class EmailTemplateUpdate(BaseModel):
@@ -77,7 +77,7 @@ class EmailTemplateUpdate(BaseModel):
     html_body: Optional[str] = Field(None, min_length=1)
     text_body: Optional[str] = None
     available_variables: Optional[List[str]] = None
-    primary_color: Optional[str] = Field(None, regex="^#[0-9a-fA-F]{6}$")
+    primary_color: Optional[str] = Field(None, pattern="^#[0-9a-fA-F]{6}$")
     is_active: Optional[bool] = None
 
 
@@ -95,7 +95,7 @@ class RenderTemplateResponse(BaseModel):
 
 class SendTestEmailRequest(BaseModel):
     """Send test email request."""
-    to_email: str = Field(..., regex=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+    to_email: str = Field(..., pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
     variables: Dict[str, str] = Field(default={})
 
 

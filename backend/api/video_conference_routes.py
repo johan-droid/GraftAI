@@ -21,7 +21,7 @@ router = APIRouter(prefix="/video-conference", tags=["video-conference"])
 
 class VideoProviderConfig(BaseModel):
     """Video provider configuration."""
-    provider: str = Field(..., regex="^(zoom|google_meet|microsoft_teams|webex)$")
+    provider: str = Field(..., pattern="^(zoom|google_meet|microsoft_teams|webex)$")
     is_enabled: bool = True
     is_default: bool = False
     default_settings: Optional[dict] = None
@@ -29,7 +29,7 @@ class VideoProviderConfig(BaseModel):
 
 class CreateMeetingRequest(BaseModel):
     """Create video meeting request."""
-    provider: str = Field(..., regex="^(zoom|google_meet|microsoft_teams)$")
+    provider: str = Field(..., pattern="^(zoom|google_meet|microsoft_teams)$")
     topic: str = Field(..., min_length=1, max_length=200)
     start_time: datetime
     duration_minutes: int = Field(default=30, ge=15, le=480)

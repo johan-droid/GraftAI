@@ -1,10 +1,17 @@
+# Render.com deployment configuration for GraftAI
+# This file configures the production deployment on Render
+# See PRODUCTION_DEPLOYMENT.md for detailed setup instructions
+
 services:
-  # 1. GraftAI Monolith API
+  # GraftAI Backend API Service
   - type: web
-    name: graftai-monolith
+    name: graftai-api
     runtime: python
     region: oregon
     plan: starter
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && uvicorn api.main:app --host 0.0.0.0 --port $PORT --proxy-headers"
     envVars:
@@ -14,6 +21,8 @@ services:
         value: .
       - key: BACKEND_URL
         value: https://graftai.onrender.com
+      - key: TRUSTED_HOSTS
+        value: graftai.onrender.com,www.graftai.tech
       - key: FRONTEND_URL
         value: https://www.graftai.tech
       - key: FRONTEND_BASE_URL
@@ -42,8 +51,42 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      
+      # Email (Resend)
+      - key: RESEND_API_KEY
+        sync: false
+      
+      # Payments (Stripe)
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      
+      # Better Auth
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: BETTER_AUTH_URL
+        value: https://www.graftai.tech
+      
+      # MFA / TOTP Encryption (Generate with: openssl rand -hex 32)
+      - key: TOTP_ENCRYPTION_KEY
+        sync: false
+      
+      # Monitoring (Sentry - Optional)
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      - key: SENTRY_TRACES_SAMPLE_RATE
+        value: "0.1"
+
+# Note: Redis must be created manually in Render Dashboard
+# Then add REDIS_URL environment variable to this service
 
 databases:
   - name: graftai-db
-    plan: free
+    plan: starter
     region: oregon
+    ipAllowList: []

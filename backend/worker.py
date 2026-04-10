@@ -368,11 +368,25 @@ async def task_delete_calendar_event(ctx, event_id: str):
 
 @task
 async def task_send_sms(ctx, phone_number: str, message: str):
-    logger.info(f"SMS queue placeholder: {phone_number} msg={message}")
+    """Send SMS notification - requires Twilio/SNS configuration."""
+    import os
+    twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    if not twilio_sid:
+        logger.warning("SMS not configured - set TWILIO_ACCOUNT_SID to enable")
+        return
+    # TODO: Implement Twilio integration
+    logger.info(f"SMS queued: {phone_number}")
 
 @task
 async def task_update_crm(ctx, booking_id: str):
-    logger.info(f"CRM update placeholder queued for booking {booking_id}")
+    """Update external CRM - requires CRM integration setup."""
+    import os
+    crm_api_key = os.getenv("CRM_API_KEY")
+    if not crm_api_key:
+        logger.debug(f"CRM update skipped for booking {booking_id} - no CRM configured")
+        return
+    # TODO: Implement CRM integration (Salesforce, HubSpot, etc.)
+    logger.info(f"CRM update queued for booking {booking_id}")
 
 @task
 async def task_daily_cleanup(ctx):

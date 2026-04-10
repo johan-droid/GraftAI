@@ -39,6 +39,12 @@ def _parse_comma_separated_env(name: str, default: str = "") -> list[str]:
     return [value.strip() for value in raw.split(",") if value.strip()]
 
 
+def _extract_hostname(url: str | None) -> str | None:
+    if not url:
+        return None
+    return url.split("//", 1)[-1].split("/", 1)[0]
+
+
 def _validate_production_env() -> None:
     env = os.getenv("ENV", "development").lower()
     if env != "production":
@@ -265,13 +271,13 @@ def create_app() -> FastAPI:
         return response
 
     # Trusted Host and CORS hardening
-    frontend_url = os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "https://www.graftai.tech"))
+    frontend_url = os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "http://localhost:3000"))
     if frontend_url:
         allow_origins = [origin.strip() for origin in frontend_url.split(",") if origin.strip()]
     else:
         allow_origins = [
-            "https://www.graftai.tech",
-            "https://graftai.tech",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
         ]
 
     trusted_hosts = _parse_comma_separated_env("TRUSTED_HOSTS")
@@ -279,10 +285,14 @@ def create_app() -> FastAPI:
         env = os.getenv("ENV", "development").lower()
         if env == "production":
             trusted_hosts = [
-                host.split("//", 1)[-1].split("/", 1)[0]
+                _extract_hostname(host)
                 for host in allow_origins
                 if host
             ]
+            backend_host = _extract_hostname(os.getenv("BACKEND_URL") or os.getenv("APP_BASE_URL"))
+            if backend_host:
+                trusted_hosts.append(backend_host)
+            trusted_hosts = [host for host in dict.fromkeys(trusted_hosts) if host]
         else:
             trusted_hosts = [
                 "localhost",
@@ -294,6 +304,56 @@ def create_app() -> FastAPI:
             ]
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
+
+    # Security Headers Middleware
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+        """Add security headers to all responses."""
+        
+        async def dispatch(self, request, call_next):
+            response = await call_next(request)
+            
+            # Prevent MIME type sniffing
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            
+            # Prevent clickjacking
+            response.headers["X-Frame-Options"] = "DENY"
+            
+            # XSS protection
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            
+            # HTTPS enforcement (1 year)
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            
+            # Referrer policy
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            
+            # Content Security Policy
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "font-src 'self'; "
+                "connect-src 'self' https://api.graftai.tech;"
+            )
+            
+            # Permissions Policy
+            response.headers["Permissions-Policy"] = (
+                "accelerometer=(), "
+                "camera=(), "
+                "geolocation=(), "
+                "gyroscope=(), "
+                "magnetometer=(), "
+                "microphone=(), "
+                "payment=(), "
+                "usb=()"
+            )
+            
+            return response
+
+    app.add_middleware(SecurityHeadersMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
@@ -322,12 +382,60 @@ def create_app() -> FastAPI:
     from backend.api.webhooks import router as webhooks_router
     from backend.services.ai import router as ai_router
     from backend.api.billing import router as billing_router
+    from backend.routes.calendar_routes import router as calendar_integration_router
+    from backend.routes.gdpr_routes import router as gdpr_router
+    from backend.api.team_routes import router as team_router
+    from backend.api.analytics_routes import router as analytics_router
+    from backend.api.api_key_routes import router as api_key_router
+    from backend.api.integration_routes import router as integration_router
+    from backend.api.email_template_routes import router as email_template_router
+    from backend.api.video_conference_routes import router as video_conference_router
+    from backend.api.resource_routes import router as resource_router
+    from backend.api.advanced_analytics_routes import router as advanced_analytics_router
+    from backend.api.automation_routes import router as automation_router
 
     # Registering the new unified Authentication router
     app.include_router(auth_router, prefix="/api/v1/auth")
+
+    # Registering MFA router
+    from backend.auth.mfa import router as mfa_router
+    app.include_router(mfa_router, prefix="/api/v1/auth/mfa")
+
+    # Registering calendar integration router
+    app.include_router(calendar_integration_router)
+
+    # Registering GDPR compliance router
+    app.include_router(gdpr_router)
+
+    # Registering team scheduling router
+    app.include_router(team_router, prefix="/api/v1")
+
+    # Registering analytics router
+    app.include_router(analytics_router, prefix="/api/v1")
+
+    # Registering API key router
+    app.include_router(api_key_router, prefix="/api/v1")
+
+    # Registering integration router
+    app.include_router(integration_router, prefix="/api/v1")
+
+    # Registering email template router
+    app.include_router(email_template_router, prefix="/api/v1")
+
+    # Registering video conference router
+    app.include_router(video_conference_router, prefix="/api/v1")
+
+    # Registering resource router
+    app.include_router(resource_router, prefix="/api/v1")
+
+    # Registering advanced analytics router
+    app.include_router(advanced_analytics_router, prefix="/api/v1")
+
+    # Registering automation router
+    app.include_router(automation_router, prefix="/api/v1")
+
     app.include_router(calendar_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
-    app.include_router(analytics_router, prefix="/api/v1")
     app.include_router(notifications_router, prefix="/api/v1")
     app.include_router(proactive_router, prefix="/api/v1")
     app.include_router(event_types_router, prefix="/api/v1")

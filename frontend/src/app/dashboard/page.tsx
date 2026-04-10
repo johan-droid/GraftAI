@@ -1,289 +1,194 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { 
-  getAnalyticsSummary, 
-  getEvents, 
-  getProactiveSuggestion,
-  ProactiveSuggestionResponse,
-  refreshSession
-} from "@/lib/api";
+import { Calendar, Clock3, ExternalLink, Sparkles, Users } from "lucide-react";
+import { getAnalyticsRealtime, getEvents, type AnalyticsRealtimeResponse, type CalendarEvent } from "@/lib/api";
+import { useAuth } from "@/providers/auth-provider";
+import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { SmartActions } from "@/components/dashboard/SmartActions";
-import type { SmartAction } from "@/components/dashboard/SmartActions";
-import {
-  Calendar as CalendarIcon,
-  Clock,
-  Sparkles,
-  Users,
-  Video,
-  ChevronRight,
-  Activity
-} from "lucide-react";
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 }
-  }
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
-};
-
-type DashboardAnalyticsDetails = {
-  meetings?: number;
-  hours?: number;
-  growth?: number;
-  cancellations?: number;
-  recent_events?: { id: number; title: string; start_time: string; category?: string; is_upcoming?: boolean }[];
-  next_event?: { id: number; title: string; start_time: string; category?: string; is_upcoming?: boolean } | null;
-};
-
-type DashboardSummary = {
-  summary: string;
-  details?: DashboardAnalyticsDetails;
-};
-
-type DashboardStats = {
-  totalMeetings?: number;
-  focusHours?: number;
-  collaborators?: number;
-};
-
-type DashboardData = { 
-  stats: DashboardStats; 
-  events: any[]; 
-  suggestion: ProactiveSuggestionResponse;
-  user: any;
-};
+const EVENT_LIST_LIMIT = 6;
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-
-  const handleExecuteSmartAction = async (action: SmartAction) => {
-    // In a real integration, we'd trigger backend execute endpoints.
-    console.log("Triggered Smart Action:", action);
-    // You could put a toast here or call the actual endpoint
-  };
+  const [error, setError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<AnalyticsRealtimeResponse | null>(null);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
 
   useEffect(() => {
-    async function loadDashboard() {
-      try {
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
+    let alive = true;
 
-        const [stats, events, suggestion, sessionData] = await Promise.all<[
-          DashboardSummary,
-          any[],
-          ProactiveSuggestionResponse,
-          any
-        ]>([
-          getAnalyticsSummary(),
-          getEvents(todayStart.toISOString(), todayEnd.toISOString()),
-          getProactiveSuggestion("User is viewing the main dashboard."),
-          refreshSession()
-        ]);
-        
-        setData({
-          stats: {
-            totalMeetings: stats.details?.meetings,
-            focusHours: stats.details?.hours,
-            collaborators: stats.details?.recent_events?.length,
-          },
-          events,
-          suggestion,
-          user: sessionData?.user
-        });
-      } catch (error) {
-        console.error("Failed to load dashboard data:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadDashboard();
+    const start = new Date();
+    const end = new Date();
+    end.setDate(end.getDate() + 14);
+
+    Promise.all([
+      getAnalyticsRealtime("30d"),
+      getEvents(start.toISOString(), end.toISOString()),
+    ])
+      .then(([analytics, calendar]) => {
+        if (!alive) return;
+        setMetrics(analytics);
+        setEvents(calendar || []);
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setError(err instanceof Error ? err.message : "Unable to load dashboard data.");
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  const upcomingEvents = useMemo(
+    () =>
+      [...events]
+        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+        .slice(0, EVENT_LIST_LIMIT),
+    [events]
+  );
+
+  const firstName =
+    user?.full_name?.split(" ").find(Boolean) ||
+    user?.email?.split("@")[0] ||
+    "there";
 
   return (
-    <motion.div 
-      className="max-w-7xl mx-auto p-6 space-y-8"
-      variants={containerVariants}
-      initial="hidden"
-      animate="show"
+    <motion.div
+      className="space-y-6 p-4 md:p-6"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
     >
-      {/* Hero Section & Quick Actions */}
-      <motion.div variants={itemVariants} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Good morning{data?.user?.full_name ? `, ${data.user.full_name?.split(' ')[0]}` : ''}.
-          </h1>
-          <p className="text-muted-foreground mt-1">Here is your schedule and AI insights for today.</p>
+          <h1 className="text-2xl font-semibold text-slate-100 md:text-3xl">Welcome back, {firstName}</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Your next two weeks at a glance, synced from your connected calendars.
+          </p>
         </div>
-        <div className="flex space-x-3">
-          <Button variant="outline">
-            <Clock className="mr-2 h-4 w-4" />
-            Review Schedule
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/dashboard/calendar">Open calendar</Link>
           </Button>
-          <Button>
-            <Video className="mr-2 h-4 w-4" />
-            Join Next Meeting
+          <Button asChild>
+            <Link href="/dashboard/event-types">Share booking link</Link>
           </Button>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Stats Grid */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Meetings</CardTitle>
-            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data?.stats?.totalMeetings ?? 0}</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center">
-              Active period total
-            </p>
-          </CardContent>
+      {error && (
+        <Card className="border-red-500/30 bg-red-500/10">
+          <CardContent className="p-4 text-sm text-red-200">{error}</CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Focus Time</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data?.stats?.focusHours ? data.stats.focusHours.toFixed(1) : '0'} hrs</div>
-            <p className="text-xs text-muted-foreground mt-1">Based on free calendar space</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Engagement</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data?.stats?.collaborators ?? 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Recent significant interactions</p>
-          </CardContent>
-        </Card>
-      </motion.div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Timeline Section */}
-        <motion.div variants={itemVariants} className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Today&apos;s Timeline</h2>
-            <Button variant="ghost" size="sm">
-              View Calendar <ChevronRight className="ml-1 h-4 w-4" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          icon={<Calendar className="h-4 w-4" />}
+          label="Meetings (30d)"
+          value={loading ? "..." : String(metrics?.totals.meetings ?? 0)}
+        />
+        <MetricCard
+          icon={<Clock3 className="h-4 w-4" />}
+          label="Focus hours"
+          value={loading ? "..." : `${metrics?.totals.hours ?? 0}h`}
+        />
+        <MetricCard
+          icon={<Users className="h-4 w-4" />}
+          label="Unique attendees"
+          value={loading ? "..." : String(metrics?.totals.unique_attendees ?? 0)}
+        />
+        <MetricCard
+          icon={<Sparkles className="h-4 w-4" />}
+          label="Growth"
+          value={loading ? "..." : `${metrics?.totals.growth ?? 0}%`}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr_1fr]">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between p-5 pb-2">
+            <h2 className="text-sm font-semibold text-slate-100">Upcoming events</h2>
+            <Button asChild size="sm" variant="ghost" className="text-slate-400 hover:text-slate-200">
+              <Link href="/dashboard/calendar">
+                View all <ExternalLink className="ml-1 h-3.5 w-3.5" />
+              </Link>
             </Button>
-          </div>
-          
-          <Card>
-            <CardContent className="p-0">
-            <div className="divide-y relative">
-                {data?.events && data.events.length > 0 ? (
-                  data.events.map((event: any, i: number) => {
-                    const startTime = new Date(event.start_time);
-                    const endTime = new Date(event.end_time);
-                    const durationMins = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
-                    const formattedTime = startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const formattedDuration = durationMins >= 60 ? `${Math.floor(durationMins / 60)}h ${durationMins % 60}m` : `${durationMins}m`;
-                    const now = new Date();
-                    const active = now >= startTime && now <= endTime;
-
-                    return (
-                      <div key={i} className={`p-6 flex items-start gap-4 transition-colors ${active ? 'bg-primary/5' : ''}`}>
-                        <div className="w-24 flex-shrink-0 text-sm font-medium text-muted-foreground">
-                          {formattedTime}
-                        </div>
-                        <div className="relative">
-                          {active && (
-                            <span className="absolute -left-7 top-1 flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-                            </span>
-                          )}
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className={`font-semibold ${active ? 'text-primary' : ''}`}>
-                              {event.title}
-                            </h4>
-                            {active && <Badge variant="secondary">In Progress</Badge>}
-                          </div>
-                          <div className="text-sm text-muted-foreground flex items-center gap-3">
-                            <span className="flex items-center"><Clock className="mr-1 h-3 w-3" /> {formattedDuration}</span>
-                            <span>• {event.category || "General"}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="p-6 text-center text-muted-foreground">
-                    No events scheduled for today. Take a break!
+          </CardHeader>
+          <CardContent className="p-5 pt-2">
+            {loading ? (
+              <p className="py-10 text-sm text-slate-500">Loading upcoming events...</p>
+            ) : upcomingEvents.length === 0 ? (
+              <p className="py-10 text-sm text-slate-500">No upcoming events yet. Create one from Calendar.</p>
+            ) : (
+              <div className="space-y-3">
+                {upcomingEvents.map((event) => (
+                  <div key={String(event.id)} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                    <p className="font-medium text-slate-100">{event.title}</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {new Date(event.start_time).toLocaleString([], {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </p>
                   </div>
-                )}
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* AI Suggestion Panel */}
-        <motion.div variants={itemVariants} className="space-y-4">
-          <h2 className="text-xl font-semibold flex items-center">
-            <Sparkles className="mr-2 h-5 w-5 text-primary" />
-            AI Suggestions
-          </h2>
-          <Card className="border-primary/20 bg-primary/5 shadow-none">
-            <CardHeader>
-              <CardTitle className="text-base">Schedule Optimization</CardTitle>
-              <CardDescription>
-                Identified an opportunity based on your schedule.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm">
-                {data?.suggestion?.suggestion || "You have back-to-back meetings from 1:00 PM to 4:00 PM tomorrow. Consider moving the 'Weekly Standup' to Friday morning to protect your focus time."}
-              </p>
-              
-              {data?.suggestion?.smart_actions && data.suggestion.smart_actions.length > 0 && (
-                <div className="mt-4">
-                  <SmartActions 
-                    actions={data.suggestion.smart_actions} 
-                    onExecute={handleExecuteSmartAction} 
-                  />
-                </div>
-              )}
-            </CardContent>
-            {(!data?.suggestion?.smart_actions || data.suggestion.smart_actions.length === 0) && (
-              <CardFooter className="flex gap-2">
-                <Button className="w-full" size="sm">
-                  Apply Change
-                </Button>
-                <Button className="w-full" variant="outline" size="sm">
-                  Dismiss
-                </Button>
-              </CardFooter>
             )}
-          </Card>
-        </motion.div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="p-5 pb-2">
+            <h2 className="text-sm font-semibold text-slate-100">Workspace pulse</h2>
+          </CardHeader>
+          <CardContent className="space-y-3 p-5 pt-2">
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Cancellations</p>
+              <p className="mt-1 text-xl font-semibold text-slate-100">{loading ? "..." : metrics?.totals.cancellations ?? 0}</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Last generated summary</p>
+              <p className="mt-1 text-sm text-slate-300">{loading ? "Loading..." : metrics?.summary || "No summary available yet."}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="bg-white/10 text-slate-300 hover:bg-white/15">
+                Live API data
+              </Badge>
+              <Badge variant="outline" className="border-white/20 text-slate-400">
+                No mock content
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </motion.div>
   );
 }
 
+function MetricCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-400">{label}</p>
+          <div className="text-slate-300">{icon}</div>
+        </div>
+        <p className="mt-2 text-2xl font-semibold text-slate-100">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}

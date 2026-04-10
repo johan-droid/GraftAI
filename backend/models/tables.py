@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Optional, TYPE_CHECKING
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -15,6 +15,17 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base # Re-using central Base for consistency
+
+# Type hints for forward references
+if TYPE_CHECKING:
+    from backend.models.dsr import DSRRecord, ConsentRecord
+    from backend.models.team import TeamMember
+    from backend.models.api_key import APIKey
+    from backend.models.integration import Integration, IntegrationLog
+    from backend.models.email_template import EmailTemplate
+    from backend.models.video_conference import VideoConferenceConfig, VideoConferenceMeeting
+    from backend.models.resource import Resource, ResourceBooking
+    from backend.models.automation import AutomationRule
 
 def generate_uuid():
     return str(uuid.uuid4())
@@ -66,6 +77,17 @@ class UserTable(Base):
     bookings: Mapped[List["BookingTable"]] = relationship("BookingTable", back_populates="user", cascade="all, delete-orphan")
     webhooks: Mapped[List["WebhookSubscriptionTable"]] = relationship("WebhookSubscriptionTable", back_populates="user", cascade="all, delete-orphan")
     notifications: Mapped[List["NotificationTable"]] = relationship("NotificationTable", back_populates="user", cascade="all, delete-orphan")
+    mfa_settings: Mapped[List["UserMFATable"]] = relationship("UserMFATable", back_populates="user", cascade="all, delete-orphan")
+    dsr_requests: Mapped[List["DSRRecord"]] = relationship("DSRRecord", back_populates="user", cascade="all, delete-orphan")
+    consent_records: Mapped[List["ConsentRecord"]] = relationship("ConsentRecord", back_populates="user", cascade="all, delete-orphan")
+    team_memberships: Mapped[List["TeamMember"]] = relationship("TeamMember", back_populates="user", cascade="all, delete-orphan")
+    api_keys: Mapped[List["APIKey"]] = relationship("APIKey", back_populates="user", cascade="all, delete-orphan")
+    integrations: Mapped[List["Integration"]] = relationship("Integration", back_populates="user", cascade="all, delete-orphan")
+    email_templates: Mapped[List["EmailTemplate"]] = relationship("EmailTemplate", back_populates="user", cascade="all, delete-orphan")
+    video_conference_configs: Mapped[List["VideoConferenceConfig"]] = relationship("VideoConferenceConfig", back_populates="user", cascade="all, delete-orphan")
+    owned_resources: Mapped[List["Resource"]] = relationship("Resource", back_populates="owner", cascade="all, delete-orphan")
+    resource_bookings: Mapped[List["ResourceBooking"]] = relationship("ResourceBooking", back_populates="user")
+    automation_rules: Mapped[List["AutomationRule"]] = relationship("AutomationRule", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserTokenTable(Base):
@@ -266,3 +288,89 @@ class EventTypeTeamMemberTable(Base):
 
     event_type: Mapped["EventTypeTable"] = relationship("EventTypeTable", back_populates="team_members")
     user: Mapped["UserTable"] = relationship("UserTable", back_populates="team_event_type_memberships")
+
+
+class UserMFATable(Base):
+    """Multi-factor authentication settings for users (TOTP)."""
+    __tablename__ = "user_mfa"
+    __table_args__ = (
+        Index("ix_user_mfa_user_id", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    mfa_type: Mapped[str] = mapped_column(String, nullable=False, default="totp")  # 'totp', 'backup_codes'
+    secret: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # Encrypted TOTP secret
+    backup_codes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # Hashed backup codes
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    user: Mapped["UserTable"] = relationship("UserTable", back_populates="mfa_settings")
+
+
+class AuditLogTable(Base):
+    """Audit log for security and compliance events (SOC 2)."""
+    __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("ix_audit_logs_user_id", "user_id"),
+        Index("ix_audit_logs_event_type", "event_type"),
+        Index("ix_audit_logs_timestamp", "timestamp"),
+        Index("ix_audit_logs_ip_address", "ip_address"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
+    
+    # Event classification
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    event_category: Mapped[str] = mapped_column(String(30), nullable=False)  # 'authentication', 'authorization', 'data_access', 'system'
+    severity: Mapped[str] = mapped_column(String(10), nullable=False, default="info")  # 'info', 'warning', 'error', 'critical'
+    
+    # Actor information
+    user_id: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("users.id"), nullable=True, index=True)
+    user_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True, index=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Action details
+    action: Mapped[str] = mapped_column(String(50), nullable=False)  # 'login', 'logout', 'create', 'update', 'delete', 'view'
+    resource_type: Mapped[str] = mapped_column(String(50), nullable=False)  # 'user', 'calendar', 'event', 'booking'
+    resource_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Result
+    result: Mapped[str] = mapped_column(String(10), nullable=False, default="success")  # 'success', 'failure', 'denied'
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Additional context (JSON)
+    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
+    # Compliance tracking
+    compliance_standards: Mapped[list] = mapped_column(JSON, default=list)  # ['SOC2', 'GDPR', 'HIPAA']
+    
+    # Data for GDPR Article 30 (Records of Processing)
+    data_subjects_affected: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    data_categories: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )

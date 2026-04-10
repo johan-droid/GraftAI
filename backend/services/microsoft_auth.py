@@ -4,8 +4,8 @@ from authlib.integrations.httpx_client import AsyncOAuth2Client
 MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
 MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
 
-# Allow dynamic redirect URI from environment for Render/Vercel production
-BACKEND_URL = os.getenv("BACKEND_URL", "https://graftai.onrender.com").rstrip("/")
+# Use the backend base URL provided through environment variables.
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
 MICROSOFT_REDIRECT_URI = os.getenv("MICROSOFT_REDIRECT_URI", f"{BACKEND_URL}/api/v1/auth/microsoft/callback")
 
 # Validate Microsoft OAuth configuration

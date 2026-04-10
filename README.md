@@ -7,12 +7,26 @@ GraftAI is a high-performance, AI-powered scheduling platform that unifies your 
 ## ✨ Features
 
 - 🤖 **AI Scheduling Intelligence** - Smart meeting coordination and optimization
-- 🔄 **Universal Calendar Sync** - Google Calendar & Microsoft Outlook integration
-- 🎨 **Modern Dark UI** - Beautiful, responsive interface optimized for productivity
-- 🔒 **Enterprise Security** - OAuth 2.0, JWT authentication, encrypted data
-- ⚡ **High Performance** - Built with FastAPI and Next.js for blazing speed
+- 🔄 **Universal Calendar Sync** - Google Calendar, Microsoft Outlook, Apple Calendar
+- 🎨 **Modern Dark UI** - Material UI with glassmorphism, animations, and responsive design
+- 📱 **Mobile-First Design** - Buttery smooth transitions, skeleton loaders, pull-to-refresh
+- 💳 **Stripe Payments** - Subscription management, checkout, and customer portal
+- 👥 **Team Scheduling** - Round-robin assignment, collective availability, team management
+- 🔑 **API Keys** - Developer access with usage tracking and scopes
+- 🔗 **Integrations** - Zapier, Slack, Microsoft Teams webhooks
+- 📧 **Email Templates** - Jinja2 templating, HTML/text rendering, customizable notifications
+- 📊 **Analytics** - Real-time metrics, booking timeline, event type analytics
+- 📹 **Video Conferencing** - Zoom, Google Meet, Microsoft Teams auto-creation
+- 📈 **Advanced Analytics** - Team metrics, trends, peak hours, revenue tracking
+- 🏢 **Resource Booking** - Rooms, equipment, facilities scheduling
+- 🤖 **AI Automation** - Soft prompting, automation rules, confidence-based execution
+- 🔌 **Offline Mode** - Pure physical buttons with sync on reconnection
+- 🔒 **Enterprise Security** - OAuth 2.0, JWT, MFA, rate limiting, audit logging
+- 🛡️ **GDPR Compliance** - DSR management, consent tracking, data retention, RoPA
+- ⚡ **High Performance** - FastAPI + Next.js with Redis caching
 - 📱 **Mobile Responsive** - Works seamlessly on all devices
 - 🌐 **PWA Support** - Install as a native app
+- 🎭 **Buttery Animations** - Framer Motion page transitions and micro-interactions
 
 ## 🏗️ Architecture
 
@@ -77,8 +91,9 @@ GraftAI is a high-performance, AI-powered scheduling platform that unifies your 
 - **API Documentation**: https://graftai.onrender.com/docs
 
 ### Deployment Guides
-- 📖 [Complete Deployment Guide](./DEPLOYMENT_GUIDE.md)
-- 🔒 [Security Audit & Checklist](./SECURITY_AUDIT.md)
+- 📖 [Production Deployment Guide](./PRODUCTION_DEPLOYMENT.md)
+- 🔗 [Developer Hub](https://www.graftai.tech/developers)
+- 🔒 [API Reference](https://www.graftai.tech/docs/api)
 
 ### Quick Deploy
 

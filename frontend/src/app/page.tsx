@@ -1,11 +1,45 @@
 'use client';
 
-import { Box, Button, Container, Typography, Grid, Card, CardContent, AppBar, Toolbar } from '@mui/material';
-import { motion } from 'framer-motion';
+import { 
+  Box, Button, Container, Typography, Grid, Card, CardContent, AppBar, Toolbar,
+  Chip, Avatar, Rating, Stack, Paper, Fade, useTheme, useMediaQuery
+} from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Sparkles, Calendar, Zap, Shield, Clock, Users, ArrowRight, Check } from 'lucide-react';
+import { 
+  Sparkles, Calendar, Zap, Shield, Clock, Users, ArrowRight, Check, 
+  MessageSquare, Globe, Bell, BarChart3, Smartphone, Rocket,
+  Star, Quote, Play, ChevronRight
+} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import DeveloperCorner from '@/components/DeveloperCorner';
 
 export default function Home() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [animatedStats, setAnimatedStats] = useState({ users: 0, meetings: 0, hours: 0 });
+  
+  // Animate stats on load
+  useEffect(() => {
+    const duration = 2000;
+    const steps = 60;
+    const interval = duration / steps;
+    
+    let step = 0;
+    const timer = setInterval(() => {
+      step++;
+      const progress = step / steps;
+      setAnimatedStats({
+        users: Math.floor(50000 * progress),
+        meetings: Math.floor(1000000 * progress),
+        hours: Math.floor(2500000 * progress),
+      });
+      if (step >= steps) clearInterval(timer);
+    }, interval);
+    
+    return () => clearInterval(timer);
+  }, []);
+
   const features = [
     {
       icon: <Calendar size={32} />,
@@ -92,6 +126,17 @@ export default function Home() {
       <Container maxWidth="lg" sx={{ pt: { xs: 12, md: 16 }, pb: { xs: 8, md: 12 } }}>
         <Box textAlign="center" maxWidth="900px" mx="auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+            <Chip
+              icon={<Sparkles size={16} />}
+              label="AI-Powered Scheduling"
+              sx={{
+                mb: 3,
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(236, 72, 153, 0.2))',
+                color: '#a5b4fc',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                fontWeight: 500,
+              }}
+            />
             <Typography variant="h1" sx={{ fontSize: { xs: '2.5rem', md: '4rem' }, fontWeight: 800, mb: 3, lineHeight: 1.1 }}>
               Let AI Handle Your{' '}
               <Box component="span" sx={{ background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
@@ -147,6 +192,106 @@ export default function Home() {
         </Container>
       </Box>
 
+      {/* Stats Section */}
+      <Box sx={{ py: { xs: 8, md: 12 }, background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(236, 72, 153, 0.05) 100%)' }}>
+        <Container maxWidth="lg">
+          <Grid container spacing={4}>
+            {[
+              { icon: Users, label: 'Active Users', value: animatedStats.users.toLocaleString() },
+              { icon: Calendar, label: 'Meetings Booked', value: animatedStats.meetings.toLocaleString() },
+              { icon: Clock, label: 'Hours Saved', value: animatedStats.hours.toLocaleString() },
+            ].map((stat, index) => (
+              <Grid item xs={12} md={4} key={index}>
+                <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: index * 0.1 }} viewport={{ once: true }}>
+                  <Paper sx={{ p: 4, background: 'linear-gradient(135deg, rgba(26, 26, 46, 0.6) 0%, rgba(15, 15, 26, 0.8) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(99, 102, 241, 0.2)', textAlign: 'center' }}>
+                    <Box sx={{ color: '#6366f1', mb: 2 }}><stat.icon size={32} /></Box>
+                    <Typography variant="h3" sx={{ fontWeight: 700, mb: 1, color: '#f8fafc' }}>{stat.value}+</Typography>
+                    <Typography variant="body1" sx={{ color: '#94a3b8' }}>{stat.label}</Typography>
+                  </Paper>
+                </motion.div>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
+
+      {/* Testimonials Section */}
+      <Box id="testimonials" sx={{ py: { xs: 8, md: 12 } }}>
+        <Container maxWidth="lg">
+          <Typography variant="h2" textAlign="center" sx={{ mb: 2, fontWeight: 700, fontSize: { xs: '2rem', md: '3rem' } }}>
+            Loved by Teams Worldwide
+          </Typography>
+          <Typography variant="body1" textAlign="center" sx={{ color: '#94a3b8', mb: 8, maxWidth: '600px', mx: 'auto' }}>
+            See what professionals are saying about GraftAI
+          </Typography>
+
+          <Grid container spacing={4}>
+            {[
+              {
+                name: 'Sarah Chen',
+                role: 'Product Manager at TechCorp',
+                avatar: 'SC',
+                rating: 5,
+                quote: 'GraftAI has completely transformed how our team schedules meetings. The AI suggestions are incredibly accurate.',
+              },
+              {
+                name: 'Michael Roberts',
+                role: 'CEO at StartupXYZ',
+                avatar: 'MR',
+                rating: 5,
+                quote: 'I save at least 5 hours every week on scheduling. The ROI has been phenomenal for our organization.',
+              },
+              {
+                name: 'Emily Watson',
+                role: 'Engineering Lead at DevCo',
+                avatar: 'EW',
+                rating: 5,
+                quote: 'The calendar sync across Google, Outlook, and Apple is seamless. Finally, a scheduling tool that just works.',
+              },
+            ].map((testimonial, index) => (
+              <Grid item xs={12} md={4} key={index}>
+                <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: index * 0.1 }} viewport={{ once: true }}>
+                  <Card sx={{ height: '100%', background: 'linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(15, 15, 26, 0.9) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(99, 102, 241, 0.1)' }}>
+                    <CardContent sx={{ p: 4 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                        <Avatar sx={{ width: 48, height: 48, mr: 2, background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 100%)' }}>
+                          {testimonial.avatar}
+                        </Avatar>
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{testimonial.name}</Typography>
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.875rem' }}>{testimonial.role}</Typography>
+                        </Box>
+                      </Box>
+                      <Rating value={testimonial.rating} readOnly sx={{ mb: 2 }} />
+                      <Typography variant="body1" sx={{ color: '#cbd5e1', fontStyle: 'italic' }}>"{testimonial.quote}"</Typography>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
+
+      {/* CTA Section */}
+      <Box sx={{ py: { xs: 8, md: 12 }, background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(236, 72, 153, 0.1) 100%)' }}>
+        <Container maxWidth="lg">
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} viewport={{ once: true }}>
+            <Box textAlign="center" maxWidth="700px" mx="auto">
+              <Typography variant="h3" sx={{ fontWeight: 700, mb: 3, fontSize: { xs: '1.75rem', md: '2.5rem' } }}>
+                Ready to Transform Your Scheduling?
+              </Typography>
+              <Typography variant="body1" sx={{ color: '#94a3b8', mb: 6 }}>
+                Join thousands of professionals who save hours every week with GraftAI's AI-powered scheduling.
+              </Typography>
+              <Button component={Link} href="/register" variant="contained" size="large" sx={{ textTransform: 'none', px: 6, py: 2, borderRadius: '12px', fontSize: '1.2rem' }}>
+                Get Started Free <ArrowRight size={24} style={{ marginLeft: 12 }} />
+              </Button>
+            </Box>
+          </motion.div>
+        </Container>
+      </Box>
+
       {/* Pricing Section */}
       <Box id="pricing" sx={{ py: { xs: 8, md: 12 } }}>
         <Container maxWidth="lg">
@@ -194,6 +339,9 @@ export default function Home() {
         </Container>
       </Box>
 
+      {/* Developer Corner */}
+      <DeveloperCorner />
+
       {/* Footer */}
       <Box sx={{ py: 8, background: 'rgba(15, 15, 26, 0.8)', borderTop: '1px solid rgba(99, 102, 241, 0.1)' }}>
         <Container maxWidth="lg">
@@ -212,6 +360,7 @@ export default function Home() {
                 <Link href="#features" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Features</Link>
                 <Link href="#pricing" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Pricing</Link>
                 <Link href="/docs" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Documentation</Link>
+                <Link href="/developers" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Developers</Link>
                 <Link href="/integrations" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Integrations</Link>
               </Box>
             </Grid>

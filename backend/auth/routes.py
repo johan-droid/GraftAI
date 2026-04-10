@@ -1,6 +1,9 @@
+import hashlib
+import hmac
 import os
 import secrets
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote_plus, unquote_plus
 from typing import Optional
@@ -23,8 +26,14 @@ from backend.services.notifications import send_email_verification_code
 from backend.services import google_auth, microsoft_auth, zoom_auth
 from backend.services.sso import get_provider_config
 from backend.utils.rate_limit import rate_limit, api_limits
+from backend.auth.config import SECRET_KEY
 
-FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "https://www.graftai.tech")).rstrip("/")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "http://localhost:3000")).rstrip("/")
+
+# OAuth state expiration (10 minutes)
+OAUTH_STATE_EXPIRY_SECONDS = 600
+# Allowed redirect paths (prevent open redirect)
+ALLOWED_REDIRECT_PATHS = {"/dashboard", "/settings", "/calendar", "/profile"}
 
 
 def _frontend_redirect_token(access_token: str, redirect_to: str = "/dashboard"):
@@ -32,20 +41,141 @@ def _frontend_redirect_token(access_token: str, redirect_to: str = "/dashboard")
 
 
 def _build_oauth_state(user_id: Optional[str], redirect_to: Optional[str] = "/dashboard") -> str:
-    safe_redirect_to = quote_plus(redirect_to or "/dashboard")
-    return f"{secrets.token_urlsafe(16)}|{user_id or ''}|{safe_redirect_to}"
+    """
+    Build signed OAuth state parameter with expiration.
+    
+    Format: timestamp:nonce:user_id:redirect:signature
+    """
+    # Validate redirect_to to prevent open redirect attacks
+    safe_redirect = _sanitize_redirect(redirect_to or "/dashboard")
+    
+    # Generate components
+    timestamp = str(int(time.time()))
+    nonce = secrets.token_urlsafe(16)
+    user_id_str = user_id or ""
+    
+    # Create payload for signing
+    payload = f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}"
+    
+    # Generate HMAC signature
+    signature = hmac.new(
+        SECRET_KEY.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()[:16]
+    
+    return f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{signature}"
 
 
 def _parse_oauth_state(state: str) -> tuple[Optional[str], str]:
-    user_id = None
-    redirect_to = "/dashboard"
-    if state and "|" in state:
-        parts = state.split("|")
-        if len(parts) >= 2:
-            user_id = parts[1] if parts[1] else None
-        if len(parts) >= 3:
-            redirect_to = unquote_plus(parts[2]) or "/dashboard"
-    return user_id, redirect_to
+    """
+    Parse and validate OAuth state parameter.
+    
+    Validates:
+    - Signature integrity
+    - Expiration (10 minutes)
+    - Redirect URL safety
+    
+    Returns:
+        tuple: (user_id, redirect_to)
+    
+    Raises:
+        HTTPException: If state is invalid or expired
+    """
+    if not state:
+        logger.error("OAuth callback missing state parameter")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state: missing state"
+        )
+    
+    # Parse state components
+    parts = state.split(":")
+    if len(parts) != 5:
+        logger.error(f"Invalid OAuth state format: {len(parts)} parts instead of 5")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state: malformed"
+        )
+    
+    timestamp_str, nonce, user_id, redirect_to, signature = parts
+    
+    # Reconstruct payload for signature verification
+    payload = f"{timestamp_str}:{nonce}:{user_id}:{redirect_to}"
+    expected_signature = hmac.new(
+        SECRET_KEY.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()[:16]
+    
+    # Verify signature using constant-time comparison
+    if not hmac.compare_digest(signature, expected_signature):
+        logger.error("OAuth state signature mismatch - possible CSRF attack")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state: signature verification failed"
+        )
+    
+    # Check expiration
+    try:
+        state_time = int(timestamp_str)
+        current_time = int(time.time())
+        if current_time - state_time > OAUTH_STATE_EXPIRY_SECONDS:
+            logger.error(f"OAuth state expired: {current_time - state_time}s old")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid OAuth state: expired"
+            )
+    except ValueError:
+        logger.error("OAuth state contains invalid timestamp")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state: invalid timestamp"
+        )
+    
+    # Validate redirect URL (additional safety check)
+    decoded_redirect = unquote_plus(redirect_to)
+    safe_redirect = _sanitize_redirect(decoded_redirect)
+    
+    # Return parsed values
+    return user_id or None, safe_redirect
+
+
+def _sanitize_redirect(redirect: str) -> str:
+    """
+    Sanitize redirect URL to prevent open redirect attacks.
+    
+    Only allows:
+    - Relative paths starting with /
+    - Known safe application paths
+    """
+    if not redirect:
+        return "/dashboard"
+    
+    # Decode if URL-encoded
+    decoded = unquote_plus(redirect)
+    
+    # Block absolute URLs (potential open redirect)
+    if decoded.startswith(("http://", "https://", "//")):
+        logger.warning(f"Blocked open redirect attempt: {decoded}")
+        return "/dashboard"
+    
+    # Ensure relative path
+    if not decoded.startswith("/"):
+        decoded = "/" + decoded
+    
+    # Validate path is in allowed list (or default to dashboard)
+    # Extract base path for validation
+    base_path = decoded.split("?")[0].split("#")[0]
+    
+    # Allow exact matches and subpaths of allowed paths
+    for allowed in ALLOWED_REDIRECT_PATHS:
+        if base_path == allowed or base_path.startswith(allowed + "/"):
+            return decoded
+    
+    # Log blocked redirect for security monitoring
+    logger.warning(f"Blocked redirect to non-allowed path: {decoded}")
+    return "/dashboard"
 
 
 logger = logging.getLogger(__name__)
@@ -819,4 +949,131 @@ async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Zoom Callback Error: {e}")
+        raise HTTPException(status_code=500, detail="Authentication failed")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# APPLE SIGN IN & CALENDAR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from backend.services import apple_auth
+
+
+@router.get("/apple/login")
+async def apple_login(token: Optional[str] = None, redirect_to: Optional[str] = "/dashboard"):
+    """Initiate Apple Sign In OAuth flow."""
+    try:
+        user_id = None
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                user_id = payload.get("sub")
+            except Exception:
+                pass
+
+        state = _build_oauth_state(user_id, redirect_to)
+        auth_url = await apple_auth.get_apple_auth_url(state)
+        return RedirectResponse(url=auth_url)
+    except ValueError as e:
+        logger.error(f"Apple OAuth Configuration Error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/apple/callback")
+async def apple_callback(
+    request: Request,
+    code: str,
+    state: Optional[str] = None,
+    user: Optional[str] = None,  # Apple returns user data on first sign-in
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Apple Sign In callback.
+    
+    Note: Apple uses POST for the callback (response_mode=form_post).
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    await rate_limit(client_ip, api_limits["oauth_callback"])
+
+    try:
+        if not state:
+            logger.error("Apple callback missing state parameter")
+            raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+        user_id, redirect_to = _parse_oauth_state(state)
+
+        data = await apple_auth.fetch_apple_tokens(code)
+        email = data.get("email")
+
+        if not email:
+            logger.error("Apple Sign In returned no email")
+            raise HTTPException(status_code=400, detail="Failed to retrieve email from Apple")
+
+        email = email.lower().strip()
+
+        if user_id:
+            result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+            db_user = result.scalars().first()
+        else:
+            result = await db.execute(select(UserTable).where(UserTable.email == email))
+            db_user = result.scalars().first()
+
+        if not db_user:
+            db_user = UserTable(
+                email=email,
+                full_name=data.get("full_name", email.split("@")[0]),
+                hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+                email_verified=True,  # Apple verifies email
+                email_verification_code=None,
+                email_verification_expires_at=None,
+            )
+            db.add(db_user)
+            await db.flush()
+            logger.info(f"New user created via Apple Sign In: {email}")
+
+        token_info = data.get("token", {})
+        if not token_info.get("access_token"):
+            logger.error("Apple Sign In returned no access token")
+            raise HTTPException(status_code=400, detail="Failed to retrieve access token")
+
+        # Store or update Apple token
+        stmt = select(UserTokenTable).where(
+            UserTokenTable.user_id == db_user.id,
+            UserTokenTable.provider == "apple",
+        )
+        user_token = (await db.execute(stmt)).scalars().first()
+
+        if not user_token:
+            user_token = UserTokenTable(user_id=db_user.id, provider="apple")
+            db.add(user_token)
+
+        user_token.access_token = token_info["access_token"]
+        user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
+        user_token.expires_at = (
+            datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
+            if "expires_at" in token_info
+            else None
+        )
+        user_token.is_active = True
+        
+        # Store Apple-specific metadata
+        user_token.metadata = {
+            "apple_user_id": data.get("apple_user_id"),
+            "auth_method": "sign_in_with_apple",
+        }
+
+        await db.commit()
+        logger.info(f"Apple Sign In successful for user: {email}")
+
+        access_token = create_access_token(data={"sub": db_user.id})
+        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
+
+    except ValueError as e:
+        logger.error(f"Apple OAuth Configuration Error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Apple Callback Error: {e}", exc_info=True)
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Authentication failed")

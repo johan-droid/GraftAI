@@ -163,6 +163,10 @@ def _sanitize_redirect(redirect: str) -> str:
     # Ensure relative path
     if not decoded.startswith("/"):
         decoded = "/" + decoded
+
+    # Legacy frontend value used as an OAuth target can create callback->callback loops.
+    if decoded.split("?")[0].split("#")[0] == "/auth-callback":
+        return "/dashboard"
     
     # Validate path is in allowed list (or default to dashboard)
     # Extract base path for validation

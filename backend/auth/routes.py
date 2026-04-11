@@ -5,7 +5,7 @@ import secrets
 import logging
 import time
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote_plus, unquote_plus
+from urllib.parse import quote_plus, unquote_plus, quote, unquote
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -62,7 +62,7 @@ def _build_oauth_state(
     user_id_str = user_id or ""
     provider_str = provider or ""
     # URL-encode frontend_url to handle colons and special characters
-    frontend_url_str = quote_plus(frontend_url or "")
+    frontend_url_str = quote(frontend_url or "", safe='')
     
     # Create payload for signing
     payload = f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{provider_str}:{frontend_url_str}"

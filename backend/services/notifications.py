@@ -131,6 +131,104 @@ async def notify_event_reminder(recipient_emails: list[str], user_player_ids: li
     await _send_notification(recipient_emails, user_player_ids, "reminder", event_data)
 
 
+class NotificationService:
+    """Compatibility wrapper for route-level notification use."""
+
+    def __init__(self, db=None):
+        self.db = db
+
+    async def send_booking_confirmation(self, to_email: str, booking_data: dict):
+        title = booking_data.get("title") or "Booking"
+        attendee_name = booking_data.get("attendee_name") or "there"
+        start_time = booking_data.get("start_time") or "as scheduled"
+        end_time = booking_data.get("end_time") or ""
+        confirmation_code = booking_data.get("confirmation_code") or ""
+
+        subject = f"Booking confirmed: {title}"
+        message = (
+            f"Hello {attendee_name},\n\n"
+            f"Your booking '{title}' is confirmed for {start_time}"
+            f"{(' to ' + end_time) if end_time else ''}.\n"
+            f"Confirmation code: {confirmation_code}\n"
+        )
+
+        import html
+
+        escaped_attendee = html.escape(attendee_name)
+        escaped_title = html.escape(title)
+        escaped_start = html.escape(start_time)
+        escaped_end = html.escape(end_time) if end_time else ""
+        escaped_code = html.escape(confirmation_code)
+
+        await send_custom_notification(
+            user_email=to_email,
+            subject=subject,
+            message=message,
+            html_body=(
+                f"<p>Hello {escaped_attendee},</p>"
+                f"<p>Your booking <strong>{escaped_title}</strong> is confirmed for {escaped_start}"
+                f"{(' to ' + escaped_end) if escaped_end else ''}.</p>"
+                f"<p>Confirmation code: <strong>{escaped_code}</strong></p>"
+            ),
+            text_body=message,
+        )
+
+    async def send_event_reminder(self, to_email: str, event_data: dict):
+        title = event_data.get("title") or "Upcoming event"
+        start_time = event_data.get("start_time") or "soon"
+        user_name = event_data.get("user_name") or "there"
+
+        subject = f"Reminder: {title}"
+        message = f"Hello {user_name},\n\nReminder: '{title}' starts at {start_time}.\n"
+
+        await send_custom_notification(
+            user_email=to_email,
+            subject=subject,
+            message=message,
+            html_body=f"<p>Hello {user_name},</p><p>Reminder: <strong>{title}</strong> starts at {start_time}.</p>",
+            text_body=message,
+        )
+
+    async def send_team_invite(self, to_email: str, invite_data: dict):
+        inviter_name = invite_data.get("inviter_name") or "A teammate"
+        team_name = invite_data.get("team_name") or "your team"
+        invite_link = invite_data.get("invite_link") or ""
+
+        subject = f"You're invited to join {team_name}"
+        message = (
+            f"Hello,\n\n"
+            f"{inviter_name} invited you to join {team_name}.\n"
+            f"{('Accept invite: ' + invite_link) if invite_link else ''}\n"
+        )
+
+        import html
+        from urllib.parse import urlparse
+
+        escaped_inviter_name = html.escape(inviter_name)
+        escaped_team_name = html.escape(team_name)
+
+        link_html = ""
+        if invite_link:
+            parsed = urlparse(invite_link)
+            if parsed.scheme in ("http", "https") and parsed.netloc:
+                escaped_link = html.escape(invite_link, quote=True)
+                link_html = f'<p><a href="{escaped_link}">Accept invite</a></p>'
+            else:
+                link_html = '<p>Invite link is invalid or expired</p>'
+
+        await send_custom_notification(
+            user_email=to_email,
+            subject=subject,
+            message=message,
+            html_body=(
+                f"<p>Hello,</p>"
+                f"<p>{escaped_inviter_name} invited you to join <strong>{escaped_team_name}</strong>.</p>"
+                f"{link_html}"
+            ),
+            text_body=message,
+        )
+
+
 async def send_custom_notification(
     user_email: str,
     subject: str,

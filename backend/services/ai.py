@@ -166,6 +166,27 @@ def _extract_event_id(prompt: str) -> Optional[int]:
     return None
 
 
+def _looks_like_meeting_request(prompt: str) -> bool:
+    lower = prompt.lower()
+    if any(provider in lower for provider in ["zoom", "teams", "microsoft", "google meet", "gmeet", "meet link"]):
+        return True
+
+    meeting_keywords = [
+        "meeting",
+        "call",
+        "sync",
+        "standup",
+        "1:1",
+        "one-on-one",
+        "interview",
+        "kickoff",
+        "demo",
+        "review",
+        "conference",
+    ]
+    return any(keyword in lower for keyword in meeting_keywords)
+
+
 def _parse_update_action_payload(action_text: str, user_timezone: str) -> tuple[Optional[int], Optional[datetime]]:
     match = re.search(r"ACTION:UPDATE_MEETING:(\{.*\})", action_text, flags=re.IGNORECASE)
     if not match:
@@ -227,15 +248,28 @@ def _extract_title(prompt: str) -> str:
     if quoted:
         return quoted.group(1).strip()
 
+    for_match = re.search(r"\b(?:for|about|regarding)\s+([^\n\r\.,!\?]+)", prompt, flags=re.IGNORECASE)
+    if for_match:
+        candidate = for_match.group(1).strip(" -:")
+        candidate = re.sub(r"^(?:a|an|the)\s+", "", candidate, flags=re.IGNORECASE).strip()
+        if candidate:
+            return candidate[:120].title()
+
     cleaned = re.sub(r"\s+", " ", prompt).strip()
     cleaned = re.sub(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(
-        r"\b(schedule|book|add|create|meeting|call|for|at|on|today|tomorrow|next|week|month|day)\b",
+        r"\b(schedule|book|add|create|event|appointment|task|reminder|meeting|call|for|at|on|today|tomorrow|next|week|month|day|morning|afternoon|evening)\b",
         "",
         cleaned,
         flags=re.IGNORECASE,
     ).strip(" -:")
-    return cleaned[:120] if cleaned else "New Meeting"
+    cleaned = re.sub(r"^(?:a|an|the)\s+", "", cleaned, flags=re.IGNORECASE).strip()
+    if cleaned:
+        return cleaned[:120].title()
+
+    if _looks_like_meeting_request(prompt):
+        return "Quick Sync"
+    return "New Event"
 
 
 def _extract_datetime(prompt: str, user_timezone: str) -> datetime:
@@ -432,21 +466,22 @@ async def _offline_assistant_response(
         )
 
     if intent == "schedule":
+        is_meeting_request = _looks_like_meeting_request(prompt)
+        lower_prompt = prompt.lower()
         meeting_platform = None
-        if "zoom" in prompt.lower():
+        if "zoom" in lower_prompt:
             meeting_platform = "zoom"
-        elif any(k in prompt.lower() for k in ["teams", "microsoft", "ms teams"]):
+        elif any(k in lower_prompt for k in ["teams", "microsoft", "ms teams"]):
             meeting_platform = "microsoft"
-        elif "google" in prompt.lower() or "meet" in prompt.lower():
+        elif any(k in lower_prompt for k in ["google meet", "gmeet", "google-meet", "meet link"]) or re.search(
+            r"\b(?:on|via|using)\s+meet\b",
+            lower_prompt,
+        ):
             meeting_platform = "google"
 
-        if not meeting_platform:
+        if is_meeting_request and not meeting_platform:
             return (
-                "Please provide the meeting details in this format to continue:\n\n"
-                "- **Title**: (e.g., Sync)\n"
-                "- **Time**: (e.g., Tomorrow at 3pm)\n"
-                "- **Platform**: (Google Meet, Zoom, or Teams)\n"
-                "- **Agenda**: (Brief points or topic)",
+                "I can schedule that. Which meeting platform should I use: Google Meet, Zoom, or Teams?",
                 {"type": "clarify", "action": "select_platform"},
             )
 
@@ -460,8 +495,8 @@ async def _offline_assistant_response(
 
         try:
             title_prompt = (
-                "Extract a concise meeting title. "
-                "If no title is clear or just 'meeting' is mentioned, return 'Quick Sync'. "
+                "Extract a concise event title. "
+                "If no clear title is present, return a short sensible title. "
                 "Output ONLY the title string."
             )
             title = await _generate_with_groq(title_prompt, prompt)
@@ -477,7 +512,7 @@ async def _offline_assistant_response(
             "end_time": start_time + timedelta(minutes=duration),
             "source": "local",
             "fingerprint": f"ai-{start_time.timestamp()}",
-            "is_meeting": True,
+            "is_meeting": bool(meeting_platform),
             "meeting_provider": meeting_platform,
             "metadata_payload": {"source": "assistant_offline_engine"},
         }
@@ -495,11 +530,13 @@ async def _offline_assistant_response(
                 f"'{_get_event_attr(c, 'title', 'event')}'"
                 for c in conflicts[:2]
             ])
-            conflict_msg = f"\n⚠️ NOTE: This overlaps with {conflict_names}."
+            conflict_msg = f" It overlaps with {conflict_names}."
 
         created = await scheduler.create_event(db, event_data)
+        start_local = created.start_time.astimezone(_safe_zoneinfo(user_timezone))
+        start_label = start_local.strftime("%a, %b %d at %I:%M %p")
         return (
-            f"Scheduled '{created.title}' on {created.start_time.strftime('%Y-%m-%d %H:%M UTC')} (event #{created.id}).{conflict_msg}",
+            f"Done, I scheduled '{created.title}' for {start_label} ({user_timezone}) as event #{created.id}.{conflict_msg}",
             {
                 "type": "schedule",
                 "event_id": created.id,

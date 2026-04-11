@@ -13,6 +13,7 @@ from backend.models.dsr import (
 )
 from backend.models.tables import UserTable, EventTable, BookingTable, UserTokenTable
 from backend.utils.audit_logger import AuditLogger, Action
+from backend.services.notifications import send_custom_notification
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ class DSRWorkflow:
         if not user_id:
             verification_code = secrets.token_urlsafe(16)
             await self._send_verification_email(requester_email, verification_code)
+            dsr.request_details = dsr.request_details or {}
             dsr.request_details["verification_code"] = verification_code
             await db.commit()
             
@@ -465,8 +467,27 @@ class DSRWorkflow:
     
     async def _send_verification_email(self, email: str, code: str):
         """Send identity verification email."""
-        # Implement email sending
-        logger.info(f"Sending verification code to {email}")
+        subject = "Verify your data request"
+        text_body = (
+            "We received a Data Subject Request for this email address.\n\n"
+            f"Verification code: {code}\n"
+            f"This code expires in {self.IDENTITY_VERIFICATION_CODE_EXPIRY} hours.\n\n"
+            "If you did not make this request, you can safely ignore this email."
+        )
+        html_body = (
+            "<p>We received a Data Subject Request for this email address.</p>"
+            f"<p><strong>Verification code:</strong> {code}</p>"
+            f"<p>This code expires in {self.IDENTITY_VERIFICATION_CODE_EXPIRY} hours.</p>"
+            "<p>If you did not make this request, you can safely ignore this email.</p>"
+        )
+
+        await send_custom_notification(
+            user_email=email,
+            subject=subject,
+            message=text_body,
+            html_body=html_body,
+            text_body=text_body,
+        )
 
 
 # Global DSR workflow instance

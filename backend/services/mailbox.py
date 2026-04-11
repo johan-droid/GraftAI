@@ -5,7 +5,6 @@ from sqlalchemy import select, and_
 from anyio import to_thread
 
 from backend.models.tables import UserTokenTable
-from backend.utils.db import unwrap_result
 from backend.services.integrations.google_calendar import get_google_credentials
 from backend.services.integrations.ms_graph import get_ms_graph_token
 
@@ -22,8 +21,7 @@ async def get_recent_emails(db: AsyncSession, user_id: str, limit: int = 5) -> L
         )
     )
     result = await db.execute(stmt)
-    scalars = await unwrap_result(result.scalars())
-    tokens = await unwrap_result(scalars.all())
+    tokens = result.scalars().all()
 
     for token in tokens:
         try:

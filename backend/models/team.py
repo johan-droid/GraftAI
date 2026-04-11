@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import (
     String, Boolean, Integer, ForeignKey, DateTime,
-    Text, JSON, Enum as SQLEnum, Index
+    Text, JSON, Enum as SQLEnum, Index, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum
@@ -90,11 +90,12 @@ class TeamMember(Base):
     
     # Relationships
     team: Mapped["Team"] = relationship("Team", back_populates="members")
-    user: Mapped["UserTable"] = relationship("UserTable")  # Will need to add back_populates in UserTable
+    user: Mapped["UserTable"] = relationship("UserTable", back_populates="team_memberships")
     
     # Indexes
     __table_args__ = (
-        Index('ix_team_members_team_user', 'team_id', 'user_id', unique=True),
+        UniqueConstraint("team_id", "user_id", name="uq_team_members_team_user"),
+        Index("ix_team_members_team_user", "team_id", "user_id"),
     )
 
 

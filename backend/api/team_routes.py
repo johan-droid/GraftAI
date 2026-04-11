@@ -1,6 +1,7 @@
 """Team scheduling API routes for collaborative scheduling."""
 
 import logging
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
@@ -432,9 +433,8 @@ async def create_team_booking(
     confirmation_code = secrets.token_urlsafe(8).upper()
     
     # Create booking
-    from datetime import datetime
     start_time = datetime.fromisoformat(booking.start_time)
-    end_time = start_time.replace(minute=start_time.minute + event_type.duration)
+    end_time = start_time + timedelta(minutes=event_type.duration)
     
     new_booking = TeamBooking(
         team_id=team_id,

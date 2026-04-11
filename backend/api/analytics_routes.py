@@ -12,6 +12,20 @@ from backend.models.tables import UserTable, BookingTable, EventTypeTable
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
+def _is_admin(user: UserTable) -> bool:
+    tier = (getattr(user, "tier", "") or "").strip().lower()
+    if tier in {"admin", "elite"}:
+        return True
+
+    preferences = getattr(user, "preferences", None)
+    if isinstance(preferences, dict):
+        role = str(preferences.get("role", "")).strip().lower()
+        if role in {"admin", "elite", "owner"}:
+            return True
+
+    return False
+
+
 class AnalyticsOverview(BaseModel):
     total_bookings: int
     total_revenue: float
@@ -42,7 +56,7 @@ async def get_analytics_overview(
 ):
     """Get overall analytics overview."""
     # Check if user is admin/owner
-    if not current_user.is_superuser:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Total bookings
@@ -89,7 +103,7 @@ async def get_booking_timeline(
 ):
     """Get booking metrics over time."""
     # Check if user is admin/owner
-    if not current_user.is_superuser:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     start_date = datetime.utcnow() - timedelta(days=days)
@@ -129,7 +143,7 @@ async def get_event_type_metrics(
 ):
     """Get metrics by event type."""
     # Check if user is admin/owner
-    if not current_user.is_superuser:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Get event types with booking counts
@@ -170,7 +184,7 @@ async def get_user_analytics(
 ):
     """Get analytics for a specific user."""
     # Users can only view their own analytics or if they're admin
-    if current_user.id != user_id and not current_user.is_superuser:
+    if current_user.id != user_id and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     start_date = datetime.utcnow() - timedelta(days=days)
@@ -213,7 +227,7 @@ async def get_realtime_metrics(
 ):
     """Get real-time metrics for dashboard."""
     # Check if user is admin/owner
-    if not current_user.is_superuser:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Bookings in last hour

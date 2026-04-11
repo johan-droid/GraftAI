@@ -73,6 +73,7 @@ def upgrade() -> None:
                existing_type=sa.TEXT(),
                type_=sa.String(),
                existing_nullable=True)
+    op.execute("UPDATE events SET is_meeting = FALSE WHERE is_meeting IS NULL")
     op.alter_column('events', 'is_meeting',
                existing_type=sa.BOOLEAN(),
                nullable=False)
@@ -80,6 +81,7 @@ def upgrade() -> None:
                existing_type=sa.TEXT(),
                type_=sa.String(),
                existing_nullable=True)
+    op.execute("UPDATE events SET is_reminded = FALSE WHERE is_reminded IS NULL")
     op.alter_column('events', 'is_reminded',
                existing_type=sa.BOOLEAN(),
                nullable=False)
@@ -110,7 +112,7 @@ def upgrade() -> None:
     op.alter_column('user_tokens', 'is_active',
                existing_type=sa.BOOLEAN(),
                nullable=False)
-    op.add_column('users', sa.Column('preferences', sa.JSON(), nullable=True))
+    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSON")
     op.alter_column('users', 'username',
                existing_type=sa.TEXT(),
                type_=sa.String(),

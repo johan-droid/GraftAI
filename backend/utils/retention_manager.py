@@ -4,10 +4,17 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, update, text
+from sqlalchemy import select, delete, update, text, exists, literal, func
 
 from backend.models.dsr import DataRetentionSchedule
-from backend.models.tables import EventTable, BookingTable, UserTokenTable, UserTable
+from backend.models.tables import (
+    AuditLogTable,
+    BookingTable,
+    EventTable,
+    UserMFATable,
+    UserTokenTable,
+    UserTable,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -147,15 +154,42 @@ class DataRetentionManager:
             count = result.rowcount
         
         elif category == "booking_history":
-            stmt = delete(BookingTable).where(BookingTable.created_at < cutoff)
+            stmt = delete(BookingTable).where(
+                BookingTable.created_at < cutoff,
+                BookingTable.status.in_(["cancelled", "completed", "archived"]),
+            )
             result = await db.execute(stmt)
             count = result.rowcount
-        
+
+        elif category == "audit_logs":
+            stmt = delete(AuditLogTable).where(AuditLogTable.timestamp < cutoff)
+            result = await db.execute(stmt)
+            count = result.rowcount
+
         elif category == "session_tokens":
-            # Delete expired tokens
             stmt = delete(UserTokenTable).where(
                 UserTokenTable.expires_at < cutoff
             )
+            result = await db.execute(stmt)
+            count = result.rowcount
+
+        elif category == "email_verification_codes":
+            if hasattr(UserTable, "email_verification_expires_at"):
+                stmt = update(UserTable).where(
+                    UserTable.email_verification_expires_at != None,
+                    UserTable.email_verification_expires_at < cutoff,
+                ).values(
+                    email_verification_code=None,
+                    email_verification_expires_at=None,
+                )
+                result = await db.execute(stmt)
+                count = result.rowcount
+
+        elif category == "mfa_backup_codes":
+            stmt = update(UserMFATable).where(
+                UserMFATable.backup_codes != None,
+                UserMFATable.created_at < cutoff,
+            ).values(backup_codes=None)
             result = await db.execute(stmt)
             count = result.rowcount
         
@@ -167,13 +201,27 @@ class DataRetentionManager:
         count = 0
         
         if category == "user_profile":
-            # Anonymize user profile data for inactive users
+            # Anonymize old profiles that show no recent booking/event activity.
+            recent_event_exists = exists(
+                select(EventTable.id).where(
+                    EventTable.user_id == UserTable.id,
+                    EventTable.created_at >= cutoff,
+                )
+            )
+            recent_booking_exists = exists(
+                select(BookingTable.id).where(
+                    BookingTable.user_id == UserTable.id,
+                    BookingTable.created_at >= cutoff,
+                )
+            )
+
             stmt = update(UserTable).where(
-                UserTable.updated_at < cutoff,
-                UserTable.is_active == False
+                UserTable.created_at < cutoff,
+                ~recent_event_exists,
+                ~recent_booking_exists,
             ).values(
                 full_name="Anonymized User",
-                email=f"anonymized-{UserTable.id}@internal.local",
+                email=literal("anonymized-") + UserTable.id + literal("@internal.local"),
             )
             result = await db.execute(stmt)
             count = result.rowcount
@@ -187,9 +235,10 @@ class DataRetentionManager:
         count = 0
         
         if category == "booking_history":
-            # Mark as archived
+            # Mark as archived for completed booking history only
             stmt = update(BookingTable).where(
-                BookingTable.created_at < cutoff
+                BookingTable.created_at < cutoff,
+                BookingTable.status.in_(["confirmed", "rescheduled"]),
             ).values(status="archived")
             result = await db.execute(stmt)
             count = result.rowcount
@@ -225,10 +274,10 @@ class DataRetentionManager:
         """Generate data inventory for GDPR Article 30 RoPA."""
         
         # Count records in each table
-        event_count = (await db.execute(select(text("COUNT(*) FROM events")))).scalar() or 0
-        booking_count = (await db.execute(select(text("COUNT(*) FROM bookings")))).scalar() or 0
-        token_count = (await db.execute(select(text("COUNT(*) FROM user_tokens")))).scalar() or 0
-        user_count = (await db.execute(select(text("COUNT(*) FROM users")))).scalar() or 0
+        event_count = (await db.execute(select(func.count()).select_from(EventTable))).scalar() or 0
+        booking_count = (await db.execute(select(func.count()).select_from(BookingTable))).scalar() or 0
+        token_count = (await db.execute(select(func.count()).select_from(UserTokenTable))).scalar() or 0
+        user_count = (await db.execute(select(func.count()).select_from(UserTable))).scalar() or 0
         
         return {
             "generated_at": datetime.utcnow().isoformat(),

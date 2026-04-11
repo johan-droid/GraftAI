@@ -22,6 +22,20 @@ from backend.services.email_template_service import EmailTemplateService
 router = APIRouter(prefix="/email-templates", tags=["email-templates"])
 
 
+def _is_admin(user: UserTable) -> bool:
+    tier = (getattr(user, "tier", "") or "").strip().lower()
+    if tier in {"admin", "elite"}:
+        return True
+
+    preferences = getattr(user, "preferences", None)
+    if isinstance(preferences, dict):
+        role = str(preferences.get("role", "")).strip().lower()
+        if role in {"admin", "elite", "owner"}:
+            return True
+
+    return False
+
+
 # Pydantic Models
 
 class EmailTemplateListItem(BaseModel):
@@ -64,7 +78,7 @@ class EmailTemplateCreate(BaseModel):
     subject: str = Field(..., min_length=1, max_length=500)
     html_body: str = Field(..., min_length=1)
     text_body: Optional[str] = None
-    available_variables: List[str] = Field(default=[])
+    available_variables: List[str] = Field(default_factory=list)
     primary_color: str = Field(default="#6366f1", pattern="^#[0-9a-fA-F]{6}$")
     language: str = Field(default="en", pattern="^[a-z]{2}$")
 
@@ -83,7 +97,7 @@ class EmailTemplateUpdate(BaseModel):
 
 class RenderTemplateRequest(BaseModel):
     """Render template request."""
-    variables: Dict[str, str] = Field(default={})
+    variables: Dict[str, str] = Field(default_factory=dict)
 
 
 class RenderTemplateResponse(BaseModel):
@@ -96,7 +110,7 @@ class RenderTemplateResponse(BaseModel):
 class SendTestEmailRequest(BaseModel):
     """Send test email request."""
     to_email: str = Field(..., pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-    variables: Dict[str, str] = Field(default={})
+    variables: Dict[str, str] = Field(default_factory=dict)
 
 
 class EmailStatsResponse(BaseModel):
@@ -507,7 +521,7 @@ async def initialize_system_templates(
     This endpoint is primarily for admin use. System templates
     are created automatically when needed.
     """
-    if not current_user.is_superuser:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     service = EmailTemplateService(db)

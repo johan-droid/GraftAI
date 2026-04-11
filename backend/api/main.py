@@ -259,17 +259,6 @@ def create_app() -> FastAPI:
     if os.getenv("SENTRY_DSN"):
         app.add_middleware(SentryAsgiMiddleware)
 
-    # Security Headers Middleware
-    @app.middleware("http")
-    async def add_security_headers(request: Request, call_next):
-        response = await call_next(request)
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: https:; connect-src 'self' https:;"
-        return response
-
     # Trusted Host and CORS hardening
     frontend_url = os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "http://localhost:3000"))
     if frontend_url:

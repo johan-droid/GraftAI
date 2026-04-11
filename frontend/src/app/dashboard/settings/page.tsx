@@ -1,547 +1,306 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/providers/auth-provider";
-import { deleteAccount, setConsent, getEmailDiagnostic, sendTestEmail } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { useAuthContext } from "@/app/providers/auth-provider";
+import { setConsent } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
-  Shield,
-  Bell,
-  Eye,
-  Loader2,
-  LogOut,
-  Clock,
-  Globe,
-  ChevronRight,
-  Zap,
-  Puzzle,
-  X,
+  User, Shield, Bell, Eye, Loader2, Check, LogOut,
+  KeyRound, Trash2, AlertTriangle, ChevronRight,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { toast } from "@/components/ui/Toast";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
-interface UserProfile {
-  name?: string;
-  email?: string;
-  bio?: string;
-  job_title?: string;
-  location?: string;
-  timezone?: string;
-  tier?: string;
-  created_at?: string;
-  is_superuser?: boolean;
-}
+const CONSENT_CONFIG = [
+  {
+    key: "analytics",
+    label: "Analytics & Usage Data",
+    description: "Share anonymized usage data to help improve GraftAI. No personal content is shared.",
+    icon: Eye,
+    defaultEnabled: true,
+  },
+  {
+    key: "notifications",
+    label: "Email Notifications",
+    description: "Receive booking reminders, meeting summaries, and AI insights via email.",
+    icon: Bell,
+    defaultEnabled: true,
+  },
+  {
+    key: "ai_training",
+    label: "AI Model Training",
+    description: "Allow anonymized interaction patterns to improve AI scheduling accuracy. Opt out anytime.",
+    icon: Shield,
+    defaultEnabled: false,
+  },
+] as const;
 
-type EmailDiagnosticStatus =
-  | { status: "success"; message: string; hint?: string }
-  | { status: "error"; message: string; hint?: string }
-  | null;
+type ConsentKey = (typeof CONSENT_CONFIG)[number]["key"];
 
-function normalizeEmailStatus(res: { status: string; message: string; hint?: string }): Exclude<EmailDiagnosticStatus, null> {
-  return {
-    status: res.status === "success" ? "success" : "error",
-    message: res.message,
-    hint: res.hint,
-  };
-}
-
-const STAGGER = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
-};
-const ITEM = {
-  hidden: { opacity: 0, y: 14 },
-  visible: { opacity: 1, y: 0 },
-};
-
-function Toggle({ on, onChange, loading }: { on: boolean; onChange: () => void; loading?: boolean }) {
-  return (
-    <button
-      onClick={onChange}
-      disabled={loading}
-      aria-label={on ? "Disable setting" : "Enable setting"}
-      className={cn(
-        "relative w-11 h-6 rounded-full transition-all shrink-0",
-        on ? "bg-indigo-600 shadow-lg shadow-indigo-600/20" : "bg-white/10 border border-white/15"
-      )}
-    >
-      <div
-        className={cn(
-          "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all flex items-center justify-center shadow-sm",
-          on ? "translate-x-5" : "translate-x-0"
-        )}
-      >
-        {loading && <Loader2 className="w-2.5 h-2.5 animate-spin text-indigo-500" />}
-      </div>
-    </button>
-  );
-}
-
-function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] overflow-hidden">
-      <div className="px-6 py-4 border-b border-white/[0.05]">
-        <h2 className="text-sm font-bold text-white">{title}</h2>
-        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
-      </div>
-      <div className="divide-y divide-white/[0.04]">{children}</div>
-    </div>
-  );
-}
-
-function SettingRow({ icon: Icon, label, description, children }: {
-  icon?: React.ComponentType<{ className?: string }>;
-  label: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 px-4 sm:px-6 py-4">
-      <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1">
-        {Icon && <Icon className="w-4 h-4 text-slate-500 shrink-0 mt-0.5 sm:mt-0" />}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-200">{label}</p>
-          {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
-        </div>
-      </div>
-      <div className="shrink-0 sm:mt-0 mt-1 pl-7 sm:pl-0 flex">{children}</div>
-    </div>
-  );
-}
+type SettingsUser = { name?: string; email?: string; sub?: string } | null;
 
 export default function SettingsPage() {
-  const router = useRouter();
-  const { user, logout } = useAuth();
-  const typedUser = user as UserProfile | null;
+  const { user, logout } = useAuthContext();
+  const settingsUser = user as SettingsUser;
 
-  const [consents, setConsents] = useState({ analytics: true, notifications: true, ai_training: false });
-  const [saving, setSaving] = useState<string | null>(null);
-  const [availability, setAvailability] = useState({
-    weekdays: true,
-    saturday: false,
-    sunday: false,
-    startHour: "09:00",
-    endHour: "18:00",
-  });
-  
-
-  const [deletingAccount, setDeletingAccount] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteReason, setDeleteReason] = useState("");
-  const [deleteDetails, setDeleteDetails] = useState("");
-
-  // Diagnostics State
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [emailStatus, setEmailStatus] = useState<EmailDiagnosticStatus>(null);
-  const [testingEmail, setTestingEmail] = useState(false);
+  const initialConsents = Object.fromEntries(CONSENT_CONFIG.map(c => [c.key, c.defaultEnabled])) as Record<ConsentKey, boolean>;
+  const [consents, setConsents] = useState<Record<ConsentKey, boolean>>(initialConsents);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    fetch("/api/user/preferences", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.consents) {
+          setConsents(data.consents);
+        } else {
+          setConsents(initialConsents);
+        }
+      })
+      .catch(err => {
+        console.error("Failed to load preferences:", err);
+        setConsents(initialConsents);
+      });
   }, []);
 
+  const [savingKey, setSavingKey]     = useState<ConsentKey | null>(null);
+  const [savedKey, setSavedKey]       = useState<ConsentKey | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [changingPw, setChangingPw]   = useState(false);
+  const [pwForm, setPwForm]           = useState({ current: "", next: "", confirm: "" });
 
-
-  const toggleConsent = async (key: keyof typeof consents) => {
+  async function handleToggle(key: ConsentKey) {
     const next = !consents[key];
-    setSaving(key);
+    setSavingKey(key);
     try {
       await setConsent(key, next);
-      setConsents((p) => ({ ...p, [key]: next }));
+      setConsents(prev => ({ ...prev, [key]: next }));
+      setSavedKey(key);
+      setTimeout(() => setSavedKey(null), 2200);
+      toast.success(`${next ? "Enabled" : "Disabled"} ${key} preference.`);
     } catch {
-      // empty
+      toast.error("Failed to update preference. Please try again.");
     } finally {
-      setSaving(null);
+      setSavingKey(null);
     }
-  };
+  }
 
-
-
-  const handleTestEmail = async () => {
-    if (!typedUser?.email) return;
-    setTestingEmail(true);
-    try {
-      const res = await sendTestEmail(typedUser.email);
-      setEmailStatus(normalizeEmailStatus(res));
-    } catch (err: unknown) {
-      setEmailStatus({ status: "error", message: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setTestingEmail(false);
-    }
-  };
-
-  const handleRunDiagnostics = async () => {
-    setTestingEmail(true);
-    try {
-      const res = await getEmailDiagnostic();
-      setEmailStatus(normalizeEmailStatus(res));
-    } catch (err: unknown) {
-      setEmailStatus({ status: "error", message: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setTestingEmail(false);
-    }
-  };
-
-  const handleDeleteAccount = () => {
-    setDeleteModalOpen(true);
-  };
-
-  const confirmDeleteAccount = async () => {
-    if (!deleteReason) {
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (pwForm.next !== pwForm.confirm) {
+      toast.error("Passwords don't match.");
       return;
     }
-
-    setDeletingAccount(true);
-    try {
-      await deleteAccount({ reason: deleteReason, details: deleteDetails });
-      if (typeof window !== "undefined") {
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.href = "/";
-      }
-    } catch (err) {
-      console.error("Critical failure during account deletion redirect", err);
-      await logout();
-    } finally {
-      setDeletingAccount(false);
-      setDeleteModalOpen(false);
+    if (pwForm.next.length < 8) {
+      toast.error("Password must be at least 8 characters.");
+      return;
     }
-  };
+    setChangingPw(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ current: pwForm.current, next: pwForm.next }),
+      });
+      if (!res.ok) throw new Error("Failed to update password.");
+      setPwForm({ current: "", next: "", confirm: "" });
+      toast.success("Password updated successfully.");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setChangingPw(false);
+    }
+  }
 
-  const userInitials = typedUser?.name
-    ? typedUser.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
-    : typedUser?.email?.[0]?.toUpperCase() ?? "U";
-
+  const item = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } };
+  const container = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
 
   return (
-    <div className="p-6 md:p-10 max-w-4xl mx-auto">
-      <motion.div variants={STAGGER} initial="hidden" animate="visible" className="space-y-8">
+    <ErrorBoundary>
+      <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-2xl">
 
-        <motion.div variants={ITEM}>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Settings</h1>
-          <p className="text-slate-500 text-[15px] mt-1.5">Configure your workspace identity and operational parameters.</p>
+        <motion.div variants={item}>
+          <h1 className="text-h1 text-white">Settings</h1>
+          <p className="text-sm mt-1 text-slate-400">
+            Manage your account preferences and privacy
+          </p>
         </motion.div>
 
-        <motion.div variants={ITEM}>
-          <div className="rounded-[1.5rem] sm:rounded-[2.5rem] border border-white/[0.08] bg-[#0d1424]/40 p-5 sm:p-8 md:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-xl">
-            {/* Ambient Background Glows */}
-            <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 blur-[120px] rounded-full -mr-20 -mt-20 opacity-40" />
-            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-violet-600/10 blur-[120px] rounded-full -ml-20 -mb-20 opacity-40" />
-
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-10 relative z-10">
-              <div className="relative shrink-0">
-                <motion.div 
-                  whileHover={{ scale: 1.02 }} 
-                  className="w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-[2rem] sm:rounded-[2.5rem] bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 p-1 shadow-2xl shadow-indigo-600/20"
-                >
-                  <div className="w-full h-full rounded-[1.8rem] sm:rounded-[2.3rem] bg-[#070b14] flex items-center justify-center overflow-hidden relative">
-                    <span className="text-3xl sm:text-4xl md:text-5xl font-black text-white hover:scale-110 transition-transform cursor-default">
-                      {userInitials}
-                    </span>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                  </div>
-                </motion.div>
-                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#070b14] border-4 border-[#0d1424] p-1.5 flex items-center justify-center">
-                  <div className="w-full h-full rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse" />
-                </div>
-              </div>
-
-              <div className="flex-1 text-center md:text-left min-w-0">
-                <div className="mb-6 sm:mb-8 w-full">
-                  <h2 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter mb-3 sm:mb-4 truncate">
-                    {typedUser?.name || "Anonymous User"}
-                  </h2>
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-                    <span className="px-4 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-bold text-indigo-400 uppercase tracking-[0.15em] flex items-center gap-2">
-                       <Zap className="w-3 h-3" /> {typedUser?.tier?.toUpperCase() || "FREE"} TIER
-                    </span>
-                    <span className="px-4 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2">
-                       <Clock className="w-3 h-3" /> {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div className="p-5 rounded-[1.5rem] bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.05] hover:border-white/20 transition-all group/node relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover/node:opacity-100 transition-opacity" />
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black mb-3 flex items-center gap-2">
-                      <Shield className="w-3.5 h-3.5 text-indigo-400/70" /> Node Identifier
-                    </p>
-                    <p className="text-[14px] text-white font-bold truncate relative z-10">{typedUser?.email}</p>
-                  </div>
-                  
-                  <div className="p-5 rounded-[1.5rem] bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.05] hover:border-white/20 transition-all group/juris relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover/juris:opacity-100 transition-opacity" />
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black mb-3 flex items-center gap-2">
-                      <Globe className="w-3.5 h-3.5 text-violet-400/70" /> Jurisdiction
-                    </p>
-                    <p className="text-[14px] text-white font-bold uppercase relative z-10">
-                      {typedUser?.email?.split("@")[1] || "GraftAI.Tech"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* ── Profile ── */}
+        <motion.section variants={item} className="card p-6 space-y-4">
+          <SectionHeader icon={User} title="Profile" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <InfoField label="Full Name" value={settingsUser?.name ?? "Administrator"} />
+            <InfoField label="Email Address" value={settingsUser?.email ?? settingsUser?.sub ?? "—"} />
           </div>
-        </motion.div>
+        </motion.section>
 
-
-
-        {typedUser && typedUser.is_superuser && (
-          <motion.div variants={ITEM} className="mt-8">
-            <div className="rounded-[2.5rem] border border-white/[0.08] bg-[#0d1424]/40 p-8 md:p-10 shadow-2xl relative overflow-hidden group backdrop-blur-xl">
-              <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 blur-[120px] rounded-full -mr-20 -mt-20 opacity-40" />
-              
-              <div className="flex flex-col md:flex-row items-start gap-8 relative z-10">
-                <div className="w-16 h-16 rounded-[1.5rem] bg-indigo-500/10 flex items-center justify-center shrink-0 border border-indigo-500/20">
-                  <Bell className="w-8 h-8 text-indigo-400" />
-                </div>
-                
-                <div className="flex-1">
-                  <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">Email System Diagnostics</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed mb-6 max-w-2xl">
-                    Verify that your <code className="text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded">SMTP_PASSWORD</code> is a 
-                    <span className="text-white font-medium"> 16-character Google App Password</span>. Standard account passwords will be blocked by Google Security.
-                  </p>
-
-                  <div className="flex flex-wrap gap-4">
-                    <button
-                      onClick={handleRunDiagnostics}
-                      disabled={testingEmail}
-                      className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-white hover:bg-white/10 transition-all flex items-center gap-2"
-                    >
-                      {testingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                      Verify Connection
-                    </button>
-                    <button
-                      onClick={handleTestEmail}
-                      disabled={testingEmail}
-                      className="px-6 py-2.5 rounded-xl bg-indigo-600 text-xs font-bold text-white hover:bg-indigo-500 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
-                    >
-                      <Zap className="w-4 h-4" /> Send Test Email
-                    </button>
-                  </div>
-
-                  {emailStatus && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }} 
-                      animate={{ opacity: 1, height: "auto" }}
-                      className={cn(
-                        "mt-8 p-6 rounded-[1.5rem] border text-[13px] font-mono relative overflow-hidden",
-                        emailStatus.status === "success" 
-                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
-                          : "bg-red-500/10 border-red-500/20 text-red-400"
-                      )}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className={cn("w-2 h-2 rounded-full animate-pulse", emailStatus.status === "success" ? "bg-emerald-400" : "bg-red-400")} />
-                        <span className="font-bold uppercase tracking-widest text-[10px]">Diagnostics Result</span>
-                      </div>
-                      <p className="leading-relaxed opacity-90">{emailStatus.message}</p>
-                      {emailStatus.hint && (
-                        <div className="mt-4 p-3 rounded-lg bg-black/20 border border-white/5 text-white/70 italic flex items-start gap-2">
-                           <span className="shrink-0 text-amber-400">💡</span> {emailStatus.hint}
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </div>
+        {/* ── Password ── */}
+        <motion.section variants={item} className="card p-6 space-y-4">
+          <SectionHeader icon={KeyRound} title="Change Password" />
+          <form onSubmit={handleChangePassword} className="space-y-3">
+            <div>
+              <label className="text-label block mb-1.5 text-slate-400">Current Password</label>
+              <input
+                className="input" type="password" autoComplete="current-password"
+                placeholder="••••••••"
+                value={pwForm.current}
+                onChange={e => setPwForm(p => ({ ...p, current: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-label block mb-1.5 text-slate-400">New Password</label>
+                <input
+                  className="input" type="password" autoComplete="new-password"
+                  placeholder="Min. 8 characters"
+                  value={pwForm.next}
+                  onChange={e => setPwForm(p => ({ ...p, next: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-label block mb-1.5 text-slate-400">Confirm</label>
+                <input
+                  className="input" type="password" autoComplete="new-password"
+                  placeholder="Repeat password"
+                  value={pwForm.confirm}
+                  onChange={e => setPwForm(p => ({ ...p, confirm: e.target.value }))}
+                />
               </div>
             </div>
-          </motion.div>
-        )}
+            <button type="submit" className="btn btn-surface text-sm" disabled={changingPw || !pwForm.current || !pwForm.next}>
+              {changingPw ? <><Loader2 className="w-4 h-4 animate-spin" /> Updating…</> : "Update Password"}
+            </button>
+          </form>
+        </motion.section>
 
-        <motion.div variants={ITEM}>
-          <Section title="Availability" description="When you're open for bookings">
-            <SettingRow icon={Clock} label="Working days">
-              <div className="flex gap-1.5">
-                {[
-                  { key: "weekdays", label: "M–F" },
-                  { key: "saturday", label: "Sat" },
-                  { key: "sunday", label: "Sun" },
-                ].map((day) => (
+        {/* ── Privacy & Consent ── */}
+        <motion.section variants={item} className="card p-6 space-y-4">
+          <SectionHeader icon={Shield} title="Privacy & Consent" />
+          <div className="space-y-3">
+            {CONSENT_CONFIG.map((item) => {
+              const isSaving = savingKey === item.key;
+              const isSaved  = savedKey === item.key;
+              const enabled  = consents[item.key];
+
+              return (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between gap-4 p-4 rounded-xl transition-colors bg-slate-800 border border-white/10"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-slate-900">
+                      <item.icon className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate text-white">{item.label}</p>
+                      <p className="text-xs leading-relaxed mt-0.5 text-slate-400">
+                        {item.description}
+                      </p>
+                    </div>
+                  </div>
+
                   <button
-                    key={day.key}
-                    onClick={() => setAvailability((p) => ({ ...p, [day.key]: !p[day.key as keyof typeof p] }))}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border",
-                      availability[day.key as keyof typeof availability]
-                        ? "bg-indigo-600 border-indigo-500 text-white"
-                        : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                    className={`toggle flex-shrink-0 ${enabled ? "on" : ""}`}
+                    onClick={() => handleToggle(item.key)}
+                    disabled={isSaving}
+                    aria-label={item.label}
+                  >
+                    {isSaving && (
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <Loader2 className="w-3 h-3 animate-spin text-amber-300" />
+                      </span>
                     )}
-                  >
-                    {day.label}
+                    {isSaved && !isSaving && (
+                      <span className="absolute right-1 top-1/2 -translate-y-1/2">
+                        <Check className="w-2.5 h-2.5 text-emerald-400" />
+                      </span>
+                    )}
                   </button>
-                ))}
-              </div>
-            </SettingRow>
-            <SettingRow icon={Clock} label="Working hours">
-              <div className="flex items-center gap-2">
-                <select
-                  value={availability.startHour}
-                  onChange={(e) => setAvailability((p) => ({ ...p, startHour: e.target.value }))}
-                  aria-label="Start hour"
-                  title="Start hour"
-                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none appearance-none"
-                >
-                  {['08:00', '09:00', '10:00'].map((h) => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                </select>
-                <span className="text-slate-600 text-xs">to</span>
-                <select
-                  value={availability.endHour}
-                  onChange={(e) => setAvailability((p) => ({ ...p, endHour: e.target.value }))}
-                  aria-label="End hour"
-                  title="End hour"
-                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none appearance-none"
-                >
-                  {['17:00', '18:00', '19:00', '20:00'].map((h) => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                </select>
-              </div>
-            </SettingRow>
-            <div className="px-6 py-3 bg-white/[0.015]">
-              <Link href="/dashboard/calendar" className="text-sm text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-2">
-                Configure advanced availability <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          </Section>
-        </motion.div>
-
-        <motion.div variants={ITEM}>
-          <Section title="Plugins & Connections" description="Connect your Google, Microsoft, and other workspace tools">
-            <div className="p-6 rounded-[1.5rem] bg-indigo-500/5 border border-indigo-500/10 flex flex-col items-center text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 mb-1">
-                <Puzzle className="w-6 h-6 text-indigo-400" />
-              </div>
-              <h3 className="text-sm font-bold text-white">Unified Marketplace</h3>
-              <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                We&apos;ve moved all integrations to the Plugin Marketplace for a more streamlined experience.
-              </p>
-              <button
-                onClick={() => router.push("/dashboard/plugins")}
-                className="mt-2 px-6 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-lg shadow-indigo-600/20"
-              >
-                Open Plugin Marketplace
-              </button>
-            </div>
-          </Section>
-        </motion.div>
-
-        <motion.div variants={ITEM}>
-          <Section title="Privacy & Data" description="Control how your data is used">
-            {([
-              { key: "analytics", icon: Eye, label: "Analytics & usage data", description: "Share anonymized usage to improve GraftAI" },
-              { key: "notifications", icon: Bell, label: "Email notifications", description: "Booking reminders and AI insights via email" },
-              { key: "ai_training", icon: Zap, label: "AI model training", description: "Help improve AI with your interactions" },
-            ] as const).map((item) => (
-              <SettingRow key={item.key} icon={item.icon} label={item.label} description={item.description}>
-                <Toggle on={consents[item.key]} onChange={() => toggleConsent(item.key)} loading={saving === item.key} />
-              </SettingRow>
-            ))}
-          </Section>
-        </motion.div>
-
-        <motion.div variants={ITEM}>
-          <div className="rounded-xl border border-red-500/15 bg-red-500/[0.03] overflow-hidden">
-            <div className="px-6 py-4 border-b border-red-500/10">
-              <h2 className="text-sm font-bold text-red-400">Danger zone</h2>
-            </div>
-            <div className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-300">Sign out of all sessions</p>
-                <p className="text-xs text-slate-500 mt-0.5">You will be redirected to the login page</p>
-              </div>
-              <button
-                onClick={logout}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition-all"
-              >
-                <LogOut className="w-3.5 h-3.5" /> Sign out
-              </button>
-            </div>
-            <div className="px-4 sm:px-6 py-4 border-t border-red-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-300">Delete account</p>
-                <p className="text-xs text-slate-500 mt-0.5">Permanently delete your account and all data</p>
-              </div>
-              <button
-                onClick={handleDeleteAccount}
-                disabled={deletingAccount}
-                className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition-all disabled:opacity-60"
-              >
-                {deletingAccount ? "Deleting..." : "Delete account"}
-              </button>
-            </div>
-          </div>
-        </motion.div>
-        {deleteModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#01050e] p-6 shadow-2xl shadow-black/40">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-bold text-white">We value your feedback</h2>
-                  <p className="mt-2 text-sm text-slate-400">Before deleting your account, tell us why you are leaving so we can improve the experience.</p>
                 </div>
-                <button
-                  onClick={() => setDeleteModalOpen(false)}
-                  className="text-slate-400 hover:text-white"
-                  aria-label="Close feedback dialog"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+              );
+            })}
+          </div>
+        </motion.section>
 
-              <div className="mt-6 space-y-4">
-                <div>
-                  <label htmlFor="delete-account-reason" className="block text-sm font-medium text-slate-200">Reason for deleting your account</label>
-                  <select
-                    id="delete-account-reason"
-                    value={deleteReason}
-                    onChange={(event) => setDeleteReason(event.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+        {/* ── Danger Zone ── */}
+        <motion.section variants={item}
+          className="p-6 rounded-xl space-y-4 bg-red-500/5 border border-red-500/15"
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-400" />
+            <h2 className="text-sm font-bold text-red-400">Danger Zone</h2>
+          </div>
+
+          <DangerRow
+            label="Sign Out"
+            description="End your current session securely."
+            action={
+              <button className="btn btn-ghost text-sm" onClick={logout}>
+                <LogOut className="w-4 h-4" /> Sign Out
+              </button>
+            }
+          />
+
+          <DangerRow
+            label="Delete Account"
+            description="Permanently delete your account and all data. This cannot be undone."
+            action={
+              !deleteConfirm ? (
+                <button className="btn btn-danger text-sm" onClick={() => setDeleteConfirm(true)}>
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-red-400">Are you sure?</span>
+                  <button className="btn btn-danger text-sm py-1.5 px-3 min-h-0"
+                    onClick={() => toast.error("Account deletion requires contacting support.")}
                   >
-                    <option value="">Select a reason</option>
-                    <option value="Not using the product enough">Not using the product enough</option>
-                    <option value="Found a better alternative">Found a better alternative</option>
-                    <option value="Too expensive">Too expensive</option>
-                    <option value="Privacy concerns">Privacy concerns</option>
-                    <option value="Other">Other</option>
-                  </select>
+                    Confirm
+                  </button>
+                  <button className="btn btn-ghost text-sm py-1.5 px-3 min-h-0"
+                    onClick={() => setDeleteConfirm(false)}
+                  >
+                    Cancel
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-200">Additional details</label>
-                  <textarea
-                    rows={4}
-                    value={deleteDetails}
-                    onChange={(event) => setDeleteDetails(event.target.value)}
-                    placeholder="Optional feedback to help us improve"
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-center justify-end gap-3">
-                <button
-                  onClick={() => setDeleteModalOpen(false)}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:bg-white/10 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmDeleteAccount}
-                  disabled={!deleteReason || deletingAccount}
-                  className="rounded-2xl bg-red-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-400 transition-colors"
-                >
-                  {deletingAccount ? "Deleting…" : "Submit feedback & delete account"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+              )
+            }
+          />
+        </motion.section>
       </motion.div>
+    </ErrorBoundary>
+  );
+}
+
+function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-900">
+        <Icon className="w-4 h-4 text-amber-300" />
+      </div>
+      <h2 className="text-sm font-semibold text-white">{title}</h2>
+    </div>
+  );
+}
+
+function InfoField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="p-3 rounded-xl bg-slate-900 border border-white/10">
+      <p className="text-label mb-1 text-slate-400">{label}</p>
+      <p className="text-sm font-medium truncate text-white">{value}</p>
+    </div>
+  );
+}
+
+function DangerRow({ label, description, action }: { label: string; description: string; action: React.ReactNode }) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-t border-red-500/15">
+      <div>
+        <p className="text-sm font-medium text-white">{label}</p>
+        <p className="text-xs mt-0.5 text-slate-400">{description}</p>
+      </div>
+      {action}
     </div>
   );
 }

@@ -30,6 +30,7 @@ Example Usage:
 """
 
 import logging
+import os
 import re
 import html
 from typing import Dict, Tuple, Optional, List
@@ -39,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from backend.models.email_template import EmailTemplate, EmailLog
+from backend.services.mail_service import send_email as smtp_send_email
 
 logger = logging.getLogger(__name__)
 
@@ -480,7 +482,7 @@ class EmailTemplateService:
             subject=subject,
             status="sent",
             provider="resend",
-            metadata={
+            email_metadata={
                 "html_length": len(html_body),
                 "text_length": len(text_body)
             }
@@ -491,8 +493,8 @@ class EmailTemplateService:
         await self.db.refresh(log)
         
         # Send email via Resend if configured
-        import os
         resend_api_key = os.getenv("RESEND_API_KEY")
+        resend_error: Optional[str] = None
         if resend_api_key:
             try:
                 import httpx
@@ -509,20 +511,42 @@ class EmailTemplateService:
                             "text": text_body
                         }
                     )
-                    if response.status_code == 200:
+                    if response.status_code in (200, 201):
                         result = response.json()
                         log.provider_message_id = result.get("id")
                         log.status = "sent"
                     else:
                         log.status = "failed"
-                        log.error_message = f"Resend API error: {response.status_code}"
+                        resend_error = f"Resend API error: {response.status_code}"
+                        log.error_message = resend_error
                         logger.error(f"Failed to send email: {response.text}")
             except Exception as e:
                 log.status = "failed"
-                log.error_message = str(e)
+                resend_error = str(e)
+                log.error_message = resend_error
                 logger.error(f"Failed to send email: {e}")
         else:
-            logger.warning("RESEND_API_KEY not configured - email logged but not sent")
+            log.status = "failed"
+            resend_error = "RESEND_API_KEY not configured"
+            log.error_message = resend_error
+
+        # SMTP fallback when primary provider fails
+        if log.status != "sent":
+            smtp_user = os.getenv("SMTP_USER")
+            smtp_password = os.getenv("SMTP_PASSWORD")
+            if smtp_user and smtp_password:
+                try:
+                    await smtp_send_email(to_email, subject, html_body, text_body)
+                    log.provider = "smtp"
+                    log.status = "sent"
+                    if resend_error:
+                        log.error_message = f"Primary provider failed: {resend_error}. Delivered via SMTP fallback."
+                except Exception as smtp_exc:
+                    log.status = "failed"
+                    log.error_message = f"SMTP fallback failed: {smtp_exc}"
+                    logger.error(f"SMTP fallback failed: {smtp_exc}")
+            elif resend_error:
+                logger.warning(f"Email delivery failed without SMTP fallback: {resend_error}")
         
         await self.db.commit()
         await self.db.refresh(log)

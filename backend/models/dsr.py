@@ -36,7 +36,7 @@ class DSRRecord(Base):
     __tablename__ = "dsr_records"
     
     id = Column(String(100), primary_key=True, default=generate_uuid)
-    user_id = Column(String(100), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(String(100), ForeignKey("users.id"), nullable=True, index=True)
     
     # Request details
     request_type = Column(SQLEnum(DSRType), nullable=False)

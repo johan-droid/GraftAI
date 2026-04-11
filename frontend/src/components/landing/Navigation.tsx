@@ -191,12 +191,20 @@ export function Navigation() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                  <ListItem sx={{ px: 0 }}>
-                    <Link
-                      href={link.href}
-                      onClick={handleNavClick}
-                      style={{ textDecoration: "none", width: "100%" }}
-                    >
+                <ListItem sx={{ px: 0 }}>
+                  <Link
+                    href={link.href}
+                    onClick={handleNavClick}
+                    style={{ textDecoration: "none", width: "100%" }}
+                  >
+                    <ListItemText
+                      primary={link.label}
+                      sx={{
+                        color: "#94a3b8",
+                        "& .MuiListItemText-primary": {
+                          fontSize: "1.1rem",
+                          fontWeight: 500,
+                        },
                         "&:hover": {
                           color: "#f8fafc",
                         },

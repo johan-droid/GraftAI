@@ -33,7 +33,7 @@ FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "ht
 # OAuth state expiration (10 minutes)
 OAUTH_STATE_EXPIRY_SECONDS = 600
 # Allowed redirect paths (prevent open redirect)
-ALLOWED_REDIRECT_PATHS = {"/dashboard", "/settings", "/calendar", "/profile"}
+ALLOWED_REDIRECT_PATHS = {"/dashboard", "/settings", "/calendar", "/profile", "/auth-callback"}
 
 
 def _frontend_redirect_token(
@@ -652,6 +652,11 @@ async def logout(response: Response):
     response.delete_cookie("graftai_access_token", path="/")
     response.delete_cookie("graftai_refresh_token", path="/")
     return {"message": "Logged out"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SSO / OAUTH PROVIDERS (Google, Microsoft)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 @router.get("/google/login")

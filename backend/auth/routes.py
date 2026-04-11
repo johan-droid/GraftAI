@@ -51,7 +51,7 @@ def _build_oauth_state(
     """
     Build signed OAuth state parameter with expiration.
     
-    Format: timestamp:nonce:user_id:redirect:provider:frontend_url:signature
+    Format: timestamp:nonce:user_id:redirect:provider:url_encoded_frontend_url:signature
     """
     # Validate redirect_to to prevent open redirect attacks
     safe_redirect = _sanitize_redirect(redirect_to or "/dashboard")
@@ -61,7 +61,8 @@ def _build_oauth_state(
     nonce = secrets.token_urlsafe(16)
     user_id_str = user_id or ""
     provider_str = provider or ""
-    frontend_url_str = frontend_url or ""
+    # URL-encode frontend_url to handle colons and special characters
+    frontend_url_str = quote(frontend_url or "", safe='')
     
     # Create payload for signing
     payload = f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{provider_str}:{frontend_url_str}"
@@ -98,8 +99,11 @@ def _parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str], O
             detail="Invalid OAuth state: missing state"
         )
     
+    # URL-decode the entire state first (browsers/OAuth providers may encode it)
+    decoded_state = unquote(state)
+    
     # Parse state components
-    parts = state.split(":")
+    parts = decoded_state.split(":")
     if len(parts) not in (5, 6, 7):
         logger.error(f"Invalid OAuth state format: {len(parts)} parts instead of 5, 6, or 7")
         raise HTTPException(
@@ -155,8 +159,11 @@ def _parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str], O
     decoded_redirect = unquote_plus(redirect_to)
     safe_redirect = _sanitize_redirect(decoded_redirect)
     
+    # URL-decode frontend_url
+    decoded_frontend_url = unquote(frontend_url) if frontend_url else None
+    
     # Return parsed values
-    return user_id or None, safe_redirect, provider or None, frontend_url or None
+    return user_id or None, safe_redirect, provider or None, decoded_frontend_url
 
 
 def _sanitize_redirect(redirect: str) -> str:

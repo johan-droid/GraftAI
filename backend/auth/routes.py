@@ -604,10 +604,11 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             user = result.scalars().first()
 
         if not user:
+            dummy_password = secrets.token_urlsafe(32)[:64]
             user = UserTable(
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
-                hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+                hashed_password=get_password_hash(dummy_password),
                 email_verified=True,
                 email_verification_code=None,
                 email_verification_expires_at=None,
@@ -728,10 +729,11 @@ async def sso_callback(
             user = result.scalars().first()
         
         if not user:
+            dummy_password = secrets.token_urlsafe(32)[:64]
             user = UserTable(
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
-                hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+                hashed_password=get_password_hash(dummy_password),
                 email_verified=True,
             )
             db.add(user)
@@ -887,10 +889,11 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
             user = result.scalars().first()
 
         if not user:
+            dummy_password = secrets.token_urlsafe(32)[:64]
             user = UserTable(
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
-                hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+                hashed_password=get_password_hash(dummy_password),
                 email_verified=True,
                 email_verification_code=None,
                 email_verification_expires_at=None,

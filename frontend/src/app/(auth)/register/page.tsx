@@ -1,91 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Zap, Mail, Lock, User, ArrowRight, Globe, ShieldCheck } from "lucide-react";
-import { apiClient } from "@/lib/api-client";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://graftai.onrender.com";
+import { Zap } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  const [savedEmail, setSavedEmail] = useState("");
-  const [step, setStep] = useState<"register" | "verify">("register");
-  const [error, setError] = useState("");
-  const [infoMessage, setInfoMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
-
-  const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError("");
-    setInfoMessage("");
-    setLoading(true);
-
-    try {
-      const response = await apiClient.post<{ message: string; email: string }>(
-        "/auth/register",
-        {
-          full_name: fullName,
-          email,
-          password,
-        }
-      );
-
-      setSavedEmail(email);
-      setStep("verify");
-      setInfoMessage(response.message || "A verification code has been sent to your email.");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to register. Please try again.";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerify = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError("");
-    setInfoMessage("");
-    setLoading(true);
-
-    try {
-      await apiClient.post<{ message: string }>("/auth/verify-email", {
-        email: savedEmail || email,
-        code: verificationCode,
-      });
-      router.push("/login?verified=true");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to verify your email. Please try again.";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResend = async () => {
-    setError("");
-    setInfoMessage("");
-    setResendLoading(true);
-
-    try {
-      const response = await apiClient.post<{ message: string }>("/auth/resend-verification", {
-        email: savedEmail || email,
-      });
-      setInfoMessage(response.message || "Verification code resent.");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to resend code. Please try again.";
-      setError(message);
-    } finally {
-      setResendLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[#070711] flex items-center justify-center p-6 relative overflow-hidden">
@@ -109,202 +30,43 @@ export default function RegisterPage() {
         </Link>
 
         {/* Form Card */}
-        <div className="rounded-3xl border border-white/10 bg-[#0a0a14]/80 backdrop-blur-xl p-8 shadow-2xl">
-          <div className="mb-6 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em]">
-            <span className={`rounded-full px-2.5 py-1 ${step === "register" ? "bg-indigo-500/20 text-indigo-300" : "bg-slate-800 text-slate-400"}`}>
-              1. Account
-            </span>
-            <span className="text-slate-600">→</span>
-            <span className={`rounded-full px-2.5 py-1 ${step === "verify" ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>
-              2. Verify
-            </span>
-          </div>
-
+        <div className="rounded-3xl border border-white/10 bg-[#0a0a14]/80 backdrop-blur-xl p-8 shadow-2xl text-center">
           <h2 className="text-2xl font-bold text-white mb-2">
-            {step === "register" ? "Create your account" : "Verify your email"}
+            Registration is SSO Only
           </h2>
           <p className="text-slate-400 text-sm mb-8">
-            {step === "register"
-              ? "Start managing your time intelligently"
-              : "Enter the code we sent to complete your signup."}
+            For security reasons, we only support sign-up via Google or Microsoft.
+            Please use one of these providers to create your account.
           </p>
-          
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-6 text-red-400 text-sm font-medium bg-red-500/10 border border-red-500/20 p-3 rounded-xl"
+
+          <div className="grid grid-cols-1 gap-4 mb-6">
+            <button
+              type="button"
+              onClick={() => (window.location.href = `${process.env.NEXT_PUBLIC_API_URL || \"https://graftai.onrender.com\"}/api/v1/auth/google/login`)}
+              className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-sm font-semibold text-white hover:bg-white/10 transition"
             >
-              {error}
-            </motion.div>
-          )}
-
-          {infoMessage && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-6 text-slate-100 text-sm font-medium bg-slate-800/70 border border-slate-700/80 p-3 rounded-xl"
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.70 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09a7.12 7.12 0 010-4.18V7.07H2.18A11.99 11.99 0 001 12c0 1.94.46 3.77 1.18 5.43l3.66-2.84.81-.5z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.70 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.60 3.30-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Continue with Google
+            </button>
+            <button
+              type="button"
+              onClick={() => (window.location.href = `${process.env.NEXT_PUBLIC_API_URL || \"https://graftai.onrender.com\"}/api/v1/auth/microsoft/login`)}
+              className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-sm font-semibold text-white hover:bg-white/10 transition"
             >
-              {infoMessage}
-            </motion.div>
-          )}
-
-          {step === "register" ? (
-            <form onSubmit={handleRegister} className="space-y-5">
-              <div>
-                <label htmlFor="full-name" className="block text-sm font-medium mb-2 text-slate-300">Full Name</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
-                  <input
-                    id="full-name"
-                    type="text"
-                    required
-                    placeholder="John Doe"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium mb-2 text-slate-300">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    placeholder="you@example.com"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium mb-2 text-slate-300">Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
-                  <input
-                    id="password"
-                    type="password"
-                    required
-                    minLength={6}
-                    placeholder="At least 6 characters"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-                <p className="mt-2 text-xs text-slate-500">Use at least 6 characters. Longer passphrases are recommended.</p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-white text-black rounded-xl py-3 font-bold hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
-              >
-                {loading ? "Creating account..." : "Create Account"}
-                {!loading && <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerify} className="space-y-5">
-              <div>
-                <label htmlFor="verify-email" className="block text-sm font-medium mb-2 text-slate-300">Email Address</label>
-                <input
-                  id="verify-email"
-                  type="email"
-                  value={savedEmail || email}
-                  readOnly
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="verification-code" className="block text-sm font-medium mb-2 text-slate-300">Verification Code</label>
-                <div className="relative">
-                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
-                  <input
-                    id="verification-code"
-                    type="text"
-                    required
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="Enter OTP code"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || verificationCode.trim().length < 6}
-                className="w-full bg-white text-black rounded-xl py-3 font-bold hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
-              >
-                {loading ? "Verifying..." : "Verify Email"}
-                {!loading && <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />}
-              </button>
-
-              <button
-                type="button"
-                disabled={resendLoading}
-                onClick={handleResend}
-                className="w-full bg-white/5 text-white border border-white/10 rounded-xl py-3 font-semibold hover:bg-white/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {resendLoading ? "Resending code..." : "Resend verification code"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStep("register")}
-                className="w-full rounded-xl border border-white/10 bg-transparent py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/5 hover:text-white"
-              >
-                Back to account details
-              </button>
-            </form>
-          )}
-
-          {step === "register" ? (
-            <>
-              <div className="mt-6 relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10"></div>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-[#0a0a14] px-2 text-slate-500 font-bold">Or continue with</span>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-3">
-                <button
-                  type="button"
-                  onClick={() => (window.location.href = `${API_URL}/api/v1/auth/google/login`)}
-                  className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10 transition"
-                >
-                  <Globe className="h-5 w-5" />
-                  Continue with Google
-                </button>
-                <button
-                  type="button"
-                  onClick={() => (window.location.href = `${API_URL}/api/v1/auth/microsoft/login`)}
-                  className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10 transition"
-                >
-                  <svg className="h-5 w-5" viewBox="0 0 23 23" fill="none">
-                    <path d="M0 0h11v11H0z" fill="#f25022"/>
-                    <path d="M12 0h11v11H12z" fill="#00a4ef"/>
-                    <path d="M0 12h11v11H0z" fill="#7fba00"/>
-                    <path d="M12 12h11v11H12z" fill="#ffb900"/>
-                  </svg>
-                  Continue with Microsoft
-                </button>
-              </div>
-            </>
-          ) : null}
+              <svg className="w-5 h-5" viewBox="0 0 23 23">
+                <path d="M0 0h11v11H0z" fill="#f25022"/>
+                <path d="M12 0h11v11H12z" fill="#00a4ef"/>
+                <path d="M0 12h11v11H0z" fill="#7fba00"/>
+                <path d="M12 12h11v11H12z" fill="#ffb900"/>
+              </svg>
+              Continue with Microsoft
+            </button>
+          </div>
 
           <div className="mt-6 text-center text-sm text-slate-400">
             Already have an account?{" "}
@@ -315,7 +77,7 @@ export default function RegisterPage() {
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6">
-          By creating an account, you agree to our {" "}
+          By signing in, you agree to our {" "}
           <Link href="/terms-of-service" className="text-slate-400 hover:text-slate-200 underline underline-offset-2">
             Terms of Service
           </Link>

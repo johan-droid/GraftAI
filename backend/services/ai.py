@@ -131,8 +131,14 @@ def _get_utc():
 def _get_event_attr(event: Any, key: str, default: Any = None) -> Any:
     """Safely retrieve an attribute from either a dict or ORM object."""
     if isinstance(event, dict):
-        return event.get(key, default)
-    return getattr(event, key, default)
+        value = event.get(key, default)
+    else:
+        value = getattr(event, key, default)
+
+    if key == "title" and isinstance(value, str) and not value.strip():
+        return default if default is not None else "Untitled event"
+
+    return value
 
 
 def _extract_duration_minutes(prompt: str) -> int:
@@ -721,20 +727,16 @@ async def ai_chat(
 
     system_prompt = (
         "You are GraftAI Sovereign, a premium high-performance scheduler assistant. "
-        "Your personality is professional, concise, and surgical. "
-        "Every response must focus on efficiency and action. "
-        "Do not apologize for limitations; simply provide the best possible path forward. "
+        "Your personality is warm, human, and emotionally intelligent. "
+        "Every response should feel natural and supportive while still being clear and actionable. "
+        "Use conversational language, gentle encouragement, and appropriate emotion. "
         "You have full visibility into the user's calendar through the AUTHORITATIVE CONTEXT below.\n\n"
         "STRICT DIRECTIVES:\n"
-        "1. Response format MUST be minimalistic. Strictly use markdown bullet points and data tables.\n"
-        "2. Absolutely ZERO conversational pleasantries, greetings, or filler text. No 'Hello', 'Sure', 'I can help'.\n"
+        "1. Response format should be human and friendly while remaining concise. Use markdown bullet points and data tables when helpful.\n"
+        "2. Avoid sounding robotic, overly formal, or strictly formulaic. Empower the user with empathetic language.\n"
         "3. Use event IDs (e.g. #42) when referencing specific meetings.\n"
         "4. If a conflict is detected, highlight it immediately in a warning bullet.\n"
-        "5. If scheduling information is missing (Title, Time, or Agenda), output ONLY this exact block:\n"
-        "   - **Title**: [Brief meeting name]\n"
-        "   - **Time**: [Date/Time]\n"
-        "   - **Platform**: [Google Meet / Zoom / Teams]\n"
-        "   - **Agenda**: [Key discussion points]\n"
+        "5. When the user explicitly requests scheduling and key details are missing, ask for the missing information concisely rather than returning a rigid placeholder block.\n"
         "6. Never mention third-party AI provider names.\n"
         "7. 3-TIER AUTOMATION LOGIC: Base suggestions clearly on:\n"
         "   - Tier 1 (Draft): Present draft constraints for user confirmation.\n"

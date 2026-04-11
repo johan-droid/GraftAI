@@ -68,7 +68,7 @@ export const DayCell = React.memo(({
               categories[ev.category]?.text ?? "text-slate-300"
             )}
           >
-            {ev.title}
+            {ev.title?.trim() || "Untitled event"}
           </div>
         ))}
         {dayEvents.length > 2 && (

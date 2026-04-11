@@ -27,6 +27,11 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"month" | "week" | "day">("month");
 
+  const getEventTitle = (event: Event) => {
+    const normalized = event.title?.trim();
+    return normalized ? normalized : "Untitled event";
+  };
+
   const monthRange = useMemo(() => {
     const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
@@ -81,12 +86,16 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
           <div className="flex items-center gap-1">
             <button
               onClick={() => navigate("prev")}
+              aria-label="Previous period"
+              title="Previous period"
               className="p-1.5 hover:bg-white/5 text-gray-500 hover:text-white rounded-md transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => navigate("next")}
+              aria-label="Next period"
+              title="Next period"
               className="p-1.5 hover:bg-white/5 text-gray-500 hover:text-white rounded-md transition-colors"
             >
               <ChevronRight className="w-4 h-4" />
@@ -179,7 +188,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                         >
                           <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", colorClass)} />
                           <span className="text-[11px] text-gray-400 group-hover/event:text-white truncate">
-                            {new Date(event.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(' ', '').toLowerCase()} {event.title}
+                            {new Date(event.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(' ', '').toLowerCase()} {getEventTitle(event)}
                           </span>
                         </div>
                       )
@@ -231,7 +240,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                           <div className="flex items-center gap-2">
                             <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", colorClass)} />
                             <div className="text-xs text-gray-300 group-hover/event:text-white font-medium truncate">
-                              {event.title}
+                              {getEventTitle(event)}
                             </div>
                           </div>
                           <div className="text-[10px] text-gray-500 pl-3.5 flex items-center gap-1">
@@ -281,7 +290,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                     
                     <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-all ml-auto md:ml-0 shadow-sm">
                       <div className="flex items-start justify-between mb-2 gap-4">
-                        <h3 className="text-base font-medium text-white group-hover:text-white transition-colors">{event.title}</h3>
+                        <h3 className="text-base font-medium text-white group-hover:text-white transition-colors">{getEventTitle(event)}</h3>
                         <span className={cn("text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 border border-white/5", textClass)}>
                           {event.source}
                         </span>

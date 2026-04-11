@@ -134,7 +134,7 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 {upcomingEvents.map((event) => (
                   <div key={String(event.id)} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
-                    <p className="font-medium text-slate-100">{event.title}</p>
+                    <p className="font-medium text-slate-100">{event.title?.trim() || "Untitled event"}</p>
                     <p className="mt-1 text-xs text-slate-400">
                       {new Date(event.start_time).toLocaleString([], {
                         weekday: "short",

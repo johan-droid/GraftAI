@@ -31,6 +31,7 @@ import { useAuth } from "@/providers/auth-provider";
 
 import { useSyncEngine } from "@/hooks/useSyncEngine";
 import { db } from "@/lib/db";
+import styles from "./copilot-chat.module.css";
 
 interface Message {
   id: string;
@@ -67,6 +68,11 @@ interface CalendarEvent {
 const formatEventTime = (isoDate: string) =>
   new Date(isoDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+const normalizeEventTitle = (title?: string) => {
+  const normalized = title?.trim();
+  return normalized ? normalized : "Untitled event";
+};
+
 const getTimeEmoji = (hour: number) => {
   if (hour < 6) return "🌙";
   if (hour < 12) return "☀️";
@@ -98,6 +104,7 @@ const buildCalendarAwareSuggestions = (events: CalendarEvent[]): SuggestedAction
   for (const event of sorted) {
     const start = new Date(event.start_time);
     const end = new Date(event.end_time);
+    const eventTitle = normalizeEventTitle(event.title);
     
     // Check if there's a gap before this event starting from now (or last event)
     if (start > lastEnd) {
@@ -110,10 +117,10 @@ const buildCalendarAwareSuggestions = (events: CalendarEvent[]): SuggestedAction
           id: `gap-${start.getTime()}`,
           type: "query",
           label: "Book focus session",
-          description: `You're free until ${event.title} (${startTimeStr}). Want to block focus time?`,
+          description: `You're free until ${eventTitle} (${startTimeStr}). Want to block focus time?`,
           icon: "zap",
           data: { 
-            prompt: `I have a ${diffMin} minute gap before "${event.title}". Help me schedule a focused work session starting at ${startTimeStr}.` 
+            prompt: `I have a ${diffMin} minute gap before "${eventTitle}". Help me schedule a focused work session starting at ${startTimeStr}.` 
           },
         });
       }
@@ -126,14 +133,15 @@ const buildCalendarAwareSuggestions = (events: CalendarEvent[]): SuggestedAction
   const nextEvent = sorted.find(e => new Date(e.start_time) > now);
   if (nextEvent) {
     const nextEventTime = formatEventTime(nextEvent.start_time);
+    const nextEventTitle = normalizeEventTitle(nextEvent.title);
     suggestions.push({
       id: "prep-next-event",
       type: "query",
-      label: `Prep for ${nextEvent.title}`,
+      label: `Prep for ${nextEventTitle}`,
       description: `Generate a checklist for your ${nextEventTime} meeting`,
       icon: "zap",
       data: {
-        prompt: `Give me a concise prep checklist for "${nextEvent.title}" at ${nextEventTime}.`,
+        prompt: `Give me a concise prep checklist for "${nextEventTitle}" at ${nextEventTime}.`,
       },
     });
   }
@@ -339,7 +347,7 @@ export default function AICopilotChat() {
 
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const contextArray = upcomingEvents.map((event) => `Event: ${event.title} at ${new Date(event.start_time).toLocaleString()}`);
+      const contextArray = upcomingEvents.map((event) => `Event: ${normalizeEventTitle(event.title)} at ${new Date(event.start_time).toLocaleString()}`);
 
       const data = await sendAiChat(userMessage.content, contextArray, timezone);
 
@@ -413,7 +421,7 @@ export default function AICopilotChat() {
   };
 
   return (
-    <div className="relative flex flex-col bg-transparent" style={{ height: "calc(100dvh - 3.5rem - env(safe-area-inset-bottom, 0px))" }}>
+    <div className={cn("relative flex flex-col bg-transparent", styles.container)}>
       
       {/* Top Header — Minimal on mobile */}
       <div className="flex h-14 shrink-0 items-center justify-between px-3 pb-2 sm:px-6">
@@ -461,7 +469,7 @@ export default function AICopilotChat() {
                       <div className="mt-2 space-y-2">
                         {upcomingEvents.length > 0 ? upcomingEvents.map(event => (
                           <div key={event.id} className="flex flex-col text-sm text-slate-200">
-                             <span className="font-medium truncate">{event.title}</span>
+                             <span className="font-medium truncate">{normalizeEventTitle(event.title)}</span>
                              <span className="text-xs text-slate-500">{formatEventTime(event.start_time)}</span>
                           </div>
                         )) : (
@@ -543,13 +551,13 @@ export default function AICopilotChat() {
                     <Calendar className="h-4 w-4 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{upcomingEvents[0].title}</p>
+                    <p className="text-sm font-medium truncate">{normalizeEventTitle(upcomingEvents[0].title)}</p>
                     <p className="text-xs text-muted-foreground">
                       Next up · {formatEventTime(upcomingEvents[0].start_time)}
                     </p>
                   </div>
                   <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15">
-                    {upcomingEvents[0].category}
+                    {upcomingEvents[0].category || "General"}
                   </Badge>
                 </CardContent>
               </Card>
@@ -625,7 +633,7 @@ export default function AICopilotChat() {
            CONVERSATION VIEW
            ═══════════════════════════════════════════════════════ */
         <div className="flex flex-1 flex-col overflow-hidden w-full">
-          <div ref={chatContainerRef} className="flex-1 overflow-y-auto w-full" style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+          <div ref={chatContainerRef} className={cn("flex-1 overflow-y-auto w-full", styles.chatScroll)}>
              <div className="mx-auto max-w-3xl py-6 h-full px-3 sm:px-4">
                 <AnimatePresence initial={false}>
                   {messages.map((msg, idx) => (

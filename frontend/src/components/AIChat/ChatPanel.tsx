@@ -130,6 +130,8 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
         </div>
         <button
           onClick={onClose}
+          aria-label="Close chat panel"
+          title="Close chat panel"
           className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white"
         >
           <X className="w-5 h-5" />
@@ -214,6 +216,8 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
           <button
             onClick={handleSend}
             disabled={!input.trim() || isTyping}
+            aria-label="Send message"
+            title="Send message"
             className="p-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-xl transition-colors text-white"
           >
             <Send className="w-5 h-5" />

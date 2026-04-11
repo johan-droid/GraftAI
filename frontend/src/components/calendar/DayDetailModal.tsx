@@ -87,6 +87,8 @@ const DayDetailModal = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close day details"
+            title="Close day details"
             className="p-1.5 rounded-lg hover:bg-white/8 text-slate-500 hover:text-white transition-all"
           >
             <X className="w-4 h-4" />
@@ -148,22 +150,32 @@ const DayDetailModal = ({
               >
                 <div className={`w-1 h-full min-h-[40px] rounded-full shrink-0 ${categories[ev.category]?.dot ?? "bg-slate-400"}`} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">{ev.title}</p>
+                  <p className="text-sm font-semibold text-white">{ev.title?.trim() || "Untitled event"}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="flex items-center gap-1 text-[11px] text-slate-500">
                       <Clock className="w-3 h-3" />
                       {new Date(ev.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                     <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border", categories[ev.category]?.bg, categories[ev.category]?.text)}>
-                      {ev.category}
+                      {ev.category || "general"}
                     </span>
                   </div>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => setEditingEvent(ev)} className="p-1.5 rounded-md hover:bg-white/10 text-slate-500 hover:text-white transition-all">
+                  <button
+                    onClick={() => setEditingEvent(ev)}
+                    aria-label={`Edit ${ev.title?.trim() || "event"}`}
+                    title="Edit event"
+                    className="p-1.5 rounded-md hover:bg-white/10 text-slate-500 hover:text-white transition-all"
+                  >
                     <Edit3 className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => handleDelete(ev.id)} className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all">
+                  <button
+                    onClick={() => handleDelete(ev.id)}
+                    aria-label={`Delete ${ev.title?.trim() || "event"}`}
+                    title="Delete event"
+                    className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all"
+                  >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>

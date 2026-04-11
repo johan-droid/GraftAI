@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -13,6 +13,13 @@ from backend.services.integrations.ms_graph import create_ms_event, update_ms_ev
 from backend.services.integrations.zoom import create_zoom_meeting, update_zoom_meeting, delete_zoom_meeting
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_event_title(value: Any, default: str = "Untitled event") -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
 
 
 def to_utc(dt: datetime) -> datetime:
@@ -133,7 +140,7 @@ async def _safe_notify(db: AsyncSession, action: str, user_id: str, event: Event
         recipients = [user.email]
         event_dict = {
             "id": event.id,
-            "title": event.title,
+            "title": _normalize_event_title(event.title),
             "start_time": event.start_time.strftime("%A, %B %d at %I:%M %p"),
             "end_time": event.end_time.strftime("%A, %B %d at %I:%M %p"),
             "meeting_link": event.meeting_url,
@@ -156,7 +163,7 @@ async def push_event_to_external_calendar(db: AsyncSession, event_id: str) -> Op
         return event
 
     event_details = {
-        "title": event.title,
+        "title": _normalize_event_title(event.title),
         "description": event.description,
         "start_time": event.start_time,
         "end_time": event.end_time,
@@ -188,7 +195,10 @@ async def get_events_for_range(db: AsyncSession, user_id: str, start: datetime, 
     result = await db.execute(stmt)
     events = result.scalars().all()
 
-    return [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in events]
+    rows = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in events]
+    for row in rows:
+        row["title"] = _normalize_event_title(row.get("title"))
+    return rows
 
 
 async def create_event(
@@ -210,6 +220,7 @@ async def create_event(
         logger.warning(f"Conflict detected for user {user_id}")
 
     db_event_data = {k: v for k, v in event_data.items() if k in EventTable.__table__.columns.keys()}
+    db_event_data["title"] = _normalize_event_title(db_event_data.get("title"))
     new_event = EventTable(**db_event_data)
     new_event.start_time = st
     new_event.end_time = et
@@ -218,13 +229,15 @@ async def create_event(
 
     should_push_external = bool(event_data.get("is_meeting") or event_data.get("meeting_provider"))
     if perform_external and should_push_external:
+        external_event_data = dict(event_data)
+        external_event_data["title"] = _normalize_event_title(external_event_data.get("title"))
         provider_preference = ["google", "microsoft", "zoom"]
         event_provider = event_data.get("meeting_provider")
         if event_provider:
             provider_preference = [event_provider]
 
         for provider in provider_preference:
-            result = await _create_external_event(db, user_id, provider, event_data)
+            result = await _create_external_event(db, user_id, provider, external_event_data)
             if result:
                 new_event.external_id = result.get("external_id") or new_event.external_id
                 new_event.meeting_url = result.get("meeting_url") or new_event.meeting_url
@@ -261,11 +274,13 @@ async def update_event(
         if hasattr(event, k):
             setattr(event, k, v)
 
+    event.title = _normalize_event_title(event.title)
+
     event.start_time = to_utc(event.start_time)
     event.end_time = to_utc(event.end_time)
 
     event_details = {
-        "title": event.title,
+        "title": _normalize_event_title(event.title),
         "description": event.description,
         "start_time": event.start_time,
         "end_time": event.end_time,

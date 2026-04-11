@@ -1,0 +1,8 @@
+.container {
+  height: calc(100dvh - 3.5rem - env(safe-area-inset-bottom, 0px));
+}
+
+.chatScroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}

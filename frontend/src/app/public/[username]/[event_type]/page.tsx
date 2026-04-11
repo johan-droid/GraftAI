@@ -221,12 +221,12 @@ export default function PublicBookingPage({ params }: { params: { username: stri
         <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
           <div className="space-y-3">
             <p className="text-sm uppercase tracking-[0.25em] text-indigo-600">Public Booking</p>
-            <h1 className="text-3xl font-semibold text-slate-900">{eventDetails?.title}</h1>
+            <h1 className="text-3xl font-semibold text-slate-900">{eventDetails?.title?.trim() || "Booking"}</h1>
             {eventDetails?.description ? (
               <p className="text-slate-600">{eventDetails.description}</p>
             ) : null}
             <div className="flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:items-center">
-              <span>Organizer timezone: <strong>{eventDetails?.timezone}</strong></span>
+              <span>Organizer timezone: <strong>{eventDetails?.timezone || "UTC"}</strong></span>
               <span>Visitor timezone: <strong>{browserTimezone || "UTC"}</strong></span>
             </div>
           </div>

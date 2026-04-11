@@ -25,6 +25,8 @@ interface EventDetailModalProps {
 export function EventDetailModal({ isOpen, onClose, onEdit, event }: EventDetailModalProps) {
   if (!event) return null;
 
+  const eventTitle = event.title?.trim() || "Untitled event";
+
   const sourceColors = {
     google: "bg-red-500/10 border-red-500/30 text-red-600",
     microsoft: "bg-blue-500/10 border-blue-500/30 text-blue-600",
@@ -70,11 +72,13 @@ export function EventDetailModal({ isOpen, onClose, onEdit, event }: EventDetail
                   </span>
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 leading-tight">
-                  {event.title}
+                  {eventTitle}
                 </h2>
               </div>
               <button
                 onClick={onClose}
+                aria-label="Close event details"
+                title="Close event details"
                 className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
               >
                 <X className="w-5 h-5" />

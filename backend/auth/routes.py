@@ -34,14 +34,22 @@ OAUTH_STATE_EXPIRY_SECONDS = 600
 ALLOWED_REDIRECT_PATHS = {"/dashboard", "/settings", "/calendar", "/profile", "/auth-callback"}
 
 
+def get_client_ip(request: Request) -> str:
+    """Extract real client IP, especially when behind a proxy like Render."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def _frontend_redirect_token(
     access_token: str,
     redirect_to: str = "/dashboard",
     frontend_url: Optional[str] = None,
     refresh_token: Optional[str] = None,
 ):
-    """Redirect to frontend auth-callback with token. Uses provided frontend_url or falls back to FRONTEND_BASE_URL."""
-    base_url = frontend_url or FRONTEND_BASE_URL
+    """Redirect to frontend auth-callback with token safely."""
+    base_url = (frontend_url or FRONTEND_BASE_URL).rstrip("/")
     url = f"{base_url}/auth-callback?access_token={quote_plus(access_token)}&redirect={quote_plus(redirect_to)}"
     if refresh_token:
         url += f"&refresh_token={quote_plus(refresh_token)}"
@@ -104,8 +112,8 @@ def _parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str], O
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid OAuth state: missing state"
         )
-    
-# Keep the raw state string intact when splitting to preserve encoded frontend_url values.
+
+    # Keep the raw state string intact when splitting to preserve encoded frontend_url values.
     parts = state.split(":", 6)
     if len(parts) not in (5, 6, 7):
         logger.error(f"Invalid OAuth state format: {len(parts)} parts instead of 5, 6, or 7")
@@ -289,9 +297,11 @@ def _set_auth_cookies(response: Optional[Response], access_token: str, refresh_t
     if response is None:
         return
 
+    # Force secure cookies if deployed on Render to satisfy cross-origin requirements
     is_production = os.getenv("ENV", "development") == "production"
-    secure = is_production
-    samesite = "none" if is_production else "lax"
+    is_render = os.getenv("RENDER") is not None
+    secure = is_production or is_render
+    samesite = "none" if secure else "lax"
 
     cookie_kwargs = {
         "httponly": True,
@@ -396,7 +406,7 @@ async def token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["login"])
 
     user = await _authenticate_user(form_data, db)
@@ -414,7 +424,7 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """Legacy login route kept for compatibility — delegates to /token logic directly."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["login"])
 
     user = await _authenticate_user(form_data, db)
@@ -562,7 +572,7 @@ async def google_login(
 
 @router.get("/google/callback")
 async def google_callback(request: Request, code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["oauth_callback"])
 
     try:
@@ -669,7 +679,7 @@ async def sso_callback(
     When fetch=true, returns JSON with token for frontend to handle.
     Otherwise, redirects to frontend with token in URL.
     """
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["oauth_callback"])
     
     if not state:
@@ -850,7 +860,7 @@ async def microsoft_login(
 
 @router.get("/microsoft/callback")
 async def microsoft_callback(request: Request, code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["oauth_callback"])
 
     try:

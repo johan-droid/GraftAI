@@ -30,7 +30,8 @@ export const authClient = {
     },
 
     async social({ provider, callbackURL }: { provider: string; callbackURL: string }) {
-      const redirectUrl = `${API_URL}/api/v1/auth/${provider}/login?redirect_to=${encodeURIComponent(callbackURL)}`;
+      const redirectTarget = callbackURL === "/auth-callback" ? "/dashboard" : callbackURL;
+      const redirectUrl = `${API_URL}/api/v1/auth/${provider}/login?redirect_to=${encodeURIComponent(redirectTarget)}`;
       if (typeof window !== "undefined") {
         window.location.href = redirectUrl;
       }

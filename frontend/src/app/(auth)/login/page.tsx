@@ -54,7 +54,7 @@ export default function LoginPage() {
   async function handleOAuth(provider: OAuthProvider) {
     setLoading(provider);
     try {
-      await authClient.signIn.social({ provider, callbackURL: "/auth-callback" });
+      await authClient.signIn.social({ provider, callbackURL: "/dashboard" });
     } catch (err) {
       toast.error(`${provider} sign-in unavailable. Try another method.`);
       setLoading(null);

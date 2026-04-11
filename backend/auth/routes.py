@@ -62,7 +62,7 @@ def _build_oauth_state(
     user_id_str = user_id or ""
     provider_str = provider or ""
     # URL-encode frontend_url to handle colons and special characters
-    frontend_url_str = quote(frontend_url or "", safe='')
+    frontend_url_str = quote_plus(frontend_url or "")
     
     # Create payload for signing
     payload = f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{provider_str}:{frontend_url_str}"
@@ -656,6 +656,7 @@ async def google_login(
     redirect_to: Optional[str] = None,
     redirect_uri: Optional[str] = None,
     force_consent: bool = False,
+    frontend_url: Optional[str] = None,
 ):
     try:
         user_id = None
@@ -666,14 +667,14 @@ async def google_login(
             except Exception:
                 pass
 
-        # Extract frontend URL from Referer header for redirect back to same origin
-        frontend_url = None
-        referer = request.headers.get("referer")
-        if referer:
-            # Extract origin from referer (scheme://host)
-            from urllib.parse import urlparse
-            parsed = urlparse(referer)
-            frontend_url = f"{parsed.scheme}://{parsed.netloc}"
+        # Extract frontend URL from query parameter or Referer header
+        if not frontend_url:
+            referer = request.headers.get("referer")
+            if referer:
+                # Extract origin from referer (scheme://host)
+                from urllib.parse import urlparse
+                parsed = urlparse(referer)
+                frontend_url = f"{parsed.scheme}://{parsed.netloc}"
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = _build_oauth_state(user_id, redirect_to, provider="google", frontend_url=frontend_url)

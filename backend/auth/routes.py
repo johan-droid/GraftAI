@@ -754,6 +754,121 @@ async def sync_timezone(payload: dict):
     return {"status": "updated", "timezone": tz}
 
 
+@router.get("/sso/callback")
+async def sso_callback(
+    request: Request,
+    code: str,
+    state: Optional[str] = None,
+    fetch: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Unified SSO callback endpoint that routes to the correct provider.
+    
+    When fetch=true, returns JSON with token for frontend to handle.
+    Otherwise, redirects to frontend with token in URL.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    await rate_limit(client_ip, api_limits["oauth_callback"])
+    
+    if not state:
+        raise HTTPException(status_code=400, detail="Missing OAuth state parameter")
+    
+    try:
+        # Parse state to get redirect info
+        user_id, redirect_to = _parse_oauth_state(state)
+        
+        # Try Google first (most common)
+        try:
+            data = await google_auth.fetch_google_tokens(code)
+            provider = "google"
+        except Exception as google_err:
+            # If Google fails, try Microsoft
+            try:
+                data = await microsoft_auth.fetch_microsoft_tokens(code)
+                provider = "microsoft"
+            except Exception:
+                # Both failed, raise the original error
+                raise google_err
+        
+        email = data.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="Failed to retrieve email from OAuth provider")
+        
+        email = email.lower().strip()
+        
+        # Get or create user
+        if user_id:
+            result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+            user = result.scalars().first()
+        else:
+            result = await db.execute(select(UserTable).where(UserTable.email == email))
+            user = result.scalars().first()
+        
+        if not user:
+            user = UserTable(
+                email=email,
+                full_name=data.get("full_name", email.split("@")[0]),
+                hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+                email_verified=True,
+            )
+            db.add(user)
+            await db.flush()
+            logger.info(f"New user created via {provider} OAuth: {email}")
+        elif not user.email_verified:
+            user.email_verified = True
+        
+        # Store tokens
+        token_info = data.get("token", {})
+        stmt = select(UserTokenTable).where(
+            UserTokenTable.user_id == user.id,
+            UserTokenTable.provider == provider,
+        )
+        user_token = (await db.execute(stmt)).scalars().first()
+        
+        if not user_token:
+            user_token = UserTokenTable(user_id=user.id, provider=provider)
+            db.add(user_token)
+        
+        user_token.access_token = token_info.get("access_token")
+        user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
+        if "expires_at" in token_info:
+            user_token.expires_at = datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
+        user_token.is_active = True
+        
+        await db.commit()
+        
+        # Generate JWT tokens
+        access_token = create_access_token(data={"sub": user.id})
+        refresh_token = _create_refresh_token(user.id)
+        
+        logger.info(f"{provider} OAuth successful for user: {email}")
+        
+        # Return JSON if fetch=true, otherwise redirect
+        if fetch:
+            return {
+                "token": {
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": "bearer"
+                },
+                "redirect_to": redirect_to,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "full_name": user.full_name
+                }
+            }
+        else:
+            return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SSO callback error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Authentication failed")
+
+
 @router.get("/sso/start")
 async def sso_start(
     provider: str,

@@ -663,6 +663,12 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
     except Exception as e:
         await db.rollback()
         logger.error(f"Google Callback Error: {e}", exc_info=True)
+        error_msg = str(e).lower()
+        if "invalid_grant" in error_msg or "expired" in error_msg or "mismatch" in error_msg:
+            return RedirectResponse(
+                url=f"{FRONTEND_BASE_URL}/login?error=Session expired. Please log in again.",
+                status_code=303,
+            )
         raise HTTPException(status_code=500, detail="Authentication failed")
 
 
@@ -799,6 +805,12 @@ async def sso_callback(
     except Exception as e:
         await db.rollback()
         logger.error(f"SSO callback error: {e}", exc_info=True)
+        error_msg = str(e).lower()
+        if "invalid_grant" in error_msg or "expired" in error_msg or "mismatch" in error_msg:
+            return RedirectResponse(
+                url=f"{FRONTEND_BASE_URL}/login?error=Session expired. Please log in again.",
+                status_code=303,
+            )
         raise HTTPException(status_code=500, detail="Authentication failed")
 
 
@@ -947,8 +959,13 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
     except Exception as e:
         logger.error(f"Microsoft Callback Error: {e}", exc_info=True)
         await db.rollback()
-        error_msg = str(e)
-        if "AADSTS" in error_msg or "unauthorized_client" in error_msg:
+        error_msg = str(e).lower()
+        if "invalid_grant" in error_msg or "expired" in error_msg or "mismatch" in error_msg:
+            return RedirectResponse(
+                url=f"{FRONTEND_BASE_URL}/login?error=Session expired. Please log in again.",
+                status_code=303,
+            )
+        if "aadsts" in error_msg or "unauthorized_client" in error_msg:
             raise HTTPException(status_code=400, detail="Microsoft OAuth configuration error. Please contact support.")
         raise HTTPException(status_code=500, detail="Authentication failed")
 

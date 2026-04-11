@@ -649,9 +649,10 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         await db.commit()
         logger.info(f"Google OAuth successful for user: {email}")
 
-        access_token = _create_access_token(user.id)
+        backend_access_token = _create_access_token(user.id)
+        backend_refresh_token = _create_refresh_token(user.id)
         return RedirectResponse(
-            url=_frontend_redirect_token(access_token, redirect_to, frontend_url, token_info.get("refresh_token")),
+            url=_frontend_redirect_token(backend_access_token, redirect_to, frontend_url, backend_refresh_token),
             status_code=303,
         )
 
@@ -945,9 +946,10 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         await db.commit()
         logger.info(f"Microsoft OAuth successful for user: {email}")
 
-        access_token = _create_access_token(user.id)
+        backend_access_token = _create_access_token(user.id)
+        backend_refresh_token = _create_refresh_token(user.id)
         return RedirectResponse(
-            url=_frontend_redirect_token(access_token, redirect_to, frontend_url, token_info.get("refresh_token")),
+            url=_frontend_redirect_token(backend_access_token, redirect_to, frontend_url, backend_refresh_token),
             status_code=303,
         )
 

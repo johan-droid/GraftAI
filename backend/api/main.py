@@ -447,6 +447,14 @@ def create_app() -> FastAPI:
     async def health_check():
         return {"status": "healthy", "architecture": "monolith"}
 
+    @app.get("/")
+    async def root():
+        return {
+            "app": "GraftAI",
+            "status": "running",
+            "frontend_url": os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")),
+        }
+
     return app
 
 app = create_app()

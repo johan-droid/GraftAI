@@ -178,7 +178,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     if not plain_password or not hashed_password:
         return False
     try:
-        return pwd_context.verify(plain_password, hashed_password)
+        # Truncate to 72 bytes (bcrypt limit)
+        truncated_password = plain_password[:72]
+        return pwd_context.verify(truncated_password, hashed_password)
     except Exception:
         return False
 
@@ -186,4 +188,6 @@ def get_password_hash(password: str) -> str:
     """Hash a password for storage."""
     if not password:
         raise ValueError("Password cannot be empty")
-    return pwd_context.hash(password)
+    # Truncate to 72 bytes (bcrypt limit) before hashing
+    truncated_password = password[:72]
+    return pwd_context.hash(truncated_password)

@@ -4,9 +4,23 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Zap } from "lucide-react";
+import { BACKEND_API_URL } from "../../../lib/backend";
 
 export default function RegisterPage() {
   const router = useRouter();
+
+  const getBackendUrl = (provider: "google" | "microsoft") => {
+    if (process.env.NODE_ENV === "production") {
+      // Always use production backend in production
+      return `https://graftai.onrender.com/api/v1/auth/${provider}/login`;
+    }
+    // Use local backend in development
+    return `${BACKEND_API_URL}/auth/${provider}/login`;
+  };
+
+  const handleOAuthLogin = (provider: "google" | "microsoft") => {
+    window.location.href = getBackendUrl(provider);
+  };
 
   return (
     <div className="min-h-screen bg-[#070711] flex items-center justify-center p-6 relative overflow-hidden">
@@ -42,7 +56,7 @@ export default function RegisterPage() {
           <div className="grid grid-cols-1 gap-4 mb-6">
             <button
               type="button"
-              onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://graftai.onrender.com'}/api/v1/auth/google/login`}
+              onClick={() => handleOAuthLogin("google")}
               className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-sm font-semibold text-white hover:bg-white/10 transition"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -55,7 +69,7 @@ export default function RegisterPage() {
             </button>
             <button
               type="button"
-              onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://graftai.onrender.com'}/api/v1/auth/microsoft/login`}
+              onClick={() => handleOAuthLogin("microsoft")}
               className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-sm font-semibold text-white hover:bg-white/10 transition"
             >
               <svg className="w-5 h-5" viewBox="0 0 23 23">

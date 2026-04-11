@@ -36,10 +36,18 @@ OAUTH_STATE_EXPIRY_SECONDS = 600
 ALLOWED_REDIRECT_PATHS = {"/dashboard", "/settings", "/calendar", "/profile"}
 
 
-def _frontend_redirect_token(access_token: str, redirect_to: str = "/dashboard", frontend_url: Optional[str] = None):
+def _frontend_redirect_token(
+    access_token: str,
+    redirect_to: str = "/dashboard",
+    frontend_url: Optional[str] = None,
+    refresh_token: Optional[str] = None,
+):
     """Redirect to frontend auth-callback with token. Uses provided frontend_url or falls back to FRONTEND_BASE_URL."""
     base_url = frontend_url or FRONTEND_BASE_URL
-    return f"{base_url}/auth-callback?access_token={quote_plus(access_token)}&redirect={quote_plus(redirect_to)}"
+    url = f"{base_url}/auth-callback?access_token={quote_plus(access_token)}&redirect={quote_plus(redirect_to)}"
+    if refresh_token:
+        url += f"&refresh_token={quote_plus(refresh_token)}"
+    return url
 
 
 def _build_oauth_state(
@@ -764,7 +772,10 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         logger.info(f"Google OAuth successful for user: {email}")
 
         access_token = _create_access_token(user.id)
-        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
+        return RedirectResponse(
+            url=_frontend_redirect_token(access_token, redirect_to, frontend_url, token_info.get("refresh_token")),
+            status_code=303,
+        )
 
     except ValueError as e:
         logger.error(f"Google OAuth Configuration Error: {e}")
@@ -811,7 +822,7 @@ async def sso_callback(
         else:
             # Fallback for old state format without provider - try to detect
             # This maintains backward compatibility
-            logger.warning(f"OAuth state missing provider, attempting detection")
+            logger.warning("OAuth state missing provider, attempting detection")
             try:
                 data = await google_auth.fetch_google_tokens(code)
                 provider = "google"
@@ -899,8 +910,11 @@ async def sso_callback(
                 }
             }
         else:
-            return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
-            
+            return RedirectResponse(
+                url=_frontend_redirect_token(access_token, redirect_to, frontend_url, refresh_token),
+                status_code=303,
+            )
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1040,7 +1054,10 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         logger.info(f"Microsoft OAuth successful for user: {email}")
 
         access_token = _create_access_token(user.id)
-        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
+        return RedirectResponse(
+            url=_frontend_redirect_token(access_token, redirect_to, frontend_url, token_info.get("refresh_token")),
+            status_code=303,
+        )
 
     except ValueError as e:
         logger.error(f"Microsoft OAuth Configuration Error: {e}")
@@ -1137,7 +1154,10 @@ async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession
 
         await db.commit()
         access_token = _create_access_token(user.id)
-        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
+        return RedirectResponse(
+            url=_frontend_redirect_token(access_token, redirect_to, frontend_url, token_info.get("refresh_token")),
+            status_code=303,
+        )
 
     except ValueError as e:
         logger.error(f"Zoom OAuth Configuration Error: {e}")
@@ -1276,7 +1296,10 @@ async def apple_callback(
         logger.info(f"Apple Sign In successful for user: {email}")
 
         access_token = _create_access_token(db_user.id)
-        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
+        return RedirectResponse(
+            url=_frontend_redirect_token(access_token, redirect_to, frontend_url, token_info.get("refresh_token")),
+            status_code=303,
+        )
 
     except ValueError as e:
         logger.error(f"Apple OAuth Configuration Error: {e}")

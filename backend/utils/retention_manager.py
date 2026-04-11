@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, update, text, exists, literal, func
+from sqlalchemy import select, delete, update, exists, literal, func
 
 from backend.models.dsr import DataRetentionSchedule
 from backend.models.tables import (
@@ -176,7 +176,7 @@ class DataRetentionManager:
         elif category == "email_verification_codes":
             if hasattr(UserTable, "email_verification_expires_at"):
                 stmt = update(UserTable).where(
-                    UserTable.email_verification_expires_at != None,
+                    UserTable.email_verification_expires_at.is_not(None),
                     UserTable.email_verification_expires_at < cutoff,
                 ).values(
                     email_verification_code=None,
@@ -187,7 +187,7 @@ class DataRetentionManager:
 
         elif category == "mfa_backup_codes":
             stmt = update(UserMFATable).where(
-                UserMFATable.backup_codes != None,
+                UserMFATable.backup_codes.is_not(None),
                 UserMFATable.created_at < cutoff,
             ).values(backup_codes=None)
             result = await db.execute(stmt)

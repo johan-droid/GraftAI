@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-
-const BACKEND =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://localhost:8000";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 const ACCESS_TOKEN_MAX_AGE = 15 * 60;
 const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60;
@@ -24,7 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing access token" }, { status: 400 });
   }
 
-  const backendRes = await fetch(`${BACKEND}/api/v1/auth/check`, {
+  const backendRes = await fetch(`${BACKEND_API_URL}/auth/check`, {
     headers: {
       Authorization: `Bearer ${access_token}`,
       "Content-Type": "application/json",

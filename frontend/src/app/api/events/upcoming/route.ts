@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth-server";
 import { headers } from "next/headers";
-
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 export async function GET() {
   const reqHeaders = await headers();
@@ -17,7 +16,7 @@ export async function GET() {
 
   try {
     const res = await fetch(
-      `${BACKEND}/api/v1/calendar/events?start=${encodeURIComponent(now)}&end=${encodeURIComponent(until)}`,
+      `${BACKEND_API_URL}/calendar/events?start=${encodeURIComponent(now)}&end=${encodeURIComponent(until)}`,
       { 
         headers: { "Authorization": `Bearer ${session.session.token}` },
         signal: controller.signal 

@@ -16,7 +16,7 @@ export async function GET() {
 
   let backendRes;
   try {
-    backendRes = await fetch(`${BACKEND}/api/v1/auth/check`, {
+    backendRes = await fetch(`${BACKEND_API_URL}/auth/check`, {
       headers: {
         Authorization: `Bearer ${session.session.token}`,
         "Content-Type": "application/json",

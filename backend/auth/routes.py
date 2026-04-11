@@ -14,7 +14,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from jose import jwt, JWTError
-from pydantic import BaseModel, EmailStr, field_validator
 
 from backend.services.auth_utils import get_password_hash, verify_password
 
@@ -22,7 +21,6 @@ from backend.utils.db import get_db
 from backend.models.tables import UserTable, UserTokenTable
 from backend.auth.schemes import get_current_user_id
 from backend.services.usage import get_next_quota_reset, get_trial_days_left
-from backend.services.notifications import send_email_verification_code
 from backend.services import google_auth, microsoft_auth
 from backend.services.sso import get_provider_config
 from backend.utils.rate_limit import rate_limit, api_limits
@@ -317,9 +315,6 @@ def _build_token_response(access_token: str, refresh_token: str):
         "token_type": "bearer",
         "refresh_token": refresh_token,
     }
-
-
-import re
 
 
 def create_access_token(data: dict):

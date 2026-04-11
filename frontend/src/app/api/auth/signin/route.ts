@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-
-const BACKEND =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://localhost:8000";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 const ACCESS_TOKEN_MAX_AGE = 15 * 60;
 const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60;
@@ -26,7 +22,7 @@ export async function POST(request: Request) {
   formData.append("username", email);
   formData.append("password", password);
 
-  const loginRes = await fetch(`${BACKEND}/api/v1/auth/login`, {
+  const loginRes = await fetch(`${BACKEND_API_URL}/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -43,7 +39,7 @@ export async function POST(request: Request) {
   const access_token = loginData.access_token;
   const refresh_token = loginData.refresh_token;
 
-  const checkRes = await fetch(`${BACKEND}/api/v1/auth/check`, {
+  const checkRes = await fetch(`${BACKEND_API_URL}/auth/check`, {
     headers: {
       Authorization: `Bearer ${access_token}`,
       "Content-Type": "application/json",

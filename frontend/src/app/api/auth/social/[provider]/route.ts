@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-
-const BACKEND =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://localhost:8000";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 const ALLOWED_PROVIDERS = new Set(["google", "microsoft"]);
 
@@ -22,7 +18,7 @@ export async function GET(
   const referer = request.headers.get("referer");
   const frontendUrl = referer ? new URL(referer).origin : url.origin;
 
-  const authUrl = `${BACKEND}/api/v1/auth/${provider}/login?redirect_to=${encodeURIComponent(
+  const authUrl = `${BACKEND_API_URL}/auth/${provider}/login?redirect_to=${encodeURIComponent(
     redirect_to
   )}&frontend_url=${encodeURIComponent(frontendUrl)}`;
 

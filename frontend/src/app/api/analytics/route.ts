@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth-server";
 import { headers } from "next/headers";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 // Redis caching — Upstash compatible
 let redis: { get: (k: string) => Promise<string | null>; setex: (k: string, ttl: number, v: string) => Promise<void> } | null = null;
@@ -16,8 +17,6 @@ async function getRedis() {
   }
   return redis;
 }
-
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 export async function POST(request: Request) {
   const reqHeaders = await headers();
@@ -35,7 +34,7 @@ export async function POST(request: Request) {
     console.error("Redis cache read failed:", err);
   }
 
-  const res = await fetch(`${BACKEND}/api/v1/analytics/summary`, {
+  const res = await fetch(`${BACKEND_API_URL}/analytics/summary`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

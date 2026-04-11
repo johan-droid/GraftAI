@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth-server";
 import { headers } from "next/headers";
-
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 export async function GET() {
   const reqHeaders = await headers();
@@ -13,7 +12,7 @@ export async function GET() {
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
-    const res = await fetch(`${BACKEND}/api/v1/proactive/suggest`, {
+    const res = await fetch(`${BACKEND_API_URL}/proactive/suggest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

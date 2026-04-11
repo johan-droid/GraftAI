@@ -679,7 +679,7 @@ async def google_login(
             state,
             prompt="consent" if force_consent else None,
         )
-        return RedirectResponse(url=auth_url)
+        return RedirectResponse(url=auth_url, status_code=303)
     except ValueError as e:
         logger.error(f"Google OAuth Configuration Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -764,7 +764,7 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         logger.info(f"Google OAuth successful for user: {email}")
 
         access_token = _create_access_token(user.id)
-        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url))
+        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
 
     except ValueError as e:
         logger.error(f"Google OAuth Configuration Error: {e}")
@@ -899,7 +899,7 @@ async def sso_callback(
                 }
             }
         else:
-            return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url))
+            return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
             
     except HTTPException:
         raise
@@ -931,7 +931,7 @@ async def sso_start(
     if query_parts:
         target_url = f"{target_url}?{'&'.join(query_parts)}"
 
-    return RedirectResponse(url=target_url)
+    return RedirectResponse(url=target_url, status_code=303)
 
 
 @router.get("/microsoft/login")
@@ -961,7 +961,7 @@ async def microsoft_login(
         redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = _build_oauth_state(user_id, redirect_to, provider="microsoft", frontend_url=frontend_url)
         auth_url = await microsoft_auth.get_microsoft_auth_url(state)
-        return RedirectResponse(url=auth_url)
+        return RedirectResponse(url=auth_url, status_code=303)
     except ValueError as e:
         logger.error(f"Microsoft OAuth Configuration Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -1040,7 +1040,7 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         logger.info(f"Microsoft OAuth successful for user: {email}")
 
         access_token = _create_access_token(user.id)
-        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url))
+        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
 
     except ValueError as e:
         logger.error(f"Microsoft OAuth Configuration Error: {e}")
@@ -1083,7 +1083,7 @@ async def zoom_login(
         redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = _build_oauth_state(user_id, redirect_to, provider="zoom", frontend_url=frontend_url)
         auth_url = await zoom_auth.get_zoom_auth_url(state)
-        return RedirectResponse(url=auth_url)
+        return RedirectResponse(url=auth_url, status_code=303)
     except ValueError as e:
         logger.error(f"Zoom OAuth Configuration Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -1137,7 +1137,7 @@ async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession
 
         await db.commit()
         access_token = _create_access_token(user.id)
-        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url))
+        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
 
     except ValueError as e:
         logger.error(f"Zoom OAuth Configuration Error: {e}")
@@ -1183,7 +1183,7 @@ async def apple_login(
         redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = _build_oauth_state(user_id, redirect_to, provider="apple", frontend_url=frontend_url)
         auth_url = await apple_auth.get_apple_auth_url(state)
-        return RedirectResponse(url=auth_url)
+        return RedirectResponse(url=auth_url, status_code=303)
     except ValueError as e:
         logger.error(f"Apple OAuth Configuration Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -1276,7 +1276,7 @@ async def apple_callback(
         logger.info(f"Apple Sign In successful for user: {email}")
 
         access_token = _create_access_token(db_user.id)
-        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url))
+        return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to, frontend_url), status_code=303)
 
     except ValueError as e:
         logger.error(f"Apple OAuth Configuration Error: {e}")

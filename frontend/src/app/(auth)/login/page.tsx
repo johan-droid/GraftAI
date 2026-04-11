@@ -11,12 +11,12 @@ import {
 import { toast } from "@/components/ui/Toast";
 
 type AuthTab = "credentials" | "passwordless" | "passkey";
-type OAuthProvider = "google" | "github";
+type OAuthProvider = "google" | "microsoft";
 
-const TABS: { key: AuthTab; label: string; icon: React.ReactNode }[] = [
+const TABS: { key: AuthTab; label: string; icon: React.ReactNode; disabled?: boolean }[] = [
   { key: "credentials",  label: "Password",   icon: <Lock className="w-4 h-4" /> },
-  { key: "passwordless", label: "Magic Link",  icon: <Mail className="w-4 h-4" /> },
-  { key: "passkey",      label: "Passkey",     icon: <Fingerprint className="w-4 h-4" /> },
+  { key: "passwordless", label: "Magic Link",  icon: <Mail className="w-4 h-4" />, disabled: true },
+  { key: "passkey",      label: "Passkey",     icon: <Fingerprint className="w-4 h-4" />, disabled: true },
 ];
 
 export default function LoginPage() {
@@ -40,7 +40,6 @@ export default function LoginPage() {
       const { error } = await authClient.signIn.email({
         email: email.trim(),
         password,
-        callbackURL: "/auth-callback",
       });
       if (error) throw new Error(error.message ?? "Invalid credentials");
       router.replace("/dashboard");
@@ -63,34 +62,11 @@ export default function LoginPage() {
 
   async function handleMagicLink(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!magicEmail.trim()) return;
-    setLoading("magic");
-    try {
-      const { error } = await authClient.signIn.magicLink({
-        email: magicEmail.trim(),
-        callbackURL: "/auth-callback",
-      });
-      if (error) throw error;
-      setMagicSent(true);
-      toast.success("Magic link sent! Check your inbox.");
-    } catch (err) {
-      toast.error((err as Error).message || "Failed to send magic link.");
-    } finally {
-      setLoading(null);
-    }
+    toast.info("Magic link authentication coming soon!");
   }
 
   async function handlePasskey() {
-    setLoading("passkey");
-    try {
-      const { error } = await authClient.signIn.passkey({});
-      if (error) throw new Error("Passkey authentication failed.");
-      router.replace("/dashboard");
-    } catch {
-      toast.error("Passkey authentication failed or was cancelled.");
-    } finally {
-      setLoading(null);
-    }
+    toast.info("Passkey authentication coming soon!");
   }
 
   return (
@@ -119,7 +95,7 @@ export default function LoginPage() {
 
         <div className="card p-6 md:p-8">
           <div className="grid grid-cols-2 gap-3 mb-6">
-            {(["google", "github"] as OAuthProvider[]).map((p) => (
+            {(["google", "microsoft"] as OAuthProvider[]).map((p) => (
               <OAuthButton
                 key={p}
                 provider={p}
@@ -144,11 +120,13 @@ export default function LoginPage() {
             {TABS.map((t) => (
               <button
                 key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${tab === t.key ? 'bg-peach text-[#1A0F0A] shadow-[0_1px_6px_rgba(255,171,145,0.3)]' : 'text-slate-400'}`}
+                onClick={() => !t.disabled && setTab(t.key)}
+                disabled={t.disabled}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${tab === t.key ? 'bg-peach text-[#1A0F0A] shadow-[0_1px_6px_rgba(255,171,145,0.3)]' : t.disabled ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 {t.icon}
                 <span className="hidden sm:inline">{t.label}</span>
+                {t.disabled && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">Soon</span>}
               </button>
             ))}
           </div>
@@ -321,7 +299,7 @@ function PrimaryButton({ loading, label }: { loading: boolean; label: string }) 
 
 function OAuthButton({
   provider, loading, onClick,
-}: { provider: "google" | "github"; loading: boolean; onClick: () => void }) {
+}: { provider: "google" | "microsoft"; loading: boolean; onClick: () => void }) {
   const icons: Record<string, React.ReactNode> = {
     google: (
       <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -331,13 +309,16 @@ function OAuthButton({
         <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.70 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.60 3.30-4.53 6.16-4.53z" fill="#EA4335"/>
       </svg>
     ),
-    github: (
-      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-        <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd"/>
+    microsoft: (
+      <svg className="w-4 h-4" viewBox="0 0 21 21">
+        <path d="M1 1h9v9H1z" fill="#f25022"/>
+        <path d="M1 11h9v9H1z" fill="#00a4ef"/>
+        <path d="M11 1h9v9h-9z" fill="#7fba00"/>
+        <path d="M11 11h9v9h-9z" fill="#ffb900"/>
       </svg>
     ),
   };
-  const labels: Record<string, string> = { google: "Google", github: "GitHub" };
+  const labels: Record<string, string> = { google: "Google", microsoft: "Microsoft" };
 
   return (
     <button

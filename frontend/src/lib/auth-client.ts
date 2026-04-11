@@ -25,8 +25,8 @@ async function postJson(path: string, payload: unknown) {
 
 export const authClient = {
   signIn: {
-    async email({ email, password, callbackURL }: { email: string; password: string; callbackURL: string }) {
-      return postJson("/api/v1/auth/login", { email, password, callbackURL });
+    async email({ email, password }: { email: string; password: string }) {
+      return postJson("/api/v1/auth/login", { username: email, password });
     },
 
     async social({ provider, callbackURL }: { provider: string; callbackURL: string }) {
@@ -36,14 +36,6 @@ export const authClient = {
         window.location.href = redirectUrl;
       }
       return { error: null };
-    },
-
-    async magicLink({ email, callbackURL }: { email: string; callbackURL: string }) {
-      return postJson("/api/v1/auth/magic-link", { email, callbackURL });
-    },
-
-    async passkey(_: Record<string, unknown>) {
-      return postJson("/api/v1/auth/passkey", {});
     },
   },
 };

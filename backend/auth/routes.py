@@ -40,11 +40,15 @@ def _frontend_redirect_token(access_token: str, redirect_to: str = "/dashboard")
     return f"{FRONTEND_BASE_URL}/auth-callback?access_token={quote_plus(access_token)}&redirect={quote_plus(redirect_to)}"
 
 
-def _build_oauth_state(user_id: Optional[str], redirect_to: Optional[str] = "/dashboard") -> str:
+def _build_oauth_state(
+    user_id: Optional[str], 
+    redirect_to: Optional[str] = "/dashboard",
+    provider: Optional[str] = None
+) -> str:
     """
     Build signed OAuth state parameter with expiration.
     
-    Format: timestamp:nonce:user_id:redirect:signature
+    Format: timestamp:nonce:user_id:redirect:provider:signature
     """
     # Validate redirect_to to prevent open redirect attacks
     safe_redirect = _sanitize_redirect(redirect_to or "/dashboard")
@@ -53,9 +57,10 @@ def _build_oauth_state(user_id: Optional[str], redirect_to: Optional[str] = "/da
     timestamp = str(int(time.time()))
     nonce = secrets.token_urlsafe(16)
     user_id_str = user_id or ""
+    provider_str = provider or ""
     
     # Create payload for signing
-    payload = f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}"
+    payload = f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{provider_str}"
     
     # Generate HMAC signature
     signature = hmac.new(
@@ -64,10 +69,10 @@ def _build_oauth_state(user_id: Optional[str], redirect_to: Optional[str] = "/da
         hashlib.sha256
     ).hexdigest()[:16]
     
-    return f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{signature}"
+    return f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{provider_str}:{signature}"
 
 
-def _parse_oauth_state(state: str) -> tuple[Optional[str], str]:
+def _parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str]]:
     """
     Parse and validate OAuth state parameter.
     
@@ -77,7 +82,7 @@ def _parse_oauth_state(state: str) -> tuple[Optional[str], str]:
     - Redirect URL safety
     
     Returns:
-        tuple: (user_id, redirect_to)
+        tuple: (user_id, redirect_to, provider)
     
     Raises:
         HTTPException: If state is invalid or expired
@@ -91,17 +96,22 @@ def _parse_oauth_state(state: str) -> tuple[Optional[str], str]:
     
     # Parse state components
     parts = state.split(":")
-    if len(parts) != 5:
-        logger.error(f"Invalid OAuth state format: {len(parts)} parts instead of 5")
+    if len(parts) not in (5, 6):
+        logger.error(f"Invalid OAuth state format: {len(parts)} parts instead of 5 or 6")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid OAuth state: malformed"
         )
     
-    timestamp_str, nonce, user_id, redirect_to, signature = parts
+    # Handle both old format (5 parts) and new format (6 parts with provider)
+    if len(parts) == 6:
+        timestamp_str, nonce, user_id, redirect_to, provider, signature = parts
+    else:
+        timestamp_str, nonce, user_id, redirect_to, signature = parts
+        provider = ""
     
     # Reconstruct payload for signature verification
-    payload = f"{timestamp_str}:{nonce}:{user_id}:{redirect_to}"
+    payload = f"{timestamp_str}:{nonce}:{user_id}:{redirect_to}:{provider}"
     expected_signature = hmac.new(
         SECRET_KEY.encode(),
         payload.encode(),
@@ -138,7 +148,7 @@ def _parse_oauth_state(state: str) -> tuple[Optional[str], str]:
     safe_redirect = _sanitize_redirect(decoded_redirect)
     
     # Return parsed values
-    return user_id or None, safe_redirect
+    return user_id or None, safe_redirect, provider or None
 
 
 def _sanitize_redirect(redirect: str) -> str:
@@ -641,7 +651,7 @@ async def google_login(
                 pass
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
-        state = _build_oauth_state(user_id, redirect_to)
+        state = _build_oauth_state(user_id, redirect_to, provider="google")
         auth_url = await google_auth.get_google_auth_url(
             state,
             prompt="consent" if force_consent else None,
@@ -667,7 +677,7 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             logger.error("Google callback missing state parameter")
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
-        user_id, redirect_to = _parse_oauth_state(state)
+        user_id, redirect_to, _ = _parse_oauth_state(state)
 
         data = await google_auth.fetch_google_tokens(code)
         email = data.get("email")
@@ -703,7 +713,8 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             user.email_verification_expires_at = None
 
         token_info = data.get("token", {})
-        if not token_info.get("access_token"):
+        access_token = token_info.get("access_token")
+        if not access_token:
             logger.error("Google OAuth returned no access token")
             raise HTTPException(status_code=400, detail="Failed to retrieve access token")
 
@@ -717,7 +728,7 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             user_token = UserTokenTable(user_id=user.id, provider="google")
             db.add(user_token)
 
-        user_token.access_token = token_info["access_token"]
+        user_token.access_token = access_token
         user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
         user_token.expires_at = (
             datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
@@ -738,20 +749,9 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Google Callback Error: {e}", exc_info=True)
         await db.rollback()
-        error_msg = str(e)
-        if "invalid_request" in error_msg or "unauthorized_client" in error_msg:
-            raise HTTPException(status_code=400, detail="Google OAuth configuration error. Please contact support.")
+        logger.error(f"Google Callback Error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Authentication failed")
-
-
-@router.post("/sync-timezone")
-async def sync_timezone(payload: dict):
-    tz = payload.get("timezone")
-    if not tz:
-        raise HTTPException(status_code=400, detail="Missing timezone")
-    return {"status": "updated", "timezone": tz}
 
 
 @router.get("/sso/callback")
@@ -775,21 +775,32 @@ async def sso_callback(
         raise HTTPException(status_code=400, detail="Missing OAuth state parameter")
     
     try:
-        # Parse state to get redirect info
-        user_id, redirect_to = _parse_oauth_state(state)
+        # Parse state to get redirect info and provider
+        user_id, redirect_to, parsed_provider = _parse_oauth_state(state)
         
-        # Try Google first (most common)
-        try:
+        # Validate provider from state
+        if parsed_provider == "google":
             data = await google_auth.fetch_google_tokens(code)
             provider = "google"
-        except Exception as google_err:
-            # If Google fails, try Microsoft
+        elif parsed_provider == "microsoft":
+            data = await microsoft_auth.fetch_microsoft_tokens(code)
+            provider = "microsoft"
+        else:
+            # Fallback for old state format without provider - try to detect
+            # This maintains backward compatibility
+            logger.warning(f"OAuth state missing provider, attempting detection")
             try:
-                data = await microsoft_auth.fetch_microsoft_tokens(code)
-                provider = "microsoft"
+                data = await google_auth.fetch_google_tokens(code)
+                provider = "google"
             except Exception:
-                # Both failed, raise the original error
-                raise google_err
+                try:
+                    data = await microsoft_auth.fetch_microsoft_tokens(code)
+                    provider = "microsoft"
+                except Exception:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="Unable to determine OAuth provider from state. Please try again."
+                    )
         
         email = data.get("email")
         if not email:
@@ -820,6 +831,11 @@ async def sso_callback(
         
         # Store tokens
         token_info = data.get("token", {})
+        access_token = token_info.get("access_token")
+        if not access_token:
+            logger.error(f"{provider} OAuth returned no access token")
+            raise HTTPException(status_code=400, detail="Failed to retrieve access token from OAuth provider")
+        
         stmt = select(UserTokenTable).where(
             UserTokenTable.user_id == user.id,
             UserTokenTable.provider == provider,
@@ -830,7 +846,7 @@ async def sso_callback(
             user_token = UserTokenTable(user_id=user.id, provider=provider)
             db.add(user_token)
         
-        user_token.access_token = token_info.get("access_token")
+        user_token.access_token = access_token
         user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
         if "expires_at" in token_info:
             user_token.expires_at = datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
@@ -865,6 +881,7 @@ async def sso_callback(
     except HTTPException:
         raise
     except Exception as e:
+        await db.rollback()
         logger.error(f"SSO callback error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Authentication failed")
 
@@ -910,7 +927,7 @@ async def microsoft_login(
                 pass
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
-        state = _build_oauth_state(user_id, redirect_to)
+        state = _build_oauth_state(user_id, redirect_to, provider="microsoft")
         auth_url = await microsoft_auth.get_microsoft_auth_url(state)
         return RedirectResponse(url=auth_url)
     except ValueError as e:
@@ -928,7 +945,7 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
             logger.error("Microsoft callback missing state parameter")
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
-        user_id, redirect_to = _parse_oauth_state(state)
+        user_id, redirect_to, _ = _parse_oauth_state(state)
 
         data = await microsoft_auth.fetch_microsoft_tokens(code)
         email = data.get("email")
@@ -1023,7 +1040,7 @@ async def zoom_login(
                 pass
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
-        state = _build_oauth_state(user_id, redirect_to)
+        state = _build_oauth_state(user_id, redirect_to, provider="zoom")
         auth_url = await zoom_auth.get_zoom_auth_url(state)
         return RedirectResponse(url=auth_url)
     except ValueError as e:
@@ -1034,7 +1051,7 @@ async def zoom_login(
 @router.get("/zoom/callback")
 async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     try:
-        user_id, redirect_to = _parse_oauth_state(state or "")
+        user_id, redirect_to, _ = _parse_oauth_state(state or "")
 
         data = await zoom_auth.fetch_zoom_tokens(code)
         email = data["email"]
@@ -1085,6 +1102,7 @@ async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession
         logger.error(f"Zoom OAuth Configuration Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        await db.rollback()
         logger.error(f"Zoom Callback Error: {e}")
         raise HTTPException(status_code=500, detail="Authentication failed")
 
@@ -1113,7 +1131,7 @@ async def apple_login(
                 pass
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
-        state = _build_oauth_state(user_id, redirect_to)
+        state = _build_oauth_state(user_id, redirect_to, provider="apple")
         auth_url = await apple_auth.get_apple_auth_url(state)
         return RedirectResponse(url=auth_url)
     except ValueError as e:
@@ -1142,7 +1160,7 @@ async def apple_callback(
             logger.error("Apple callback missing state parameter")
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
-        user_id, redirect_to = _parse_oauth_state(state)
+        user_id, redirect_to, _ = _parse_oauth_state(state)
 
         data = await apple_auth.fetch_apple_tokens(code)
         email = data.get("email")

@@ -12,7 +12,7 @@ services:
     branch: main
     autoDeploy: true
     healthCheckPath: /health
-    buildCommand: "pip install -r backend/requirements.txt"
+    buildCommand: "python -m pip install --upgrade pip && pip install -r backend/requirements.txt"
     startCommand: "cd backend && uvicorn api.main:app --host 0.0.0.0 --port $PORT --proxy-headers"
     envVars:
       - key: ENV
@@ -23,8 +23,8 @@ services:
         value: https://graftai.onrender.com
       - key: TRUSTED_HOSTS
         # Restrict trusted hosts to the app's own Render and public frontend domains.
-        # Use exact domain names for production and avoid broad wildcard host allowlists.
-        value: "graftai.onrender.com,www.graftai.tech"
+        # Include localhost/127.0.0.1 for internal health checks and self-ping probes.
+        value: "graftai.onrender.com,www.graftai.tech,127.0.0.1,localhost"
       - key: FRONTEND_URL
         value: https://www.graftai.tech
       - key: FRONTEND_BASE_URL

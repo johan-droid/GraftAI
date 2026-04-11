@@ -97,6 +97,25 @@ GraftAI is a high-performance, AI-powered scheduling platform that unifies your 
 
 ### Quick Deploy
 
+#### Backend (Heroku)
+```bash
+# Create a Heroku app (if needed)
+heroku create graftai-backend
+# Push the backend to Heroku
+git push heroku main
+```
+
+#### Backend (Railway)
+```bash
+# From the project root, Railway will detect the Python app via Procfile.
+# If you are using the CLI, link or init your project first:
+railway init
+# Then deploy the repo:
+railway up
+```
+
+> Note: On Railway, set the app's `TRUSTED_HOSTS` env to your Railway domain (for example `myapp.up.railway.app`) and keep `BACKEND_URL` set to the public backend URL.
+
 #### Backend (Render)
 ```bash
 # Automatic deployment on push to main

@@ -1,0 +1,9 @@
+frontend/
+docs/
+.github/
+nginx/
+scripts/
+backend/tests/
+logs/
+uploads/
+*.log

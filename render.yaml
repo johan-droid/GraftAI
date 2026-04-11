@@ -24,8 +24,6 @@ services:
       - key: TRUSTED_HOSTS
         # Restrict trusted hosts to the app's own Render domain and the public frontend domain.
         # Avoid broad Render wildcards unless preview subdomains are intentionally allowed.
-        value: "*.graftai.onrender.com,graftai.onrender.com,www.graftai.tech"nd the public frontend domain.
-        # Avoid broad Render wildcards unless preview subdomains are intentionally allowed.
         value: "*.graftai.onrender.com,graftai.onrender.com,www.graftai.tech"
       - key: FRONTEND_URL
         value: https://www.graftai.tech

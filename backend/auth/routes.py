@@ -99,18 +99,15 @@ def _parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str], O
             detail="Invalid OAuth state: missing state"
         )
     
-    # URL-decode the entire state first (browsers/OAuth providers may encode it)
-    decoded_state = unquote(state)
-    
-    # Parse state components
-    parts = decoded_state.split(":")
+# Keep the raw state string intact when splitting to preserve encoded frontend_url values.
+    parts = state.split(":", 6)
     if len(parts) not in (5, 6, 7):
         logger.error(f"Invalid OAuth state format: {len(parts)} parts instead of 5, 6, or 7")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid OAuth state: malformed"
         )
-    
+
     # Handle old formats (5, 6 parts) and new format (7 parts with frontend_url)
     if len(parts) == 7:
         timestamp_str, nonce, user_id, redirect_to, provider, frontend_url, signature = parts

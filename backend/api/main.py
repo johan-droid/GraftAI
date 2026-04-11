@@ -447,7 +447,7 @@ def create_app() -> FastAPI:
     async def health_check():
         return {"status": "healthy", "architecture": "monolith"}
 
-    @app.get("/")
+    @app.api_route("/", methods=["GET", "HEAD"])
     async def root():
         return {
             "app": "GraftAI",

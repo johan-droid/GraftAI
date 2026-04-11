@@ -280,7 +280,14 @@ def create_app() -> FastAPI:
             "http://127.0.0.1:3000",
         ]
 
-    trusted_hosts = _parse_comma_separated_env("TRUSTED_HOSTS")
+    trusted_hosts = [
+        host
+        for host in (
+            _extract_hostname(value)
+            for value in _parse_comma_separated_env("TRUSTED_HOSTS")
+        )
+        if host
+    ]
     if not trusted_hosts:
         env = os.getenv("ENV", "development").lower()
         if env == "production":

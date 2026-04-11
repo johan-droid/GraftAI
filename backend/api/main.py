@@ -288,6 +288,9 @@ def create_app() -> FastAPI:
             backend_host = _extract_hostname(os.getenv("BACKEND_URL") or os.getenv("APP_BASE_URL"))
             if backend_host:
                 trusted_hosts.append(backend_host)
+
+            # Always allow internal health checks and local probes in production.
+            trusted_hosts.extend(["localhost", "127.0.0.1", "0.0.0.0"])
             trusted_hosts = [host for host in dict.fromkeys(trusted_hosts) if host]
         else:
             trusted_hosts = [

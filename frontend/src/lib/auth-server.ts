@@ -5,13 +5,21 @@ export const auth = {
       if (authHeader?.startsWith("Bearer ")) {
         return { session: { token: authHeader.split(" ")[1] } };
       }
-      
+
       const cookieHeader = headers.get("cookie");
-      if (cookieHeader?.includes("auth_token=")) {
-         const token = cookieHeader.split("auth_token=")[1].split(";")[0];
-         return { session: { token } };
+      if (cookieHeader) {
+        const parseCookie = (name: string) => {
+          const match = cookieHeader.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+          return match ? decodeURIComponent(match[1]) : null;
+        };
+
+        const authToken = parseCookie("auth_token") || parseCookie("graftai_access_token");
+        if (authToken) {
+          return { session: { token: authToken } };
+        }
       }
+
       return null;
-    }
-  }
+    },
+  },
 };

@@ -67,6 +67,7 @@ export const apiClient = {
     let response: Response;
     try {
       response = await fetch(url, {
+        credentials: "include",
         ...requestInit,
         headers,
         body,

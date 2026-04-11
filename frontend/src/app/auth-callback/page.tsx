@@ -29,44 +29,70 @@ function AuthCallbackInner() {
       if (hasFetched.current) return;
       hasFetched.current = true;
       try {
-        if (accessToken) {
-          setStatus("Completing SSO login...");
+        const restoreSession = async (accessToken: string, refreshToken?: string) => {
+          setStatus("Restoring your session...");
+          const response = await fetch("/api/auth/restore", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+              redirect_to: redirectTo,
+            }),
+          });
 
-          window.sessionStorage.setItem("token", accessToken);
-          window.localStorage.setItem("token", accessToken);
-          window.sessionStorage.setItem("graftai_access_token", accessToken);
-          window.localStorage.setItem("graftai_access_token", accessToken);
-          if (refreshToken) {
-            window.sessionStorage.setItem("refresh_token", refreshToken);
-            window.localStorage.setItem("refresh_token", refreshToken);
-            window.sessionStorage.setItem("graftai_refresh_token", refreshToken);
-            window.localStorage.setItem("graftai_refresh_token", refreshToken);
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
           }
 
-          setStatus("Login successful! Redirecting...");
-          sessionStorage.removeItem("oauth_in_progress");
-          safeReplace(redirectTo);
-          return;
+          const data = await response.json();
+          if (data.access_token) {
+            if (typeof window !== "undefined") {
+              window.localStorage.setItem("token", data.access_token);
+              window.localStorage.setItem("graftai_access_token", data.access_token);
+              sessionStorage.setItem("token", data.access_token);
+              sessionStorage.setItem("graftai_access_token", data.access_token);
+            }
+          }
+          return data;
+        };
+
+        if (accessToken) {
+          try {
+            await restoreSession(accessToken, refreshToken ?? undefined);
+            setStatus("Login successful! Redirecting...");
+            sessionStorage.removeItem("oauth_in_progress");
+            safeReplace(redirectTo);
+            return;
+          } catch (err) {
+            console.error("Session restore failed", err);
+            setStatus("Failed to restore session. Redirecting to login...");
+            setTimeout(() => safeReplace("/login"), 2000);
+            return;
+          }
         }
 
         if (code && state) {
           setStatus("Authenticating with OAuth provider...");
-          
-          // First, store the token from URL params to preserve it during the fetch
-          // The backend will set cookies, but we also need to capture the access_token
+
           const callbackPath = composeEndpoint("/auth/sso/callback", true);
           const response = await fetch(
             `${callbackPath}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
             {
               method: "GET",
-              headers: { 
+              headers: {
                 "Accept": "application/json",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
               },
               credentials: "include",
             }
           );
-          
+
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             const message = errorData.detail || `HTTP ${response.status}`;
@@ -84,32 +110,22 @@ function AuthCallbackInner() {
 
             throw new Error(message);
           }
-          
-          const data = await response.json();
 
+          const data = await response.json();
           if (data.token?.access_token) {
-            setStatus("Login successful! Redirecting to dashboard...");
-            window.sessionStorage.setItem("token", data.token.access_token);
-            window.localStorage.setItem("token", data.token.access_token);
-            window.sessionStorage.setItem("graftai_access_token", data.token.access_token);
-            window.localStorage.setItem("graftai_access_token", data.token.access_token);
-            if (data.token.refresh_token) {
-              window.sessionStorage.setItem("refresh_token", data.token.refresh_token);
-              window.localStorage.setItem("refresh_token", data.token.refresh_token);
-              window.sessionStorage.setItem("graftai_refresh_token", data.token.refresh_token);
-              window.localStorage.setItem("graftai_refresh_token", data.token.refresh_token);
+            try {
+              await restoreSession(data.token.access_token, data.token.refresh_token);
+              setStatus("Login successful! Redirecting to dashboard...");
+              safeReplace(data.redirect_to || "/dashboard");
+              return;
+            } catch (err) {
+              console.error("Session restore failed", err);
+              setStatus("Authentication failed. Redirecting to login...");
+              setTimeout(() => safeReplace("/login"), 2000);
+              return;
             }
-            // Use the redirect_to from backend, default to /dashboard
-            safeReplace(data.redirect_to || "/dashboard");
-            return;
           }
-          
-          if (response.status === 401 || response.status === 403) {
-            setStatus("Authentication expired or not allowed. Please login again.");
-            setTimeout(() => safeReplace("/login"), 1000);
-            return;
-          }
-          
+
           setStatus(data.detail || "Authentication failed");
           setTimeout(() => safeReplace("/login"), 2000);
           return;

@@ -1,12 +1,10 @@
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "https://graftai.onrender.com";
+const API_URL = "/api/auth";
 
 async function postJson(path: string, payload: unknown) {
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
 
@@ -26,14 +24,14 @@ async function postJson(path: string, payload: unknown) {
 export const authClient = {
   signIn: {
     async email({ email, password }: { email: string; password: string }) {
-      return postJson("/api/v1/auth/login", { username: email, password });
+      return postJson("/signin", { email, password });
     },
 
     async social({ provider, callbackURL }: { provider: string; callbackURL: string }) {
       const redirectTarget = callbackURL === "/auth-callback" ? "/dashboard" : callbackURL;
-      // Pass current frontend URL as query parameter for redirect back to same origin
-      const currentFrontendUrl = typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}` : "";
-      const redirectUrl = `${API_URL}/api/v1/auth/${provider}/login?redirect_to=${encodeURIComponent(redirectTarget)}&frontend_url=${encodeURIComponent(currentFrontendUrl)}`;
+      const redirectUrl = `/api/auth/social/${encodeURIComponent(provider)}?redirect_to=${encodeURIComponent(
+        redirectTarget
+      )}`;
       if (typeof window !== "undefined") {
         window.location.href = redirectUrl;
       }

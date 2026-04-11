@@ -623,7 +623,8 @@ async def logout(response: Response):
 @router.get("/google/login")
 async def google_login(
     token: Optional[str] = None,
-    redirect_to: Optional[str] = "/dashboard",
+    redirect_to: Optional[str] = None,
+    redirect_uri: Optional[str] = None,
     force_consent: bool = False,
 ):
     try:
@@ -635,6 +636,7 @@ async def google_login(
             except Exception:
                 pass
 
+        redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = _build_oauth_state(user_id, redirect_to)
         auth_url = await google_auth.get_google_auth_url(
             state,
@@ -751,16 +753,18 @@ async def sync_timezone(payload: dict):
 @router.get("/sso/start")
 async def sso_start(
     provider: str,
-    redirect_to: Optional[str] = "/dashboard",
+    redirect_to: Optional[str] = None,
+    redirect_uri: Optional[str] = None,
     token: Optional[str] = None,
 ):
     provider = provider.lower()
     if get_provider_config(provider) is None:
         raise HTTPException(status_code=400, detail="Unsupported SSO provider")
 
+    final_redirect = redirect_to or redirect_uri or "/dashboard"
     query_parts = []
-    if redirect_to:
-        query_parts.append(f"redirect_to={quote_plus(redirect_to)}")
+    if final_redirect:
+        query_parts.append(f"redirect_to={quote_plus(final_redirect)}")
     if token:
         query_parts.append(f"token={quote_plus(token)}")
 
@@ -772,7 +776,11 @@ async def sso_start(
 
 
 @router.get("/microsoft/login")
-async def microsoft_login(token: Optional[str] = None, redirect_to: Optional[str] = "/dashboard"):
+async def microsoft_login(
+    token: Optional[str] = None,
+    redirect_to: Optional[str] = None,
+    redirect_uri: Optional[str] = None,
+):
     try:
         user_id = None
         if token:
@@ -782,6 +790,7 @@ async def microsoft_login(token: Optional[str] = None, redirect_to: Optional[str
             except Exception:
                 pass
 
+        redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = _build_oauth_state(user_id, redirect_to)
         auth_url = await microsoft_auth.get_microsoft_auth_url(state)
         return RedirectResponse(url=auth_url)
@@ -880,7 +889,11 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
 
 
 @router.get("/zoom/login")
-async def zoom_login(token: Optional[str] = None, redirect_to: Optional[str] = "/dashboard"):
+async def zoom_login(
+    token: Optional[str] = None,
+    redirect_to: Optional[str] = None,
+    redirect_uri: Optional[str] = None,
+):
     try:
         user_id = None
         if token:
@@ -890,6 +903,7 @@ async def zoom_login(token: Optional[str] = None, redirect_to: Optional[str] = "
             except Exception:
                 pass
 
+        redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = _build_oauth_state(user_id, redirect_to)
         auth_url = await zoom_auth.get_zoom_auth_url(state)
         return RedirectResponse(url=auth_url)
@@ -964,7 +978,11 @@ from backend.services import apple_auth
 
 
 @router.get("/apple/login")
-async def apple_login(token: Optional[str] = None, redirect_to: Optional[str] = "/dashboard"):
+async def apple_login(
+    token: Optional[str] = None,
+    redirect_to: Optional[str] = None,
+    redirect_uri: Optional[str] = None,
+):
     """Initiate Apple Sign In OAuth flow."""
     try:
         user_id = None
@@ -975,6 +993,7 @@ async def apple_login(token: Optional[str] = None, redirect_to: Optional[str] = 
             except Exception:
                 pass
 
+        redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = _build_oauth_state(user_id, redirect_to)
         auth_url = await apple_auth.get_apple_auth_url(state)
         return RedirectResponse(url=auth_url)

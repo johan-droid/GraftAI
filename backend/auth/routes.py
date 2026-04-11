@@ -740,7 +740,7 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         await db.commit()
         logger.info(f"Google OAuth successful for user: {email}")
 
-        access_token = create_access_token(data={"sub": user.id})
+        access_token = _create_access_token(user.id)
         return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
 
     except ValueError as e:
@@ -855,7 +855,7 @@ async def sso_callback(
         await db.commit()
         
         # Generate JWT tokens
-        access_token = create_access_token(data={"sub": user.id})
+        access_token = _create_access_token(user.id)
         refresh_token = _create_refresh_token(user.id)
         
         logger.info(f"{provider} OAuth successful for user: {email}")
@@ -1007,7 +1007,7 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         await db.commit()
         logger.info(f"Microsoft OAuth successful for user: {email}")
 
-        access_token = create_access_token(data={"sub": user.id})
+        access_token = _create_access_token(user.id)
         return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
 
     except ValueError as e:
@@ -1095,7 +1095,7 @@ async def zoom_callback(code: str, state: Optional[str] = None, db: AsyncSession
         )
 
         await db.commit()
-        access_token = create_access_token(data={"sub": user.id})
+        access_token = _create_access_token(user.id)
         return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
 
     except ValueError as e:
@@ -1225,7 +1225,7 @@ async def apple_callback(
         await db.commit()
         logger.info(f"Apple Sign In successful for user: {email}")
 
-        access_token = create_access_token(data={"sub": db_user.id})
+        access_token = _create_access_token(db_user.id)
         return RedirectResponse(url=_frontend_redirect_token(access_token, redirect_to))
 
     except ValueError as e:
@@ -1234,6 +1234,6 @@ async def apple_callback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Apple Callback Error: {e}", exc_info=True)
         await db.rollback()
+        logger.error(f"Apple Callback Error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Authentication failed")

@@ -5,5 +5,5 @@ SET title = 'Untitled event'
 WHERE title IS NULL OR btrim(title) = '';
 
 UPDATE event_types
-SET title = 'Booking'
-WHERE title IS NULL OR btrim(title) = '';
+SET name = 'Booking'
+WHERE name IS NULL OR btrim(name) = '';

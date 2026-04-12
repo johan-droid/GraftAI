@@ -38,3 +38,9 @@ test-client.ts
 .vscode/
 *.swp
 *.swo
+
+# Ignore compiled JS artifacts in source (TypeScript/Next compiled outputs)
+# Prevent committing transient compiled JS under `src/`.
+src/**/*.js
+src/**/*.jsx
+src/**/*.js.map

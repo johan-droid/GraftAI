@@ -1,0 +1,169 @@
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from fastapi import HTTPException, status
+from jose import jwt, JWTError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.auth.config import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    ACCESS_TOKEN_TYPE,
+    ALGORITHM,
+    REFRESH_TOKEN_TYPE,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    SECRET_KEY,
+)
+from backend.models.tables import UserTable, UserTokenTable
+from backend.services.auth_utils import get_password_hash, verify_password
+
+
+def _create_jwt_token_impl(user_id: str, token_type: str) -> str:
+    now = datetime.now(timezone.utc)
+    if token_type == REFRESH_TOKEN_TYPE:
+        expire = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    else:
+        expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    payload = {
+        "sub": user_id,
+        "type": token_type,
+        "exp": expire,
+        "iat": now,
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_access_token(user_id: str) -> str:
+    return _create_jwt_token_impl(user_id, ACCESS_TOKEN_TYPE)
+
+
+def create_refresh_token(user_id: str) -> str:
+    return _create_jwt_token_impl(user_id, REFRESH_TOKEN_TYPE)
+
+
+def create_token_pair(user_id: str) -> dict[str, str]:
+    return {
+        "access_token": create_access_token(user_id),
+        "refresh_token": create_refresh_token(user_id),
+    }
+
+
+def decode_jwt_token(token: str, expected_type: Optional[str] = None) -> dict:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate token",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    if payload.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token payload missing subject",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if expected_type and payload.get("type") != expected_type:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token type mismatch",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return payload
+
+
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[UserTable]:
+    stmt = select(UserTable).where(UserTable.email == email)
+    return (await db.execute(stmt)).scalars().first()
+
+
+async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[UserTable]:
+    stmt = select(UserTable).where(UserTable.id == user_id)
+    return (await db.execute(stmt)).scalars().first()
+
+
+async def authenticate_user(form_data, db: AsyncSession) -> UserTable:
+    email = form_data.username.lower().strip()
+    user = await get_user_by_email(db, email)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address is not verified. Please verify your email before signing in.",
+        )
+
+    if not user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
+
+
+async def create_user_with_dummy_password(
+    db: AsyncSession,
+    email: str,
+    full_name: str,
+    verified: bool = True,
+    username: Optional[str] = None,
+    **extra_fields,
+) -> UserTable:
+    dummy_password = secrets.token_urlsafe(32)[:64]
+    user = UserTable(
+        email=email,
+        username=username,
+        full_name=full_name,
+        hashed_password=get_password_hash(dummy_password),
+        email_verified=verified,
+        **extra_fields,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+async def upsert_user_token(
+    db: AsyncSession,
+    user: UserTable,
+    provider: str,
+    token_info: dict,
+) -> UserTokenTable:
+    stmt = select(UserTokenTable).where(
+        UserTokenTable.user_id == user.id,
+        UserTokenTable.provider == provider,
+    )
+    user_token = (await db.execute(stmt)).scalars().first()
+    if not user_token:
+        user_token = UserTokenTable(user_id=user.id, provider=provider)
+        db.add(user_token)
+
+    user_token.access_token = token_info.get("access_token") or user_token.access_token
+    user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
+    if "expires_at" in token_info and token_info["expires_at"] is not None:
+        try:
+            user_token.expires_at = datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
+        except Exception:
+            user_token.expires_at = token_info.get("expires_at")
+    user_token.is_active = True
+    return user_token

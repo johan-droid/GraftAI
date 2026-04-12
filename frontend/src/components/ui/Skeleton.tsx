@@ -1,73 +1,188 @@
-import { cn } from "@/lib/utils";
+"use client";
 
-interface SkeletonProps {
-  className?: string;
-  style?: React.CSSProperties;
+import { Box, BoxProps } from "@mui/material";
+import { keyframes } from "@emotion/react";
+
+const shimmer = keyframes`
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+`;
+
+interface SkeletonProps extends Omit<BoxProps, 'sx'> {
+  width?: string | number;
+  height?: string | number;
+  borderRadius?: string | number;
 }
 
-export function Skeleton({ className, style }: SkeletonProps) {
+const skeletonGradient = `
+  linear-gradient(
+    90deg,
+    hsl(240, 24%, 14%) 0%,
+    hsl(240, 24%, 18%) 50%,
+    hsl(240, 24%, 14%) 100%
+  )
+`;
+
+export function Skeleton({
+  width = "100%",
+  height = 16,
+  borderRadius = 8,
+  className,
+}: SkeletonProps) {
   return (
-    <div
-      className={cn("skeleton rounded", className)}
-      style={style}
-      aria-hidden="true"
+    <Box
+      className={className}
+      sx={{
+        width,
+        height,
+        borderRadius,
+        background: skeletonGradient,
+        backgroundSize: "200% 100%",
+        animation: `${shimmer} 1.5s ease-in-out infinite`,
+      }}
     />
   );
 }
 
-export function StatCardSkeleton() {
+// Pre-built skeleton patterns
+export function SkeletonText({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="card p-5 space-y-3">
-      <Skeleton className="h-10 w-10 rounded-xl" />
-      <Skeleton className="h-3 w-24" />
-      <Skeleton className="h-8 w-16" />
-    </div>
-  );
-}
-
-export function TableRowSkeleton({ cols = 4 }: { cols?: number }) {
-  return (
-    <div className="flex items-center gap-4 px-4 py-3 border-b border-[var(--border)]">
-      {Array.from({ length: cols }).map((_, i) => (
-        <Skeleton key={i} className="h-4 flex-1" style={{ maxWidth: `${100 / cols}%` }} />
-      ))}
-    </div>
-  );
-}
-
-export function CardSkeleton({ lines = 3 }: { lines?: number }) {
-  return (
-    <div className="card p-5 space-y-3">
-      <Skeleton className="h-5 w-2/3" />
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton key={i} className="h-4" style={{ width: `${Math.max(10, 90 - i * 15)}%` }} />
+        <Skeleton
+          key={i}
+          width={i === lines - 1 ? "75%" : "100%"}
+          height={14}
+          borderRadius={4}
+        />
       ))}
-    </div>
+    </Box>
   );
 }
 
-export function PluginCardSkeleton() {
+export function SkeletonCard() {
   return (
-    <div className="card p-5 space-y-3">
-      <div className="flex items-start justify-between">
-        <Skeleton className="h-11 w-11 rounded-xl" />
-        <Skeleton className="h-5 w-12 rounded-full" />
-      </div>
-      <Skeleton className="h-4 w-3/4" />
-      <Skeleton className="h-3 w-full" />
-      <Skeleton className="h-3 w-2/3" />
-    </div>
+    <Box
+      sx={{
+        p: 3,
+        background: "hsl(240, 24%, 14%)",
+        border: "1px solid hsla(239, 84%, 67%, 0.1)",
+        borderRadius: 3,
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+        <Skeleton width={48} height={48} borderRadius="12px" />
+        <Box sx={{ flex: 1 }}>
+          <Skeleton width="60%" height={20} borderRadius={4} />
+          <Box sx={{ mt: 1 }}>
+            <Skeleton width="40%" height={14} borderRadius={4} />
+          </Box>
+        </Box>
+      </Box>
+      <SkeletonText lines={2} />
+    </Box>
   );
 }
 
-export function ChatMessageSkeleton() {
+export function SkeletonAvatar({ size = 40 }: { size?: number }) {
+  return <Skeleton width={size} height={size} borderRadius="50%" />;
+}
+
+export function SkeletonButton({ width = 120 }: { width?: number }) {
+  return <Skeleton width={width} height={40} borderRadius="12px" />;
+}
+
+export function SkeletonStat() {
   return (
-    <div className="flex gap-3 animate-fade-in">
-      <Skeleton className="h-8 w-8 rounded-xl flex-shrink-0" />
-      <div className="space-y-2 flex-1">
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-4 w-1/2" />
-      </div>
-    </div>
+    <Box sx={{ textAlign: "center" }}>
+      <Box sx={{ display: "flex", justifyContent: "center" }}>
+        <Skeleton width={80} height={40} borderRadius={8} />
+      </Box>
+      <Box sx={{ mt: 1, display: "flex", justifyContent: "center" }}>
+        <Skeleton width={100} height={16} borderRadius={4} />
+      </Box>
+    </Box>
+  );
+}
+
+export function SkeletonList({ items = 5 }: { items?: number }) {
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      {Array.from({ length: items }).map((_, i) => (
+        <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <SkeletonAvatar size={40} />
+          <Box sx={{ flex: 1 }}>
+            <Skeleton width="70%" height={16} borderRadius={4} />
+            <Box sx={{ mt: 0.5 }}>
+              <Skeleton width="40%" height={12} borderRadius={4} />
+            </Box>
+          </Box>
+          <Skeleton width={60} height={24} borderRadius={4} />
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
+  return (
+    <Box>
+      {/* Header */}
+      <Box sx={{ display: "flex", gap: 2, mb: 2, pb: 2, borderBottom: "1px solid hsla(239, 84%, 67%, 0.1)" }}>
+        {Array.from({ length: columns }).map((_, i) => (
+          <Box key={i} sx={{ flex: 1 }}>
+            <Skeleton width="80%" height={20} borderRadius={4} />
+          </Box>
+        ))}
+      </Box>
+      {/* Rows */}
+      {Array.from({ length: rows }).map((_, rowIndex) => (
+        <Box
+          key={rowIndex}
+          sx={{
+            display: "flex",
+            gap: 2,
+            py: 2,
+            borderBottom: "1px solid hsla(239, 84%, 67%, 0.05)",
+          }}
+        >
+          {Array.from({ length: columns }).map((_, colIndex) => (
+            <Box key={colIndex} sx={{ flex: 1 }}>
+              <Skeleton width={colIndex === 0 ? "60%" : "80%"} height={16} borderRadius={4} />
+            </Box>
+          ))}
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+export function SkeletonDashboard() {
+  return (
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Skeleton width={200} height={32} borderRadius={8} />
+        <Box sx={{ mt: 1 }}>
+          <Skeleton width={300} height={16} borderRadius={4} />
+        </Box>
+      </Box>
+
+      {/* Stats Row */}
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 3, mb: 4 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonCard key={i} />
+        ))}
+      </Box>
+
+      {/* Main Content */}
+      <Box sx={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 3 }}>
+        <SkeletonCard />
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </Box>
+      </Box>
+    </Box>
   );
 }

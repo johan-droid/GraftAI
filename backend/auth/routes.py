@@ -1,11 +1,8 @@
-import hashlib
-import hmac
 import os
 import secrets
 import logging
-import time
-from datetime import datetime, timedelta, timezone
-from urllib.parse import quote_plus, unquote_plus, quote, unquote
+from datetime import datetime, timezone
+from urllib.parse import quote_plus, unquote_plus
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -13,10 +10,22 @@ from starlette.responses import Response, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from jose import jwt, JWTError
+from jose import jwt
 
-from backend.services.auth_utils import get_password_hash, verify_password
-
+from backend.services.auth_service import (
+    authenticate_user,
+    create_access_token,
+    create_refresh_token,
+    create_user_with_dummy_password,
+    decode_jwt_token,
+    upsert_user_token,
+)
+from backend.services.oauth_service import (
+    get_client_ip,
+    build_oauth_state,
+    parse_oauth_state,
+    frontend_redirect_token,
+)
 from backend.utils.db import get_db
 from backend.models.tables import UserTable, UserTokenTable
 from backend.auth.schemes import get_current_user_id
@@ -24,7 +33,14 @@ from backend.services.usage import get_next_quota_reset, get_trial_days_left
 from backend.services import google_auth, microsoft_auth
 from backend.services.sso import get_provider_config
 from backend.utils.rate_limit import rate_limit, api_limits
-from backend.auth.config import SECRET_KEY
+from backend.auth.config import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    ACCESS_TOKEN_TYPE,
+    ALGORITHM,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    REFRESH_TOKEN_TYPE,
+    SECRET_KEY,
+)
 
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "http://localhost:3000")).rstrip("/")
 
@@ -34,263 +50,8 @@ OAUTH_STATE_EXPIRY_SECONDS = 600
 ALLOWED_REDIRECT_PATHS = {"/dashboard", "/settings", "/calendar", "/profile", "/auth-callback"}
 
 
-def get_client_ip(request: Request) -> str:
-    """Extract real client IP, especially when behind a proxy like Render."""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
-def _frontend_redirect_token(
-    access_token: str,
-    redirect_to: str = "/dashboard",
-    frontend_url: Optional[str] = None,
-    refresh_token: Optional[str] = None,
-):
-    """Redirect to frontend auth-callback with token safely."""
-    base_url = (frontend_url or FRONTEND_BASE_URL).rstrip("/")
-    url = f"{base_url}/auth-callback?access_token={quote_plus(access_token)}&redirect={quote_plus(redirect_to)}"
-    if refresh_token:
-        url += f"&refresh_token={quote_plus(refresh_token)}"
-    return url
-
-
-def _build_oauth_state(
-    user_id: Optional[str], 
-    redirect_to: Optional[str] = "/dashboard",
-    provider: Optional[str] = None,
-    frontend_url: Optional[str] = None
-) -> str:
-    """
-    Build signed OAuth state parameter with expiration.
-    
-    Format: timestamp:nonce:user_id:redirect:provider:url_encoded_frontend_url:signature
-    """
-    # Validate redirect_to to prevent open redirect attacks
-    safe_redirect = _sanitize_redirect(redirect_to or "/dashboard")
-    
-    # Generate components
-    timestamp = str(int(time.time()))
-    nonce = secrets.token_urlsafe(16)
-    user_id_str = user_id or ""
-    provider_str = provider or ""
-    # URL-encode frontend_url to handle colons and special characters
-    frontend_url_str = quote(frontend_url or "", safe='')
-    
-    # Create payload for signing
-    payload = f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{provider_str}:{frontend_url_str}"
-    
-    # Generate HMAC signature
-    signature = hmac.new(
-        SECRET_KEY.encode(),
-        payload.encode(),
-        hashlib.sha256
-    ).hexdigest()[:16]
-    
-    return f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{provider_str}:{frontend_url_str}:{signature}"
-
-
-def _parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str], Optional[str]]:
-    """
-    Parse and validate OAuth state parameter.
-    
-    Validates:
-    - Signature integrity
-    - Expiration (10 minutes)
-    - Redirect URL safety
-    
-    Returns:
-        tuple: (user_id, redirect_to, provider, frontend_url)
-    
-    Raises:
-        HTTPException: If state is invalid or expired
-    """
-    if not state:
-        logger.error("OAuth callback missing state parameter")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OAuth state: missing state"
-        )
-
-    # Keep the raw state string intact when splitting to preserve encoded frontend_url values.
-    parts = state.split(":", 6)
-    if len(parts) not in (5, 6, 7):
-        logger.error(f"Invalid OAuth state format: {len(parts)} parts instead of 5, 6, or 7")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OAuth state: malformed"
-        )
-
-    # Handle old formats (5, 6 parts) and new format (7 parts with frontend_url)
-    if len(parts) == 7:
-        timestamp_str, nonce, user_id, redirect_to, provider, frontend_url, signature = parts
-    elif len(parts) == 6:
-        timestamp_str, nonce, user_id, redirect_to, provider, signature = parts
-        frontend_url = ""
-    else:
-        timestamp_str, nonce, user_id, redirect_to, signature = parts
-        provider = ""
-        frontend_url = ""
-    
-    # Reconstruct payload for signature verification
-    payload = f"{timestamp_str}:{nonce}:{user_id}:{redirect_to}:{provider}:{frontend_url}"
-    expected_signature = hmac.new(
-        SECRET_KEY.encode(),
-        payload.encode(),
-        hashlib.sha256
-    ).hexdigest()[:16]
-    
-    # Verify signature using constant-time comparison
-    if not hmac.compare_digest(signature, expected_signature):
-        logger.error("OAuth state signature mismatch - possible CSRF attack")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OAuth state: signature verification failed"
-        )
-    
-    # Check expiration
-    try:
-        state_time = int(timestamp_str)
-        current_time = int(time.time())
-        if current_time - state_time > OAUTH_STATE_EXPIRY_SECONDS:
-            logger.error(f"OAuth state expired: {current_time - state_time}s old")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid OAuth state: expired"
-            )
-    except ValueError:
-        logger.error("OAuth state contains invalid timestamp")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OAuth state: invalid timestamp"
-        )
-    
-    # Validate redirect URL (additional safety check)
-    decoded_redirect = unquote_plus(redirect_to)
-    safe_redirect = _sanitize_redirect(decoded_redirect)
-    
-    # URL-decode frontend_url
-    decoded_frontend_url = unquote(frontend_url) if frontend_url else None
-    
-    # Return parsed values
-    return user_id or None, safe_redirect, provider or None, decoded_frontend_url
-
-
-def _sanitize_redirect(redirect: str) -> str:
-    """
-    Sanitize redirect URL to prevent open redirect attacks.
-    
-    Only allows:
-    - Relative paths starting with /
-    - Known safe application paths
-    """
-    if not redirect:
-        return "/dashboard"
-    
-    # Decode if URL-encoded
-    decoded = unquote_plus(redirect)
-    
-    # Block absolute URLs (potential open redirect)
-    if decoded.startswith(("http://", "https://", "//")):
-        logger.warning(f"Blocked open redirect attempt: {decoded}")
-        return "/dashboard"
-    
-    # Ensure relative path
-    if not decoded.startswith("/"):
-        decoded = "/" + decoded
-
-    # Legacy frontend value used as an OAuth target can create callback->callback loops.
-    # However, we need to allow /auth-callback as it's the OAuth entry point from backend.
-    # Only block if it would create a loop (i.e., already in auth-callback).
-    
-    # Validate path is in allowed list (or default to dashboard)
-    # Extract base path for validation
-    base_path = decoded.split("?")[0].split("#")[0]
-    
-    # Allow exact matches and subpaths of allowed paths
-    for allowed in ALLOWED_REDIRECT_PATHS:
-        if base_path == allowed or base_path.startswith(allowed + "/"):
-            return decoded
-    
-    # Log blocked redirect for security monitoring
-    logger.warning(f"Blocked redirect to non-allowed path: {decoded}")
-    return "/dashboard"
-
-
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Authentication"])
-
-from backend.auth.config import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    ACCESS_TOKEN_TYPE,
-    ALGORITHM,
-    REFRESH_TOKEN_TYPE,
-    REFRESH_TOKEN_EXPIRE_DAYS,
-)
-
-
-def _create_jwt_token_impl(user_id: str, token_type: str):
-    now = datetime.now(timezone.utc)
-    if token_type == REFRESH_TOKEN_TYPE:
-        expire = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    else:
-        expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    payload = {
-        "sub": user_id,
-        "type": token_type,
-        "exp": expire,
-        "iat": now,
-    }
-
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def _create_jwt_token_pair(user_id: str):
-    return {
-        "access_token": _create_jwt_token_impl(user_id, ACCESS_TOKEN_TYPE),
-        "refresh_token": _create_jwt_token_impl(user_id, REFRESH_TOKEN_TYPE),
-    }
-
-
-def _create_access_token(user_id: str) -> str:
-    return _create_jwt_token_impl(user_id, ACCESS_TOKEN_TYPE)
-
-
-def _create_refresh_token(user_id: str) -> str:
-    return _create_jwt_token_impl(user_id, REFRESH_TOKEN_TYPE)
-
-
-async def _create_jwt_token(user_id: str):
-    return _create_jwt_token_pair(user_id)
-
-
-def _decode_jwt_token(token: str, expected_type: Optional[str] = None) -> dict:
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate token",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
-
-    if payload.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token payload missing subject",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if expected_type and payload.get("type") != expected_type:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token type mismatch",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return payload
 
 
 def _set_auth_cookies(response: Optional[Response], access_token: str, refresh_token: str):
@@ -327,54 +88,6 @@ def _build_token_response(access_token: str, refresh_token: str):
     }
 
 
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-async def _authenticate_user(form_data: OAuth2PasswordRequestForm, db: AsyncSession) -> UserTable:
-    email = form_data.username.lower().strip()
-
-    stmt = select(UserTable).where(UserTable.email == email)
-    user = (await db.execute(stmt)).scalars().first()
-
-    if not user:
-        logger.warning(f"Failed login attempt for non-existent user: {email}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not user.email_verified:
-        logger.warning(f"Login attempt for unverified email: {email}")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email address is not verified. Please verify your email before signing in.",
-        )
-
-    if not user.hashed_password:
-        logger.error(f"User {email} has no password set")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not verify_password(form_data.password, user.hashed_password):
-        logger.warning(f"Failed login attempt for user: {email}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    logger.info(f"Successful login for user: {email}")
-    return user
-
-
 @router.get("/integrations/status")
 async def integration_status(
     user_id: str = Depends(get_current_user_id),
@@ -409,9 +122,9 @@ async def token(
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["login"])
 
-    user = await _authenticate_user(form_data, db)
-    access_token = _create_access_token(user.id)
-    refresh_token = _create_refresh_token(user.id)
+    user = await authenticate_user(form_data, db)
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
     _set_auth_cookies(response, access_token, refresh_token)
     return _build_token_response(access_token, refresh_token)
 
@@ -427,9 +140,9 @@ async def login(
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["login"])
 
-    user = await _authenticate_user(form_data, db)
-    access_token = _create_access_token(user.id)
-    refresh_token = _create_refresh_token(user.id)
+    user = await authenticate_user(form_data, db)
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
     _set_auth_cookies(response, access_token, refresh_token)
     return _build_token_response(access_token, refresh_token)
 
@@ -454,7 +167,7 @@ async def check(
         )
 
     try:
-        payload = _decode_jwt_token(raw_token, expected_type=ACCESS_TOKEN_TYPE)
+        payload = decode_jwt_token(raw_token, expected_type=ACCESS_TOKEN_TYPE)
     except HTTPException:
         raise
 
@@ -498,7 +211,7 @@ async def refresh(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    payload = _decode_jwt_token(token_value, expected_type=REFRESH_TOKEN_TYPE)
+    payload = decode_jwt_token(token_value, expected_type=REFRESH_TOKEN_TYPE)
     stmt = select(UserTable).where(UserTable.id == payload["sub"])
     user = (await db.execute(stmt)).scalars().first()
     if user is None:
@@ -508,8 +221,8 @@ async def refresh(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    new_access_token = _create_access_token(user.id)
-    new_refresh_token = _create_refresh_token(user.id)
+    new_access_token = create_access_token(user.id)
+    new_refresh_token = create_refresh_token(user.id)
     _set_auth_cookies(response, new_access_token, new_refresh_token)
     return {
         "message": "Token refreshed successfully",
@@ -559,7 +272,7 @@ async def google_login(
                 frontend_url = f"{parsed.scheme}://{parsed.netloc}"
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
-        state = _build_oauth_state(user_id, redirect_to, provider="google", frontend_url=frontend_url)
+        state = build_oauth_state(user_id, redirect_to, provider="google", frontend_url=frontend_url)
         auth_url = await google_auth.get_google_auth_url(
             state,
             prompt="consent" if force_consent else None,
@@ -585,7 +298,7 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             logger.error("Google callback missing state parameter")
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
-        user_id, redirect_to, _, frontend_url = _parse_oauth_state(state)
+        user_id, redirect_to, _, frontend_url = parse_oauth_state(state)
 
         data = await google_auth.fetch_google_tokens(code)
         email = data.get("email")
@@ -604,17 +317,14 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             user = result.scalars().first()
 
         if not user:
-            dummy_password = secrets.token_urlsafe(32)[:64]
-            user = UserTable(
+            user = await create_user_with_dummy_password(
+                db,
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
-                hashed_password=get_password_hash(dummy_password),
-                email_verified=True,
+                verified=True,
                 email_verification_code=None,
                 email_verification_expires_at=None,
             )
-            db.add(user)
-            await db.flush()
             logger.info(f"New user created via Google OAuth: {email}")
         elif not user.email_verified:
             user.email_verified = True
@@ -627,32 +337,14 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             logger.error("Google OAuth returned no access token")
             raise HTTPException(status_code=400, detail="Failed to retrieve access token")
 
-        stmt = select(UserTokenTable).where(
-            UserTokenTable.user_id == user.id,
-            UserTokenTable.provider == "google",
-        )
-        user_token = (await db.execute(stmt)).scalars().first()
-
-        if not user_token:
-            user_token = UserTokenTable(user_id=user.id, provider="google")
-            db.add(user_token)
-
-        user_token.access_token = access_token
-        user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
-        user_token.expires_at = (
-            datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
-            if "expires_at" in token_info
-            else None
-        )
-        user_token.is_active = True
-
+        await upsert_user_token(db, user, "google", token_info)
         await db.commit()
         logger.info(f"Google OAuth successful for user: {email}")
 
-        backend_access_token = _create_access_token(user.id)
-        backend_refresh_token = _create_refresh_token(user.id)
+        backend_access_token = create_access_token(user.id)
+        backend_refresh_token = create_refresh_token(user.id)
         return RedirectResponse(
-            url=_frontend_redirect_token(backend_access_token, redirect_to, frontend_url, backend_refresh_token),
+            url=frontend_redirect_token(backend_access_token, redirect_to, frontend_url, backend_refresh_token),
             status_code=303,
         )
 
@@ -695,7 +387,7 @@ async def sso_callback(
     
     try:
         # Parse state to get redirect info and provider
-        user_id, redirect_to, parsed_provider, frontend_url = _parse_oauth_state(state)
+        user_id, redirect_to, parsed_provider, frontend_url = parse_oauth_state(state)
         
         # Validate provider from state
         if parsed_provider == "google":
@@ -736,15 +428,12 @@ async def sso_callback(
             user = result.scalars().first()
         
         if not user:
-            dummy_password = secrets.token_urlsafe(32)[:64]
-            user = UserTable(
+            user = await create_user_with_dummy_password(
+                db,
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
-                hashed_password=get_password_hash(dummy_password),
-                email_verified=True,
+                verified=True,
             )
-            db.add(user)
-            await db.flush()
             logger.info(f"New user created via {provider} OAuth: {email}")
         elif not user.email_verified:
             user.email_verified = True
@@ -756,27 +445,12 @@ async def sso_callback(
             logger.error(f"{provider} OAuth returned no access token")
             raise HTTPException(status_code=400, detail="Failed to retrieve access token from OAuth provider")
         
-        stmt = select(UserTokenTable).where(
-            UserTokenTable.user_id == user.id,
-            UserTokenTable.provider == provider,
-        )
-        user_token = (await db.execute(stmt)).scalars().first()
-        
-        if not user_token:
-            user_token = UserTokenTable(user_id=user.id, provider=provider)
-            db.add(user_token)
-        
-        user_token.access_token = access_token
-        user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
-        if "expires_at" in token_info:
-            user_token.expires_at = datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
-        user_token.is_active = True
-        
+        await upsert_user_token(db, user, provider, token_info)
         await db.commit()
         
         # Generate JWT tokens
-        access_token = _create_access_token(user.id)
-        refresh_token = _create_refresh_token(user.id)
+        access_token = create_access_token(user.id)
+        refresh_token = create_refresh_token(user.id)
         
         logger.info(f"{provider} OAuth successful for user: {email}")
         
@@ -797,7 +471,7 @@ async def sso_callback(
             }
         else:
             return RedirectResponse(
-                url=_frontend_redirect_token(access_token, redirect_to, frontend_url, refresh_token),
+                url=frontend_redirect_token(access_token, redirect_to, frontend_url, refresh_token),
                 status_code=303,
             )
 
@@ -865,7 +539,7 @@ async def microsoft_login(
             frontend_url = f"{parsed.scheme}://{parsed.netloc}"
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
-        state = _build_oauth_state(user_id, redirect_to, provider="microsoft", frontend_url=frontend_url)
+        state = build_oauth_state(user_id, redirect_to, provider="microsoft", frontend_url=frontend_url)
         auth_url = await microsoft_auth.get_microsoft_auth_url(state)
         return RedirectResponse(url=auth_url, status_code=303)
     except ValueError as e:
@@ -883,7 +557,7 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
             logger.error("Microsoft callback missing state parameter")
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
-        user_id, redirect_to, _, frontend_url = _parse_oauth_state(state)
+        user_id, redirect_to, _, frontend_url = parse_oauth_state(state)
 
         data = await microsoft_auth.fetch_microsoft_tokens(code)
         email = data.get("email")
@@ -902,17 +576,14 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
             user = result.scalars().first()
 
         if not user:
-            dummy_password = secrets.token_urlsafe(32)[:64]
-            user = UserTable(
+            user = await create_user_with_dummy_password(
+                db,
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
-                hashed_password=get_password_hash(dummy_password),
-                email_verified=True,
+                verified=True,
                 email_verification_code=None,
                 email_verification_expires_at=None,
             )
-            db.add(user)
-            await db.flush()
             logger.info(f"New user created via Microsoft OAuth: {email}")
         elif not user.email_verified:
             user.email_verified = True
@@ -924,32 +595,14 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
             logger.error("Microsoft OAuth returned no access token")
             raise HTTPException(status_code=400, detail="Failed to retrieve access token")
 
-        stmt = select(UserTokenTable).where(
-            UserTokenTable.user_id == user.id,
-            UserTokenTable.provider == "microsoft",
-        )
-        user_token = (await db.execute(stmt)).scalars().first()
-
-        if not user_token:
-            user_token = UserTokenTable(user_id=user.id, provider="microsoft")
-            db.add(user_token)
-
-        user_token.access_token = token_info["access_token"]
-        user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
-        user_token.expires_at = (
-            datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
-            if "expires_at" in token_info
-            else None
-        )
-        user_token.is_active = True
-
+        await upsert_user_token(db, user, "microsoft", token_info)
         await db.commit()
         logger.info(f"Microsoft OAuth successful for user: {email}")
 
-        backend_access_token = _create_access_token(user.id)
-        backend_refresh_token = _create_refresh_token(user.id)
+        backend_access_token = create_access_token(user.id)
+        backend_refresh_token = create_refresh_token(user.id)
         return RedirectResponse(
-            url=_frontend_redirect_token(backend_access_token, redirect_to, frontend_url, backend_refresh_token),
+            url=frontend_redirect_token(backend_access_token, redirect_to, frontend_url, backend_refresh_token),
             status_code=303,
         )
 

@@ -72,6 +72,13 @@ target/
 *.min.js
 *.min.css
 
+# Frontend build artifacts and compiled source outputs
+frontend/.next/
+frontend/out/
+frontend/src/**/*.js
+frontend/src/**/*.jsx
+frontend/src/**/*.js.map
+
 # OS generated files
 .DS_Store
 .DS_Store?

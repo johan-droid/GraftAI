@@ -1,92 +1,237 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
+import { Box, Typography, Checkbox, FormControlLabel } from "@mui/material";
 import { motion } from "framer-motion";
-import { Zap } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { AuthLayout } from "@/components/auth/AuthLayout";
+import { OAuthButtons } from "@/components/auth/OAuthButtons";
+import { FloatingInput } from "@/components/ui/FloatingInput";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { PasswordStrength } from "@/components/ui/PasswordStrength";
+import { toast } from "@/components/ui/Toast";
 
 export default function RegisterPage() {
-  const router = useRouter();
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    // Validation
+    if (!fullName.trim()) {
+      setError("Please enter your full name");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Please enter your email");
+      return;
+    }
+    if (!password) {
+      setError("Please enter a password");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+    if (!agreeTerms) {
+      setError("Please agree to the terms and conditions");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      setError("Local registration is currently disabled. Use Google or Microsoft to sign up.");
+      toast.warning("Local registration is not supported at this time.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#070711] flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[20%] w-[600px] h-[600px] bg-indigo-600/10 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[10%] right-[10%] w-[400px] h-[400px] bg-violet-600/5 blur-[100px] rounded-full" />
-      </div>
+    <AuthLayout
+      title="Create your account"
+      subtitle="Join thousands of professionals who save hours every week with AI scheduling."
+    >
+      {/* Show OAuth first since that's the primary method */}
+      <Box sx={{ mb: 4 }}>
+        <OAuthButtons callbackURL="/dashboard" />
+        <Typography sx={{ mt: 3, color: "hsl(215, 16%, 55%)", fontSize: "0.9rem" }}>
+          Email registration is currently disabled. Please continue with Google or Microsoft sign-up.
+        </Typography>
+      </Box>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md relative z-10"
-      >
-        {/* Logo */}
-        <Link href="/" className="flex items-center justify-center gap-2 mb-8 group">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/25">
-            <Zap className="w-6 h-6 text-white fill-white" />
-          </div>
-          <span className="text-xl font-black tracking-tight text-white uppercase">GraftAI</span>
-        </Link>
+      {/* Divider */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
+        <Box sx={{ flex: 1, height: 1, background: "hsla(239, 84%, 67%, 0.1)" }} />
+        <Typography sx={{ fontSize: "0.875rem", color: "hsl(215, 16%, 40%)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Or with email
+        </Typography>
+        <Box sx={{ flex: 1, height: 1, background: "hsla(239, 84%, 67%, 0.1)" }} />
+      </Box>
 
-        {/* Form Card */}
-        <div className="rounded-3xl border border-white/10 bg-[#0a0a14]/80 backdrop-blur-xl p-8 shadow-2xl text-center">
-          <h2 className="text-2xl font-bold text-white mb-2">
-            Registration is SSO Only
-          </h2>
-          <p className="text-slate-400 text-sm mb-8">
-            For security reasons, we only support sign-up via Google or Microsoft.
-            Please use one of these providers to create your account.
-          </p>
-
-          <div className="grid grid-cols-1 gap-4 mb-6">
-            <button
-              type="button"
-              onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://graftai.onrender.com'}/api/v1/auth/google/login`}
-              className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-sm font-semibold text-white hover:bg-white/10 transition"
+      <form onSubmit={handleSubmit}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          {/* Error Alert */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.70 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09a7.12 7.12 0 010-4.18V7.07H2.18A11.99 11.99 0 001 12c0 1.94.46 3.77 1.18 5.43l3.66-2.84.81-.5z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.70 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.60 3.30-4.53 6.16-4.53z" fill="#EA4335"/>
-              </svg>
-              Continue with Google
-            </button>
-            <button
-              type="button"
-              onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://graftai.onrender.com'}/api/v1/auth/microsoft/login`}
-              className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-sm font-semibold text-white hover:bg-white/10 transition"
+              <Box
+                sx={{
+                  p: 3,
+                  background: "hsla(346, 84%, 61%, 0.1)",
+                  border: "1px solid hsla(346, 84%, 61%, 0.3)",
+                  borderRadius: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  color: "hsl(346, 84%, 61%)",
+                }}
+              >
+                <AlertCircle size={20} />
+                <Typography sx={{ fontSize: "0.9375rem" }}>{error}</Typography>
+              </Box>
+            </motion.div>
+          )}
+
+          {/* Full Name Field */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.3 }}
+          >
+            <FloatingInput
+              label="Full Name"
+              type="text"
+              placeholder="John Doe"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              icon={User}
+              disabled={isLoading}
+              required
+            />
+          </motion.div>
+
+          {/* Email Field */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.3 }}
+          >
+            <FloatingInput
+              label="Email"
+              type="email"
+              placeholder="name@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              icon={Mail}
+              disabled={isLoading}
+              required
+            />
+          </motion.div>
+
+          {/* Password Field */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.3 }}
+          >
+            <FloatingInput
+              label="Password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              icon={Lock}
+              isPassword
+              disabled={isLoading}
+              required
+            />
+            <PasswordStrength password={password} />
+          </motion.div>
+
+          {/* Terms Checkbox */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.3 }}
+          >
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={agreeTerms}
+                  onChange={(e) => setAgreeTerms(e.target.checked)}
+                  sx={{
+                    color: "hsla(239, 84%, 67%, 0.3)",
+                    "&.Mui-checked": {
+                      color: "hsl(239, 84%, 67%)",
+                    },
+                  }}
+                />
+              }
+              label={
+                <Typography sx={{ fontSize: "0.875rem", color: "hsl(215, 16%, 55%)" }}>
+                  I agree to the{" "}
+                  <Link href="/terms" style={{ color: "hsl(239, 84%, 67%)", textDecoration: "none" }}>
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" style={{ color: "hsl(239, 84%, 67%)", textDecoration: "none" }}>
+                    Privacy Policy
+                  </Link>
+                </Typography>
+              }
+            />
+          </motion.div>
+
+          {/* Submit Button */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.3 }}
+          >
+            <GradientButton
+              type="submit"
+              gradientVariant="primary"
+              fullWidth
+              size="large"
+              disabled
             >
-              <svg className="w-5 h-5" viewBox="0 0 23 23">
-                <path d="M0 0h11v11H0z" fill="#f25022"/>
-                <path d="M12 0h11v11H12z" fill="#00a4ef"/>
-                <path d="M0 12h11v11H0z" fill="#7fba00"/>
-                <path d="M12 12h11v11H12z" fill="#ffb900"/>
-              </svg>
-              Continue with Microsoft
-            </button>
-          </div>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <ArrowRight size={18} />
+                Local sign-up disabled
+              </Box>
+            </GradientButton>
+          </motion.div>
+        </Box>
+      </form>
 
-          <div className="mt-6 text-center text-sm text-slate-400">
-            Already have an account?{" "}
-            <Link href="/login" className="text-indigo-400 font-semibold hover:text-indigo-300 transition">
-              Sign in
-            </Link>
-          </div>
-        </div>
-
-        <p className="text-center text-xs text-slate-600 mt-6">
-          By signing in, you agree to our {" "}
-          <Link href="/terms-of-service" className="text-slate-400 hover:text-slate-200 underline underline-offset-2">
-            Terms of Service
+      {/* Sign In Link */}
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Typography sx={{ fontSize: "0.9375rem", color: "hsl(215, 16%, 55%)" }}>
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            style={{
+              color: "hsl(239, 84%, 67%)",
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            Sign in
           </Link>
-          {" "}and {" "}
-          <Link href="/privacy-policy" className="text-slate-400 hover:text-slate-200 underline underline-offset-2">
-            Privacy Policy
-          </Link>
-        </p>
-      </motion.div>
-    </div>
+        </Typography>
+      </Box>
+    </AuthLayout>
   );
 }

@@ -1,5 +1,6 @@
 import os
 from authlib.integrations.httpx_client import AsyncOAuth2Client
+import httpx
 
 MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
 MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
@@ -69,3 +70,19 @@ async def fetch_microsoft_tokens(code: str):
         "full_name": profile.get("displayName"),
         "token": token
     }
+
+async def verify_microsoft_token(access_token: str) -> dict:
+    if not access_token:
+        raise ValueError("No access token provided")
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://graph.microsoft.com/v1.0/me",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+        )
+        if resp.status_code != 200:
+            raise ValueError("Invalid Microsoft access token")
+        profile = resp.json()
+        return {
+            "email": profile.get("mail") or profile.get("userPrincipalName"),
+            "full_name": profile.get("displayName"),
+        }

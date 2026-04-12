@@ -86,7 +86,7 @@ export function SkeletonCard() {
 
 // Aliases for compatibility
 export const CardSkeleton = SkeletonCard;
-export const StatCardSkeleton = SkeletonCard;
+export const StatCardSkeleton = SkeletonStat;
 export const PluginCardSkeleton = SkeletonCard;
 
 export function SkeletonAvatar({ size = 40 }: { size?: number }) {

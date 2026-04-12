@@ -2,6 +2,12 @@ import NextAuth, { NextAuthConfig } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
 
+if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET) {
+  throw new Error("NEXTAUTH_SECRET is missing in production");
+} else if (!process.env.NEXTAUTH_SECRET) {
+  console.warn("NEXTAUTH_SECRET is missing. This is required for secure sessions.");
+}
+
 const authOptions: NextAuthConfig = {
   providers: [
     GoogleProvider({

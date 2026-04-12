@@ -1,6 +1,7 @@
 import os
 from typing import Optional
 from authlib.integrations.httpx_client import AsyncOAuth2Client
+import httpx
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -74,3 +75,19 @@ async def fetch_google_tokens(code: str):
         "full_name": profile.get("name"),
         "token": token
     }
+
+async def verify_google_token(access_token: str) -> dict:
+    if not access_token:
+        raise ValueError("No access token provided")
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+        )
+        if resp.status_code != 200:
+            raise ValueError("Invalid Google access token")
+        profile = resp.json()
+        return {
+            "email": profile.get("email"),
+            "full_name": profile.get("name"),
+        }

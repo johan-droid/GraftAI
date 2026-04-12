@@ -62,20 +62,36 @@ class SocialExchangeRequest(BaseModel):
     image: Optional[str] = None
 
 @router.post("/social/exchange")
-async def social_exchange(req: SocialExchangeRequest, db: AsyncSession = Depends(get_db)):
+async def social_exchange(req: SocialExchangeRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    client_ip = get_client_ip(request)
+    await rate_limit(client_ip, api_limits["login"])
+
     if req.provider not in ["google", "microsoft", "microsoft-entra-id"]:
         raise HTTPException(status_code=400, detail="Invalid provider")
     
-    if not req.email:
+    if not req.access_token:
+        raise HTTPException(status_code=400, detail="Access token required for social exchange")
+        
+    try:
+        if req.provider == "google":
+            provider_profile = await google_auth.verify_google_token(req.access_token)
+        else:
+            provider_profile = await microsoft_auth.verify_microsoft_token(req.access_token)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    
+    email = provider_profile.get("email") or req.email
+    if not email:
         raise HTTPException(status_code=400, detail="Email required for social login")
     
     from backend.services.auth_service import create_user_with_dummy_password
-    user = await create_user_with_dummy_password(req.email, req.name or "", db=db)
+    user = await create_user_with_dummy_password(db, email=email, full_name=provider_profile.get("full_name") or req.name or "", verified=True)
     
-    access_token = create_access_token(data={"sub": str(user.id)})
-    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
     
     # Store provider logic if needed
+    await upsert_user_token(db, str(user.id), req.provider, req.access_token, req.id_token)
     
     return {"access_token": access_token, "refresh_token": refresh_token}
 

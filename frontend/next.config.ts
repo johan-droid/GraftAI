@@ -10,6 +10,13 @@ const withSerwist = withSerwistInit({
   disable:
     process.env.NODE_ENV === "development" ||
     process.env.NEXT_PUBLIC_DISABLE_SERVICE_WORKER === "true",
+  exclude: [
+    /\.map$/,
+    /^manifest.*\.js(?:on)?$/,
+    /\.js\.map$/,
+    /^middleware-manifest\.json$/,
+    /_next\/static\/chunks\/remoteEntry\.js$/,
+  ],
 });
 
 const nextConfig: NextConfig = {

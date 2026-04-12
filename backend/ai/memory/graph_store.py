@@ -400,7 +400,6 @@ class GraphStore:
             List of clusters (each cluster is list of user IDs)
         """
         # Simple clustering based on meeting attendance
-        from collections import defaultdict
         
         # Get all meetings
         meetings = await self.query(node_type=NodeType.MEETING)
@@ -480,7 +479,7 @@ class GraphStore:
             shared_teams = set(t.id for t, _ in user_teams) & set(t.id for t, _ in their_teams)
             if shared_teams:
                 score += len(shared_teams) * 0.4
-                reasons.append(f"Same team(s)")
+                reasons.append("Same team(s)")
             
             if score > 0:
                 recommendations.append({
@@ -511,7 +510,6 @@ class GraphStore:
             await self.add_node(user_id, NodeType.USER, {"created_from_db": True})
         
         # Get user data from database
-        from backend.utils import db as db_utils
         # Query user's meetings, contacts, teams, etc.
         # Placeholder: Would query actual database
         

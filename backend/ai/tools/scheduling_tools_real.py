@@ -9,7 +9,6 @@ Integrates with:
 """
 
 import os
-import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from google.oauth2.credentials import Credentials
@@ -428,7 +427,7 @@ async def create_calendar_event(
                 "start_time": start_time,
                 "duration_minutes": duration_minutes,
                 "attendees": attendees,
-                "calendar_link": f"https://calendar.google.com/calendar/event?eid=dev",
+                "calendar_link": "https://calendar.google.com/calendar/event?eid=dev",
                 "status": "logged",
                 "mode": "development",
                 "provider": calendar_provider

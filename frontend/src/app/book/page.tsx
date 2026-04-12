@@ -770,28 +770,29 @@ export default function BookMeetingPage() {
           router.push("/calendar");
         }}
       />
-      <Button
-        onClick={handleBack}
-        disabled={activeStep === 0}
-        startIcon={<ArrowLeft size={18} />}
-        sx={{
-          borderColor: "hsla(239, 84%, 67%, 0.3)",
-          color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-          textTransform: "none",
-          fontWeight: 600,
-          borderRadius: "10px",
-          "&:hover": {
-            borderColor: "hsla(239, 84%, 67%, 0.5)",
-            background: "hsla(239, 84%, 67%, 0.05)",
-          },
-          "&:disabled": {
-            borderColor: "transparent",
-            color: isDark ? "hsl(215, 16%, 30%)" : "hsl(215, 16%, 70%)",
-          },
-        }}
-      >
-        Back
-      </Button>
+      <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap", mt: 4 }}>
+        <Button
+          onClick={handleBack}
+          disabled={activeStep === 0}
+          startIcon={<ArrowLeft size={18} />}
+          sx={{
+            borderColor: "hsla(239, 84%, 67%, 0.3)",
+            color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
+            textTransform: "none",
+            fontWeight: 600,
+            borderRadius: "10px",
+            "&:hover": {
+              borderColor: "hsla(239, 84%, 67%, 0.5)",
+              background: "hsla(239, 84%, 67%, 0.05)",
+            },
+            "&:disabled": {
+              borderColor: "transparent",
+              color: isDark ? "hsl(215, 16%, 30%)" : "hsl(215, 16%, 70%)",
+            },
+          }}
+        >
+          Back
+        </Button>
 
               {activeStep === steps.length - 1 ? (
                 <Button

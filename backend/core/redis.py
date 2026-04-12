@@ -5,7 +5,6 @@ import os
 import json
 from typing import Optional, Any
 import redis.asyncio as redis
-from datetime import timedelta
 
 # Redis connection settings
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")

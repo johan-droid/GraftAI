@@ -4,8 +4,8 @@ Query Tools for Agent Actions
 Tools for querying databases, retrieving history, and checking business rules.
 """
 
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, Any
+from datetime import datetime, timezone
 from backend.utils.logger import get_logger
 from .registry import register_tool, ToolCategory, ToolPriority
 
@@ -75,7 +75,7 @@ async def query_database(
         if not _is_select_only(sql):
             raise ValueError("Only SELECT queries are allowed.")
 
-        logger.info(f"Executing query", extra={"query_preview": sql[:50]})
+        logger.info("Executing query", extra={"query_preview": sql[:50]})
         
         # TODO: Execute query through database
         # async with get_db() as db:
@@ -257,7 +257,7 @@ async def check_business_rules(
         Dict with validation results
     """
     try:
-        logger.info(f"Checking business rules for booking")
+        logger.info("Checking business rules for booking")
         
         # TODO: Check various business rules
         # - Max duration

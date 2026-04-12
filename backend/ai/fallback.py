@@ -41,12 +41,10 @@ from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 import asyncio
-import traceback
 
 from backend.utils.logger import get_logger
 from backend.ai.monitoring import (
     get_agent_metrics,
-    log_automation_complete,
     log_error
 )
 
@@ -551,7 +549,7 @@ class FallbackOrchestrator:
         try:
             notification_results = await AdminNotifier.notify(
                 booking_id=booking_id,
-                reason=f"All automation levels failed. AI Agent and rule-based engine both encountered errors.",
+                reason="All automation levels failed. AI Agent and rule-based engine both encountered errors.",
                 urgency="critical",
                 details={
                     "booking": booking,

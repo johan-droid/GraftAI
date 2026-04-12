@@ -2,9 +2,8 @@
 Monitoring Agent - Tracks outcomes, alerts on issues, and collects feedback
 Provides observability and analytics for the scheduling system
 """
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime, timedelta
-from collections import defaultdict
 from backend.ai.agents.base import BaseAgent, AgentContext
 from backend.utils.logger import get_logger
 
@@ -488,7 +487,6 @@ class MonitoringAgent(BaseAgent):
     async def _check_database_health(self) -> Dict[str, Any]:
         """Check database connectivity"""
         try:
-            from backend.utils import db as db_utils
             # Would execute a simple query
             return {"healthy": True, "response_time_ms": 50}
         except Exception as e:
@@ -507,7 +505,6 @@ class MonitoringAgent(BaseAgent):
     async def _check_celery_health(self) -> Dict[str, Any]:
         """Check Celery workers"""
         try:
-            from celery import current_app as celery_app
             # Would check worker status
             return {"healthy": True, "active_workers": 4}
         except Exception as e:

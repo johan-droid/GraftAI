@@ -62,7 +62,7 @@ async def send_email(
         
         email_id = f"email_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         
-        logger.info(f"Sending email", extra={"recipient": _mask_email(to), "subject": subject})
+        logger.info("Sending email", extra={"recipient": _mask_email(to), "subject": subject})
         
         # TODO: Integrate with actual email service
         # Example integration:

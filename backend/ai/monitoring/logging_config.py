@@ -9,7 +9,6 @@ import logging
 import json
 from typing import Dict, Any, Optional
 from datetime import datetime
-from hashlib import sha256
 from pathlib import Path
 
 from backend.utils.logger import get_logger

@@ -13,7 +13,7 @@ import asyncio
 
 from backend.utils.db import get_db
 from backend.api.deps import get_current_user
-from backend.models.tables import UserTable, EventTable
+from backend.models.tables import UserTable
 from backend.services.booking_automation import BookingAutomationService, AutomationResult
 from backend.utils.logger import get_logger
 

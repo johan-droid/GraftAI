@@ -5,7 +5,7 @@ Structured prompts for the LLM to make intelligent decisions about
 booking automation based on context, attendee history, and preferences.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
 
 # ═════════════════════════════════════════════════════════════════

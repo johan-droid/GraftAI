@@ -5,7 +5,7 @@ Provides comprehensive metrics for monitoring agent performance,
 decision quality, and system health.
 """
 
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Optional, Tuple
 from datetime import datetime
 import time
 

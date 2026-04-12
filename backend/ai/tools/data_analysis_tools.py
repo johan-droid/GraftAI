@@ -6,7 +6,6 @@ Tools for analyzing patterns, predicting outcomes, and finding insights.
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
-import random
 from backend.utils.logger import get_logger
 from .registry import register_tool, ToolCategory, ToolPriority
 

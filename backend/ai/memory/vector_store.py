@@ -2,7 +2,7 @@
 Vector Database Store for GraftAI
 Handles semantic search and embeddings for AI memory
 """
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass
 import hashlib
 import json

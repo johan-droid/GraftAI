@@ -10,36 +10,29 @@ This file demonstrates the full agent lifecycle in practice.
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from dataclasses import dataclass
 import asyncio
 import time
 
 from backend.utils.logger import get_logger
-from backend.ai.orchestrator import get_agent_controller, AgentType, AgentRequest
+from backend.ai.orchestrator import get_agent_controller
 from backend.ai.decision_engine import create_decision_engine, AgentDecision
-from backend.ai.memory.multi_layer_memory import create_memory_manager, AgentMemoryContext
+from backend.ai.memory.multi_layer_memory import create_memory_manager
 from backend.ai.memory.vector_store import get_vector_store
 from backend.ai.tools import (
     send_email,
     create_calendar_event,
     create_task,
     get_attendee_info,
-    check_business_rules,
-    analyze_booking_pattern
+    check_business_rules
 )
 from backend.ai.monitoring import (
     get_agent_metrics,
     get_agent_logger,
     log_agent_decision,
-    log_automation_start,
     log_automation_complete,
-    log_phase_execution,
-    log_tool_execution,
-    measure_decision_latency,
-    measure_agent_phase,
-    measure_tool_execution,
-    measure_memory_operation
+    log_phase_execution
 )
 from backend.utils.db import get_db
 

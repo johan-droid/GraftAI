@@ -5,10 +5,9 @@ Agent = LLM + Memory + Tools + Loop
 """
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-from sqlalchemy import select, and_, desc
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.utils.db import get_db
@@ -121,7 +120,6 @@ async def extract_entities(user_message: str, intent: str) -> Dict[str, Any]:
     Extract relevant entities from user message based on intent.
     """
     import re
-    from datetime import datetime, timedelta
     
     entities = {}
     lower = user_message.lower()

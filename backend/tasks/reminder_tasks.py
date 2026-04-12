@@ -5,7 +5,6 @@ Sends email/SMS reminders before meetings.
 from datetime import datetime, timedelta
 from backend.core.celery_app import celery_app
 from backend.utils.logger import get_logger
-from backend.tasks.email_tasks import send_reminder_email
 
 logger = get_logger(__name__)
 
@@ -19,8 +18,6 @@ def send_pending_reminders(self):
         now = datetime.utcnow()
         
         # Query reminders that should be sent now
-        from backend.utils import db as db_utils
-        from sqlalchemy import text
         
         # Placeholder: Query reminder_logs table for pending reminders
         # where scheduled_time <= now and sent = false

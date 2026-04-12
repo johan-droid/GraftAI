@@ -9,7 +9,7 @@ Manages agent tools with:
 - Tool selection for LLM
 """
 
-from typing import Dict, Any, List, Optional, Callable, Type
+from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -148,15 +148,15 @@ class ToolRegistry:
                 
                 param_type = "string"
                 if param.annotation != inspect.Parameter.empty:
-                    if param.annotation == int:
+                    if param.annotation is int:
                         param_type = "integer"
-                    elif param.annotation == float:
+                    elif param.annotation is float:
                         param_type = "number"
-                    elif param.annotation == bool:
+                    elif param.annotation is bool:
                         param_type = "boolean"
-                    elif param.annotation == list or param.annotation == List:
+                    elif param.annotation is list or param.annotation is List:
                         param_type = "array"
-                    elif param.annotation == dict or param.annotation == Dict:
+                    elif param.annotation is dict or param.annotation is Dict:
                         param_type = "object"
                 
                 params_schema["properties"][param_name] = {

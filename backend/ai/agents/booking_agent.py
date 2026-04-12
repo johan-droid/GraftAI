@@ -181,8 +181,6 @@ class BookingAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """Check if time slot is available for user"""
         # Query database for conflicts
-        from backend.utils import db as db_utils
-        from sqlalchemy import text
         
         # Placeholder: Actual implementation would query EventTable
         # and check work_hours, busy times from integrations

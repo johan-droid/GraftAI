@@ -37,14 +37,13 @@ Implementation:
 ├─ Long-term: Vector DB + Graph DB
 """
 
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 import asyncio
 import json
 import hashlib
-from abc import ABC, abstractmethod
 
 from backend.utils.logger import get_logger
 

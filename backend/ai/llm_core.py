@@ -11,7 +11,6 @@ from backend.utils.logger import get_logger
 from backend.ai.prompts import (
     BOOKING_DECISION_SYSTEM_PROMPT,
     AGENT_SYSTEM_PROMPT,
-    format_booking_decision_prompt,
     format_agent_cognition_prompt
 )
 

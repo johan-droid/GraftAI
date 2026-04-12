@@ -6,7 +6,6 @@ import hmac
 import hashlib
 import asyncio
 import httpx
-from datetime import datetime
 from backend.core.celery_app import celery_app
 from backend.utils.logger import get_logger
 
@@ -97,8 +96,6 @@ def retry_failed_webhooks(self):
 def log_webhook_delivery(webhook_id: str, success: bool, 
                          status_code: int = None, error: str = None):
     """Log webhook delivery attempt."""
-    from backend.utils import db as db_utils
-    from sqlalchemy import text
     
     # In real implementation, insert into webhook_delivery_logs table
     logger.info(

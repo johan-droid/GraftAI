@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 import asyncio
 from datetime import datetime
-import json
 from backend.utils.logger import get_logger
 from backend.ai.agents.base import BaseAgent, AgentState
 from backend.ai.memory.vector_store import VectorStore

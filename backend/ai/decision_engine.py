@@ -27,7 +27,6 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-import asyncio
 
 from backend.utils.logger import get_logger
 from backend.ai.tools.registry import ToolPriority
@@ -448,7 +447,7 @@ class DecisionEngine:
                 rule_name="vip_notification",
                 compliant=False,  # Needs action
                 severity="info",
-                message=f"VIP booking - notify manager",
+                message="VIP booking - notify manager",
                 auto_action="notify_manager"
             ))
         
@@ -825,11 +824,11 @@ class DecisionEngine:
             f"  - Booking frequency: {attendee.booking_frequency}/month",
             f"  - No-show rate: {attendee.no_show_rate:.1%}",
             f"  - Engagement: {attendee.engagement_score:.1%}",
-            f"",
+            "",
             f"Risk Assessment: {risk.level.value.upper()}",
             f"  - Risk score: {risk.score:.2f}",
             f"  - Factors: {len(risk.factors)}",
-            f"",
+            "",
             f"Actions Planned: {len(actions)}",
             f"  - Critical: {len([a for a in actions if a.priority == ToolPriority.CRITICAL])}",
             f"  - High: {len([a for a in actions if a.priority == ToolPriority.HIGH])}",

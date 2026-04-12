@@ -2,10 +2,8 @@
 Workflow execution tasks for automation.
 """
 import asyncio
-from datetime import datetime, timedelta
 from backend.core.celery_app import celery_app
 from backend.utils.logger import get_logger
-from backend.tasks.email_tasks import send_booking_confirmation, send_reminder_email
 
 logger = get_logger(__name__)
 
@@ -17,8 +15,6 @@ def execute_workflow(self, workflow_id: str, trigger_event: str, event_data: dic
         logger.info(f"Executing workflow {workflow_id} for event {trigger_event}")
         
         # Get workflow steps
-        from backend.utils import db as db_utils
-        from sqlalchemy import text
         
         # Placeholder: Query workflow steps from database
         # For each step, execute the appropriate action
@@ -86,7 +82,7 @@ def send_workflow_slack(self, step_config: dict, event_data: dict):
         for key, value in event_data.items():
             message = message.replace(f"{{{key}}}", str(value))
         
-        logger.info(f"Sending Slack message to webhook")
+        logger.info("Sending Slack message to webhook")
         
         # Send Slack message
         import httpx

@@ -5,32 +5,32 @@ Provides LlamaIndex ReAct Agent integration with the existing tool system.
 Allows using LlamaIndex's reasoning capabilities with GraftAI's tools.
 """
 
-from typing import Dict, Any, List, Optional, Callable
-from dataclasses import dataclass
+from __future__ import annotations
+
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 import asyncio
+
+if TYPE_CHECKING:
+    from llama_index.core.agent import ReActAgent
 
 from backend.ai.tools import (
     send_email,
     send_sms,
     post_to_slack,
     send_teams_message,
-    send_calendar_invite,
     create_calendar_event,
     update_calendar_event,
     check_calendar_availability,
     search_available_slots,
     get_conflicts,
     create_contact,
-    update_contact,
     create_task,
-    query_contacts,
     get_contact_history,
     analyze_booking_pattern,
     predict_no_show_risk,
     find_best_time_slot,
     estimate_booking_value,
     get_attendee_preferences,
-    query_database,
     get_booking_history,
     get_attendee_info,
     check_business_rules
@@ -762,7 +762,7 @@ class HybridAgent:
             )
             
             return {
-                "response": f"Decision made using rule-based engine",
+                "response": "Decision made using rule-based engine",
                 "decision": decision,
                 "approach": "rule_based"
             }

@@ -2,7 +2,6 @@
 Calendar synchronization tasks.
 Syncs events between GraftAI and external calendar providers.
 """
-from datetime import datetime, timedelta
 from backend.core.celery_app import celery_app
 from backend.utils.logger import get_logger
 from backend.services.calendar_sync import CalendarSyncService
@@ -40,8 +39,6 @@ def sync_all_calendars(self):
         logger.info("Starting batch calendar sync")
         
         # Get all users with calendar integrations
-        from backend.utils import db as db_utils
-        from sqlalchemy import text
         
         # This would query users with calendar credentials
         # For now, return success

@@ -21,10 +21,7 @@ from backend.ai.memory.multi_layer_memory import MemoryLayer, MemoryPriority
 from backend.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from backend.ai.memory.multi_layer_memory import (
-        MultiLayerMemoryManager,
-        AgentMemoryContext,
-    )
+    pass
 
 logger = get_logger(__name__)
 

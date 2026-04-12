@@ -13,12 +13,6 @@ import os
 import base64
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
-import aiohttp
-import asyncio
 
 from backend.utils.logger import get_logger
 from .registry import register_tool, ToolCategory, ToolPriority
@@ -433,7 +427,6 @@ async def post_to_slack(
         
         # Post via Slack API
         from slack_sdk import WebClient
-        from slack_sdk.errors import SlackApiError
         
         client = WebClient(token=APIConfig.SLACK_BOT_TOKEN)
         

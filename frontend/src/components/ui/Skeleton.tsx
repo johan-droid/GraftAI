@@ -84,6 +84,11 @@ export function SkeletonCard() {
   );
 }
 
+// Aliases for compatibility
+export const CardSkeleton = SkeletonCard;
+export const StatCardSkeleton = SkeletonCard;
+export const PluginCardSkeleton = SkeletonCard;
+
 export function SkeletonAvatar({ size = 40 }: { size?: number }) {
   return <Skeleton width={size} height={size} borderRadius="50%" />;
 }

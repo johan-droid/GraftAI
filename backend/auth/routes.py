@@ -1,8 +1,6 @@
 import os
-import secrets
 import logging
-from datetime import datetime, timezone
-from urllib.parse import quote_plus, unquote_plus
+from urllib.parse import quote_plus
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -52,6 +50,34 @@ ALLOWED_REDIRECT_PATHS = {"/dashboard", "/settings", "/calendar", "/profile", "/
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Authentication"])
+
+from pydantic import BaseModel
+
+class SocialExchangeRequest(BaseModel):
+    provider: str
+    id_token: Optional[str] = None
+    access_token: Optional[str] = None
+    email: Optional[str] = None
+    name: Optional[str] = None
+    image: Optional[str] = None
+
+@router.post("/social/exchange")
+async def social_exchange(req: SocialExchangeRequest, db: AsyncSession = Depends(get_db)):
+    if req.provider not in ["google", "microsoft", "microsoft-entra-id"]:
+        raise HTTPException(status_code=400, detail="Invalid provider")
+    
+    if not req.email:
+        raise HTTPException(status_code=400, detail="Email required for social login")
+    
+    from backend.services.auth_service import create_user_with_dummy_password
+    user = await create_user_with_dummy_password(req.email, req.name or "", db=db)
+    
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    
+    # Store provider logic if needed
+    
+    return {"access_token": access_token, "refresh_token": refresh_token}
 
 
 def _set_auth_cookies(response: Optional[Response], access_token: str, refresh_token: str):

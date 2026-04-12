@@ -26,8 +26,8 @@ import {
 } from "@mui/material";
 import {
   Search,
-  FilterList,
-  Refresh,
+  ListFilter,
+  RefreshCw,
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
@@ -315,7 +315,7 @@ export function DataTable<T>({
                     color={showFilters ? "primary" : "default"}
                     size="small"
                   >
-                    <FilterList size={20} />
+                    <ListFilter size={20} />
                   </IconButton>
                 </Tooltip>
               )}
@@ -324,7 +324,7 @@ export function DataTable<T>({
               {onRefresh && (
                 <Tooltip title="Refresh">
                   <IconButton onClick={onRefresh} size="small">
-                    <Refresh size={20} />
+                    <RefreshCw size={20} />
                   </IconButton>
                 </Tooltip>
               )}

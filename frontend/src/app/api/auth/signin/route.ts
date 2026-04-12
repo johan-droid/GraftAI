@@ -54,22 +54,24 @@ export async function POST(request: Request) {
   const userData = await checkRes.json();
   const response = NextResponse.json({ user: userData.user || userData, access_token, refresh_token });
 
-  response.cookies.set("auth_token", access_token, {
+  const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: ACCESS_TOKEN_MAX_AGE,
-  });
+  };
+
+  response.cookies.set("auth_token", access_token, cookieOptions);
+  response.cookies.set("graftai_access_token", access_token, cookieOptions);
 
   if (refresh_token) {
-    response.cookies.set("refresh_token", refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
+    const refreshCookieOptions = {
+      ...cookieOptions,
       maxAge: REFRESH_TOKEN_MAX_AGE,
-    });
+    };
+    response.cookies.set("refresh_token", refresh_token, refreshCookieOptions);
+    response.cookies.set("graftai_refresh_token", refresh_token, refreshCookieOptions);
   }
 
   return response;

@@ -45,8 +45,12 @@ export async function middleware(request: NextRequest) {
   const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
 
   if (isDashboardRoute) {
-    const accessToken = request.cookies.get("graftai_access_token")?.value;
-    const refreshToken = request.cookies.get("graftai_refresh_token")?.value;
+    const accessToken =
+      request.cookies.get("graftai_access_token")?.value ||
+      request.cookies.get("auth_token")?.value;
+    const refreshToken =
+      request.cookies.get("graftai_refresh_token")?.value ||
+      request.cookies.get("refresh_token")?.value;
 
     if (!accessToken && !refreshToken) {
       const loginUrl = new URL("/login", request.url);

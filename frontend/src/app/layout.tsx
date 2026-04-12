@@ -46,6 +46,32 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* Preconnect to backend */}
         {apiBase && <link rel="preconnect" href={apiBase} />}
+        {/* SW Recovery: Self-heal stuck workers from previous builds */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                if ('serviceWorker' in navigator) {
+                  const RESET_KEY = 'graftai_sw_reset_v2';
+                  if (!localStorage.getItem(RESET_KEY)) {
+                    navigator.serviceWorker.getRegistrations().then(registrations => {
+                      for (let registration of registrations) {
+                        registration.unregister();
+                        console.log('Unregistered old SW for recovery');
+                      }
+                      if (registrations.length > 0) {
+                        localStorage.setItem(RESET_KEY, 'true');
+                        window.location.reload();
+                      } else {
+                        localStorage.setItem(RESET_KEY, 'true');
+                      }
+                    });
+                  }
+                }
+              })();
+            `,
+          }}
+        />
       </head>
       <body
         className="min-h-full flex flex-col"

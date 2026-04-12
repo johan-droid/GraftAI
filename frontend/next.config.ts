@@ -7,7 +7,9 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   cacheOnNavigation: true,
   reloadOnOnline: true,
-  disable: process.env.NODE_ENV === "development",
+  disable:
+    process.env.NODE_ENV === "development" ||
+    process.env.NEXT_PUBLIC_DISABLE_SERVICE_WORKER === "true",
 });
 
 const nextConfig: NextConfig = {
@@ -40,7 +42,18 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
-    const backendBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+    const rawBackendBaseUrl =
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      "http://127.0.0.1:8000";
+    const normalizedBackendBaseUrl = rawBackendBaseUrl.replace(/\/+$/, "");
+    const backendOrigin = normalizedBackendBaseUrl.endsWith("/api/v1")
+      ? normalizedBackendBaseUrl.slice(0, -"/api/v1".length)
+      : normalizedBackendBaseUrl;
+    const backendApiBase = normalizedBackendBaseUrl.endsWith("/api/v1")
+      ? normalizedBackendBaseUrl
+      : `${backendOrigin}/api/v1`;
+
     return {
       beforeFiles: [
         {
@@ -51,18 +64,18 @@ const nextConfig: NextConfig = {
       afterFiles: [
         {
           source: "/auth/:path*",
-          destination: `${backendBaseUrl}/auth/:path*`,
+          destination: `${backendApiBase}/auth/:path*`,
         },
         {
           source: "/health",
-          destination: `${backendBaseUrl}/health`,
+          destination: `${backendOrigin}/health`,
         },
       ],
       // Keep generic /api proxy as fallback so local backend APIs are proxied.
       fallback: [
         {
           source: "/api/:path*",
-          destination: `${backendBaseUrl}/api/:path*`,
+          destination: `${backendApiBase}/:path*`,
         },
       ],
     };

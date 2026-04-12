@@ -26,7 +26,7 @@ import {
 } from "@mui/material";
 import {
   Search,
-  ListFilter,
+  Filter,
   RefreshCw,
   ChevronLeft,
   ChevronRight,
@@ -315,7 +315,7 @@ export function DataTable<T>({
                     color={showFilters ? "primary" : "default"}
                     size="small"
                   >
-                    <ListFilter size={20} />
+                    <Filter size={20} />
                   </IconButton>
                 </Tooltip>
               )}

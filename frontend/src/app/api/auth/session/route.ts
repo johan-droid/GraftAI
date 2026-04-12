@@ -1,11 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth-server";
-
-const BACKEND =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://localhost:8000";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 export async function GET() {
   const reqHeaders = await headers();

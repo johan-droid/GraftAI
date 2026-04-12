@@ -93,28 +93,28 @@ export function EmptyState({
           {action && (
             <>
               {action.href ? (
-                <Link href={action.href} passHref legacyBehavior>
-                  <Button
-                    variant="contained"
-                    sx={{
-                      background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                      borderRadius: "12px",
-                      textTransform: "none",
-                      fontWeight: 600,
-                      px: 3,
-                      py: 1.5,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      "&:hover": {
-                        background: "linear-gradient(135deg, hsl(239, 84%, 57%) 0%, hsl(330, 81%, 50%) 100%)",
-                      },
-                    }}
-                  >
-                    <Plus size={18} />
-                    {action.label}
-                  </Button>
-                </Link>
+                <Button
+                  component={Link}
+                  href={action.href}
+                  variant="contained"
+                  sx={{
+                    background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
+                    borderRadius: "12px",
+                    textTransform: "none",
+                    fontWeight: 600,
+                    px: 3,
+                    py: 1.5,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    "&:hover": {
+                      background: "linear-gradient(135deg, hsl(239, 84%, 57%) 0%, hsl(330, 81%, 50%) 100%)",
+                    },
+                  }}
+                >
+                  <Plus size={18} />
+                  {action.label}
+                </Button>
               ) : (
                 <Button
                   variant="contained"
@@ -144,26 +144,26 @@ export function EmptyState({
           {secondaryAction && (
             <>
               {secondaryAction.href ? (
-                <Link href={secondaryAction.href} passHref legacyBehavior>
-                  <Button
-                    variant="outlined"
-                    sx={{
-                      borderColor: "hsla(239, 84%, 67%, 0.3)",
-                      color: "hsl(220, 20%, 98%)",
-                      borderRadius: "12px",
-                      textTransform: "none",
-                      fontWeight: 600,
-                      px: 3,
-                      py: 1.5,
-                      "&:hover": {
-                        borderColor: "hsla(239, 84%, 67%, 0.5)",
-                        background: "hsla(239, 84%, 67%, 0.05)",
-                      },
-                    }}
-                  >
-                    {secondaryAction.label}
-                  </Button>
-                </Link>
+                <Button
+                  component={Link}
+                  href={secondaryAction.href}
+                  variant="outlined"
+                  sx={{
+                    borderColor: "hsla(239, 84%, 67%, 0.3)",
+                    color: "hsl(220, 20%, 98%)",
+                    borderRadius: "12px",
+                    textTransform: "none",
+                    fontWeight: 600,
+                    px: 3,
+                    py: 1.5,
+                    "&:hover": {
+                      borderColor: "hsla(239, 84%, 67%, 0.5)",
+                      background: "hsla(239, 84%, 67%, 0.05)",
+                    },
+                  }}
+                >
+                  {secondaryAction.label}
+                </Button>
               ) : (
                 <Button
                   variant="outlined"

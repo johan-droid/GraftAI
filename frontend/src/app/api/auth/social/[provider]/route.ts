@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { BACKEND_API_URL } from "@/lib/backend";
 
-const ALLOWED_PROVIDERS = new Set(["google", "microsoft"]);
+const ALLOWED_PROVIDERS = new Set(["google", "microsoft", "microsoft-entra-id"]);
 
 export async function GET(
   request: Request,
-  paramsPromise: Promise<{ params: { provider: string } }>
+  { params }: { params: Promise<{ provider: string }> }
 ) {
-  const { params } = await paramsPromise;
-  const provider = params.provider.toLowerCase();
+  const { provider: rawProvider } = await params;
+  const provider = rawProvider.toLowerCase();
   if (!ALLOWED_PROVIDERS.has(provider)) {
     return NextResponse.json({ error: "Unsupported provider" }, { status: 400 });
   }
@@ -18,7 +18,10 @@ export async function GET(
   const referer = request.headers.get("referer");
   const frontendUrl = referer ? new URL(referer).origin : url.origin;
 
-  const authUrl = `${BACKEND_API_URL}/auth/${provider}/login?redirect_to=${encodeURIComponent(
+  // Map internal frontend provider names to backend provider names
+  const backendProvider = provider === "microsoft-entra-id" ? "microsoft" : provider;
+
+  const authUrl = `${BACKEND_API_URL}/auth/${backendProvider}/login?redirect_to=${encodeURIComponent(
     redirect_to
   )}&frontend_url=${encodeURIComponent(frontendUrl)}`;
 

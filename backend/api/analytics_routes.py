@@ -258,3 +258,85 @@ async def get_realtime_metrics(
         "total_event_types": total_event_types,
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+@router.get("/summary")
+async def get_user_dashboard_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserTable = Depends(get_current_user)
+):
+    """Get dashboard summary for current user (non-admin endpoint)."""
+    from backend.models.tables import EventTable
+    
+    # Get user's bookings this week
+    today = datetime.utcnow()
+    week_start = today - timedelta(days=today.weekday())
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_end = week_start + timedelta(days=7)
+    
+    # Get this week's meetings
+    stmt = select(BookingTable).where(
+        and_(
+            BookingTable.user_id == current_user.id,
+            BookingTable.start_time >= week_start,
+            BookingTable.start_time < week_end,
+            BookingTable.status != "cancelled"
+        )
+    )
+    bookings = (await db.execute(stmt)).scalars().all()
+    
+    # Calculate total hours
+    total_hours = 0.0
+    for b in bookings:
+        if b.end_time and b.start_time:
+            duration = (b.end_time - b.start_time).total_seconds() / 3600
+            total_hours += duration
+    
+    # Get previous week for comparison
+    prev_week_start = week_start - timedelta(days=7)
+    prev_week_end = week_start
+    stmt = select(func.count(BookingTable.id)).where(
+        and_(
+            BookingTable.user_id == current_user.id,
+            BookingTable.start_time >= prev_week_start,
+            BookingTable.start_time < prev_week_end,
+            BookingTable.status != "cancelled"
+        )
+    )
+    prev_week_count = (await db.execute(stmt)).scalar() or 0
+    current_week_count = len(bookings)
+    
+    # Calculate growth percentage
+    if prev_week_count > 0:
+        growth = round(((current_week_count - prev_week_count) / prev_week_count) * 100)
+    else:
+        growth = 100 if current_week_count > 0 else 0
+    
+    # Get upcoming events count (next 24 hours)
+    tomorrow = today + timedelta(days=1)
+    stmt = select(func.count(EventTable.id)).where(
+        and_(
+            EventTable.user_id == current_user.id,
+            EventTable.start_time >= today,
+            EventTable.start_time <= tomorrow,
+            EventTable.source != "deleted"
+        )
+    )
+    upcoming_today = (await db.execute(stmt)).scalar() or 0
+    
+    # Get AI suggestions count from user preferences (stored as JSON)
+    suggestions_count = 0
+    if current_user.preferences and isinstance(current_user.preferences, dict):
+        suggestions_count = current_user.preferences.get("pending_suggestions", 0)
+    
+    return {
+        "summary": f"You have {current_week_count} meetings this week with {upcoming_today} events today.",
+        "details": {
+            "meetings": current_week_count,
+            "hours": round(total_hours, 1),
+            "growth": growth,
+            "previousWeekMeetings": prev_week_count,
+            "upcomingToday": upcoming_today,
+            "suggestions": suggestions_count
+        }
+    }

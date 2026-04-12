@@ -256,3 +256,33 @@ async def delete_current_user_out_of_office(
     await db.commit()
     await db.refresh(current_user)
     return {"status": "deleted", "id": block_id}
+
+
+@router.delete("/me")
+async def delete_current_user_account(
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete user account (anonymize for data integrity)."""
+    import secrets
+    import uuid
+    from backend.services.auth_service import get_password_hash
+    
+    # Anonymize user instead of hard delete for data integrity
+    current_user.email = f"deleted_{current_user.id}_{uuid.uuid4().hex[:8]}@anonymized.com"
+    current_user.full_name = "Deleted User"
+    current_user.is_active = False
+    current_user.deleted_at = datetime.now(timezone.utc)
+    
+    # Clear sensitive data
+    current_user.hashed_password = get_password_hash(secrets.token_urlsafe(64))
+    current_user.email_verification_code = None
+    current_user.password_reset_token = None
+    current_user.preferences = {}
+    
+    await db.commit()
+    
+    return {
+        "status": "account_anonymized",
+        "message": "Your account has been anonymized and deactivated. Access has been removed."
+    }

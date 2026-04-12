@@ -2,12 +2,13 @@ import os
 import logging
 from urllib.parse import quote_plus
 from typing import Optional
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from starlette.responses import Response, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from jose import jwt
 
 from backend.services.auth_service import (
@@ -26,7 +27,7 @@ from backend.services.oauth_service import (
 )
 from backend.utils.db import get_db
 from backend.models.tables import UserTable, UserTokenTable
-from backend.auth.schemes import get_current_user_id
+from backend.auth.schemes import get_current_user, get_current_user_id
 from backend.services.usage import get_next_quota_reset, get_trial_days_left
 from backend.services import google_auth, microsoft_auth
 from backend.services.sso import get_provider_config
@@ -58,8 +59,28 @@ class SocialExchangeRequest(BaseModel):
     id_token: Optional[str] = None
     access_token: Optional[str] = None
     email: Optional[str] = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class OnboardingRequest(BaseModel):
     name: Optional[str] = None
-    image: Optional[str] = None
+    timezone: Optional[str] = None
+    work_hours_start: Optional[str] = None
+    work_hours_end: Optional[str] = None
+    notifications_enabled: Optional[bool] = True
+    ai_suggestions_enabled: Optional[bool] = True
 
 @router.post("/social/exchange")
 async def social_exchange(req: SocialExchangeRequest, request: Request, db: AsyncSession = Depends(get_db)):
@@ -665,5 +686,162 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         if "aadsts" in error_msg or "unauthorized_client" in error_msg:
             raise HTTPException(status_code=400, detail="Microsoft OAuth configuration error. Please contact support.")
         raise HTTPException(status_code=500, detail="Authentication failed")
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    req: ForgotPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Send password reset email to user."""
+    client_ip = get_client_ip(request)
+    await rate_limit(client_ip, api_limits["login"])
+    
+    # Find user by email
+    stmt = select(UserTable).where(UserTable.email == req.email.lower().strip())
+    user = (await db.execute(stmt)).scalars().first()
+    
+    if not user:
+        # Don't reveal if email exists (security best practice)
+        return {"message": "If an account exists with this email, you will receive a password reset link."}
+    
+    # Generate reset token
+    import secrets
+    from datetime import datetime, timedelta
+    
+    reset_token = secrets.token_urlsafe(32)
+    user.password_reset_token = reset_token
+    user.password_reset_expires_at = datetime.utcnow() + timedelta(hours=24)
+    
+    await db.commit()
+    
+    # TODO: Send actual email with reset link
+    # For now, log the token for development
+    logger.info(f"Password reset requested for {req.email}")
+    
+    return {"message": "If an account exists with this email, you will receive a password reset link."}
+
+
+@router.post("/change-password")
+async def change_password(
+    req: ChangePasswordRequest,
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Change user password (requires current password)."""
+    from backend.services.auth_service import verify_password, get_password_hash
+    
+    # Verify current password
+    if not verify_password(req.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update password
+    current_user.hashed_password = get_password_hash(req.new_password)
+    current_user.password_reset_token = None
+    current_user.password_reset_expires_at = None
+    
+    await db.commit()
+    
+    return {"message": "Password updated successfully"}
+
+
+@router.get("/verify")
+async def verify_email(
+    token: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Verify user email with token."""
+    from datetime import datetime
+    
+    # Find user with matching verification token
+    stmt = select(UserTable).where(
+        and_(
+            UserTable.email_verification_code == token,
+            UserTable.email_verification_expires_at > datetime.utcnow()
+        )
+    )
+    user = (await db.execute(stmt)).scalars().first()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+    
+    # Mark email as verified
+    user.email_verified = True
+    user.email_verification_code = None
+    user.email_verification_expires_at = None
+    
+    await db.commit()
+    
+    return {"message": "Email verified successfully"}
+
+
+@router.post("/resend-verification")
+async def resend_verification_email(
+    request: Request,
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Resend email verification link."""
+    client_ip = get_client_ip(request)
+    await rate_limit(client_ip, api_limits["high"])
+    
+    if current_user.email_verified:
+        raise HTTPException(status_code=400, detail="Email already verified")
+    
+    # Generate new verification code
+    import secrets
+    current_user.email_verification_code = secrets.token_urlsafe(32)
+    current_user.email_verification_expires_at = datetime.utcnow() + timedelta(hours=24)
+    
+    await db.commit()
+    
+    # TODO: Send actual email
+    logger.info(f"Resent verification email to {current_user.email}")
+    
+    return {"message": "Verification email sent"}
+
+
+@router.post("/onboarding")
+async def complete_onboarding(
+    req: OnboardingRequest,
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Complete user onboarding process."""
+    # Update user profile with onboarding data
+    if req.name:
+        current_user.full_name = req.name
+        current_user.name = req.name
+    
+    # Store preferences
+    prefs = dict(current_user.preferences or {})
+    if req.timezone:
+        prefs["timezone"] = req.timezone
+    if req.work_hours_start:
+        prefs["work_hours_start"] = req.work_hours_start
+    if req.work_hours_end:
+        prefs["work_hours_end"] = req.work_hours_end
+    if req.notifications_enabled is not None:
+        prefs["notifications_enabled"] = req.notifications_enabled
+    if req.ai_suggestions_enabled is not None:
+        prefs["ai_suggestions_enabled"] = req.ai_suggestions_enabled
+    
+    current_user.preferences = prefs
+    current_user.onboarding_completed = True
+    current_user.onboarding_completed_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(current_user)
+    
+    return {
+        "message": "Onboarding completed successfully",
+        "user": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "name": current_user.name,
+            "onboarding_completed": True
+        }
+    }
 
 

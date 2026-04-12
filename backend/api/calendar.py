@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.utils.errors import ValidationError, TimezoneError
@@ -46,6 +46,18 @@ class EventResponseSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AvailabilitySlot(BaseModel):
+    time: str  # Format: "HH:MM"
+    available: bool
+    reason: Optional[str] = None  # e.g., "busy", "outside_work_hours"
+
+
+class AvailabilityResponse(BaseModel):
+    date: str  # Format: "YYYY-MM-DD"
+    slots: List[AvailabilitySlot]
+    timezone: str
 
 
 @router.get("/events", response_model=List[EventResponseSchema])
@@ -170,3 +182,110 @@ async def trigger_calendar_sync(
                 "Please reconnect your calendar providers or try again later."
             )
         )
+
+
+@router.get("/availability/free-slots", response_model=AvailabilityResponse)
+async def get_free_slots(
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    duration: int = Query(30, description="Meeting duration in minutes"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserTable = Depends(get_current_user)
+):
+    """
+    Get available time slots for a specific date based on user's calendar.
+    Considers existing events and work hours preferences.
+    """
+    from backend.models.tables import EventTable
+    from dateutil import parser as date_parser, tz as dateutil_tz
+    
+    try:
+        target_date = date_parser.parse(date).date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    if duration <= 0 or duration > 480:
+        raise HTTPException(status_code=400, detail="Duration must be between 1 and 480 minutes.")
+    
+    # Get user's timezone and work hours from preferences
+    user_tz = "UTC"
+    work_start = 9  # Default 9 AM
+    work_end = 18   # Default 6 PM
+    
+    if current_user.preferences:
+        if isinstance(current_user.preferences, dict):
+            user_tz = current_user.preferences.get("timezone", "UTC")
+            work_start_str = current_user.preferences.get("work_hours_start", "09:00")
+            work_end_str = current_user.preferences.get("work_hours_end", "18:00")
+            try:
+                work_start = int(work_start_str.split(":")[0])
+                work_end = int(work_end_str.split(":")[0])
+            except (ValueError, IndexError):
+                pass  # Use defaults
+    
+    user_tzinfo = dateutil_tz.gettz(user_tz) or dateutil_tz.tzutc()
+
+    # Build time range for the requested date in the user's timezone
+    day_start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=user_tzinfo)
+    day_end = datetime.combine(target_date, datetime.max.time().replace(microsecond=0)).replace(tzinfo=user_tzinfo)
+    
+    # Fetch existing events for this date
+    stmt = select(EventTable).where(
+        and_(
+            EventTable.user_id == current_user.id,
+            EventTable.start_time <= day_end,
+            EventTable.end_time >= day_start,
+            EventTable.source != "deleted"
+        )
+    )
+    events = (await db.execute(stmt)).scalars().all()
+    
+    # Build busy intervals
+    busy_intervals = []
+    for event in events:
+        if event.start_time and event.end_time:
+            start = event.start_time
+            end = event.end_time
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=user_tzinfo)
+            else:
+                start = start.astimezone(user_tzinfo)
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=user_tzinfo)
+            else:
+                end = end.astimezone(user_tzinfo)
+            busy_intervals.append((start, end))
+    
+    # Generate time slots using requested duration step.
+    slots = []
+    work_start_minutes = work_start * 60
+    work_end_minutes = work_end * 60
+    day_work_end = day_start + timedelta(minutes=work_end_minutes)
+
+    for minute_offset in range(work_start_minutes, work_end_minutes, duration):
+        slot_time = day_start + timedelta(minutes=minute_offset)
+        slot_end = slot_time + timedelta(minutes=duration)
+
+        if slot_end > day_work_end:
+            continue
+
+        time_str = slot_time.strftime("%H:%M")
+
+        is_available = True
+        reason = None
+        for busy_start, busy_end in busy_intervals:
+            if slot_time < busy_end and slot_end > busy_start:
+                is_available = False
+                reason = "busy"
+                break
+
+        slots.append(AvailabilitySlot(
+            time=time_str,
+            available=is_available,
+            reason=reason
+        ))
+    
+    return AvailabilityResponse(
+        date=date,
+        slots=slots,
+        timezone=user_tz
+    )

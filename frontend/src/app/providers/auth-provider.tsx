@@ -16,14 +16,18 @@ type User = {
 
 type AuthContextType = {
   user: User | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
+  loading: boolean; // Alias for isLoading used in some components
   login: (email: string, password: string) => Promise<{ error?: { message: string } | null; data?: User | null }>;
   logout: () => void;
 };
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  isAuthenticated: false,
   isLoading: true,
+  loading: true,
   login: async () => ({ error: { message: "Auth not initialized" } }),
   logout: () => {},
 });
@@ -159,7 +163,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      isAuthenticated: !!user, 
+      isLoading, 
+      loading: isLoading, 
+      login, 
+      logout 
+    }}>
       {children}
     </AuthContext.Provider>
   );

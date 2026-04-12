@@ -225,6 +225,7 @@ class EventTypeTable(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    team_id: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("teams.id", ondelete="CASCADE"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String, nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -365,3 +366,283 @@ class AuditLogTable(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
     )
+
+
+class ChatMessageTable(Base):
+    """AI Copilot chat messages for conversation history and context."""
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String(100), ForeignKey("users.id"), nullable=False, index=True)
+    conversation_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)  # "user" or "assistant"
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True
+    )
+
+    user: Mapped["UserTable"] = relationship("UserTable", backref="chat_messages")
+
+
+class TeamTable(Base):
+    """Teams/Organizations for multi-user support."""
+    __tablename__ = "teams"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    
+    # Settings
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    # Relationships
+    memberships: Mapped[List["TeamMembershipTable"]] = relationship("TeamMembershipTable", backref="team", lazy="selectin")
+    event_types: Mapped[List["EventTypeTable"]] = relationship("EventTypeTable", backref="team", lazy="selectin")
+
+
+class TeamMembershipTable(Base):
+    """Team membership with role-based access (OWNER, ADMIN, MEMBER)."""
+    __tablename__ = "team_memberships"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
+    team_id: Mapped[str] = mapped_column(String(100), ForeignKey("teams.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(100), ForeignKey("users.id"), nullable=False, index=True)
+    
+    # Role: OWNER, ADMIN, MEMBER
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="MEMBER")
+    
+    # Invitation status
+    is_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    invited_by: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("users.id"), nullable=True)
+    invite_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
+    invite_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    # Relationships
+    user: Mapped["UserTable"] = relationship("UserTable", foreign_keys=[user_id])
+    inviter: Mapped[Optional["UserTable"]] = relationship("UserTable", foreign_keys=[invited_by])
+
+
+class WorkflowTable(Base):
+    """Workflows for automated sequences."""
+    __tablename__ = "workflows"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
+    user_id: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("users.id"), nullable=True, index=True)
+    team_id: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("teams.id"), nullable=True, index=True)
+    event_type_id: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("event_types.id"), nullable=True, index=True)
+    
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Trigger: BOOKING_CREATED, BOOKING_CANCELLED, BOOKING_RESCHEDULED, etc.
+    trigger: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    
+    # Settings
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    # Relationships
+    user: Mapped[Optional["UserTable"]] = relationship("UserTable", backref="workflows")
+    team: Mapped[Optional["TeamTable"]] = relationship("TeamTable", backref="workflows")
+    event_type: Mapped[Optional["EventTypeTable"]] = relationship("EventTypeTable", backref="workflows")
+    steps: Mapped[List["WorkflowStepTable"]] = relationship("WorkflowStepTable", backref="workflow", lazy="selectin", order_by="WorkflowStepTable.step_number")
+
+
+class WorkflowStepTable(Base):
+    """Individual steps in a workflow."""
+    __tablename__ = "workflow_steps"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
+    workflow_id: Mapped[str] = mapped_column(String(100), ForeignKey("workflows.id"), nullable=False, index=True)
+    
+    step_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    
+    # Action type: EMAIL, SMS, WEBHOOK, SLACK, TEAMS
+    action_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    
+    # Action configuration (JSON)
+    action_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    
+    # Delay before executing (minutes)
+    delay_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    
+    # Is step active
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+
+class ReminderLogTable(Base):
+    """Scheduled reminders for bookings."""
+    __tablename__ = "reminder_logs"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
+    booking_id: Mapped[str] = mapped_column(String(100), ForeignKey("bookings.id"), nullable=False, index=True)
+    
+    # Reminder type: EMAIL, SMS
+    reminder_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    
+    # When to send
+    scheduled_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    
+    # Status
+    is_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Error tracking
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    
+    # Cancellation
+    is_cancelled: Mapped[bool] = mapped_column(Boolean, default=False)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    # Relationship
+    booking: Mapped["BookingTable"] = relationship("BookingTable", backref="reminders")
+
+
+class AuditLogTable(Base):
+    """Audit log for all system actions."""
+    __tablename__ = "audit_logs"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
+    user_id: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("users.id"), nullable=True, index=True)
+    
+    # Action details
+    action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # user, event, booking, team, etc.
+    entity_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    
+    # Changes
+    old_values: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    new_values: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
+    # Request info
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True
+    )
+
+    # Relationship
+    user: Mapped[Optional["UserTable"]] = relationship("UserTable", backref="audit_logs")
+
+
+class AIAutomationTable(Base):
+    """
+    Tracks AI agent automation executions for bookings.
+    Stores results from the 4-phase agent loop.
+    """
+    __tablename__ = "ai_automations"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
+    booking_id: Mapped[str] = mapped_column(String(100), ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Automation status
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")  # pending, in_progress, completed, partial, failed
+    
+    # Decision quality
+    decision_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 0-100
+    risk_assessment: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # low, medium, high, critical
+    
+    # Agent decisions and reasoning
+    agent_decisions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # {actions, reasoning, confidence}
+    
+    # Actions executed
+    actions_executed: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of action results
+    
+    # External service results
+    external_results: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # {email_id, calendar_id, task_id}
+    
+    # Execution metrics
+    execution_time_ms: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Error tracking
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    
+    # Fallback tracking
+    fallback_mode: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # ai_agent, rule_based, manual_review
+    
+    # Trigger source
+    trigger_source: Mapped[str] = mapped_column(String(50), default="api")  # api, webhook, scheduler, manual
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+    
+    # Indexes for queries
+    __table_args__ = (
+        Index('idx_automation_status', 'status'),
+        Index('idx_automation_booking_user', 'booking_id', 'user_id'),
+        Index('idx_automation_created', 'created_at'),
+    )
+    
+    # Relationships
+    booking: Mapped["BookingTable"] = relationship("BookingTable", backref="ai_automations")
+    user: Mapped["UserTable"] = relationship("UserTable", backref="ai_automations")

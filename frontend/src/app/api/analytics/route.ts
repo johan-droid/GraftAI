@@ -18,14 +18,11 @@ async function getRedis() {
   return redis;
 }
 
-export async function POST(request: Request) {
-  const reqHeaders = await headers();
-  const session = await auth.api.getSession({ headers: reqHeaders });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+async function getAnalytics(session: any) {
   const cacheKey = `analytics:${session.user?.id || session.session?.token || "user"}`;
+  const r = await getRedis();
+  
   try {
-    const r = await getRedis();
     if (r) {
       const cached = await r.get(cacheKey);
       if (cached) return NextResponse.json(typeof cached === "string" ? JSON.parse(cached) : cached);
@@ -46,7 +43,27 @@ export async function POST(request: Request) {
   if (!res.ok) return NextResponse.json({ error: "Backend error" }, { status: res.status });
   const data = await res.json();
 
-  if (r) await r.setex(cacheKey, 60, JSON.stringify(data));
+  if (r) {
+    try {
+      await r.setex(cacheKey, 60, JSON.stringify(data));
+    } catch (err) {
+      console.error("Redis cache write failed:", err);
+    }
+  }
 
   return NextResponse.json(data);
+}
+
+export async function GET() {
+  const reqHeaders = await headers();
+  const session = await auth.api.getSession({ headers: reqHeaders });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return getAnalytics(session);
+}
+
+export async function POST(request: Request) {
+  const reqHeaders = await headers();
+  const session = await auth.api.getSession({ headers: reqHeaders });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return getAnalytics(session);
 }

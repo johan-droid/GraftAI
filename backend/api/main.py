@@ -381,6 +381,7 @@ def create_app() -> FastAPI:
     from backend.api.webhooks import router as webhooks_router
     from backend.services.ai import router as ai_router
     from backend.api.billing import router as billing_router
+    from backend.api.ai_chat import router as ai_chat_router
     from backend.routes.calendar_routes import router as calendar_integration_router
     from backend.routes.gdpr_routes import router as gdpr_router
     from backend.api.team_routes import router as team_router
@@ -391,6 +392,7 @@ def create_app() -> FastAPI:
     from backend.api.resource_routes import router as resource_router
     from backend.api.advanced_analytics_routes import router as advanced_analytics_router
     from backend.api.automation_routes import router as automation_router
+    from backend.api.monitoring import router as monitoring_router
 
     # Registering the new unified Authentication router
     app.include_router(auth_router, prefix="/api/v1/auth")
@@ -441,7 +443,9 @@ def create_app() -> FastAPI:
     app.include_router(webhooks_router, prefix="/api/v1")
     app.include_router(public_router, prefix="/api")
     app.include_router(ai_router, prefix="/api/v1")
+    app.include_router(ai_chat_router, prefix="/api/v1")
     app.include_router(billing_router, prefix="/api/v1")
+    app.include_router(monitoring_router, prefix="/api/v1")
 
     @app.get("/health")
     async def health_check():

@@ -102,7 +102,7 @@ export function Hero() {
                   letterSpacing: "-0.02em",
                 }}
               >
-                AI Scheduling That{" "}
+                Schedule Meetings{" "}
                 <Box
                   component="span"
                   sx={{
@@ -111,7 +111,7 @@ export function Hero() {
                     WebkitTextFillColor: "transparent",
                   }}
                 >
-                  Thinks Like You
+                  Without the Email Tennis
                 </Box>
               </Typography>
             </motion.div>
@@ -132,8 +132,8 @@ export function Hero() {
                   maxWidth: { xs: "100%", md: "90%" },
                 }}
               >
-                GraftAI learns your preferences, finds optimal meeting times, 
-                and protects your focus time—all automatically.
+                Skip the back-and-forth. Share your availability once. 
+                Let people book instantly. Save 5+ hours every week on scheduling.
               </Typography>
             </motion.div>
 
@@ -156,9 +156,9 @@ export function Hero() {
                   href="/register"
                   gradientVariant="primary"
                   size="large"
-                  sx={{ minWidth: 200 }}
+                  sx={{ minWidth: 220 }}
                 >
-                  Start Free Trial
+                  Get Started Free
                   <ArrowRight size={20} style={{ marginLeft: 8 }} />
                 </GradientButton>
                 <GradientButton
@@ -194,7 +194,7 @@ export function Hero() {
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                   <Shield size={16} />
-                  <span>No credit card required</span>
+                  <span>No credit card • Takes 2 minutes</span>
                 </Box>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                   <Zap size={16} />

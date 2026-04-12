@@ -11,16 +11,14 @@ Implements 6 key booking scenarios with specific agent behaviors:
 6. Follow-up Booking (memory-based optimization)
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import pytz
 
 from backend.ai.decision_engine import (
     DecisionEngine,
-    AgentDecision,
     ActionDecision,
-    ToolPriority,
     RiskLevel,
     VIPLevel
 )
@@ -359,7 +357,7 @@ Please ensure team is prepared and premium suite is reserved.
         4. Suggest video call over phone due to timezones
         5. Add timezone conversions to confirmation
         """
-        logger.info(f"🌍 SCENARIO 3: Timezone Conflict - 5 time zones")
+        logger.info("🌍 SCENARIO 3: Timezone Conflict - 5 time zones")
         
         # Set up attendees with different timezones
         timezones = [
@@ -453,7 +451,7 @@ Best regards,
             tool_name="send_sms",
             parameters={
                 "to": booking["organizer"],
-                "message": f"Multi-timezone meeting set up. Video conference recommended due to 5 time zones."
+                "message": "Multi-timezone meeting set up. Video conference recommended due to 5 time zones."
             },
             priority=ToolPriorityEnum.MEDIUM,
             execute_immediately=False
@@ -501,7 +499,7 @@ Best regards,
         4. Ask for human decision
         5. Resume when conflict resolved
         """
-        logger.info(f"⚠️ SCENARIO 4: Conflict Detected")
+        logger.info("⚠️ SCENARIO 4: Conflict Detected")
         
         # Simulate conflict detection
         conflict_event = {
@@ -628,7 +626,7 @@ Please choose an alternative time or resolve the conflict manually.
         3. Minimal follow-up
         4. No special handling needed
         """
-        logger.info(f"✅ SCENARIO 5: Low-Value Low-Risk Booking")
+        logger.info("✅ SCENARIO 5: Low-Value Low-Risk Booking")
         
         # Set low-risk attendee profile
         attendee_info["no_show_rate"] = 0.05
@@ -724,7 +722,7 @@ Calendar invite attached.
         3. Send streamlined confirmation
         4. Faster process overall
         """
-        logger.info(f"🧠 SCENARIO 6: Follow-up Booking (Memory-Based)")
+        logger.info("🧠 SCENARIO 6: Follow-up Booking (Memory-Based)")
         
         # Retrieve past interaction from memory
         if not memory_manager:
@@ -891,12 +889,12 @@ async def create_scenario_engine() -> ScenarioEngine:
 async def run_all_scenarios():
     """Run all 6 scenarios for demonstration"""
     engine = await create_scenario_engine()
-+    try:
-+        from backend.ai.memory.multi_layer_memory import create_memory_manager
-+        engine.memory_manager = await create_memory_manager()
-+    except Exception:
-+        engine.memory_manager = None
-    
+    try:
+        from backend.ai.memory.multi_layer_memory import create_memory_manager
+        engine.memory_manager = await create_memory_manager()
+    except Exception:
+        engine.memory_manager = None
+
     scenarios = [
         ("High-Risk Booking", engine.handle_scenario_1_high_risk_booking),
         ("VIP Booking", engine.handle_scenario_2_vip_booking),

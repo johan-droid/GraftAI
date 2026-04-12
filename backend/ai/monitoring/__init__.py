@@ -24,7 +24,8 @@ from .logging_config import (
     get_agent_logger,
     log_agent_decision,
     log_tool_execution,
-    log_memory_operation
+    log_memory_operation,
+    LogAnalyzer,
 )
 
 __all__ = [
@@ -46,5 +47,6 @@ __all__ = [
     "get_agent_logger",
     "log_agent_decision",
     "log_tool_execution",
-    "log_memory_operation"
+    "log_memory_operation",
+    "LogAnalyzer",
 ]

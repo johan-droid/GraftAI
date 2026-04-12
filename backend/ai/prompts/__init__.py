@@ -12,7 +12,7 @@ from .booking_prompts import (
 )
 from .agent_prompts import (
     AGENT_SYSTEM_PROMPT,
-    AGENT_COGNITION_PROMPT_TEMPLATE,
+    COGNITION_PROMPT_TEMPLATE as AGENT_COGNITION_PROMPT_TEMPLATE,
     format_agent_cognition_prompt
 )
 

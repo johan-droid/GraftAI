@@ -41,7 +41,7 @@ from backend.ai.monitoring import (
     measure_tool_execution,
     measure_memory_operation
 )
-from backend.db import get_db
+from backend.utils.db import get_db
 
 logger = get_logger(__name__)
 agent_logger = get_agent_logger()

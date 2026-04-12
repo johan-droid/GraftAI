@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from typing import List
 
 import pyotp
-import qrcode
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -147,12 +146,21 @@ async def setup_mfa(
         name=user.email,
         issuer_name="GraftAI"
     )
-    
+
     # Generate QR code
+    try:
+        import qrcode
+    except ImportError as e:
+        logger.error(f"Missing dependency for MFA QR code generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MFA QR code generation requires the qrcode package. Install it with pip install qrcode."
+        )
+
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
     qr.add_data(provisioning_uri)
     qr.make(fit=True)
-    
+
     img = qr.make_image(fill_color="black", back_color="white")
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")

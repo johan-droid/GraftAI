@@ -16,7 +16,7 @@ try:
 except ImportError:
     PROMETHEUS_AVAILABLE = False
 
-from backend.auth.dependencies import get_current_user
+from backend.api.deps import get_current_user
 from backend.models.tables import UserTable
 from backend.ai.monitoring import get_agent_metrics, get_agent_logger, LogAnalyzer
 from backend.utils.logger import get_logger

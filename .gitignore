@@ -17,6 +17,8 @@ venv/
 .venv/
 .env
 .env.local
+.env.production
+.env.production.local
 .env.*
 
 # Logs and temp files
@@ -71,6 +73,15 @@ build/
 target/
 *.min.js
 *.min.css
+
+# Production and deployment artifacts
+*.prod
+*.production
+*.stage
+*.staging
+docker-compose.prod.yml
+Dockerfile.prod
+.vercel/
 
 # Frontend build artifacts and compiled source outputs
 frontend/.next/

@@ -11,8 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db import get_db
-from backend.auth.dependencies import get_current_user
+from backend.utils.db import get_db
+from backend.api.deps import get_current_user
 from backend.models.tables import UserTable, EventTable
 from backend.services.booking_automation import (
     BookingAutomationService,

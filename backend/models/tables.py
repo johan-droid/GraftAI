@@ -19,7 +19,7 @@ from .base import Base # Re-using central Base for consistency
 # Type hints for forward references
 if TYPE_CHECKING:
     from backend.models.dsr import DSRRecord, ConsentRecord
-    from backend.models.team import TeamMember
+    from backend.models.team import Team, TeamMember
     from backend.models.api_key import APIKey
     from backend.models.integration import Integration
     from backend.models.email_template import EmailTemplate
@@ -387,36 +387,6 @@ class ChatMessageTable(Base):
     user: Mapped["UserTable"] = relationship("UserTable", backref="chat_messages")
 
 
-class TeamTable(Base):
-    """Teams/Organizations for multi-user support."""
-    __tablename__ = "teams"
-
-    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    
-    # Settings
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False
-    )
-
-    # Relationships
-    memberships: Mapped[List["TeamMembershipTable"]] = relationship("TeamMembershipTable", backref="team", lazy="selectin")
-    event_types: Mapped[List["EventTypeTable"]] = relationship("EventTypeTable", backref="team", lazy="selectin")
-
-
 class TeamMembershipTable(Base):
     """Team membership with role-based access (OWNER, ADMIN, MEMBER)."""
     __tablename__ = "team_memberships"
@@ -483,7 +453,7 @@ class WorkflowTable(Base):
 
     # Relationships
     user: Mapped[Optional["UserTable"]] = relationship("UserTable", backref="workflows")
-    team: Mapped[Optional["TeamTable"]] = relationship("TeamTable", backref="workflows")
+    team: Mapped[Optional["Team"]] = relationship("Team", backref="workflows")
     event_type: Mapped[Optional["EventTypeTable"]] = relationship("EventTypeTable", backref="workflows")
     steps: Mapped[List["WorkflowStepTable"]] = relationship("WorkflowStepTable", backref="workflow", lazy="selectin", order_by="WorkflowStepTable.step_number")
 
@@ -550,36 +520,6 @@ class ReminderLogTable(Base):
     # Relationship
     booking: Mapped["BookingTable"] = relationship("BookingTable", backref="reminders")
 
-
-class AuditLogTable(Base):
-    """Audit log for all system actions."""
-    __tablename__ = "audit_logs"
-
-    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
-    user_id: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("users.id"), nullable=True, index=True)
-    
-    # Action details
-    action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    entity_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # user, event, booking, team, etc.
-    entity_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
-    
-    # Changes
-    old_values: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    new_values: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    
-    # Request info
-    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
-    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
-        index=True
-    )
-
-    # Relationship
-    user: Mapped[Optional["UserTable"]] = relationship("UserTable", backref="audit_logs")
 
 
 class AIAutomationTable(Base):

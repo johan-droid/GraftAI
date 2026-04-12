@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from datetime import datetime
 import asyncio
 import re
-import traceback
 import uuid
 from sqlalchemy import inspect
 from backend.ai.agents.base import BaseAgent, AgentContext
@@ -452,15 +451,17 @@ class ExecutionAgent(BaseAgent):
 
         if "id" not in values:
             try:
-                bind = session.get_bind()
-                sync_bind = getattr(bind, "sync_engine", bind)
-                inspector = inspect(sync_bind)
-                if table in inspector.get_table_names():
-                    columns_info = {c["name"]: c for c in inspector.get_columns(table)}
-                    id_column = columns_info.get("id")
-                    if id_column and not id_column.get("autoincrement", False):
-                        values["id"] = str(uuid.uuid4())
-                        safe_columns.append("id")
+                inspect_session_maker = get_async_session_maker()
+                async with inspect_session_maker() as inspect_session:
+                    bind = inspect_session.get_bind()
+                    sync_bind = getattr(bind, "sync_engine", bind)
+                    inspector = inspect(sync_bind)
+                    if table in inspector.get_table_names():
+                        columns_info = {c["name"]: c for c in inspector.get_columns(table)}
+                        id_column = columns_info.get("id")
+                        if id_column and not id_column.get("autoincrement", False):
+                            values["id"] = str(uuid.uuid4())
+                            safe_columns.append("id")
             except Exception as exc:
                 logger.warning("Unable to inspect database schema for table %s: %s", table, exc)
 

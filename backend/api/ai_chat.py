@@ -11,8 +11,8 @@ from sqlalchemy import select, and_, desc
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db import get_db
-from backend.auth.dependencies import get_current_user
+from backend.utils.db import get_db
+from backend.api.deps import get_current_user
 from backend.models.tables import UserTable, ChatMessageTable
 from backend.ai.llm_core import get_llm_core
 from backend.ai.orchestrator import get_agent_controller, AgentType, AgentRequest

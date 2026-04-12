@@ -23,6 +23,23 @@ export async function resolveServerAccessToken(reqHeaders: Headers): Promise<Ser
     return { accessToken: null, refreshed: false };
   }
 
+  // Look for existing access token in cookies
+  const match = cookieHeader.match(/(?:graftai_access_token|auth_token)=([^;]+)/);
+  if (match && match[1]) {
+    const token = match[1];
+    try {
+      const payloadBase64 = token.split('.')[1];
+      const payloadStr = Buffer.from(payloadBase64, 'base64').toString('utf8');
+      const payload = JSON.parse(payloadStr);
+      // Check if token is valid for at least another minute
+      if (payload.exp && payload.exp * 1000 > Date.now() + 60000) {
+        return { accessToken: token, refreshed: false };
+      }
+    } catch (e) {
+      // Decode failed or invalid token, fall through to attempt refresh
+    }
+  }
+
   try {
     const refreshRes = await fetch(`${BACKEND_API_URL}/auth/refresh`, {
       method: "POST",

@@ -240,7 +240,7 @@ function ErrorFallback({ error, onReload, onReset }: ErrorFallbackProps) {
             <Typography sx={{ fontSize: "0.875rem", color: "hsl(215, 16%, 40%)" }}>
               Need help?{" "}
               <Link
-                href="/support"
+                href="mailto:support@graftai.com"
                 style={{
                   color: "hsl(239, 84%, 67%)",
                   textDecoration: "none",

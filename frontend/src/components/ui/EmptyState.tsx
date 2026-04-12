@@ -265,7 +265,6 @@ export function EmptyFiles() {
       icon={FolderOpen}
       title="No files uploaded"
       description="Upload meeting recordings, transcripts, or documents to keep everything organized."
-      action={{ label: "Upload Files", onClick: () => {} }}
     />
   );
 }

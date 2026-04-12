@@ -3,6 +3,7 @@
 import { Box, Button } from "@mui/material";
 import { motion } from "framer-motion";
 import { authClient } from "@/lib/auth-client";
+import { toast } from "@/components/ui/Toast";
 
 // Custom SVG icons for OAuth providers
 const GoogleIcon = () => (
@@ -41,6 +42,11 @@ export function OAuthButtons({ callbackURL = "/dashboard" }: OAuthButtonsProps) 
       });
     } catch (error) {
       console.error(`OAuth error for ${provider}:`, error);
+      toast.error(
+        `Unable to sign in with ${provider}. ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   };
 

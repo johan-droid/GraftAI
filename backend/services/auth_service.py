@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -18,6 +19,7 @@ from backend.auth.config import (
 from backend.models.tables import UserTable, UserTokenTable
 from backend.services.auth_utils import get_password_hash, verify_password
 
+logger = logging.getLogger(__name__)
 
 def _create_jwt_token_impl(user_id: str, token_type: str) -> str:
     now = datetime.now(timezone.utc)
@@ -160,10 +162,26 @@ async def upsert_user_token(
 
     user_token.access_token = token_info.get("access_token") or user_token.access_token
     user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
-    if "expires_at" in token_info and token_info["expires_at"] is not None:
+    expires_at_raw = token_info.get("expires_at")
+    if expires_at_raw is not None:
+        expires_at_dt = None
         try:
-            user_token.expires_at = datetime.fromtimestamp(token_info["expires_at"], tz=timezone.utc)
-        except Exception:
-            user_token.expires_at = token_info.get("expires_at")
+            if isinstance(expires_at_raw, str):
+                expires_at_raw = float(expires_at_raw)
+
+            if isinstance(expires_at_raw, (int, float)):
+                expires_at_dt = datetime.fromtimestamp(expires_at_raw, tz=timezone.utc)
+            else:
+                raise ValueError("expires_at must be an int, float, or numeric string")
+        except (TypeError, ValueError, OverflowError) as exc:
+            logger.warning(
+                "Invalid expires_at value for user_token update: %r; provider=%s; user_id=%s", 
+                expires_at_raw,
+                provider,
+                user.id,
+            )
+
+        if expires_at_dt is not None:
+            user_token.expires_at = expires_at_dt
     user_token.is_active = True
     return user_token

@@ -44,7 +44,7 @@ async def drop_all_tables(url: str) -> None:
         await engine.dispose()
 
     elif url.startswith("sqlite"):
-        engine = create_async_engine(url, connect_args={"check_same_thread": False})
+        engine = create_async_engine(url)
         async with engine.begin() as conn:
             print("🔥 Dropping all tables in SQLite database...")
             result = await conn.execute(text(

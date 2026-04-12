@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ReactNode, useRef } from "react";
+import { useState, ReactNode, useRef, useEffect } from "react";
 import { Box, Fade, Paper, Popper } from "@mui/material";
 
 interface TooltipProps {
@@ -30,18 +30,14 @@ export function Tooltip({
     timeoutRef.current = setTimeout(() => setOpen(false), delay);
   };
 
-  const getPlacementStyles = () => {
-    switch (placement) {
-      case "top":
-        return { bottom: "100%", left: "50%", transform: "translateX(-50%)", mb: 1 };
-      case "bottom":
-        return { top: "100%", left: "50%", transform: "translateX(-50%)", mt: 1 };
-      case "left":
-        return { right: "100%", top: "50%", transform: "translateY(-50%)", mr: 1 };
-      case "right":
-        return { left: "100%", top: "50%", transform: "translateY(-50%)", ml: 1 };
-    }
-  };
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <Box
@@ -80,7 +76,6 @@ export function Tooltip({
               fontWeight: 500,
               maxWidth: 250,
               boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
-              ...getPlacementStyles(),
             }}
           >
             {content}

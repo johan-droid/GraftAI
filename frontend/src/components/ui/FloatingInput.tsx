@@ -23,7 +23,7 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
       <Box sx={{ position: "relative", width: "100%" }}>
         <TextField
           {...props}
-          ref={ref}
+          inputRef={ref}
           type={inputType}
           fullWidth
           onFocus={(e) => {

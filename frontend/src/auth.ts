@@ -303,6 +303,7 @@ const authOptions: NextAuthConfig = {
   },
 
   secret: nextAuthSecret,
+  trustHost: true,
 };
 
 export const { handlers, signIn, signOut, auth } = NextAuth(authOptions);

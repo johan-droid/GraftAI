@@ -1,12 +1,12 @@
+import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export default auth(async function middleware(request: NextRequest & { auth: any }) {
   // 1. Generate Nonce
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
 
   // 2. Define CSP Policy
-  // Note: 'strict-dynamic' allows scripts loaded by trusted (nonced) scripts to execute.
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval';
@@ -27,10 +27,20 @@ export async function middleware(request: NextRequest) {
     upgrade-insecure-requests;
   `.replace(/\s{2,}/g, " ").trim();
 
-  // 3. Set Request Headers (to pass nonce to Layout/Components)
+  // 3. Set Request Headers
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", cspHeader);
+
+  // 4. Protected Route Logic
+  const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
+  const isAuthenticated = !!request.auth;
+
+  if (isDashboardRoute && !isAuthenticated) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("callbackUrl", request.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
+  }
 
   const response = NextResponse.next({
     request: {
@@ -38,29 +48,13 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  // 4. Set Response Headers
+  // 5. Set Response Headers
   response.headers.set("Content-Security-Policy", cspHeader);
 
-  // 5. Existing Dashboard Auth Logic
-  const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
-
-  if (isDashboardRoute) {
-    const accessToken =
-      request.cookies.get("graftai_access_token")?.value ||
-      request.cookies.get("auth_token")?.value;
-    const refreshToken =
-      request.cookies.get("graftai_refresh_token")?.value ||
-      request.cookies.get("refresh_token")?.value;
-
-    if (!accessToken && !refreshToken) {
-      const loginUrl = new URL("/login", request.url);
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-
   return response;
-}
+});
 
 export const config = {
   matcher: ["/dashboard", "/dashboard/:path*", "/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
+

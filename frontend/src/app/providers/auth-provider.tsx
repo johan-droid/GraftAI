@@ -124,17 +124,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── fetch / refresh the backend profile ─────────────────────────────────────
   useEffect(() => {
-    // Cleanup legacy cookies that might interfere with NextAuth
-    if (typeof document !== "undefined") {
-      const legacyCookies = ["auth_token", "graftai_access_token", "refresh_token", "graftai_refresh_token"];
-      legacyCookies.forEach(name => {
-        if (document.cookie.includes(`${name}=`)) {
-          console.log(`[AuthProvider] Clearing legacy cookie: ${name}`);
-          document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;`;
-        }
-      });
-    }
-
     if (status === "authenticated" && backendToken) {
       fetchProfile();
     } else if (status === "unauthenticated") {

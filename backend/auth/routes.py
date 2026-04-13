@@ -76,7 +76,7 @@ class OnboardingRequest(BaseModel):
     ai_suggestions_enabled: Optional[bool] = True
 
 @router.post("/social/exchange")
-async def social_exchange(req: SocialExchangeRequest, request: Request, db: AsyncSession = Depends(get_db)):
+async def social_exchange(req: SocialExchangeRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["login"])
 
@@ -137,6 +137,9 @@ async def social_exchange(req: SocialExchangeRequest, request: Request, db: Asyn
 
     await upsert_user_token(db, user, backend_provider, token_payload)
     await db.commit()
+
+    # ── Issue legacy cookies for backward compatibility ──────────────────
+    _set_auth_cookies(response, access_token, refresh_token)
 
     # ── Return tokens + user profile (avoids a second /users/me round-trip) ──
     return {

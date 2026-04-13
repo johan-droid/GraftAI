@@ -1,79 +1,75 @@
 "use client";
 
-import { Box, Typography, Container, Grid, Paper } from "@mui/material";
+import { Box, Typography, Container, Grid, Stack } from "@mui/material";
 import { motion } from "framer-motion";
-import { MessageSquareX, Brain, AlertTriangle, Check, Clock, CalendarCheck } from "lucide-react";
+import { 
+  MessageSquareX, 
+  Brain, 
+  AlertTriangle, 
+  Check, 
+  ArrowRight,
+  Database,
+  Cpu,
+  Activity
+} from "lucide-react";
 
 const painPoints = [
   {
     icon: MessageSquareX,
     pain: "8+ emails just to schedule one meeting",
     solution: "AI suggests 3 optimal times instantly",
-    color: "#6366f1",
+    nodeId: "0xFC1",
   },
   {
     icon: Brain,
     pain: "Constant interruptions kill productivity",
     solution: "Auto-blocks deep work sessions",
-    color: "#ec4899",
+    nodeId: "0xFC2",
   },
   {
     icon: AlertTriangle,
     pain: "Double-bookings and timezone confusion",
     solution: "Smart conflict detection across all calendars",
-    color: "#10b981",
+    nodeId: "0xFC3",
   },
 ];
 
 export function ProblemSolution() {
   return (
-    <Box id="features" sx={{ py: { xs: 10, md: 16 } }}>
-      <Container maxWidth="lg">
+    <Box id="features" sx={{ py: { xs: 10, md: 20 }, background: "var(--bg-base)" }}>
+      <Container maxWidth="xl">
         {/* Section Header */}
-        <Box sx={{ textAlign: "center", mb: { xs: 6, md: 10 } }}>
+        <Box sx={{ mb: { xs: 8, md: 12 } }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             viewport={{ once: true }}
           >
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+               <Database size={14} className="text-[var(--primary)]" />
+               <Typography className="telemetry-text">[ CONFLICT_RESOLUTION_MODULE ]</Typography>
+            </Stack>
             <Typography
               variant="h2"
               sx={{
-                fontSize: { xs: "1.75rem", sm: "2.25rem", md: "3rem" },
-                fontWeight: 800,
-                mb: 3,
-                maxWidth: 800,
-                mx: "auto",
+                fontSize: { xs: "2.25rem", sm: "3rem", md: "4rem" },
+                fontWeight: 900,
+                fontFamily: "var(--font-mono)",
+                maxWidth: 900,
+                lineHeight: 1,
+                letterSpacing: "-0.05em",
+                color: "var(--text-primary)",
+                textTransform: "uppercase"
               }}
             >
-              Stop Calendar Chaos.{" "}
-              <Box
-                component="span"
-                sx={{
-                  background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
-                Start Smart Scheduling.
-              </Box>
-            </Typography>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            viewport={{ once: true }}
-          >
-            <Typography variant="body1" sx={{ color: "#94a3b8", maxWidth: 600, mx: "auto", fontSize: "1.125rem" }}>
-              Three ways GraftAI transforms your scheduling nightmare into a productivity dream.
+              Terminate <Box component="span" sx={{ color: "var(--text-faint)" }}>Calendar</Box> Chaos.
             </Typography>
           </motion.div>
         </Box>
 
         {/* Pain Point Cards */}
-        <Grid container spacing={3}>
+        <Grid container spacing={4}>
           {painPoints.map((point, index) => (
             <Grid item xs={12} md={4} key={index}>
               <motion.div
@@ -83,92 +79,89 @@ export function ProblemSolution() {
                 viewport={{ once: true }}
                 style={{ height: "100%" }}
               >
-                <Paper
+                <Box
                   sx={{
                     height: "100%",
-                    p: { xs: 3, md: 4 },
-                    background: "linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(15, 15, 26, 0.9) 100%)",
-                    border: "1px solid rgba(99, 102, 241, 0.1)",
-                    borderRadius: 3,
+                    p: { xs: 4, md: 5 },
+                    background: "var(--bg-base)",
+                    border: "1px dashed var(--border-subtle)",
                     position: "relative",
                     overflow: "hidden",
-                    transition: "all 0.3s ease",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                     "&:hover": {
-                      borderColor: point.color,
-                      transform: "translateY(-4px)",
-                      boxShadow: `0 20px 40px -20px ${point.color}20`,
+                      borderColor: "var(--primary)",
+                      background: "rgba(0, 255, 156, 0.03)",
+                      "& .status-glow": { opacity: 1 }
                     },
                   }}
                 >
-                  {/* Background Glow */}
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      top: -50,
-                      right: -50,
-                      width: 150,
-                      height: 150,
-                      background: `radial-gradient(circle, ${point.color}20 0%, transparent 70%)`,
-                      borderRadius: "50%",
-                    }}
+                  {/* Status Indicator */}
+                  <Box 
+                    className="status-glow"
+                    sx={{ 
+                      position: "absolute", 
+                      top: 0, 
+                      left: 0, 
+                      width: "100%", 
+                      height: "2px", 
+                      background: "var(--primary)",
+                      opacity: 0,
+                      transition: "opacity 0.3s",
+                      boxShadow: "0 0 15px var(--primary)"
+                    }} 
                   />
 
-                  <Box sx={{ position: "relative", zIndex: 1 }}>
-                    {/* Icon */}
-                    <Box
-                      sx={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: 2,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        background: `linear-gradient(135deg, ${point.color}30 0%, ${point.color}10 100%)`,
-                        mb: 3,
-                      }}
-                    >
-                      <point.icon size={28} style={{ color: point.color }} />
+                  <Stack spacing={4}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Box sx={{ p: 1.5, border: "1px solid var(--border-subtle)", color: "var(--text-faint)" }}>
+                        <point.icon size={20} />
+                      </Box>
+                      <Typography className="telemetry-text" sx={{ opacity: 0.5 }}>
+                        NODE_{point.nodeId}
+                      </Typography>
+                    </Stack>
+
+                    <Stack spacing={2}>
+                      <Typography sx={{ color: "var(--text-faint)", fontSize: "10px", fontFamily: "var(--font-mono)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                        // LEGACY_INPUT
+                      </Typography>
+                      <Typography sx={{ color: "var(--text-secondary)", fontSize: "14px", fontFamily: "var(--font-mono)", fontWeight: 700, fontStyle: "italic", textDecoration: "line-through", opacity: 0.6 }}>
+                        "{point.pain}"
+                      </Typography>
+                    </Stack>
+
+                    <Box sx={{ py: 1, px: 2, background: "var(--bg-elevated)", borderLeft: "2px solid var(--primary)" }}>
+                       <Stack direction="row" spacing={1} alignItems="center">
+                          <Activity size={12} className="text-[var(--primary)]" />
+                          <Typography className="telemetry-text" sx={{ color: "var(--primary)" }}>REFINEMENT_COMPLETE</Typography>
+                       </Stack>
                     </Box>
 
-                    {/* Pain */}
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: "#64748b",
-                        mb: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.5,
-                        fontSize: "0.875rem",
-                      }}
-                    >
-                      <MessageSquareX size={14} />
-                      Before: {point.pain}
-                    </Typography>
+                    <Stack spacing={2}>
+                      <Typography sx={{ color: "var(--primary)", fontSize: "11px", fontFamily: "var(--font-mono)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                        // GRAFT_OUTPUT
+                      </Typography>
+                      <Typography sx={{ color: "var(--text-primary)", fontSize: "15px", fontFamily: "var(--font-mono)", fontWeight: 800, lineHeight: 1.5 }}>
+                        {point.solution}
+                      </Typography>
+                    </Stack>
+                  </Stack>
 
-                    {/* Divider */}
-                    <Box sx={{ width: "100%", height: 1, background: "rgba(99, 102, 241, 0.1)", my: 2 }} />
-
-                    {/* Solution */}
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        color: "#f8fafc",
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 1,
-                        fontWeight: 500,
-                      }}
-                    >
-                      <Check size={18} style={{ color: "#10b981", flexShrink: 0, marginTop: 2 }} />
-                      {point.solution}
-                    </Typography>
-                  </Box>
-                </Paper>
+                  {/* Decorative Background PID */}
+                  <Typography sx={{ position: "absolute", bottom: 20, right: 20, fontSize: "40px", fontFamily: "var(--font-mono)", fontWeight: 900, color: "rgba(255,255,255,0.02)", pointerEvents: "none" }}>
+                    {point.nodeId}
+                  </Typography>
+                </Box>
               </motion.div>
             </Grid>
           ))}
         </Grid>
+
+        <Box sx={{ mt: 12, p: 4, border: "1px dashed var(--border-subtle)", textAlign: "center" }}>
+           <Typography className="telemetry-text">
+             SYSTEM_STATUS: <Box component="span" sx={{ color: "var(--primary)" }}>AUTO_OPTIMIZATION_ENABLED</Box> // SCAN_MODE: CONTINUOUS
+           </Typography>
+        </Box>
       </Container>
     </Box>
   );

@@ -49,43 +49,57 @@ export function OAuthButtons({ callbackURL = "/dashboard" }: OAuthButtonsProps) 
 
   return (
     <Box>
-
       {/* OAuth Buttons */}
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {providers.map((provider, index) => (
           <motion.div
             key={provider.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1, duration: 0.3 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.1, duration: 0.2 }}
+            whileHover={{ x: 4 }}
+            whileTap={{ scale: 0.99 }}
           >
             <Button
               onClick={() => handleOAuth(provider.id)}
               fullWidth
               sx={{
-                py: 1.5,
-                background: "hsl(240, 24%, 14%)",
-                border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                borderRadius: "12px",
-                color: "hsl(220, 20%, 98%)",
-                textTransform: "none",
-                fontSize: "0.9375rem",
-                fontWeight: 500,
+                py: 2,
+                px: 3,
+                background: "var(--bg-elevated)",
+                border: "1px dashed var(--border-subtle)",
+                borderRadius: 0,
+                color: "var(--text-primary)",
+                textTransform: "uppercase",
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px",
+                fontWeight: 900,
                 display: "flex",
                 alignItems: "center",
-                gap: 2,
-                transition: "all 0.2s ease",
+                justifyContent: "flex-start",
+                gap: 2.5,
+                transition: "all 0.15s ease",
+                letterSpacing: "0.15em",
                 "&:hover": {
-                  background: "hsl(240, 24%, 18%)",
-                  borderColor: "hsla(239, 84%, 67%, 0.3)",
-                  boxShadow: `0 0 20px ${provider.color}20`,
+                  background: "var(--primary)",
+                  borderColor: "var(--primary)",
+                  color: "black",
+                  "& svg": {
+                    filter: "brightness(0) saturate(100%)",
+                    opacity: 1,
+                  }
                 },
+                "& svg": {
+                  filter: "grayscale(100%) brightness(0.8)",
+                  opacity: 0.6,
+                  transition: "all 0.3s ease",
+                }
               }}
             >
-              <provider.icon />
-              Continue with {provider.name}
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", minWidth: 24 }}>
+                <provider.icon />
+              </Box>
+              AUTH_NODE_VIA_{provider.name.toUpperCase()}
             </Button>
           </motion.div>
         ))}

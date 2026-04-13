@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { motion } from "framer-motion";
 import { ReactNode } from "react";
 import { Sparkles } from "lucide-react";
@@ -21,20 +21,22 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
       sx={{
         minHeight: "100vh",
         display: "flex",
-        background: "hsl(240, 24%, 7%)",
+        background: "var(--bg-base)",
         position: "relative",
         overflow: "hidden",
       }}
     >
-      {/* Animated Background Gradient */}
-      <Box
+      {/* Technical Grid Overlay */}
+      <Box 
         sx={{
           position: "absolute",
           inset: 0,
           background: `
-            radial-gradient(ellipse at 20% 20%, hsla(239, 84%, 67%, 0.15) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 80%, hsla(330, 81%, 60%, 0.1) 0%, transparent 50%)
+            linear-gradient(rgba(0, 255, 156, 0.02) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 255, 156, 0.02) 1px, transparent 1px)
           `,
+          backgroundSize: "48px 48px",
+          pointerEvents: "none",
         }}
       />
 
@@ -49,57 +51,43 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            alignItems: "center",
-            padding: 48,
-            background: "linear-gradient(135deg, hsla(239, 84%, 67%, 0.1) 0%, hsla(330, 81%, 60%, 0.05) 100%)",
-            borderRight: "1px solid hsla(239, 84%, 67%, 0.1)",
+            padding: 80,
+            borderRight: "1px dashed var(--border-subtle)",
             position: "relative",
+            background: "rgba(0, 0, 0, 0.4)",
+            backdropFilter: "blur(4px)",
           }}
         >
-          {/* Decorative Elements */}
-          <motion.div
-            animate={{
-              y: [0, -20, 0],
-              rotate: [0, 5, 0],
-            }}
-            transition={{
-              duration: 6,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            style={{
-              width: 300,
-              height: 300,
-              borderRadius: 30,
-              background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-              opacity: 0.3,
-              filter: "blur(60px)",
-              position: "absolute",
-            }}
-          />
+          {/* Scanline Effect */}
+          <Box className="scanline" sx={{ opacity: 0.05 }} />
 
-          <Box sx={{ position: "relative", zIndex: 1, textAlign: "center" }}>
+          <Box sx={{ position: "relative", zIndex: 1 }}>
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.3, duration: 0.5 }}
             >
-              <Box
-                sx={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 3,
-                  background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  mx: "auto",
-                  mb: 4,
-                  boxShadow: "0 20px 40px hsla(239, 84%, 67%, 0.4)",
-                }}
-              >
-                <Sparkles size={40} color="white" />
-              </Box>
+              <div className="flex items-center gap-4 mb-8">
+                <Box
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 0,
+                    background: "var(--bg-elevated)",
+                    border: "1px solid var(--primary)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 0 20px rgba(0, 255, 156, 0.15)",
+                  }}
+                >
+                  <Sparkles size={32} className="text-primary" />
+                </Box>
+                <div className="flex flex-col">
+                   <div className="text-[10px] font-black text-[var(--primary)] uppercase tracking-[0.3em]">System_Core_v0.1</div>
+                   <div className="text-[24px] font-black text-white uppercase tracking-tighter">GRAFT_AI</div>
+                </div>
+              </div>
             </motion.div>
 
             <motion.div
@@ -107,72 +95,44 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5, duration: 0.5 }}
             >
-              <Box
-                component="h1"
+              <Typography
                 sx={{
-                  fontSize: "2.5rem",
-                  fontWeight: 800,
-                  background: "linear-gradient(135deg, hsl(220, 20%, 98%) 0%, hsl(215, 16%, 70%) 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  mb: 2,
-                  letterSpacing: "-0.02em",
+                  fontSize: "3.5rem",
+                  fontWeight: 900,
+                  color: "var(--text-primary)",
+                  fontFamily: "var(--font-mono)",
+                  textTransform: "uppercase",
+                  letterSpacing: "-0.04em",
+                  mb: 4,
+                  lineHeight: 1,
+                  maxWidth: "500px"
                 }}
               >
-                Welcome to GraftAI
-              </Box>
+                SECURE_GATEWAY_ACCESS
+              </Typography>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6, duration: 0.5 }}
-            >
-              <Box
-                component="p"
-                sx={{
-                  color: "hsl(215, 16%, 55%)",
-                  fontSize: "1.125rem",
-                  maxWidth: 400,
-                  lineHeight: 1.6,
-                }}
-              >
-                AI-powered scheduling that transforms how you manage your time and meetings.
-              </Box>
-            </motion.div>
+            <div className="space-y-6 max-w-md">
+              <div className="p-4 border border-dashed border-[var(--border-subtle)] bg-black/50 font-mono text-[11px] leading-relaxed text-[var(--text-muted)]">
+                <div className="text-[var(--primary)] mb-2 font-black tracking-widest uppercase">// SYS_INITIALIZATION</div>
+                &gt; BOOTING_CORTEX_MODULES... [OK]<br/>
+                &gt; ESTABLISHING_VECTOR_PIPELINES... [OK]<br/>
+                &gt; AUTHENTICATING_AUTH_NODE_07... [PENDING]
+              </div>
 
-            {/* Feature Pills */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.8, duration: 0.5 }}
-              style={{
-                display: "flex",
-                gap: 12,
-                justifyContent: "center",
-                marginTop: 40,
-                flexWrap: "wrap",
-              }}
-            >
-              {["AI Scheduling", "Smart Sync", "Team Coordination"].map((feature, i) => (
-                <Box
-                  key={feature}
-                  sx={{
-                    px: 3,
-                    py: 1.5,
-                    background: "hsla(239, 84%, 67%, 0.1)",
-                    border: "1px solid hsla(239, 84%, 67%, 0.2)",
-                    borderRadius: 10,
-                    color: "hsl(215, 16%, 70%)",
-                    fontSize: "0.875rem",
-                    fontWeight: 500,
-                  }}
-                >
-                  {feature}
-                </Box>
-              ))}
-            </motion.div>
+              <div className="flex flex-wrap gap-3">
+                {["AES_256", "OAUTH_2.0", "RSA_GEN"].map((tag) => (
+                  <div key={tag} className="px-3 py-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[9px] font-black text-[var(--text-faint)] tracking-widest uppercase">
+                    {tag}
+                  </div>
+                ))}
+              </div>
+            </div>
           </Box>
+
+          <div className="absolute bottom-12 left-12 font-mono text-[9px] text-[var(--text-faint)] tracking-widest uppercase opacity-40">
+            [ GRAFT_OS_X // KERNEL: 5.4.0-HARDENED // REG_NODE: {title.toUpperCase()} ]
+          </div>
         </motion.div>
       )}
 
@@ -190,104 +150,97 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
         }}
       >
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
-          style={{ width: "100%", maxWidth: 420 }}
+          style={{ width: "100%", maxWidth: 1000 }}
         >
-          {/* Mobile Logo */}
-          {isMobile && (
-            <Box sx={{ textAlign: "center", mb: 4 }}>
+          <Box sx={{ maxWidth: 440, mx: "auto" }}>
+            {/* Form Header */}
+            <Box sx={{ mb: 8 }}>
+              <div className="flex items-center gap-3 mb-4">
+                 <div className="w-8 h-[1px] bg-[var(--primary)]" />
+                 <div className="text-[9px] font-black text-primary tracking-[.4em] uppercase font-mono">Permission_Protocol</div>
+              </div>
               <Box
+                component="h2"
                 sx={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 2,
-                  background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  mx: "auto",
-                  mb: 2,
+                  fontSize: "2rem",
+                  fontWeight: 900,
+                  color: "var(--text-primary)",
+                  fontFamily: "var(--font-mono)",
+                  textTransform: "uppercase",
+                  mb: 1.5,
+                  letterSpacing: "-0.02em",
                 }}
               >
-                <Sparkles size={28} color="white" />
+                {title.replace(/ /g, "_")}
               </Box>
-              <Box
-                component="h1"
-                sx={{
-                  fontSize: "1.5rem",
-                  fontWeight: 700,
-                  background: "linear-gradient(135deg, hsl(220, 20%, 98%) 0%, hsl(215, 16%, 70%) 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
-                GraftAI
-              </Box>
+              {subtitle && (
+                <Box
+                  component="p"
+                  sx={{
+                    fontSize: "12px",
+                    color: "var(--text-muted)",
+                    fontFamily: "var(--font-mono)",
+                    textTransform: "uppercase",
+                    fontWeight: 600,
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {subtitle}
+                </Box>
+              )}
             </Box>
-          )}
 
-          {/* Form Header */}
-          <Box sx={{ mb: 4 }}>
-            <Box
-              component="h2"
-              sx={{
-                fontSize: "1.875rem",
-                fontWeight: 700,
-                color: "hsl(220, 20%, 98%)",
-                mb: 1,
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {title}
-            </Box>
-            {subtitle && (
+            <div className="relative p-8 border border-dashed border-[var(--border-subtle)] bg-black/20">
+               {/* Decorative corner tags */}
+               <div className="absolute -top-[1px] -left-[1px] w-3 h-3 border-t-2 border-l-2 border-[var(--primary)]" />
+               <div className="absolute -bottom-[1px] -right-[1px] w-3 h-3 border-b-2 border-r-2 border-[var(--primary)]" />
+               
+               {children}
+            </div>
+
+            {/* Footer */}
+            <Box sx={{ mt: 8, textAlign: "center", pt: 6, borderTop: "1px dashed var(--border-subtle)" }}>
               <Box
                 component="p"
                 sx={{
-                  fontSize: "1rem",
-                  color: "hsl(215, 16%, 55%)",
+                  fontSize: "9px",
+                  color: "var(--text-faint)",
+                  fontFamily: "var(--font-mono)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.2em",
                 }}
               >
-                {subtitle}
+                [ SYS_INTEGRITY_VERIFIED ]
               </Box>
-            )}
-          </Box>
-
-          {children}
-
-          {/* Footer */}
-          <Box sx={{ mt: 4, textAlign: "center" }}>
-            <Box
-              component="p"
-              sx={{
-                fontSize: "0.875rem",
-                color: "hsl(215, 16%, 40%)",
-              }}
-            >
-              By continuing, you agree to our{" "}
-              <Link
-                href="/terms"
-                style={{
-                  color: "hsl(239, 84%, 67%)",
-                  textDecoration: "none",
-                  fontWeight: 500,
-                }}
-              >
-                Terms of Service
-              </Link>{" "}
-              and{" "}
-              <Link
-                href="/privacy"
-                style={{
-                  color: "hsl(239, 84%, 67%)",
-                  textDecoration: "none",
-                  fontWeight: 500,
-                }}
-              >
-                Privacy Policy
-              </Link>
+              <div className="mt-4 flex justify-center gap-6 opacity-60">
+                <Link
+                  href="/terms"
+                  style={{
+                    fontSize: "9px",
+                    color: "var(--text-muted)",
+                    textDecoration: "none",
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: 800,
+                  }}
+                >
+                  PROTOCOL_A
+                </Link>
+                <Link
+                  href="/privacy"
+                  style={{
+                    fontSize: "9px",
+                    color: "var(--text-muted)",
+                    textDecoration: "none",
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: 800,
+                  }}
+                >
+                  PROTOCOL_B
+                </Link>
+              </div>
             </Box>
           </Box>
         </motion.div>

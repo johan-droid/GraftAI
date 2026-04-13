@@ -16,8 +16,8 @@ import { toast } from "@/components/ui/Toast";
 export default function LoginPage() {
   return (
     <AuthLayout
-      title="Sign in to GraftAI"
-      subtitle="The most powerful AI-first calendar and scheduling platform."
+      title="INIT_AUTH_SEQUENCE"
+      subtitle="GRAFT_AI :: SECURE_KERNEL_ACCESS_GATEWAY"
     >
       <Box sx={{ mt: 2 }}>
         <OAuthButtons callbackURL="/dashboard" />
@@ -26,17 +26,20 @@ export default function LoginPage() {
       <Box sx={{ mt: 6, textAlign: "center" }}>
         <Typography
           sx={{
-            fontSize: "0.875rem",
-            color: "hsl(215, 16%, 50%)",
-            maxWidth: "280px",
+            fontSize: "10px",
+            color: "var(--text-faint)",
+            maxWidth: "320px",
             mx: "auto",
             lineHeight: 1.6,
+            fontFamily: "var(--font-mono)",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
           }}
         >
-          By signing in, you agree to our{" "}
-          <Link href="/terms" style={{ color: "hsl(239, 84%, 67%)", textDecoration: "none" }}>Terms of Service</Link>
-          {" "}and{" "}
-          <Link href="/privacy" style={{ color: "hsl(239, 84%, 67%)", textDecoration: "none" }}>Privacy Policy</Link>.
+          AUTH_CONSENT: By proceeding, you accept the{" "}
+          <Link href="/terms" style={{ color: "var(--primary)", textDecoration: "none" }}>ENFORCE_TERMS</Link>
+          {" "}AND{" "}
+          <Link href="/privacy" style={{ color: "var(--primary)", textDecoration: "none" }}>PRIVACY_PROTOCOL</Link>.
         </Typography>
       </Box>
     </AuthLayout>

@@ -2,14 +2,26 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Box, Paper, Typography, Button, TextField, Stepper, Step, StepLabel, Grid, Chip } from "@mui/material";
+import { Box, Typography, Button, TextField, Grid, Stack } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Calendar, Sparkles, Check, ArrowRight, ArrowLeft, Zap, Clock, Bell } from "lucide-react";
-import { useTheme } from "@/contexts/ThemeContext";
+import { 
+  User, 
+  Calendar, 
+  Sparkles, 
+  Check, 
+  ArrowRight, 
+  ArrowLeft, 
+  Zap, 
+  Clock, 
+  Bell,
+  Terminal,
+  Activity,
+  Cpu
+} from "lucide-react";
 import { toast } from "@/components/ui/Toast";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 
-const steps = ["Welcome", "Profile", "Preferences", "Complete"];
+const steps = ["BOOT_ENV", "USER_PROFILE", "PREF_SYNC", "COMMS_READY"];
 
 const timeZones = [
   "UTC",
@@ -26,8 +38,6 @@ const timeZones = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { isDark } = useTheme();
-
   const [activeStep, setActiveStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -40,7 +50,7 @@ export default function OnboardingPage() {
 
   const handleNext = () => {
     if (activeStep === 1 && !name.trim()) {
-      toast.error("Please enter your name");
+      toast.error("PROTOCOL_ERROR: IDENTITY_DATA_REQUIRED");
       return;
     }
     setActiveStep((prev) => prev + 1);
@@ -67,135 +77,98 @@ export default function OnboardingPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to complete onboarding");
+        throw new Error("KERNEL_REJECTION: ONBOARDING_SYNC_FAILED");
       }
 
-      toast.success("Welcome to GraftAI!");
+      toast.success("KERNEL_ACCESS_GRANTED: WELCOME_USER");
       router.push("/dashboard");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+      toast.error(error instanceof Error ? error.message : "SYSTEM_CRITICAL: UNKNOWN_ERROR_DURING_SYNC");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <AuthLayout title="Welcome">
+    <AuthLayout title="GraftAI // Kernel_Setup">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
       >
-        {/* Stepper */}
-        <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4 }}>
-          {steps.map((label) => (
-            <Step key={label}>
-              <StepLabel
-                sx={{
-                  "& .MuiStepLabel-label": {
-                    color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)",
-                    fontSize: "0.75rem",
-                  },
-                  "& .Mui-active .MuiStepLabel-label": {
-                    color: "hsl(239, 84%, 67%) !important",
-                    fontWeight: 600,
-                  },
-                  "& .Mui-completed .MuiStepLabel-label": {
-                    color: isDark ? "hsl(160, 84%, 39%)" : "hsl(160, 84%, 39%)",
-                  },
-                }}
-              >
-                {label}
-              </StepLabel>
-            </Step>
-          ))}
-        </Stepper>
+        {/* Technical Stepper */}
+        <Box sx={{ mb: 6 }}>
+          <div className="flex items-center gap-1 mb-2">
+             {steps.map((label, i) => (
+               <div key={i} className="flex-1 flex items-center gap-2">
+                  <div className={`h-[2px] flex-1 ${activeStep >= i ? "bg-[var(--primary)]" : "bg-[var(--border-subtle)]"}`} />
+                  {i === steps.length - 1 && <div className={`h-[2px] flex-1 ${activeStep > i ? "bg-[var(--primary)]" : "bg-[var(--border-subtle)]"}`} />}
+               </div>
+             ))}
+          </div>
+          <div className="flex justify-between px-1">
+             {steps.map((label, i) => (
+               <span 
+                 key={i} 
+                 className={`text-[8px] font-black font-mono tracking-widest ${activeStep === i ? "text-[var(--primary)]" : "text-[var(--text-faint)]"}`}
+               >
+                 {label}
+               </span>
+             ))}
+          </div>
+        </Box>
 
-        <Paper
-          elevation={0}
+        <Box
           sx={{
-            p: { xs: 3, md: 4 },
-            background: isDark
-              ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-              : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-            border: "1px solid hsla(239, 84%, 67%, 0.15)",
-            borderRadius: "16px",
+            p: { xs: 3, md: 5 },
+            background: "#050505",
+            border: "1px dashed var(--border-subtle)",
+            position: "relative",
+            overflow: "hidden"
           }}
         >
+          {/* Corner accents */}
+          <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-[var(--primary)]" />
+          <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[var(--primary)]" />
+          
           <AnimatePresence mode="wait">
             {activeStep === 0 && (
               <motion.div
                 key="step0"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.2 }}
               >
-                <Box sx={{ textAlign: "center", mb: 4 }}>
-                  <Box
-                    sx={{
-                      width: 80,
-                      height: 80,
-                      borderRadius: "20px",
-                      background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      margin: "0 auto 16px",
-                      boxShadow: "0 10px 40px -10px hsla(239, 84%, 67%, 0.5)",
-                    }}
-                  >
-                    <Sparkles size={40} color="white" />
-                  </Box>
-
-                  <Typography
-                    variant="h4"
-                    sx={{
-                      fontWeight: 700,
-                      color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                      mb: 2,
-                    }}
-                  >
-                    Welcome to GraftAI
-                  </Typography>
-
-                  <Typography sx={{ color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                    Your AI-powered scheduling assistant is ready to help you save time and stay organized.
-                    Let's set up your account in just a few steps.
+                <Box sx={{ mb: 6 }}>
+                  <div className="flex items-center gap-3 mb-4">
+                     <Terminal size={20} className="text-[var(--primary)]" />
+                     <h2 className="text-[14px] font-black text-white uppercase tracking-tighter font-mono">INIT_KERNEL_SEQUENCE</h2>
+                  </div>
+                  
+                  <Typography sx={{ color: "var(--text-secondary)", fontSize: "12px", fontFamily: "var(--font-mono)", textTransform: "uppercase", lineHeight: 1.6, mb: 4 }}>
+                     Initializing AI-powered core scheduling protocols. GraftAI is preparing your dedicated compute node for automated organizational management.
                   </Typography>
                 </Box>
 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 4 }}>
                   {[
-                    { icon: Zap, text: "Smart meeting scheduling" },
-                    { icon: Clock, text: "Automatic availability detection" },
-                    { icon: Bell, text: "Intelligent reminders" },
+                    { icon: Zap, text: "SMART_SCHEDULING_PROTOCOL" },
+                    { icon: Clock, text: "AUTO_AVAILABILITY_DETECTION" },
+                    { icon: Bell, text: "INTEL_NOTIFICATION_HANDLERS" },
                   ].map((feature, i) => (
                     <Box
                       key={i}
                       sx={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 2,
-                        p: 2,
-                        borderRadius: "10px",
-                        background: isDark ? "hsla(239, 84%, 67%, 0.1)" : "hsla(239, 84%, 67%, 0.05)",
+                        gap: 3,
+                        p: 2.5,
+                        background: "rgba(255,255,255,0.02)",
+                        borderLeft: "2px solid var(--primary)",
                       }}
                     >
-                      <Box
-                        sx={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: "8px",
-                          background: "hsla(239, 84%, 67%, 0.2)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <feature.icon size={18} style={{ color: "hsl(239, 84%, 67%)" }} />
-                      </Box>
-                      <Typography sx={{ color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
+                      <feature.icon size={16} className="text-[var(--primary)]" />
+                      <Typography sx={{ color: "white", fontSize: "10px", fontWeight: 900, fontFamily: "var(--font-mono)", letterSpacing: "0.1em" }}>
                         {feature.text}
                       </Typography>
                     </Box>
@@ -210,85 +183,68 @@ export default function OnboardingPage() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.2 }}
               >
-                <Box sx={{ textAlign: "center", mb: 4 }}>
-                  <Box
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: "16px",
-                      background: "hsla(239, 84%, 67%, 0.15)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      margin: "0 auto 16px",
-                      border: "1px solid hsla(239, 84%, 67%, 0.3)",
-                    }}
-                  >
-                    <User size={28} style={{ color: "hsl(239, 84%, 67%)" }} />
+                <Box sx={{ mb: 6 }}>
+                  <div className="flex items-center gap-3 mb-4">
+                     <User size={20} className="text-[var(--primary)]" />
+                     <h2 className="text-[14px] font-black text-white uppercase tracking-tighter font-mono">USER_PROFILE_SYNC</h2>
+                  </div>
+                  <Typography sx={{ color: "var(--text-faint)", fontSize: "11px", fontFamily: "var(--font-mono)", textTransform: "uppercase", mb: 4 }}>
+                     IDENTITY_MANIFEST: Verify primary operator credentials.
+                  </Typography>
+                </Box>
+
+                <Stack spacing={4}>
+                  <Box>
+                     <div className="text-[9px] font-black text-[var(--text-faint)] mb-2 font-mono uppercase">OPERATOR_NAME</div>
+                     <TextField
+                       fullWidth
+                       placeholder="[ENTER_NAME]"
+                       value={name}
+                       onChange={(e) => setName(e.target.value)}
+                       sx={{
+                         "& .MuiOutlinedInput-root": {
+                           background: "rgba(255,255,255,0.03)",
+                           borderRadius: 0,
+                           color: "white",
+                           fontFamily: "var(--font-mono)",
+                           fontSize: "13px",
+                           "& fieldset": { border: "1px dashed var(--border-subtle)" },
+                           "&:hover fieldset": { borderColor: "var(--primary)" },
+                           "&.Mui-focused fieldset": { borderColor: "var(--primary)" },
+                         },
+                       }}
+                     />
                   </Box>
 
-                  <Typography
-                    variant="h5"
-                    sx={{
-                      fontWeight: 700,
-                      color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                      mb: 1,
-                    }}
-                  >
-                    Set up your profile
-                  </Typography>
-
-                  <Typography sx={{ color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                    Tell us a bit about yourself so we can personalize your experience.
-                  </Typography>
-                </Box>
-
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  <TextField
-                    fullWidth
-                    label="Your Name"
-                    placeholder="John Doe"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    sx={{
-                      "& .MuiOutlinedInput-root": {
-                        background: "transparent",
-                        borderRadius: "10px",
-                        color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                        "& fieldset": { borderColor: "hsla(239, 84%, 67%, 0.3)" },
-                        "&:hover fieldset": { borderColor: "hsla(239, 84%, 67%, 0.5)" },
-                        "&.Mui-focused fieldset": { borderColor: "hsl(239, 84%, 67%)" },
-                      },
-                      "& .MuiInputLabel-root": { color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" },
-                    }}
-                  />
-
-                  <TextField
-                    fullWidth
-                    select
-                    label="Time Zone"
-                    value={timeZone}
-                    onChange={(e) => setTimeZone(e.target.value)}
-                    SelectProps={{ native: true, inputProps: { title: "Time Zone" } }}
-                    sx={{
-                      "& .MuiOutlinedInput-root": {
-                        background: "transparent",
-                        borderRadius: "10px",
-                        color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                        "& fieldset": { borderColor: "hsla(239, 84%, 67%, 0.3)" },
-                      },
-                      "& .MuiInputLabel-root": { color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" },
-                    }}
-                  >
-                    {timeZones.map((tz) => (
-                      <option key={tz} value={tz}>
-                        {tz}
-                      </option>
-                    ))}
-                  </TextField>
-                </Box>
+                  <Box>
+                     <div className="text-[9px] font-black text-[var(--text-faint)] mb-2 font-mono uppercase">TIMEZONE_SYNC</div>
+                     <TextField
+                       fullWidth
+                       select
+                       value={timeZone}
+                       onChange={(e) => setTimeZone(e.target.value)}
+                       SelectProps={{ native: true }}
+                       sx={{
+                         "& .MuiOutlinedInput-root": {
+                           background: "rgba(255,255,255,0.03)",
+                           borderRadius: 0,
+                           color: "white",
+                           fontFamily: "var(--font-mono)",
+                           fontSize: "13px",
+                           "& fieldset": { border: "1px dashed var(--border-subtle)" },
+                         },
+                       }}
+                     >
+                       {timeZones.map((tz) => (
+                         <option key={tz} value={tz}>
+                           {tz}
+                         </option>
+                       ))}
+                     </TextField>
+                  </Box>
+                </Stack>
               </motion.div>
             )}
 
@@ -298,70 +254,36 @@ export default function OnboardingPage() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.2 }}
               >
-                <Box sx={{ textAlign: "center", mb: 4 }}>
-                  <Box
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: "16px",
-                      background: "hsla(239, 84%, 67%, 0.15)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      margin: "0 auto 16px",
-                      border: "1px solid hsla(239, 84%, 67%, 0.3)",
-                    }}
-                  >
-                    <Calendar size={28} style={{ color: "hsl(239, 84%, 67%)" }} />
-                  </Box>
-
-                  <Typography
-                    variant="h5"
-                    sx={{
-                      fontWeight: 700,
-                      color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                      mb: 1,
-                    }}
-                  >
-                    Your preferences
-                  </Typography>
-
-                  <Typography sx={{ color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                    Configure how GraftAI works for you.
+                <Box sx={{ mb: 6 }}>
+                  <div className="flex items-center gap-3 mb-4">
+                     <Cpu size={20} className="text-[var(--primary)]" />
+                     <h2 className="text-[14px] font-black text-white uppercase tracking-tighter font-mono">PREFERENCE_SYNC</h2>
+                  </div>
+                  <Typography sx={{ color: "var(--text-faint)", fontSize: "11px", fontFamily: "var(--font-mono)", textTransform: "uppercase", mb: 4 }}>
+                     CORE_LOGIC: Configure AI scheduling thresholds.
                   </Typography>
                 </Box>
 
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 3,
-                      background: isDark ? "hsla(239, 84%, 67%, 0.05)" : "hsla(239, 84%, 67%, 0.03)",
-                      border: "1px solid hsla(239, 84%, 67%, 0.1)",
-                      borderRadius: "12px",
-                    }}
-                  >
-                    <Typography
-                      sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)", mb: 2 }}
-                    >
-                      Working Hours
-                    </Typography>
+                <Stack spacing={3}>
+                  <Box sx={{ p: 3, background: "rgba(255,255,255,0.02)", border: "1px dashed var(--border-subtle)" }}>
+                    <div className="text-[9px] font-black text-white mb-4 font-mono uppercase">WORKING_WINDOW</div>
                     <Grid container spacing={2}>
                       <Grid item xs={6}>
                         <TextField
                           fullWidth
                           type="time"
-                          label="Start"
                           value={workHours.start}
                           onChange={(e) => setWorkHours((p) => ({ ...p, start: e.target.value }))}
                           sx={{
                             "& .MuiOutlinedInput-root": {
-                              borderRadius: "10px",
-                              "& fieldset": { borderColor: "hsla(239, 84%, 67%, 0.3)" },
+                              borderRadius: 0,
+                              color: "white",
+                              fontFamily: "var(--font-mono)",
+                              fontSize: "12px",
+                              "& fieldset": { border: "1px dashed var(--border-subtle)" },
                             },
-                            "& .MuiInputLabel-root": { color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" },
                           }}
                         />
                       </Grid>
@@ -369,276 +291,135 @@ export default function OnboardingPage() {
                         <TextField
                           fullWidth
                           type="time"
-                          label="End"
                           value={workHours.end}
                           onChange={(e) => setWorkHours((p) => ({ ...p, end: e.target.value }))}
                           sx={{
                             "& .MuiOutlinedInput-root": {
-                              borderRadius: "10px",
-                              "& fieldset": { borderColor: "hsla(239, 84%, 67%, 0.3)" },
+                              borderRadius: 0,
+                              color: "white",
+                              fontFamily: "var(--font-mono)",
+                              fontSize: "12px",
+                              "& fieldset": { border: "1px dashed var(--border-subtle)" },
                             },
-                            "& .MuiInputLabel-root": { color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" },
                           }}
                         />
                       </Grid>
                     </Grid>
-                  </Paper>
+                  </Box>
 
-                  <Paper
-                    elevation={0}
-                    onClick={() => setNotifications(!notifications)}
-                    sx={{
-                      p: 3,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      background: isDark ? "hsla(239, 84%, 67%, 0.05)" : "hsla(239, 84%, 67%, 0.03)",
-                      border: "1px solid hsla(239, 84%, 67%, 0.1)",
-                      borderRadius: "12px",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                      "&:hover": {
-                        borderColor: "hsla(239, 84%, 67%, 0.3)",
-                      },
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: "10px",
-                          background: "hsla(239, 84%, 67%, 0.15)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Bell size={20} style={{ color: "hsl(239, 84%, 67%)" }} />
-                      </Box>
-                      <Box>
-                        <Typography sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                          Notifications
-                        </Typography>
-                        <Typography sx={{ fontSize: "0.875rem", color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                          Get reminders about upcoming meetings
-                        </Typography>
-                      </Box>
-                    </Box>
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 24,
-                        borderRadius: "12px",
-                        background: notifications ? "hsl(239, 84%, 67%)" : isDark ? "hsl(240, 24%, 25%)" : "hsl(220, 14%, 80%)",
-                        position: "relative",
-                        transition: "background 0.2s ease",
+                  {[
+                    { icon: Bell, title: "NOTIFICATIONS", desc: "SYSTEM_REPORTS", state: notifications, set: setNotifications },
+                    { icon: Sparkles, title: "AI_AUGMENTATION", desc: "SCHEDULE_OPTIMIZATION", state: aiSuggestions, set: setAiSuggestions },
+                  ].map((p, i) => (
+                    <Box 
+                      key={i}
+                      onClick={() => p.set(!p.state)}
+                      sx={{ 
+                        p: 3, 
+                        display: "flex", 
+                        alignItems: "center", 
+                        justifyContent: "space-between", 
+                        background: "rgba(255,255,255,0.02)", 
+                        border: "1px solid transparent",
+                        borderColor: p.state ? "rgba(0,255,156,0.3)" : "transparent",
                         cursor: "pointer",
+                        transition: "all 0.1s"
                       }}
                     >
-                      <Box
-                        sx={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: "50%",
-                          background: "white",
-                          position: "absolute",
-                          top: 2,
-                          left: notifications ? 26 : 2,
-                          transition: "left 0.2s ease",
-                        }}
-                      />
+                      <div className="flex items-center gap-4">
+                        <p.icon size={16} className={p.state ? "text-[var(--primary)]" : "text-[var(--text-faint)]"} />
+                        <div>
+                           <div className="text-[10px] font-black text-white font-mono uppercase">{p.title}</div>
+                           <div className="text-[8px] font-bold text-[var(--text-faint)] font-mono uppercase">{p.desc}</div>
+                        </div>
+                      </div>
+                      <div className={`w-8 h-4 border ${p.state ? "border-[var(--primary)] bg-[var(--primary)]/20" : "border-[var(--border-subtle)]"} p-[2px] transition-all`}>
+                         <div className={`w-full h-full ${p.state ? "bg-[var(--primary)]" : "bg-transparent"}`} />
+                      </div>
                     </Box>
-                  </Paper>
-
-                  <Paper
-                    elevation={0}
-                    onClick={() => setAiSuggestions(!aiSuggestions)}
-                    sx={{
-                      p: 3,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      background: isDark ? "hsla(239, 84%, 67%, 0.05)" : "hsla(239, 84%, 67%, 0.03)",
-                      border: "1px solid hsla(239, 84%, 67%, 0.1)",
-                      borderRadius: "12px",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                      "&:hover": {
-                        borderColor: "hsla(239, 84%, 67%, 0.3)",
-                      },
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: "10px",
-                          background: "hsla(239, 84%, 67%, 0.15)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Sparkles size={20} style={{ color: "hsl(239, 84%, 67%)" }} />
-                      </Box>
-                      <Box>
-                        <Typography sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                          AI Suggestions
-                        </Typography>
-                        <Typography sx={{ fontSize: "0.875rem", color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                          Let AI optimize your schedule
-                        </Typography>
-                      </Box>
-                    </Box>
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 24,
-                        borderRadius: "12px",
-                        background: aiSuggestions ? "hsl(239, 84%, 67%)" : isDark ? "hsl(240, 24%, 25%)" : "hsl(220, 14%, 80%)",
-                        position: "relative",
-                        transition: "background 0.2s ease",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: "50%",
-                          background: "white",
-                          position: "absolute",
-                          top: 2,
-                          left: aiSuggestions ? 26 : 2,
-                          transition: "left 0.2s ease",
-                        }}
-                      />
-                    </Box>
-                  </Paper>
-                </Box>
+                  ))}
+                </Stack>
               </motion.div>
             )}
 
             {activeStep === 3 && (
               <motion.div
                 key="step3"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.2 }}
               >
-                <Box sx={{ textAlign: "center", mb: 4 }}>
-                  <Box
-                    sx={{
-                      width: 80,
-                      height: 80,
-                      borderRadius: "20px",
-                      background: "linear-gradient(135deg, hsl(160, 84%, 39%) 0%, hsl(160, 84%, 49%) 100%)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      margin: "0 auto 16px",
-                      boxShadow: "0 10px 40px -10px hsla(160, 84%, 39%, 0.5)",
-                    }}
-                  >
-                    <Check size={40} color="white" />
-                  </Box>
+                <Box sx={{ textAlign: "center", py: 4 }}>
+                  <div className="w-20 h-20 border border-dashed border-[var(--primary)] flex items-center justify-center mx-auto mb-8 relative">
+                     <Box className="scanline" sx={{ opacity: 0.2 }} />
+                     <Check size={40} className="text-[var(--primary)]" />
+                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-[var(--primary)]" />
+                  </div>
 
                   <Typography
                     variant="h4"
                     sx={{
-                      fontWeight: 700,
-                      color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
+                      fontWeight: 900,
+                      color: "white",
+                      fontFamily: "var(--font-mono)",
                       mb: 2,
+                      textTransform: "uppercase"
                     }}
                   >
-                    You're all set!
+                    SYNC_COMPLETE
                   </Typography>
 
-                  <Typography sx={{ color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                    Your account is ready. Start exploring GraftAI and let us help you take control of your schedule.
+                  <Typography sx={{ color: "var(--text-faint)", fontSize: "11px", fontFamily: "var(--font-mono)", textTransform: "uppercase", maxWidth: 300, mx: "auto", mb: 8 }}>
+                     Your operator identity is now integrated into the AI Cortex. Access to the GraftAI kernel has been authorized.
                   </Typography>
-                </Box>
-
-                <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
-                  <Chip
-                    label="Setup Complete"
-                    sx={{
-                      background: "hsla(160, 84%, 39%, 0.15)",
-                      color: "hsl(160, 84%, 39%)",
-                      fontWeight: 600,
-                      px: 2,
-                    }}
-                  />
+                  
+                  <div className="flex justify-center">
+                    <div className="px-6 py-2 border-l-2 border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)] text-[10px] font-black font-mono tracking-widest uppercase">
+                       PROTOCOL_READY // 100%_STABLE
+                    </div>
+                  </div>
                 </Box>
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* Navigation Buttons */}
-          <Box sx={{ display: "flex", justifyContent: "space-between", mt: 4 }}>
-            <Button
+          <Box sx={{ display: "flex", justifyContent: "space-between", mt: 10 }}>
+            <button
               onClick={handleBack}
               disabled={activeStep === 0}
-              startIcon={<ArrowLeft size={18} />}
-              sx={{
-                color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                textTransform: "none",
-                fontWeight: 600,
-                "&:disabled": {
-                  color: isDark ? "hsl(215, 16%, 30%)" : "hsl(215, 16%, 70%)",
-                },
-              }}
+              className={`flex items-center gap-2 text-[10px] font-black font-mono tracking-widest uppercase transition-all ${activeStep === 0 ? "opacity-20 cursor-not-allowed" : "text-white hover:text-[var(--primary)]"}`}
             >
-              Back
-            </Button>
+              <ArrowLeft size={16} />
+              BACK_STEP
+            </button>
 
             {activeStep === steps.length - 1 ? (
-              <Button
+              <button
                 onClick={handleComplete}
                 disabled={isLoading}
-                variant="contained"
-                endIcon={<ArrowRight size={18} />}
-                sx={{
-                  background: "linear-gradient(135deg, hsl(160, 84%, 39%) 0%, hsl(160, 84%, 49%) 100%)",
-                  color: "white",
-                  fontWeight: 600,
-                  borderRadius: "10px",
-                  textTransform: "none",
-                  px: 4,
-                  py: 1.5,
-                  "&:hover": {
-                    background: "linear-gradient(135deg, hsl(160, 84%, 29%) 0%, hsl(160, 84%, 39%) 100%)",
-                  },
-                }}
+                className="px-10 py-3 bg-[var(--primary)] text-black text-[10px] font-black font-mono tracking-[.25em] uppercase hover:bg-white transition-all disabled:opacity-50"
               >
-                {isLoading ? "Setting up..." : "Get Started"}
-              </Button>
+                {isLoading ? "SYNCING..." : "ENTER_KERNEL"}
+              </button>
             ) : (
-              <Button
+              <button
                 onClick={handleNext}
-                variant="contained"
-                endIcon={<ArrowRight size={18} />}
-                sx={{
-                  background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                  color: "white",
-                  fontWeight: 600,
-                  borderRadius: "10px",
-                  textTransform: "none",
-                  px: 4,
-                  py: 1.5,
-                  "&:hover": {
-                    background: "linear-gradient(135deg, hsl(239, 84%, 57%) 0%, hsl(330, 81%, 50%) 100%)",
-                  },
-                }}
+                className="px-10 py-3 bg-white text-black text-[10px] font-black font-mono tracking-[.25em] uppercase hover:bg-[var(--primary)] transition-all"
               >
-                Continue
-              </Button>
+                CONTINUE_INIT
+              </button>
             )}
           </Box>
-        </Paper>
+        </Box>
+        
+        {/* Environment status line */}
+        <div className="mt-4 flex justify-between font-mono text-[7px] text-[var(--text-faint)] uppercase tracking-widest">
+           <span>BUILD_ID: GRAFT_0.82_N</span>
+           <span>INIT_CODE: 0xFD91_X</span>
+           <span>KERN_STAT: NOMINAL</span>
+        </div>
       </motion.div>
     </AuthLayout>
   );

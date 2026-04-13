@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Calendar, Settings, Bot, LogOut,
-  Activity, Puzzle, Menu, X, ChevronRight, Sun, Moon,
+  Activity, Puzzle, Menu, X, ChevronRight, Sun, Moon, Terminal
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/app/providers/auth-provider";
@@ -14,9 +14,10 @@ import { Toaster } from "@/components/ui/Toast";
 
 const NAV_LINKS = [
   { name: "Overview",   href: "/dashboard",           icon: LayoutDashboard },
-  { name: "Analytics",  href: "/dashboard/analytics", icon: Activity },
+  { name: "Telemetry",  href: "/dashboard/analytics", icon: Activity },
   { name: "Calendar",   href: "/dashboard/calendar",  icon: Calendar },
-  { name: "AI Copilot", href: "/dashboard/ai",        icon: Bot },
+  { name: "AI_Engine",  href: "/dashboard/ai",        icon: Bot },
+  { name: "Developer",  href: "/dashboard/developers",icon: Terminal },
   { name: "Plugins",    href: "/dashboard/plugins",   icon: Puzzle },
   { name: "Settings",   href: "/dashboard/settings",  icon: Settings },
 ] as const;
@@ -50,16 +51,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside
         className={`hidden lg:flex flex-col z-20 border-r transition-[width] duration-200 bg-[var(--bg-surface)] border-[var(--border)] flex-shrink-0 ${collapsed ? 'w-[64px]' : 'w-[220px]'}`}
       >
-        <div className="flex items-center gap-3 px-4 py-5 border-b min-h-[64px] border-[var(--border)]">
-          <div className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-sm bg-peach text-[#1A0F0A]">
-            G
+        <div className="flex items-center gap-3 px-4 py-5 border-b min-h-[64px] border-[var(--border-subtle)] bg-[rgba(255,255,255,0.02)]">
+          <div className="w-8 h-8 rounded-none flex-shrink-0 flex items-center justify-center font-bold text-sm border border-[var(--primary)] bg-[rgba(0,255,156,0.1)] text-[var(--primary)]">
+            G_
           </div>
           {!collapsed && (
-            <span className="font-bold text-base tracking-tight text-white">GraftAI</span>
+            <span className="font-bold text-base tracking-tight text-white font-mono">GRAFT_AI</span>
           )}
         </div>
 
-        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-hide">
           {NAV_LINKS.map(({ name, href, icon: Icon }) => {
             const active = isActive(href);
             return (
@@ -67,15 +68,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 key={href}
                 href={href}
                 title={collapsed ? name : undefined}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative group ${active ? 'bg-[var(--peach-ghost)] text-[var(--peach)] border-r-2 border-[var(--peach)]' : 'text-[var(--text-muted)]'}`}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-bold font-mono transition-all relative group uppercase tracking-wider ${active ? 'bg-[rgba(0,255,156,0.08)] text-[var(--primary)] border-l-2 border-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[rgba(255,255,255,0.03)] hover:text-white'}`}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" />
+                <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-[var(--primary)]' : 'text-[var(--text-muted)]'}`} />
                 {!collapsed && <span>{name}</span>}
-                {active && !collapsed && (
-                  <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-50" />
-                )}
                 {collapsed && (
-                  <span className="absolute left-full ml-2 px-2 py-1 rounded text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 bg-[var(--bg-hover)] text-[var(--text)] border border-[var(--border)]">
+                  <span className="absolute left-full ml-4 px-2 py-1 rounded-none text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 bg-[#000] text-[var(--primary)] border border-[var(--primary)] font-mono">
                     {name}
                   </span>
                 )}
@@ -84,22 +82,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        <div className="p-2 border-t space-y-1 border-[var(--border)]">
-          <button
-            onClick={() => setDarkMode(v => !v)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[var(--text-muted)]"
-            title={collapsed ? (darkMode ? "Light mode" : "Dark mode") : undefined}
-          >
-            {darkMode ? <Sun className="w-5 h-5 flex-shrink-0" /> : <Moon className="w-5 h-5 flex-shrink-0" />}
-            {!collapsed && <span>{darkMode ? "Light mode" : "Dark mode"}</span>}
-          </button>
+        <div className="p-2 border-t space-y-1 border-[var(--border-subtle)] bg-[rgba(0,0,0,0.2)]">
+          <div className="flex items-center gap-3 px-3 py-2">
+            <div className="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse" />
+            {!collapsed && <span className="text-[10px] font-mono text-[var(--primary)] font-bold tracking-widest">SYSTEM_LIVE</span>}
+          </div>
 
           <button
             onClick={() => setCollapsed(v => !v)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-[var(--text-faint)]"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-none text-[10px] font-mono font-bold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--primary)] hover:bg-[rgba(0,255,156,0.05)]"
           >
             <Menu className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span className="text-xs">Collapse</span>}
+            {!collapsed && <span>Collapse_View</span>}
           </button>
 
           <button

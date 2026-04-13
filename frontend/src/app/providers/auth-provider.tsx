@@ -18,6 +18,9 @@ export type User = {
   id: string;
   email: string;
   full_name?: string;
+  name?: string; // Add name alias
+  avatar?: string; // Add avatar alias
+  image?: string;
   username?: string;
   bio?: string;
   job_title?: string;

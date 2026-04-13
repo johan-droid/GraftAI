@@ -41,35 +41,36 @@ export interface MetricCardProps {
 }
 
 // Status color mapping
+// Status color mapping
 const statusColors = {
   success: {
-    bg: "rgba(34, 197, 94, 0.1)",
-    border: "rgba(34, 197, 94, 0.2)",
-    text: "#22c55e",
+    bg: "rgba(0, 255, 156, 0.05)",
+    border: "var(--primary)",
+    text: "var(--primary)",
     icon: CheckCircle,
   },
   warning: {
-    bg: "rgba(234, 179, 8, 0.1)",
-    border: "rgba(234, 179, 8, 0.2)",
-    text: "#eab308",
+    bg: "rgba(0, 224, 255, 0.05)",
+    border: "var(--secondary)",
+    text: "var(--secondary)",
     icon: AlertCircle,
   },
   error: {
-    bg: "rgba(239, 68, 68, 0.1)",
-    border: "rgba(239, 68, 68, 0.2)",
-    text: "#ef4444",
+    bg: "rgba(255, 0, 122, 0.05)",
+    border: "var(--accent)",
+    text: "var(--accent)",
     icon: AlertCircle,
   },
   info: {
-    bg: "rgba(59, 130, 246, 0.1)",
-    border: "rgba(59, 130, 246, 0.2)",
-    text: "#3b82f6",
+    bg: "var(--bg-elevated)",
+    border: "var(--border-subtle)",
+    text: "var(--text-secondary)",
     icon: Activity,
   },
   neutral: {
-    bg: "hsl(var(--muted))",
-    border: "hsl(var(--border))",
-    text: "hsl(var(--muted-foreground))",
+    bg: "var(--bg-base)",
+    border: "var(--border-subtle)",
+    text: "var(--text-muted)",
     icon: Minus,
   },
 };
@@ -138,40 +139,26 @@ export function MetricCard({
 
   return (
     <motion.div
-      whileHover={onClick ? { scale: 1.02, y: -2 } : undefined}
-      whileTap={onClick ? { scale: 0.98 } : undefined}
-      transition={{ type: "spring", stiffness: 400, damping: 17 }}
+      whileHover={onClick ? { y: -2 } : undefined}
+      whileTap={onClick ? { scale: 0.99 } : undefined}
+      transition={{ duration: 0.2 }}
     >
       <Card
         onClick={onClick}
         className={`relative overflow-hidden ${className || ""}`}
         sx={{
-          backgroundColor: "hsl(var(--card))",
-          border: `1px solid ${colors.border}`,
-          borderRadius: "16px",
+          backgroundColor: "var(--bg-base)",
+          border: `1px dashed var(--border-subtle)`,
+          borderRadius: "0",
           cursor: onClick ? "pointer" : "default",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-          transition: "box-shadow 0.2s ease, border-color 0.2s ease",
-          "&:hover": onClick
-            ? {
-                boxShadow: "0 8px 25px rgba(0,0,0,0.1)",
-                borderColor: colors.text,
-              }
-            : undefined,
+          boxShadow: "none",
+          transition: "all 0.2s ease",
+          "&:hover": {
+            borderColor: colors.border,
+            background: "var(--bg-elevated)",
+          },
         }}
       >
-        {/* Background gradient accent */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "3px",
-            background: `linear-gradient(90deg, ${colors.text} 0%, ${colors.bg} 100%)`,
-          }}
-        />
-
         <CardContent sx={{ padding: styles.padding, "&:last-child": { paddingBottom: styles.padding } }}>
           <Box className="flex items-start justify-between">
             {/* Left content */}
@@ -180,11 +167,13 @@ export function MetricCard({
               <Typography
                 variant={styles.titleSize as any}
                 sx={{
-                  color: "hsl(var(--muted-foreground))",
-                  fontWeight: 500,
+                  color: "var(--text-muted)",
+                  fontWeight: 800,
                   textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  mb: 0.5,
+                  letterSpacing: "0.15em",
+                  mb: 1,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
                 }}
               >
                 {title}
@@ -192,14 +181,16 @@ export function MetricCard({
 
               {/* Value */}
               {loading ? (
-                <Skeleton variant="text" width="60%" height={40} />
+                <Skeleton variant="text" width="60%" height={40} sx={{ bgcolor: "var(--bg-elevated)" }} />
               ) : (
                 <Typography
-                  variant={styles.valueSize as any}
                   sx={{
-                    fontWeight: 700,
-                    color: "hsl(var(--foreground))",
-                    lineHeight: 1.2,
+                    fontWeight: 900,
+                    color: "var(--text-primary)",
+                    lineHeight: 1,
+                    fontSize: { xs: "1.25rem", md: "1.5rem" },
+                    fontFamily: "var(--font-mono)",
+                    letterSpacing: "-0.02em",
                   }}
                 >
                   {value}
@@ -209,11 +200,13 @@ export function MetricCard({
               {/* Subtitle */}
               {subtitle && !loading && (
                 <Typography
-                  variant="caption"
                   sx={{
-                    color: "hsl(var(--muted-foreground))",
-                    mt: 0.5,
+                    color: "var(--text-muted)",
+                    mt: 1,
                     display: "block",
+                    fontSize: "11px",
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: 500
                   }}
                 >
                   {subtitle}
@@ -222,34 +215,26 @@ export function MetricCard({
 
               {/* Trend */}
               {trend && !loading && (
-                <Box className="flex items-center gap-1 mt-2">
+                <Box className="flex items-center gap-1.5 mt-3">
                   <TrendIcon
-                    size={16}
-                    color={
-                      trend.direction === "up"
-                        ? "#22c55e"
-                        : trend.direction === "down"
-                        ? "#ef4444"
-                        : "#6b7280"
-                    }
+                    size={14}
+                    style={{ 
+                       color: trend.direction === "up" ? "var(--primary)" : "var(--accent)"
+                    }}
                   />
                   <Typography
-                    variant="caption"
                     sx={{
-                      fontWeight: 600,
-                      color:
-                        trend.direction === "up"
-                          ? "#22c55e"
-                          : trend.direction === "down"
-                          ? "#ef4444"
-                          : "#6b7280",
+                      fontSize: "10px",
+                      fontWeight: 800,
+                      fontFamily: "var(--font-mono)",
+                      color: trend.direction === "up" ? "var(--primary)" : "var(--accent)",
                     }}
                   >
                     {trend.value > 0 ? "+" : ""}
                     {trend.value}%
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {trend.label}
+                  <Typography sx={{ fontSize: "10px", color: "var(--text-faint)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                    {trend.label.toUpperCase()}
                   </Typography>
                 </Box>
               )}
@@ -260,8 +245,9 @@ export function MetricCard({
               sx={{
                 width: styles.iconSize,
                 height: styles.iconSize,
-                borderRadius: "12px",
-                backgroundColor: colors.bg,
+                borderRadius: "0",
+                backgroundColor: "var(--bg-elevated)",
+                border: "1px solid var(--border-subtle)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -269,26 +255,26 @@ export function MetricCard({
                 ml: 2,
               }}
             >
-              <Icon size={styles.iconSize / 2} color={colors.text} />
+              <Icon size={styles.iconSize / 2.2} style={{ color: colors.border }} />
             </Box>
           </Box>
 
           {/* Progress bar */}
           {progress && !loading && (
-            <Box className="mt-4">
-              <Box className="flex justify-between mb-1">
-                <Typography variant="caption" color="text.secondary">
-                  {progress.label || "Progress"}
+            <Box className="mt-5">
+              <Box className="flex justify-between mb-1.5">
+                <Typography sx={{ fontSize: "9px", color: "var(--text-faint)", fontWeight: 800, fontFamily: "var(--font-mono)" }}>
+                  {progress.label?.toUpperCase() || "NODE_YIELD"}
                 </Typography>
-                <Typography variant="caption" sx={{ fontWeight: 600, color: colors.text }}>
+                <Typography sx={{ fontWeight: 800, color: colors.border, fontSize: "9px", fontFamily: "var(--font-mono)" }}>
                   {Math.round((progress.value / progress.max) * 100)}%
                 </Typography>
               </Box>
               <Box
                 sx={{
-                  height: "6px",
-                  backgroundColor: "hsl(var(--muted))",
-                  borderRadius: "3px",
+                  height: "2px",
+                  backgroundColor: "var(--bg-elevated)",
+                  borderRadius: "0",
                   overflow: "hidden",
                 }}
               >
@@ -298,8 +284,7 @@ export function MetricCard({
                   transition={{ duration: 1, ease: "easeOut" }}
                   style={{
                     height: "100%",
-                    backgroundColor: colors.text,
-                    borderRadius: "3px",
+                    backgroundColor: colors.border,
                   }}
                 />
               </Box>
@@ -308,18 +293,13 @@ export function MetricCard({
 
           {/* Status chip */}
           {status !== "neutral" && !loading && (
-            <Box className="mt-3">
-              <Chip
-                size="small"
-                label={status.replace(/_/g, " ").toUpperCase()}
-                sx={{
-                  backgroundColor: colors.bg,
-                  color: colors.text,
-                  fontWeight: 600,
-                  fontSize: "0.7rem",
-                  borderRadius: "4px",
-                }}
-              />
+            <Box className="mt-4">
+               <div className="inline-flex items-center px-1.5 py-0.5 border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+                  <div className="w-1.5 h-1.5 mr-2 rounded-full animate-pulse" style={{ background: colors.text }} />
+                  <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: colors.text }}>
+                    {status}
+                  </span>
+               </div>
             </Box>
           )}
         </CardContent>

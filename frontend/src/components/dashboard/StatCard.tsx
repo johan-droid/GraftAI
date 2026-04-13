@@ -29,14 +29,13 @@ export function StatCard({
   delay = 0,
 }: StatCardProps) {
   const { isDark } = useTheme();
-  const colors = getThemeColors(isDark ? "dark" : "light");
 
   const colorMap = {
-    primary: { bg: "hsla(239, 84%, 67%, 0.15)", border: "hsla(239, 84%, 67%, 0.3)", icon: "hsl(239, 84%, 67%)" },
-    success: { bg: "hsla(160, 84%, 39%, 0.15)", border: "hsla(160, 84%, 39%, 0.3)", icon: "hsl(160, 84%, 39%)" },
-    warning: { bg: "hsla(38, 92%, 50%, 0.15)", border: "hsla(38, 92%, 50%, 0.3)", icon: "hsl(38, 92%, 50%)" },
-    info: { bg: "hsla(199, 89%, 48%, 0.15)", border: "hsla(199, 89%, 48%, 0.3)", icon: "hsl(199, 89%, 48%)" },
-    error: { bg: "hsla(346, 84%, 61%, 0.15)", border: "hsla(346, 84%, 61%, 0.3)", icon: "hsl(346, 84%, 61%)" },
+    primary: { bg: "var(--bg-hover)", border: "var(--primary)", icon: "var(--primary)" },
+    success: { bg: "var(--bg-hover)", border: "var(--primary)", icon: "var(--primary)" },
+    warning: { bg: "var(--bg-hover)", border: "var(--secondary)", icon: "var(--secondary)" },
+    info: { bg: "var(--bg-hover)", border: "var(--secondary)", icon: "var(--secondary)" },
+    error: { bg: "var(--bg-hover)", border: "var(--accent)", icon: "var(--accent)" },
   };
 
   const theme = colorMap[color];
@@ -47,151 +46,123 @@ export function StatCard({
       <Box
         sx={{
           p: { xs: 2, md: 3 },
-          background: isDark 
-            ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-            : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-          border: "1px solid hsla(239, 84%, 67%, 0.1)",
-          borderRadius: "16px",
+          background: "var(--bg-base)",
+          border: "1px dashed var(--border-subtle)",
+          borderRadius: "0",
         }}
       >
-        <Skeleton width={40} height={40} sx={{ bgcolor: "hsla(239, 84%, 67%, 0.1)", mb: 2 }} />
-        <Skeleton width="60%" height={28} sx={{ bgcolor: "hsla(239, 84%, 67%, 0.1)", mb: 1 }} />
-        <Skeleton width="40%" height={20} sx={{ bgcolor: "hsla(239, 84%, 67%, 0.1)" }} />
+        <Skeleton width={40} height={40} sx={{ bgcolor: "var(--bg-elevated)", mb: 2 }} />
+        <Skeleton width="60%" height={28} sx={{ bgcolor: "var(--bg-elevated)", mb: 1 }} />
+        <Skeleton width="40%" height={20} sx={{ bgcolor: "var(--bg-elevated)" }} />
       </Box>
     );
   }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.5, ease: "easeOut" }}
-      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay, duration: 0.3 }}
     >
       <Box
         sx={{
-          p: { xs: 2, md: 3 },
-          background: isDark 
-            ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-            : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-          border: `1px solid ${theme.border}`,
-          borderRadius: "16px",
+          p: { xs: 2.5, md: 3 },
+          background: "var(--bg-base)",
+          border: `1px dashed var(--border-subtle)`,
+          borderRadius: "0",
           position: "relative",
           overflow: "hidden",
-          transition: "all 0.3s ease",
-          boxShadow: isDark ? "0 4px 20px rgba(0, 0, 0, 0.3)" : "0 4px 20px rgba(0, 0, 0, 0.05)",
+          transition: "all 0.2s ease",
           "&:hover": {
-            boxShadow: isDark 
-              ? "0 8px 30px rgba(0, 0, 0, 0.4)" 
-              : "0 8px 30px rgba(0, 0, 0, 0.1)",
-            borderColor: theme.border.replace("0.3", "0.5"),
+            borderColor: theme.border,
+            background: "var(--bg-elevated)",
+            boxShadow: `0 0 20px -10px ${theme.border}`,
           },
         }}
       >
-        {/* Background Glow */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: -50,
-            right: -50,
-            width: 150,
-            height: 150,
-            background: `radial-gradient(circle, ${theme.bg} 0%, transparent 70%)`,
-            opacity: 0.5,
-            pointerEvents: "none",
-          }}
-        />
-
         <Box sx={{ position: "relative", zIndex: 1 }}>
           {/* Header */}
-          <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "flex-start", justifyBaseline: "space-between", mb: 3 }}>
             <Box
               sx={{
-                width: 44,
-                height: 44,
-                borderRadius: "12px",
-                background: theme.bg,
-                border: `1px solid ${theme.border}`,
+                width: 40,
+                height: 40,
+                border: `1px solid var(--border-subtle)`,
+                background: "var(--bg-elevated)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                borderRadius: "0",
               }}
             >
-              <Icon size={22} style={{ color: theme.icon }} />
+              <Icon size={18} style={{ color: theme.icon }} />
             </Box>
 
-            {trend && (
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: "20px",
-                  background: isPositive 
-                    ? "hsla(160, 84%, 39%, 0.15)" 
-                    : "hsla(346, 84%, 61%, 0.15)",
-                  border: isPositive 
-                    ? "1px solid hsla(160, 84%, 39%, 0.3)" 
-                    : "1px solid hsla(346, 84%, 61%, 0.3)",
-                }}
-              >
-                {isPositive ? (
-                  <TrendingUp size={14} style={{ color: "hsl(160, 84%, 39%)" }} />
-                ) : (
-                  <TrendingDown size={14} style={{ color: "hsl(346, 84%, 61%)" }} />
-                )}
-                <Typography
+            <Box sx={{ ml: "auto" }}>
+              {trend && (
+                <Box
                   sx={{
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    color: isPositive ? "hsl(160, 84%, 39%)" : "hsl(346, 84%, 61%)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    px: 1,
+                    py: 0.5,
+                    background: isPositive 
+                      ? "rgba(0, 255, 156, 0.05)" 
+                      : "rgba(255, 0, 122, 0.05)",
+                    border: `1px solid ${isPositive ? "rgba(0, 255, 156, 0.2)" : "rgba(255, 0, 122, 0.2)"}`,
                   }}
                 >
-                  {isPositive ? "+" : ""}{trend.value}%
-                </Typography>
-              </Box>
-            )}
+                  <Typography
+                    sx={{
+                      fontSize: "10px",
+                      fontWeight: 800,
+                      color: isPositive ? "var(--primary)" : "var(--accent)",
+                      fontFamily: "var(--font-mono)",
+                    }}
+                  >
+                    {isPositive ? "▲" : "▼"} {Math.abs(trend.value)}%
+                  </Typography>
+                </Box>
+              )}
+            </Box>
           </Box>
-
-          {/* Value */}
-          <Typography
-            variant="h4"
-            sx={{
-              fontSize: { xs: "1.5rem", md: "1.75rem" },
-              fontWeight: 700,
-              color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-              mb: 0.5,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            {value}
-          </Typography>
 
           {/* Title */}
           <Typography
             sx={{
-              fontSize: "0.875rem",
-              color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)",
-              fontWeight: 500,
+              fontSize: "10px",
+              color: "var(--text-muted)",
+              fontWeight: 800,
+              fontFamily: "var(--font-mono)",
+              textTransform: "uppercase",
+              letterSpacing: "0.15em",
+              mb: 1,
             }}
           >
             {title}
           </Typography>
 
-          {/* Trend Label */}
-          {trend && (
-            <Typography
-              sx={{
-                fontSize: "0.75rem",
-                color: isDark ? "hsl(215, 16%, 40%)" : "hsl(215, 16%, 60%)",
-                mt: 1,
-              }}
-            >
-              {trend.label}
+          {/* Value */}
+          <Typography
+            sx={{
+              fontSize: { xs: "1.75rem", md: "2rem" },
+              fontWeight: 900,
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-mono)",
+              lineHeight: 1,
+              letterSpacing: "-0.05em",
+            }}
+          >
+            {value}
+          </Typography>
+
+          {/* Detail Line */}
+          <Box sx={{ mt: 2, pt: 1, borderTop: "1px solid var(--border-subtle)", opacity: 0.5 }}>
+            <Typography sx={{ fontSize: "9px", color: "var(--text-faint)", fontFamily: "var(--font-mono)", textTransform: "uppercase" }}>
+              {trend?.label || "SYSTEM_ACTIVE"}
             </Typography>
-          )}
+          </Box>
         </Box>
       </Box>
     </motion.div>

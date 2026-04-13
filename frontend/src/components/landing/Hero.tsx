@@ -1,339 +1,285 @@
 "use client";
 
-import { Box, Typography, Container, Chip, Stack } from "@mui/material";
-import { motion } from "framer-motion";
+import { Box, Typography, Container, Stack, Button } from "@mui/material";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { 
-  Sparkles, 
-  ArrowRight, 
-  Play, 
-  Star, 
-  Shield, 
+  Terminal as TerminalIcon, 
+  Cpu, 
+  Database, 
+  Globe, 
+  ChevronRight,
+  Activity,
   Zap,
-  Calendar
+  Code as CodeIcon
 } from "lucide-react";
-import { GradientButton } from "@/components/ui/GradientButton";
+import { useState, useEffect } from "react";
+import { CodeSnippetPreview } from "./CodeSnippetPreview";
+import { TimeEngineAnimation } from "../ui/TimeEngineAnimation";
+
+const LOG_LINES = [
+  { text: "> initializing graftai_engine...", delay: 500, type: "system" },
+  { text: "> connecting to redis cluster at 10.0.4.12...", delay: 800, type: "system" },
+  { text: "> LOADED: calendar_sync_v4.py", delay: 400, type: "success" },
+  { text: "> LOADED: ai_semantic_memory.bin", delay: 600, type: "success" },
+  { text: "> indexing vector store user_882 [namespace: personal]", delay: 1000, type: "process" },
+  { text: "> found 42 scheduled events in google_calendar", delay: 300, type: "info" },
+  { text: "> vectorizing event: 'Technical Interview'", delay: 900, type: "process" },
+  { text: "> AI memory updated. Confidence: 0.98", delay: 400, type: "success" },
+  { text: "> webhook incoming: hmac_validated=true", delay: 1200, type: "info" },
+  { text: "> trigger: distributed_sync_job (PID: 2841)", delay: 300, type: "process" },
+  { text: "> graftai is ready. listening on port 8000.", delay: 500, type: "primary" },
+];
+
+function TerminalWindow() {
+  const [visibleLines, setVisibleLines] = useState<number>(0);
+
+  useEffect(() => {
+    if (visibleLines < LOG_LINES.length) {
+      const timer = setTimeout(() => {
+        setVisibleLines(prev => prev + 1);
+      }, LOG_LINES[visibleLines].delay);
+      return () => clearTimeout(timer);
+    } else {
+      setTimeout(() => setVisibleLines(0), 10000);
+    }
+  }, [visibleLines]);
+
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: "540px",
+        height: "340px",
+        background: "var(--bg-base)",
+        border: "1px dashed var(--border-subtle)",
+        borderRadius: "0",
+        boxShadow: "0 20px 40px rgba(0,0,0,0.8)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      <Box className="scanline" sx={{ opacity: 0.1 }} />
+
+      {/* Header */}
+      <Box sx={{ px: 2, py: 1.5, borderBottom: "1px dashed var(--border-subtle)", background: "rgba(255,255,255,0.02)", display: "flex", alignItems: "center", gap: 2 }}>
+        <div className="flex gap-1.5">
+           <Box sx={{ width: 6, height: 6, background: "var(--text-faint)", opacity: 0.3 }} />
+           <Box sx={{ width: 6, height: 6, background: "var(--text-faint)", opacity: 0.6 }} />
+           <Box sx={{ width: 6, height: 6, background: "var(--primary)" }} />
+        </div>
+        <Typography sx={{ fontSize: "9px", color: "var(--primary)", fontFamily: "var(--font-mono)", fontWeight: 900, flex: 1, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+          GRAFT_KERNEL_CLI // SHELL_ROOT
+        </Typography>
+        <div className="flex items-center gap-2">
+           <Activity size={10} className="text-[var(--primary)] animate-pulse" />
+           <span className="text-[8px] font-black text-[var(--primary)] font-mono">ACTIVE</span>
+        </div>
+      </Box>
+
+      {/* Content */}
+      <Box sx={{ p: 3, flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", background: "rgba(0,0,0,0.4)" }}>
+        <AnimatePresence mode="popLayout">
+          {LOG_LINES.slice(0, visibleLines).map((line, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.15 }}
+              style={{ marginBottom: "6px" }}
+            >
+              <Typography
+                sx={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  lineHeight: 1.2,
+                  color: line.type === "success" ? "var(--primary)" : 
+                         line.type === "primary" ? "var(--primary)" :
+                         line.type === "process" ? "var(--secondary)" :
+                         "var(--text-faint)",
+                  textShadow: line.type === "primary" ? "0 0 10px rgba(0,255,156,0.2)" : "none",
+                  textTransform: "uppercase"
+                }}
+              >
+                {line.text}
+              </Typography>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <div className="flex items-center gap-2 mt-2">
+           <span className="text-[var(--primary)] font-mono text-[10px] font-black">{">"}</span>
+           <Box sx={{ width: "8px", height: "14px", background: "var(--primary)", animation: "blink 1s infinite" }} />
+        </div>
+      </Box>
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
+    </Box>
+  );
+}
 
 export function Hero() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        minHeight: { xs: "auto", md: "100vh" },
         display: "flex",
         alignItems: "center",
         position: "relative",
+        background: "var(--bg-base)",
+        pt: { xs: 15, md: 0 },
+        pb: { xs: 10, md: 0 },
         overflow: "hidden",
-        pt: { xs: 10, md: 0 },
-        background: "linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #0f0f1a 100%)",
       }}
     >
-      {/* Background Gradient Orbs */}
-      <Box
-        sx={{
-          position: "absolute",
-          top: "10%",
-          right: "-10%",
-          width: { xs: 300, md: 600 },
-          height: { xs: 300, md: 600 },
-          background: "radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)",
-          borderRadius: "50%",
-          filter: "blur(60px)",
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          bottom: "10%",
-          left: "-10%",
-          width: { xs: 250, md: 500 },
-          height: { xs: 250, md: 500 },
-          background: "radial-gradient(circle, rgba(236,72,153,0.1) 0%, transparent 70%)",
-          borderRadius: "50%",
-          filter: "blur(60px)",
-        }}
-      />
-
-      <Container maxWidth="lg" sx={{ position: "relative", zIndex: 1 }}>
+      <TimeEngineAnimation />
+      <Box className="scanline" />
+      
+      <Container maxWidth="xl" sx={{ position: "relative", zIndex: 1, px: { xs: 4, md: 8 } }}>
         <Box
           sx={{
             display: "flex",
-            flexDirection: { xs: "column", md: "row" },
+            flexDirection: { xs: "column", lg: "row" },
             alignItems: "center",
-            gap: { xs: 6, md: 8 },
-            py: { xs: 8, md: 12 },
+            gap: { xs: 8, lg: 12 },
           }}
         >
-          {/* Left Content */}
-          <Box sx={{ flex: 1, textAlign: { xs: "center", md: "left" }, maxWidth: { md: "600px" } }}>
-            {/* Trust Badge */}
+          {/* Left: Value Prop */}
+          <Box sx={{ flex: 1.2 }}>
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6 }}
             >
-              <Chip
-                icon={<Sparkles size={16} />}
-                label="Trusted by 50,000+ professionals"
-                sx={{
-                  mb: 3,
-                  background: "linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(236, 72, 153, 0.2))",
-                  color: "#a5b4fc",
-                  border: "1px solid rgba(99, 102, 241, 0.3)",
-                  fontWeight: 500,
-                  py: 0.5,
-                  px: 1,
-                }}
-              />
-            </motion.div>
+              <Stack direction="row" spacing={2} sx={{ mb: 4, alignItems: "center" }}>
+                <Box sx={{ px: 2, py: 0.5, background: "var(--primary)", border: "1px dashed var(--primary)", borderRadius: "0" }}>
+                  <Typography sx={{ fontSize: "10px", color: "#000", fontWeight: 900, letterSpacing: "0.2em", fontFamily: "var(--font-mono)" }}>
+                    BUILD_v3.0.4A_STABLE
+                  </Typography>
+                </Box>
+                <div className="h-[1px] w-12 border-b border-dashed border-[var(--border-subtle)]" />
+                <Typography className="telemetry-text">
+                  // LATENCY: 0.12MS [OPTIMIZED]
+                </Typography>
+              </Stack>
 
-            {/* Headline */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-            >
               <Typography
                 variant="h1"
                 sx={{
-                  fontSize: { xs: "2.5rem", sm: "3rem", md: "3.75rem" },
-                  fontWeight: 800,
-                  lineHeight: 1.1,
-                  mb: 3,
-                  letterSpacing: "-0.02em",
+                  fontSize: { xs: "2.5rem", sm: "3.5rem", md: "5rem" },
+                  fontWeight: 900,
+                  mb: 4,
+                  lineHeight: 0.9,
+                  fontFamily: "var(--font-mono)",
+                  letterSpacing: "-0.05em",
+                  color: "var(--text-primary)",
+                  textTransform: "uppercase"
                 }}
               >
-                Schedule Meetings{" "}
-                <Box
-                  component="span"
-                  sx={{
-                    background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  Without the Email Tennis
+                PROG_AMMABLE <br />
+                <Box component="span" sx={{ color: "var(--primary)", textShadow: "0 0 40px rgba(0,255,156,0.3)" }}>
+                  SCHEDULING
                 </Box>
               </Typography>
-            </motion.div>
 
-            {/* Subheadline */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
               <Typography
-                variant="h5"
                 sx={{
-                  color: "#94a3b8",
-                  fontSize: { xs: "1.1rem", md: "1.35rem" },
+                  color: "var(--text-secondary)",
+                  fontSize: { xs: "14px", md: "18px" },
                   lineHeight: 1.6,
-                  mb: 4,
-                  maxWidth: { xs: "100%", md: "90%" },
+                  mb: 6,
+                  maxWidth: "600px",
+                  fontWeight: 600,
+                  fontFamily: "var(--font-mono)",
+                  textTransform: "uppercase",
+                  letterSpacing: "-0.01em"
                 }}
               >
-                Skip the back-and-forth. Share your availability once. 
-                Let people book instantly. Save 5+ hours every week on scheduling.
+                Zero-trust scheduling infrastructure. Automate availability with vector-backed semantic memory, real-time telemetry, and secure kernel hooks.
               </Typography>
-            </motion.div>
 
-            {/* CTA Buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-            >
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={2}
-                sx={{ 
-                  mb: 4,
-                  justifyContent: { xs: "center", md: "flex-start" }
-                }}
-              >
-                <GradientButton
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={3} sx={{ mb: 8 }}>
+                <Button
                   component={Link}
                   href="/login"
-                  gradientVariant="primary"
-                  size="large"
-                  sx={{ minWidth: 220 }}
-                >
-                  Get Started Free
-                  <ArrowRight size={20} style={{ marginLeft: 8 }} />
-                </GradientButton>
-                <GradientButton
-                  gradientVariant="outline"
-                  size="large"
-                  sx={{ minWidth: 180 }}
-                  onClick={() => {
-                    // TODO: open demo modal or navigate to live demo route when available
-                    alert("Demo coming soon!");
+                  sx={{
+                    background: "var(--primary)",
+                    color: "#000",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "12px",
+                    fontWeight: 900,
+                    px: 6,
+                    py: 2.5,
+                    borderRadius: "0",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.15em",
+                    "&:hover": { background: "#FFF", boxShadow: "0 0 30px rgba(255,255,255,0.4)" }
                   }}
                 >
-                  <Play size={18} style={{ marginRight: 8 }} />
-                  Watch Demo
-                </GradientButton>
+                  <CodeIcon size={18} style={{ marginRight: 12 }} />
+                  INIT_SESSION();
+                </Button>
+                <Button
+                  component={Link}
+                  href="/developers"
+                  sx={{
+                    color: "var(--text-primary)",
+                    borderColor: "var(--border-subtle)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "12px",
+                    fontWeight: 900,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.15em",
+                    borderRadius: "0",
+                    border: "1px dashed",
+                    px: 6,
+                    py: 2.5,
+                    "&:hover": { borderColor: "var(--primary)", color: "var(--primary)", background: "rgba(0,255,156,0.03)" }
+                  }}
+                >
+                  READ_PROTOCOLS <ChevronRight size={18} />
+                </Button>
               </Stack>
-            </motion.div>
 
-            {/* Trust Indicators */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={3}
-                sx={{
-                  color: "#64748b",
-                  fontSize: "0.875rem",
-                  justifyContent: { xs: "center", md: "flex-start" },
-                  alignItems: "center",
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <Shield size={16} />
-                  <span>No credit card • Takes 2 minutes</span>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <Zap size={16} />
-                  <span>Setup in 60 seconds</span>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <Star size={16} style={{ color: "#fbbf24" }} />
-                  <span>4.9/5 from 2,000+ reviews</span>
-                </Box>
+              {/* Tech Stack Bar */}
+              <Stack direction="row" spacing={6} sx={{ opacity: 0.5 }}>
+                {[
+                  { label: "POSTGRES_CORE", icon: Database },
+                  { label: "VECTOR_DB", icon: Cpu },
+                  { label: "AUTH_NODE", icon: Globe },
+                ].map((item, idx) => (
+                  <Stack key={idx} direction="row" spacing={1.5} alignItems="center">
+                    <item.icon size={14} className="text-[var(--text-faint)]" />
+                    <Typography className="telemetry-text">{item.label}</Typography>
+                  </Stack>
+                ))}
               </Stack>
             </motion.div>
           </Box>
 
-          {/* Right Content - Product Demo */}
-          <Box
-            sx={{
-              flex: 1,
-              display: { xs: "none", md: "flex" },
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
+          {/* Right: Technical Showcase */}
+          <Box sx={{ flex: 0.8, display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
             <motion.div
-              initial={{ opacity: 0, x: 50, rotateY: 15 }}
-              animate={{ opacity: 1, x: 0, rotateY: 0 }}
-              transition={{ duration: 0.8, delay: 0.3 }}
-              style={{ perspective: 1000 }}
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
             >
-              <Box
-                sx={{
-                  position: "relative",
-                  width: 500,
-                  height: 400,
-                }}
-              >
-                {/* Main Dashboard Card */}
-                <Box
-                  sx={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: "100%",
-                    background: "linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(15, 15, 26, 0.95) 100%)",
-                    borderRadius: 4,
-                    border: "1px solid rgba(99, 102, 241, 0.2)",
-                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.1)",
-                    overflow: "hidden",
-                    transform: "rotateY(-5deg) rotateX(5deg)",
-                  }}
-                >
-                  {/* Fake Browser Header */}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      px: 2,
-                      py: 1.5,
-                      borderBottom: "1px solid rgba(99, 102, 241, 0.1)",
-                      background: "rgba(15, 15, 26, 0.5)",
-                    }}
-                  >
-                    <Box sx={{ display: "flex", gap: 0.5 }}>
-                      <Box sx={{ width: 12, height: 12, borderRadius: "50%", background: "#ef4444" }} />
-                      <Box sx={{ width: 12, height: 12, borderRadius: "50%", background: "#f59e0b" }} />
-                      <Box sx={{ width: 12, height: 12, borderRadius: "50%", background: "#10b981" }} />
-                    </Box>
-                    <Box
-                      sx={{
-                        flex: 1,
-                        mx: 2,
-                        py: 0.5,
-                        px: 2,
-                        background: "rgba(99, 102, 241, 0.1)",
-                        borderRadius: 1,
-                        fontSize: "0.75rem",
-                        color: "#64748b",
-                        textAlign: "center",
-                      }}
-                    >
-                      graftai.tech/dashboard
-                    </Box>
-                  </Box>
-
-                  {/* Fake Dashboard Content */}
-                  <Box sx={{ p: 3 }}>
-                    <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
-                      <Box sx={{ flex: 1, height: 80, background: "rgba(99, 102, 241, 0.1)", borderRadius: 2 }} />
-                      <Box sx={{ flex: 1, height: 80, background: "rgba(236, 72, 153, 0.1)", borderRadius: 2 }} />
-                      <Box sx={{ flex: 1, height: 80, background: "rgba(16, 185, 129, 0.1)", borderRadius: 2 }} />
-                    </Box>
-                    <Box sx={{ height: 200, background: "rgba(99, 102, 241, 0.05)", borderRadius: 2, mb: 2 }} />
-                  </Box>
-                </Box>
-
-                {/* Floating Elements */}
-                <motion.div
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                  style={{
-                    position: "absolute",
-                    top: 60,
-                    right: -30,
-                    background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                    padding: "12px 16px",
-                    borderRadius: 12,
-                    boxShadow: "0 10px 30px rgba(99, 102, 241, 0.3)",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Calendar size={20} color="white" />
-                    <Typography sx={{ color: "white", fontWeight: 600, fontSize: "0.875rem" }}>
-                      AI Optimized
-                    </Typography>
-                  </Box>
-                </motion.div>
-
-                <motion.div
-                  animate={{ y: [0, 10, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                  style={{
-                    position: "absolute",
-                    bottom: 40,
-                    left: -20,
-                    background: "rgba(26, 26, 46, 0.95)",
-                    padding: "12px 16px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(99, 102, 241, 0.3)",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Sparkles size={18} style={{ color: "#6366f1" }} />
-                    <Typography sx={{ color: "#f8fafc", fontWeight: 500, fontSize: "0.875rem" }}>
-                      Focus Time Protected
-                    </Typography>
-                  </Box>
-                </motion.div>
-              </Box>
+              <TerminalWindow />
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+            >
+              <CodeSnippetPreview />
             </motion.div>
           </Box>
         </Box>

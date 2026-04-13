@@ -1,101 +1,56 @@
 "use client";
 
-import { Box, Typography, Container } from "@mui/material";
+import { Box, Typography, Container, Stack } from "@mui/material";
 import { motion } from "framer-motion";
 
 const logos = [
-  { name: "Notion", color: "#ffffff" },
-  { name: "Linear", color: "#5e6ad2" },
-  { name: "Figma", color: "#f24e1e" },
-  { name: "Vercel", color: "#ffffff" },
-  { name: "Stripe", color: "#635bff" },
-  { name: "Slack", color: "#4a154b" },
-  { name: "Discord", color: "#5865f2" },
-  { name: "GitHub", color: "#ffffff" },
+  "NOTION", "LINEAR", "FIGMA", "VERCEL", "STRIPE", "SLACK", "DISCORD", "GITHUB"
 ];
 
 export function LogoCloud() {
   return (
-    <Box sx={{ py: { xs: 6, md: 10 }, background: "rgba(26, 26, 46, 0.3)" }}>
+    <Box sx={{ py: 6, borderBottom: "1px solid var(--border-dotted)", background: "rgba(0,0,0,0.2)" }}>
       <Container maxWidth="lg">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          viewport={{ once: true }}
+        <Typography
+          textAlign="center"
+          sx={{ 
+            color: "var(--text-faint)", 
+            mb: 4, 
+            fontSize: "10px", 
+            fontFamily: "var(--font-mono)",
+            letterSpacing: "0.2em"
+          }}
         >
-          <Typography
-            variant="body2"
-            textAlign="center"
-            sx={{ color: "#64748b", mb: 4, fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: 1 }}
-          >
-            Trusted by teams at
-          </Typography>
-        </motion.div>
+          // TRUSTED_BY_NODES
+        </Typography>
 
-        <Box sx={{ position: "relative", overflow: "hidden" }}>
-          {/* Gradient Masks */}
-          <Box
-            sx={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: { xs: 40, md: 100 },
-              background: "linear-gradient(to right, #0f0f1a, transparent)",
-              zIndex: 2,
-            }}
-          />
-          <Box
-            sx={{
-              position: "absolute",
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: { xs: 40, md: 100 },
-              background: "linear-gradient(to left, #0f0f1a, transparent)",
-              zIndex: 2,
-            }}
-          />
-
-          {/* Scrolling Logos */}
-          <Box
-            sx={{
-              display: "flex",
-              animation: "scroll 30s linear infinite",
-              "@keyframes scroll": {
-                "0%": { transform: "translateX(0)" },
-                "100%": { transform: "translateX(-50%)" },
-              },
-            }}
-          >
-            {[...logos, ...logos].map((logo, index) => (
-              <Box
-                key={index}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  px: { xs: 4, md: 6 },
-                  opacity: 0.5,
-                  transition: "opacity 0.3s",
-                  "&:hover": { opacity: 0.8 },
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: { xs: "1.25rem", md: "1.5rem" },
-                    fontWeight: 700,
-                    color: "#64748b",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {logo.name}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-        </Box>
+        <Stack 
+          direction="row" 
+          spacing={6} 
+          justifyContent="center" 
+          alignItems="center" 
+          sx={{ 
+            opacity: 0.3,
+            flexWrap: "wrap",
+            gap: 4
+          }}
+        >
+          {logos.map((name) => (
+            <Typography
+              key={name}
+              sx={{
+                fontSize: "14px",
+                fontWeight: 800,
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-mono)",
+                transition: "color 0.2s",
+                "&:hover": { color: "var(--primary)" }
+              }}
+            >
+              {name}
+            </Typography>
+          ))}
+        </Stack>
       </Container>
     </Box>
   );

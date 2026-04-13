@@ -1,28 +1,31 @@
 "use client";
 
-import { Box, Typography, Container, Stepper, Step, StepLabel, StepContent, Paper } from "@mui/material";
+import { Box, Typography, Container, Stepper, Step, StepLabel, StepContent, Stack } from "@mui/material";
 import { motion } from "framer-motion";
-import { Link, Settings, Sparkles, CheckCircle } from "lucide-react";
+import { Link, Settings, Sparkles, Terminal, Activity, ShieldCheck, Database, Cpu } from "lucide-react";
 import { useState } from "react";
 
 const steps = [
   {
     icon: Link,
-    title: "Connect Your Calendars",
-    description: "One-click integration with Google Calendar, Outlook, Apple Calendar, and more. We sync everything in real-time.",
-    color: "#6366f1",
+    title: "INIT_PROTOCOL: CALENDAR_SYNC",
+    description: "Establish encrypted handshakes with Google, Microsoft, and Apple clusters. We pull real-time availability payloads across all endpoints to build your local schedule baseline.",
+    footer: "PROTOCOL_STABLE: 256-BIT_AES",
+    color: "var(--primary)",
   },
   {
     icon: Settings,
-    title: "Set Your Preferences",
-    description: "Tell us your ideal meeting times, focus hours, and break preferences. The AI learns from every choice you make.",
-    color: "#ec4899",
+    title: "PARAM_CONFIG: USER_HEURISTICS",
+    description: "Define neural parameters for deep-work windows, latency buffers, and priority tiers. Our AI agent parses your high-level intent into actionable schedule architecture.",
+    footer: "PARAM_LOADED: MEMORY_OPTIMIZED",
+    color: "#00E0FF", // Accent Cyan
   },
   {
     icon: Sparkles,
-    title: "Let AI Handle the Rest",
-    description: "Auto-scheduling, conflict resolution, smart reminders, and focus time protection—all working in the background.",
-    color: "#10b981",
+    title: "EXEC_SEQUENCE: REAL_TIME_OPTIM",
+    description: "Activate background scheduling engine. Conflict resolution, smart-rerouting, and focus protection run in a background kernel—preserving your bandwidth while maximizing output.",
+    footer: "STATUS: ACTIVE_NODE_SYNC",
+    color: "var(--primary)",
   },
 ];
 
@@ -30,119 +33,142 @@ export function HowItWorks() {
   const [activeStep, setActiveStep] = useState(0);
 
   return (
-    <Box id="how-it-works" sx={{ py: { xs: 10, md: 16 }, background: "rgba(26, 26, 46, 0.3)" }}>
-      <Container maxWidth="lg">
+    <Box id="how-it-works" sx={{ py: { xs: 10, md: 20 }, background: "var(--bg-base)" }}>
+      <Container maxWidth="xl">
         {/* Header */}
-        <Box sx={{ textAlign: "center", mb: { xs: 6, md: 10 } }}>
+        <Box sx={{ mb: { xs: 8, md: 12 } }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             viewport={{ once: true }}
           >
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+               <Database size={14} className="text-[var(--primary)]" />
+               <Typography className="telemetry-text">[ SEQUENTIAL_INTEGRATION_FLOW_v1.0.4 ]</Typography>
+            </Stack>
             <Typography
               variant="h2"
-              sx={{ fontSize: { xs: "1.75rem", sm: "2.25rem", md: "3rem" }, fontWeight: 800, mb: 2 }}
+              sx={{ 
+                fontSize: { xs: "2.5rem", sm: "3.5rem", md: "4.5rem" }, 
+                fontWeight: 900, 
+                fontFamily: "var(--font-mono)",
+                letterSpacing: "-0.05em",
+                color: "var(--text-primary)",
+                textTransform: "uppercase",
+                lineHeight: 1
+              }}
             >
-              Get Started in{" "}
-              <Box
-                component="span"
-                sx={{
-                  background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
-                60 Seconds
-              </Box>
-            </Typography>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            viewport={{ once: true }}
-          >
-            <Typography variant="body1" sx={{ color: "#94a3b8", maxWidth: 600, mx: "auto", fontSize: "1.125rem" }}>
-              Three simple steps to transform your scheduling forever
+              System Deployment <Box component="span" sx={{ color: "var(--text-faint)" }}>In 60s</Box>.
             </Typography>
           </motion.div>
         </Box>
 
         {/* Steps */}
-        <Box sx={{ maxWidth: 800, mx: "auto" }}>
+        <Box sx={{ maxWidth: 1000 }}>
           <Stepper 
             orientation="vertical" 
             activeStep={activeStep}
+            connector={null}
             sx={{
-              "& .MuiStepConnector-root": {
-                ml: 2.5,
-                borderLeft: "2px solid rgba(99, 102, 241, 0.2)",
-              },
-              "& .MuiStepConnector-active, & .MuiStepConnector-completed": {
-                borderColor: "#6366f1",
-              },
+              "& .MuiStep-root": { mb: 4 }
             }}
           >
             {steps.map((step, index) => (
-              <Step key={index}>
+              <Step key={index} expanded>
                 <StepLabel
                   onClick={() => setActiveStep(index)}
                   sx={{
                     cursor: "pointer",
-                    "& .MuiStepLabel-iconContainer": {
-                      bgcolor: activeStep === index ? step.color : "rgba(99, 102, 241, 0.1)",
-                      borderRadius: "50%",
-                      width: 48,
-                      height: 48,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      border: `2px solid ${activeStep >= index ? step.color : "rgba(99, 102, 241, 0.2)"}`,
-                      transition: "all 0.3s ease",
-                    },
+                    padding: 0,
+                    "& .MuiStepLabel-iconContainer": { padding: 0 },
                     "& .MuiStepLabel-label": {
-                      color: activeStep === index ? "#f8fafc" : "#94a3b8",
-                      fontSize: "1.25rem",
-                      fontWeight: 600,
+                       display: "flex",
+                       alignItems: "center",
+                       gap: 3,
+                       color: activeStep === index ? "var(--primary)" : "var(--text-faint)",
+                       fontSize: { xs: "14px", md: "18px" },
+                       fontWeight: 900,
+                       fontFamily: "var(--font-mono)",
+                       textTransform: "uppercase",
+                       letterSpacing: "0.1em",
+                       transition: "color 0.3s"
                     },
                   }}
                   StepIconComponent={() => (
-                    <step.icon size={24} style={{ color: activeStep >= index ? "white" : "#94a3b8" }} />
+                    <Box 
+                      sx={{ 
+                        width: 50, 
+                        height: 50, 
+                        display: "flex", 
+                        alignItems: "center", 
+                        justifyContent: "center",
+                        border: `1px solid ${activeStep === index ? step.color : "var(--border-subtle)"}`,
+                        background: activeStep === index ? "rgba(0,0,0,0.5)" : "transparent",
+                        transition: "all 0.3s"
+                      }}
+                    >
+                      <step.icon size={20} style={{ color: activeStep >= index ? step.color : "var(--text-faint)" }} />
+                    </Box>
                   )}
                 >
                   {step.title}
                 </StepLabel>
-                <StepContent>
+                <StepContent sx={{ borderLeft: "1px dashed var(--border-subtle)", ml: "25px", pl: 6, py: 4 }}>
                   <motion.div
-                    initial={{ opacity: 0, x: -20 }}
+                    initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.4 }}
                   >
-                    <Paper
+                    <Box
                       sx={{
-                        p: 3,
-                        background: "rgba(15, 15, 26, 0.8)",
-                        border: `1px solid ${step.color}40`,
-                        borderRadius: 2,
-                        mb: 2,
+                        p: { xs: 3, md: 5 },
+                        background: "rgba(255, 255, 255, 0.01)",
+                        border: `1px dashed var(--border-subtle)`,
+                        position: "relative",
+                        "&:hover": { borderColor: step.color }
                       }}
                     >
-                      <Typography variant="body1" sx={{ color: "#94a3b8", mb: 2 }}>
+                      <Typography 
+                        sx={{ 
+                          color: "var(--text-secondary)", 
+                          mb: 4, 
+                          lineHeight: 1.8,
+                          fontSize: "14px",
+                          fontFamily: "var(--font-mono)",
+                          maxWidth: 700
+                        }}
+                      >
                         {step.description}
                       </Typography>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: step.color }}>
-                        <CheckCircle size={18} />
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {index === 0 ? "Syncs in real-time" : index === 1 ? "Learns continuously" : "Works 24/7"}
-                        </Typography>
-                      </Box>
-                    </Paper>
+                      
+                      <Stack direction="row" spacing={4} sx={{ borderTop: "1px dashed var(--border-subtle)", pt: 3 }}>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ color: step.color }}>
+                          <Activity size={14} />
+                          <Typography sx={{ fontWeight: 800, fontSize: "10px", fontFamily: "var(--font-mono)", textTransform: "uppercase" }}>
+                            {step.footer}
+                          </Typography>
+                        </Stack>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ color: "var(--text-faint)" }}>
+                          <ShieldCheck size={14} />
+                          <Typography sx={{ fontSize: "10px", fontFamily: "var(--font-mono)", textTransform: "uppercase" }}>
+                            ENCRYPTED_ENDPOINT
+                          </Typography>
+                        </Stack>
+                      </Stack>
+                    </Box>
                   </motion.div>
                 </StepContent>
               </Step>
             ))}
           </Stepper>
+        </Box>
+
+        <Box sx={{ mt: 10, display: "flex", alignItems: "center", gap: 2 }}>
+           <Cpu size={16} className="text-[var(--text-faint)]" />
+           <Typography className="telemetry-text" sx={{ color: "var(--text-faint)" }}>
+             SYSTEM_STABILITY: 100% // ALL_STREAMS_ACTIVE
+           </Typography>
         </Box>
       </Container>
     </Box>

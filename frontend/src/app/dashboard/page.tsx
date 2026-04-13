@@ -19,6 +19,7 @@ import {
   AlertCircle,
   TrendingUp,
   Timer,
+  Terminal,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -88,7 +89,7 @@ export default function DashboardPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: isDark ? "hsl(240, 24%, 7%)" : "hsl(220, 14%, 96%)",
+          background: "var(--bg-base)",
         }}
       >
         <motion.div
@@ -130,83 +131,83 @@ export default function DashboardPage() {
     <Box
       sx={{
         minHeight: "100vh",
-        background: isDark ? "hsl(240, 24%, 7%)" : "hsl(220, 14%, 96%)",
-        pb: { xs: 10, md: 4 }, // Extra padding for bottom nav on mobile
+        background: "var(--bg-base)",
+        pb: { xs: 10, md: 4 },
       }}
     >
       <MobileSidebar />
 
-      <Container maxWidth="xl" sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 4 } }}>
+      <Container maxWidth="xl" sx={{ px: { xs: 2.5, md: 5 }, py: { xs: 3, md: 6 } }}>
         <motion.div variants={container} initial="hidden" animate="show">
-          {/* Header */}
-          <motion.div variants={item}>
-            <Header
-              userName={(user as any)?.name}
-              userEmail={user?.email}
-              userAvatar={(user as any)?.avatar}
-              notificationCount={3}
-            />
-          </motion.div>
+          
+          {/* Header & Greeting Layer */}
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-12">
+            <div className="flex-1">
+              <motion.div variants={item}>
+                <Greeting
+                  userName={user?.name}
+                  userEmail={user?.email}
+                  isLoading={false}
+                />
+              </motion.div>
+            </div>
+            <div className="lg:w-auto w-full">
+              <motion.div variants={item}>
+                <Header
+                  userName={user?.name}
+                  userEmail={user?.email}
+                  userAvatar={user?.avatar}
+                  notificationCount={3}
+                />
+              </motion.div>
+            </div>
+          </div>
 
-          {/* Greeting Section */}
-          <motion.div variants={item}>
-            <Greeting
-              userName={(user as any)?.name}
-              userEmail={user?.email}
-              isLoading={false}
-            />
-          </motion.div>
-
-          {/* Stats Grid */}
-          <motion.div variants={item}>
-            <Grid container spacing={{ xs: 2, md: 3 }} sx={{ mb: { xs: 3, md: 4 } }}>
+          {/* Primary Stats Matrix */}
+          <motion.div variants={item} className="mb-12">
+            <div className="flex items-center gap-3 mb-6">
+               <Activity size={16} className="text-[var(--primary)]" />
+               <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--text-muted)]">Core_Telemetry_Matrix</h2>
+            </div>
+            <Grid container spacing={3}>
               {analyticsLoading ? (
-                <>
-                  <Grid item xs={12} sm={6} md={4}>
+                Array(3).fill(0).map((_, i) => (
+                  <Grid item xs={12} sm={6} md={4} key={i}>
                     <SkeletonCard />
                   </Grid>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <SkeletonCard />
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <SkeletonCard />
-                  </Grid>
-                </>
+                ))
               ) : (
                 <>
                   <Grid item xs={12} sm={6} md={4}>
                     <StatCard
-                      title="Meetings This Week"
-                      value={stats.meetings != null ? stats.meetings.toString() : "—"}
+                      title="Total_Meetings"
+                      value={stats.meetings ?? "—"}
                       icon={Calendar}
                       trend={meetingsDelta != null ? {
                         value: Math.round((meetingsDelta / (stats.previousWeekMeetings || 1)) * 100),
-                        label: "vs last week",
+                        label: "L_WEEK_DELTA",
                       } : undefined}
                       color="primary"
-                      delay={0}
                     />
                   </Grid>
                   <Grid item xs={12} sm={6} md={4}>
                     <StatCard
-                      title="AI Copilot Hours"
-                      value={stats.hours != null ? `${stats.hours}h` : "—"}
+                      title="Copilot_Optimization"
+                      value={stats.hours ? `${stats.hours}H` : "—"}
                       icon={Bot}
                       trend={stats.growth != null ? {
                         value: stats.growth,
-                        label: "efficiency gain",
+                        label: "EFFICIENCY_GAIN",
                       } : undefined}
-                      color="success"
-                      delay={0.1}
+                      color="warning"
                     />
                   </Grid>
                   <Grid item xs={12} sm={6} md={4}>
                     <StatCard
-                      title="System Status"
-                      value="Operational"
-                      icon={Activity}
+                      title="Active_Node_Status"
+                      value="STABLE"
+                      icon={CheckCircle}
                       color="success"
-                      delay={0.2}
                     />
                   </Grid>
                 </>
@@ -214,508 +215,143 @@ export default function DashboardPage() {
             </Grid>
           </motion.div>
 
-          {/* AI Automation Metrics Section */}
-          <motion.div variants={item}>
-            <Box sx={{ mb: { xs: 3, md: 4 } }}>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                    color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                    letterSpacing: "-0.01em",
-                  }}
-                >
-                  AI Automation Metrics
-                </Typography>
-                <Tooltip title="Refresh metrics">
-                  <IconButton onClick={refetchMetrics} size="small">
-                    <RefreshCw size={18} />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              
-              <MetricCardGrid columns={4}>
-                <MetricCard
-                  title="Total Automations"
-                  value={metrics?.total_automations?.toLocaleString() ?? "—"}
-                  icon={Zap}
-                  status={metrics ? "success" : "neutral"}
-                  trend={metrics ? { value: 12, label: "vs last week", direction: "up" } : undefined}
-                  loading={metricsLoading}
-                />
-                <MetricCard
-                  title="Success Rate"
-                  value={metrics?.success_rate ? `${(metrics.success_rate * 100).toFixed(1)}%` : "—"}
-                  icon={CheckCircle}
-                  status={metrics && metrics.success_rate > 0.8 ? "success" : metrics && metrics.success_rate > 0.5 ? "warning" : "error"}
-                  trend={metrics ? { value: 5, label: "improvement", direction: "up" } : undefined}
-                  loading={metricsLoading}
-                  progress={metrics ? { value: Math.round(metrics.success_rate * 100), max: 100, label: "Success Rate" } : undefined}
-                />
-                <MetricCard
-                  title="Avg Execution Time"
-                  value={metrics?.avg_execution_time_ms ? `${(metrics.avg_execution_time_ms / 1000).toFixed(1)}s` : "—"}
-                  icon={Timer}
-                  status={metrics && metrics.avg_execution_time_ms < 5000 ? "success" : metrics && metrics.avg_execution_time_ms < 10000 ? "warning" : "error"}
-                  loading={metricsLoading}
-                />
-                <MetricCard
-                  title="Pending Automations"
-                  value={metrics?.pending_automations?.toString() ?? "—"}
-                  icon={Activity}
-                  status={metrics && metrics.pending_automations === 0 ? "success" : metrics && metrics.pending_automations < 5 ? "warning" : "info"}
-                  loading={metricsLoading}
-                />
-              </MetricCardGrid>
-            </Box>
-          </motion.div>
-
-          {/* Main Content Grid */}
-          <Grid container spacing={{ xs: 2, md: 3 }}>
-            {/* Recent Activity - Takes 2/3 on desktop */}
+          {/* System Tiles Grid */}
+          <Grid container spacing={3} sx={{ mb: 6 }}>
+            {/* Left Column: Activity & Logs */}
             <Grid item xs={12} lg={8}>
-              <motion.div variants={item}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: { xs: 2, md: 3 },
-                    background: isDark
-                      ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                      : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-                    border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                    borderRadius: "16px",
-                    height: "100%",
-                  }}
-                >
-                  {/* Section Header */}
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
-                    <Typography
-                      variant="h6"
-                      sx={{
-                        fontWeight: 700,
-                        color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
-                      Recent Activity
-                    </Typography>
-                    <Link href="/dashboard/analytics" style={{ textDecoration: "none" }}>
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 0.5,
-                          fontSize: "0.875rem",
-                          color: "hsl(239, 84%, 67%)",
-                          fontWeight: 500,
-                          "&:hover": { textDecoration: "underline" },
-                        }}
-                      >
-                        View all
-                        <ArrowUpRight size={16} />
-                      </Box>
-                    </Link>
-                  </Box>
+              <div className="flex flex-col gap-6">
+                
+                {/* Activity Stream Tile */}
+                <motion.div variants={item}>
+                  <Box sx={{ background: "var(--bg-base)", border: "1px dashed var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
+                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-dashed border-[var(--border-subtle)]">
+                      <div className="flex items-center gap-3">
+                        <Activity size={18} className="text-[var(--primary)]" />
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Activity_Flow_Stream</h3>
+                      </div>
+                      <Link href="/dashboard/analytics" className="text-[10px] font-black text-[var(--primary)] uppercase tracking-widest hover:underline font-mono">
+                        EXPLORE_REPORTS →
+                      </Link>
+                    </div>
 
-                  {/* Activity Content */}
-                  {analyticsLoading && !analyticsError ? (
-                    <SkeletonText lines={3} />
-                  ) : analyticsError ? (
-                    <Box sx={{ textAlign: "center", py: 3 }}>
-                      <Typography color="error" sx={{ mb: 2 }}>
-                        Failed to load activity data
-                      </Typography>
-                      <Button
-                        onClick={refetchAnalytics}
-                        variant="outlined"
-                        size="small"
-                        sx={{ textTransform: "none" }}
-                      >
-                        Retry
-                      </Button>
-                    </Box>
-                  ) : displayAnalytics?.summary ? (
-                    <Typography
-                      sx={{
-                        color: isDark ? "hsl(215, 16%, 70%)" : "hsl(215, 16%, 47%)",
-                        lineHeight: 1.6,
-                        fontSize: "0.9375rem",
-                      }}
-                    >
-                      {displayAnalytics.summary}
-                    </Typography>
-                  ) : (
-                    <EmptyState
-                      icon={Activity}
-                      title="No recent activity"
-                      description="Your meetings and events will appear here once you start using GraftAI."
-                      action={{ label: "Schedule Meeting", href: "/book" }}
-                    />
-                  )}
-                </Paper>
-              </motion.div>
+                    {analyticsLoading ? (
+                      <SkeletonText lines={4} />
+                    ) : (
+                      <div className="font-mono text-[13px] leading-relaxed text-[var(--text-secondary)] bg-[var(--bg-hover)] p-5 border-l-2 border-[var(--primary)]">
+                        {displayAnalytics?.summary || "No synchronization data available in local buffer."}
+                      </div>
+                    )}
+                  </Box>
+                </motion.div>
+
+                {/* System Automation Tiles */}
+                <motion.div variants={item}>
+                   <Box sx={{ background: "var(--bg-elevated)", border: "1px dashed var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
+                      <div className="flex items-center gap-3 mb-6">
+                         <Zap size={18} className="text-[var(--secondary)]" />
+                         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Automation_Yield_Matrix</h3>
+                      </div>
+                      <MetricCardGrid columns={2}>
+                        <MetricCard
+                          title="Success_Rate"
+                          value={metrics?.success_rate ? `${(metrics.success_rate * 100).toFixed(1)}%` : "—"}
+                          icon={CheckCircle}
+                          status={metrics && metrics.success_rate > 0.8 ? "success" : "warning"}
+                          progress={metrics ? { value: Math.round(metrics.success_rate * 100), max: 100, label: "NODE_INTEGRITY" } : undefined}
+                          loading={metricsLoading}
+                        />
+                        <MetricCard
+                          title="Latency_Buffer"
+                          value={metrics?.avg_execution_time_ms ? `${(metrics.avg_execution_time_ms / 1000).toFixed(1)}S` : "—"}
+                          icon={Timer}
+                          status="info"
+                          loading={metricsLoading}
+                        />
+                      </MetricCardGrid>
+                   </Box>
+                </motion.div>
+              </div>
             </Grid>
 
-            {/* Sidebar - Takes 1/3 on desktop */}
+            {/* Right Column: Console & Insights */}
             <Grid item xs={12} lg={4}>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: { xs: 2, md: 3 } }}>
-                {/* Upcoming Events */}
-                <motion.div variants={item}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: { xs: 2, md: 3 },
-                      background: isDark
-                        ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                        : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-                      border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                      borderRadius: "16px",
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-                      <Typography
-                        sx={{
-                          fontWeight: 600,
-                          color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                        }}
-                      >
-                        Upcoming
-                      </Typography>
-                      <Link href="/dashboard/calendar" style={{ textDecoration: "none" }}>
-                        <Box
-                          sx={{
-                            fontSize: "0.8125rem",
-                            color: "hsl(239, 84%, 67%)",
-                            "&:hover": { textDecoration: "underline" },
-                          }}
-                        >
-                          Calendar →
-                        </Box>
-                      </Link>
-                    </Box>
-
-                    {eventsLoading ? (
-                      <SkeletonText lines={3} />
-                    ) : displayEvents.length > 0 ? (
-                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                        {displayEvents.slice(0, 4).map((evt) => (
-                          <Box
-                            key={evt.id}
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 2,
-                              p: 1.5,
-                              borderRadius: "12px",
-                              background: isDark ? "hsla(239, 84%, 67%, 0.05)" : "hsla(239, 84%, 67%, 0.03)",
-                              border: "1px solid hsla(239, 84%, 67%, 0.1)",
-                              transition: "all 0.2s ease",
-                              "&:hover": {
-                                background: isDark ? "hsla(239, 84%, 67%, 0.1)" : "hsla(239, 84%, 67%, 0.05)",
-                                borderColor: "hsla(239, 84%, 67%, 0.2)",
-                              },
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: "10px",
-                                background: isDark ? "hsla(239, 84%, 67%, 0.15)" : "hsla(239, 84%, 67%, 0.1)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                              }}
-                            >
-                              <Calendar size={18} style={{ color: "hsl(239, 84%, 67%)" }} />
-                            </Box>
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                              <Typography
-                                sx={{
-                                  fontSize: "0.875rem",
-                                  fontWeight: 600,
-                                  color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                              >
-                                {evt.title}
-                              </Typography>
-                              <Typography
-                                sx={{
-                                  fontSize: "0.75rem",
-                                  color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 0.5,
-                                }}
-                              >
-                                <Clock size={12} />
-                                {new Date(evt.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        ))}
-                      </Box>
-                    ) : (
-                      <Typography
-                        sx={{
-                          textAlign: "center",
-                          color: isDark ? "hsl(215, 16%, 40%)" : "hsl(215, 16%, 60%)",
-                          fontSize: "0.875rem",
-                          py: 2,
-                        }}
-                      >
-                        No upcoming events
-                      </Typography>
-                    )}
-                  </Paper>
-                </motion.div>
-
-                {/* AI Insight */}
-                <motion.div variants={item}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: { xs: 2, md: 3 },
-                      background: isDark
-                        ? "linear-gradient(135deg, hsla(25, 95%, 53%, 0.15) 0%, hsla(25, 95%, 53%, 0.05) 100%)"
-                        : "linear-gradient(135deg, hsla(25, 95%, 53%, 0.1) 0%, hsla(25, 95%, 53%, 0.02) 100%)",
-                      border: "1px solid hsla(25, 95%, 53%, 0.3)",
-                      borderRadius: "16px",
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-                      <Sparkles size={18} style={{ color: "hsl(25, 95%, 53%)" }} />
-                      <Typography
-                        sx={{
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                          color: "hsl(25, 95%, 53%)",
-                        }}
-                      >
-                        AI Insight
-                      </Typography>
-                    </Box>
-
-                    {suggestionLoading ? (
-                      <SkeletonText lines={2} />
-                    ) : displaySuggestion?.suggestion ? (
-                      <Typography
-                        sx={{
-                          color: isDark ? "hsl(215, 16%, 70%)" : "hsl(215, 16%, 47%)",
-                          fontSize: "0.9375rem",
-                          lineHeight: 1.6,
-                          mb: 2,
-                        }}
-                      >
-                        {displaySuggestion.suggestion}
-                      </Typography>
-                    ) : (
-                      <Typography
-                        sx={{
-                          color: isDark ? "hsl(215, 16%, 40%)" : "hsl(215, 16%, 60%)",
-                          fontSize: "0.875rem",
-                          mb: 2,
-                        }}
-                      >
-                        Ask the AI Copilot for personalized scheduling insights.
-                      </Typography>
-                    )}
-
-                    <GradientButton
-                      component={Link}
-                      href="/dashboard/ai"
-                      gradientVariant="secondary"
-                      size="small"
-                      sx={{
-                        background: "hsl(25, 95%, 53%)",
-                        "&:hover": { background: "hsl(25, 95%, 48%)" },
-                      }}
-                    >
-                      <Bot size={16} style={{ marginRight: 8 }} />
-                      Open Copilot
-                    </GradientButton>
-                  </Paper>
-                </motion.div>
-
-                {/* Recent Automations */}
-                <motion.div variants={item}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: { xs: 2, md: 3 },
-                      background: isDark
-                        ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                        : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-                      border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                      borderRadius: "16px",
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-                      <Typography
-                        sx={{
-                          fontWeight: 600,
-                          color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                        }}
-                      >
-                        Recent Automations
-                      </Typography>
-                      <Link href="/dashboard/automations" style={{ textDecoration: "none" }}>
-                        <Typography
-                          sx={{
-                            fontSize: "0.8125rem",
-                            color: "hsl(239, 84%, 67%)",
-                            "&:hover": { textDecoration: "underline" },
-                          }}
-                        >
-                          View All →
-                        </Typography>
-                      </Link>
-                    </Box>
+              <div className="flex flex-col gap-6 h-full">
+                
+                {/* AI Cortex Console Tile */}
+                <motion.div variants={item} className="h-full">
+                  <Box sx={{ background: "#050505", border: "1px dashed var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0, height: "100%", display: "flex", flexDirection: "column" }}>
+                    <div className="flex items-center gap-3 mb-6">
+                       <Sparkles size={18} className="text-[var(--accent)]" />
+                       <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Cortex_Advisory</h3>
+                    </div>
                     
-                    {metricsLoading ? (
-                      <SkeletonText lines={4} />
-                    ) : metrics?.recent_activity && metrics.recent_activity.length > 0 ? (
-                      <DataTable
-                        columns={[
-                          {
-                            key: "booking_id",
-                            header: "Booking",
-                            width: "40%",
-                            render: (row) => (
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontWeight: 500,
-                                  color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  maxWidth: 150,
-                                }}
-                              >
-                                {row.booking_id.slice(0, 8)}...
-                              </Typography>
-                            ),
-                          },
-                          {
-                            key: "status",
-                            header: "Status",
-                            width: "25%",
-                            render: (row) => <StatusChip status={row.status} size="small" />,
-                          },
-                          {
-                            key: "decision_score",
-                            header: "Score",
-                            width: "20%",
-                            align: "right",
-                            render: (row) => (
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontWeight: 600,
-                                  color: row.decision_score >= 80 ? "#22c55e" : row.decision_score >= 50 ? "#eab308" : "#ef4444",
-                                }}
-                              >
-                                {row.decision_score}%
-                              </Typography>
-                            ),
-                          },
-                          {
-                            key: "created_at",
-                            header: "Time",
-                            width: "15%",
-                            align: "right",
-                            render: (row) => (
-                              <Typography variant="caption" color="text.secondary">
-                                {new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                              </Typography>
-                            ),
-                          },
-                        ]}
-                        data={metrics.recent_activity.slice(0, 5)}
-                        keyExtractor={(row) => row.id}
-                        pagination={false}
-                        maxHeight={250}
-                        className="mt-2"
-                      />
-                    ) : (
-                      <EmptyState
-                        icon={Zap}
-                        title="No recent automations"
-                        description="Automations will appear here when the AI agent processes bookings."
-                        action={{ label: "Create Booking", href: "/book" }}
-                      />
-                    )}
-                  </Paper>
+                    <div className="flex-1 bg-black/40 border border-[var(--border-subtle)] p-4 font-mono text-[11px] mb-6 overflow-y-auto max-h-[200px] text-[var(--text-muted)] italic">
+                       {suggestionLoading ? (
+                         <div className="animate-pulse">BOOTING_CORTEX...</div>
+                       ) : displaySuggestion?.suggestion ? (
+                         `> ${displaySuggestion.suggestion}`
+                       ) : (
+                         "> WAITING_FOR_INPUT_SIGNAL..."
+                       )}
+                    </div>
+
+                    <button className="w-full py-3 bg-[var(--primary)] text-black text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all flex items-center justify-center gap-2 font-mono">
+                       <Bot size={14} />
+                       ACCESS_CO_PILOT
+                    </button>
+                  </Box>
                 </motion.div>
 
-                {/* Quick Access */}
+                {/* System Log Tile */}
                 <motion.div variants={item}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: { xs: 2, md: 3 },
-                      background: isDark
-                        ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                        : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-                      border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                      borderRadius: "16px",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontWeight: 600,
-                        color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                        mb: 2,
-                      }}
-                    >
-                      Quick Access
-                    </Typography>
-
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                      {[
-                        { label: "Plugins & Integrations", href: "/dashboard/plugins", icon: Zap },
-                        { label: "Privacy & Settings", href: "/dashboard/settings", icon: Settings },
-                      ].map(({ label, href, icon: Icon }) => (
-                        <Link key={href} href={href} style={{ textDecoration: "none" }}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              p: 1.5,
-                              borderRadius: "10px",
-                              color: isDark ? "hsl(215, 16%, 70%)" : "hsl(215, 16%, 47%)",
-                              transition: "all 0.2s ease",
-                              "&:hover": {
-                                background: isDark ? "hsla(239, 84%, 67%, 0.1)" : "hsla(239, 84%, 67%, 0.05)",
-                                color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                              },
-                            }}
-                          >
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                              <Icon size={18} />
-                              <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>
-                                {label}
-                              </Typography>
-                            </Box>
-                            <ArrowUpRight size={16} />
-                          </Box>
-                        </Link>
-                      ))}
-                    </Box>
-                  </Paper>
+                   <Box sx={{ background: "var(--bg-elevated)", border: "1px dashed var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
+                      <div className="flex items-center justify-between mb-6">
+                         <div className="flex items-center gap-3">
+                           <Terminal size={18} className="text-[var(--text-faint)]" />
+                           <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Kernel_Logs</h3>
+                         </div>
+                         <div className="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse" />
+                      </div>
+                      <div className="space-y-3 font-mono text-[9px] text-[var(--text-faint)] uppercase">
+                         <div className="flex justify-between border-b border-dashed border-[var(--border-subtle)] pb-1">
+                            <span>WS_CONNECTION</span>
+                            <span className="text-[var(--primary)]">ESTABLISHED</span>
+                         </div>
+                         <div className="flex justify-between border-b border-dashed border-[var(--border-subtle)] pb-1">
+                            <span>SESSION_KEY</span>
+                            <span>{user?.email?.slice(0, 8)}...</span>
+                         </div>
+                         <div className="flex justify-between border-b border-dashed border-[var(--border-subtle)] pb-1">
+                            <span>NODE_SYNC</span>
+                            <span className="text-[var(--secondary)]">88%</span>
+                         </div>
+                      </div>
+                   </Box>
                 </motion.div>
-              </Box>
+              </div>
             </Grid>
           </Grid>
+          
+          {/* Bottom Layer: Secondary Matrices */}
+          <motion.div variants={item}>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[
+                  { label: "UPTIME", value: "99.98%", icon: Activity },
+                  { label: "MEMORY", value: "256MB", icon: Zap },
+                  { label: "NODES", value: "12/12", icon: Users },
+                  { label: "SYNC", value: "INSTANT", icon: RefreshCw },
+                ].map((m, i) => (
+                  <div key={i} className="p-4 border border-dashed border-[var(--border-subtle)] bg-[var(--bg-base)] flex flex-col gap-2">
+                     <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black text-[var(--text-faint)] tracking-widest uppercase">{m.label}</span>
+                        <m.icon size={12} className="text-[var(--text-faint)]" />
+                     </div>
+                     <div className="text-xl font-black text-[var(--text-primary)] font-mono">{m.value}</div>
+                  </div>
+                ))}
+             </div>
+          </motion.div>
+
         </motion.div>
       </Container>
 

@@ -10,7 +10,9 @@ import {
   Settings, 
   Puzzle, 
   LogOut,
-  MapPin
+  MapPin,
+  Terminal,
+  Activity
 } from "lucide-react";
 import { useAuth } from "@/app/providers/auth-provider";
 
@@ -19,25 +21,29 @@ export function Sidebar() {
   const { logout } = useAuth();
 
   const NAV_ITEMS = [
-    { label: "Overview", icon: LayoutDashboard, href: "/dashboard" },
-    { label: "Calendar", icon: CalendarDays, href: "/dashboard/calendar" },
-    { label: "Event Types", icon: MapPin, href: "/dashboard/event-types" },
-    { label: "AI Assistant", icon: Bot, href: "/dashboard/ai" },
-    { label: "Plugins", icon: Puzzle, href: "/dashboard/plugins" },
-    { label: "Settings", icon: Settings, href: "/dashboard/settings" },
+    { label: "OVERVIEW", icon: LayoutDashboard, href: "/dashboard" },
+    { label: "CALENDAR", icon: CalendarDays, href: "/dashboard/calendar" },
+    { label: "EVENT_TYPES", icon: MapPin, href: "/dashboard/event-types" },
+    { label: "COGNITIVE_AI", icon: Bot, href: "/dashboard/ai" },
+    { label: "CLUSTER_PLUGINS", icon: Puzzle, href: "/dashboard/plugins" },
+    { label: "DEV_CORNER", icon: Terminal, href: "/dashboard/developer" },
+    { label: "SYS_SETTINGS", icon: Settings, href: "/dashboard/settings" },
   ];
 
   return (
-    <aside className="flex h-full flex-col justify-between bg-white/[0.015] p-4 backdrop-blur-3xl">
+    <aside className="flex h-full flex-col justify-between bg-[var(--bg-base)] border-r border-dashed border-[var(--border-subtle)] font-mono">
       <div>
-        <div className="mb-8 px-4 flex items-center h-10 pt-2">
-          <div className="mr-3 flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/90 shadow-md shadow-indigo-500/25">
-             <span className="font-bold text-white text-lg">G</span>
+        <div className="mb-10 px-6 flex items-center h-16 border-b border-dashed border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+          <div className="mr-3 flex h-8 w-8 items-center justify-center border border-[var(--primary)] bg-[var(--bg-base)] shadow-[0_0_10px_var(--primary-glow)]">
+             <span className="font-black text-[var(--primary)] text-lg">G</span>
           </div>
-          <span className="text-lg font-semibold tracking-tight text-slate-100">GraftAI</span>
+          <div className="flex flex-col">
+            <span className="text-sm font-black tracking-tighter text-[var(--text-primary)] uppercase">GraftAI_OS</span>
+            <span className="text-[9px] text-[var(--primary)] font-bold tracking-widest opacity-80">v3.0.4-STABLE</span>
+          </div>
         </div>
 
-        <nav className="flex flex-col space-y-1.5">
+        <nav className="flex flex-col px-2 space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -45,13 +51,13 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "group flex items-center rounded-xl px-4 py-3 text-sm font-medium transition-colors duration-200",
+                  "group flex items-center px-4 py-3 text-[11px] font-black tracking-widest transition-all duration-200 border-l-2",
                   isActive 
-                    ? "bg-indigo-500/12 text-indigo-300" 
-                    : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                    ? "bg-[var(--bg-hover)] text-[var(--primary)] border-[var(--primary)] shadow-[inset_0_0_15px_var(--primary-glow)]" 
+                    : "text-[var(--text-muted)] border-transparent hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
                 )}
               >
-                <item.icon className={cn("mr-3 h-5 w-5", isActive ? "text-indigo-300" : "text-slate-500 group-hover:text-slate-300")} />
+                <item.icon className={cn("mr-3 h-4 w-4 transition-colors", isActive ? "text-[var(--primary)]" : "text-[var(--text-faint)] group-hover:text-[var(--primary)]")} />
                 {item.label}
               </Link>
             )
@@ -59,15 +65,24 @@ export function Sidebar() {
         </nav>
       </div>
 
-      <div className="mt-auto pt-8">
+      <div className="p-4 border-t border-dashed border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+         <div className="mb-4 px-2 py-2 border border-dashed border-[var(--border-subtle)] bg-[var(--bg-base)]">
+            <div className="flex items-center justify-between mb-1">
+               <span className="text-[10px] text-[var(--text-faint)] font-bold uppercase">Uptime_Pulse</span>
+               <Activity className="h-3 w-3 text-[var(--primary)] animate-pulse" />
+            </div>
+            <div className="w-full h-1 bg-[var(--bg-hover)]">
+               <div className="w-3/4 h-full bg-[var(--primary)]" />
+            </div>
+         </div>
          <button
            onClick={logout}
-           className="group flex w-full items-center rounded-xl px-4 py-3 text-sm font-medium text-slate-500 transition-colors hover:bg-white/[0.04] hover:text-rose-300"
+           className="group flex w-full items-center px-4 py-3 text-[10px] font-black tracking-widest text-[var(--text-muted)] transition-all hover:bg-[var(--accent)] hover:text-white border border-transparent hover:border-white/20"
          >
-            <LogOut className="mr-3 h-5 w-5 text-slate-600 group-hover:text-rose-300" />
-            Sign Out
+            <LogOut className="mr-3 h-4 w-4 transition-colors group-hover:text-white" />
+            TERMINATE_SESSION
          </button>
       </div>
     </aside>
   );
-}
+}

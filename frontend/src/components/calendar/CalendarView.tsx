@@ -76,27 +76,23 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
   const isCurrentMonth = (day: Date) => day.getMonth() === currentDate.getMonth();
 
   return (
-    <div className="flex flex-col h-full lg:h-[750px] bg-transparent">
+    <div className="flex flex-col h-full lg:h-[750px] bg-transparent font-mono">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-8 gap-4 border-b border-dashed border-[var(--border-subtle)] mb-6">
         <div className="flex items-center gap-6">
-          <h2 className="text-2xl font-medium text-white min-w-[160px]">
+          <h2 className="text-xl font-bold text-[var(--text-primary)] min-w-[160px] uppercase tracking-tighter">
             {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           </h2>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("prev")}
-              aria-label="Previous period"
-              title="Previous period"
-              className="p-1.5 hover:bg-white/5 text-gray-500 hover:text-white rounded-md transition-colors"
+              className="p-2 border border-[var(--border-subtle)] hover:border-[var(--primary)] text-[var(--text-muted)] hover:text-[var(--primary)] transition-all bg-[var(--bg-elevated)]"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => navigate("next")}
-              aria-label="Next period"
-              title="Next period"
-              className="p-1.5 hover:bg-white/5 text-gray-500 hover:text-white rounded-md transition-colors"
+              className="p-2 border border-[var(--border-subtle)] hover:border-[var(--primary)] text-[var(--text-muted)] hover:text-[var(--primary)] transition-all bg-[var(--bg-elevated)]"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -104,40 +100,41 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
         </div>
 
         <div className="flex items-center gap-6 w-full sm:w-auto">
-          <div className="flex gap-4">
+          <div className="flex gap-2">
             {(["month", "week", "day"] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "text-sm font-medium transition-colors capitalize pb-1 border-b-2",
-                  view === v ? "border-white text-white" : "border-transparent text-gray-500 hover:text-gray-300"
+                  "px-3 py-1 text-xs font-bold transition-all uppercase tracking-widest border",
+                  view === v 
+                    ? "border-[var(--primary)] text-[var(--primary)] bg-[var(--bg-hover)]" 
+                    : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                 )}
               >
                 {v}
               </button>
             ))}
           </div>
-          <div className="w-px h-4 bg-white/10 hidden sm:block" />
+          <div className="w-px h-4 bg-[var(--border-subtle)] hidden sm:block" />
           <button
             onClick={onCreateEvent}
-            className="flex items-center gap-1.5 text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-md font-medium transition-colors text-sm"
+            className="flex items-center gap-2 text-black bg-[var(--primary)] px-4 py-2 font-bold transition-all hover:brightness-110 text-xs uppercase"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>New</span>
+            <span>New Event</span>
           </button>
         </div>
       </div>
 
       {/* Calendar Grid */}
       {view === "month" && (
-        <div className="flex-1 flex flex-col bg-transparent rounded-xl border border-white/5 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-[var(--bg-base)] border border-[var(--border-subtle)] overflow-hidden">
           {/* Weekday Headers */}
-          <div className="grid grid-cols-7 bg-white/[0.02] border-b border-white/5">
+          <div className="grid grid-cols-7 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)]">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-              <div key={day} className="text-center text-[10px] font-medium text-gray-500 uppercase tracking-widest py-3">
-                <span className="hidden xl:inline">{day}</span>
-                <span className="xl:hidden">{day[0]}</span>
+              <div key={day} className="text-center text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] py-4 bg-[var(--bg-card)]">
+                {day}
               </div>
             ))}
           </div>
@@ -152,31 +149,31 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                   key={idx}
                   onClick={() => isCurrentMonth(day) && onDateClick(day)}
                   className={cn(
-                    "relative flex flex-col p-2 cursor-pointer transition-colors border-b border-r border-white/5 last:border-r-0 group",
+                    "relative flex flex-col p-3 cursor-pointer transition-all border-b border-r border-dashed border-[var(--border-subtle)] last:border-r-0 group h-24 md:h-32",
                     isCurrentMonth(day)
-                      ? "hover:bg-white/[0.03]"
-                      : "opacity-40 cursor-default bg-[#0a0a0f]/50",
+                      ? "hover:bg-[var(--bg-hover)]"
+                      : "opacity-20 cursor-default bg-[var(--bg-elevated)]",
                     (idx + 1) % 7 === 0 && "border-r-0"
                   )}
                 >
                   <div className="flex justify-between items-center mb-2">
                     <div
                       className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center text-xs",
+                        "w-7 h-7 flex items-center justify-center text-[10px] font-bold border transition-all",
                         isToday(day)
-                          ? "bg-white text-black font-semibold"
+                          ? "border-[var(--primary)] text-[var(--primary)] shadow-[0_0_10px_var(--primary-glow)]"
                           : isCurrentMonth(day)
-                          ? "text-gray-300"
-                          : "text-gray-600"
+                          ? "text-[var(--text-secondary)] border-transparent group-hover:border-[var(--border-subtle)]"
+                          : "text-[var(--text-faint)] border-transparent"
                       )}
                     >
                       {day.getDate()}
                     </div>
                   </div>
 
-                  <div className="space-y-1 flex-1 overflow-hidden min-h-[60px] sm:min-h-[90px]">
+                  <div className="space-y-1 flex-1 overflow-hidden">
                     {dayEvents.slice(0, 4).map((event) => {
-                      const colorClass = event.source === 'google' ? 'bg-red-400' : event.source === 'microsoft' ? 'bg-blue-400' : 'bg-emerald-400';
+                      const colorToken = event.source === 'google' ? 'var(--accent)' : event.source === 'microsoft' ? 'var(--secondary)' : 'var(--primary)';
                       return (
                         <div
                           key={event.id}
@@ -184,18 +181,18 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                             e.stopPropagation();
                             onEventClick(event);
                           }}
-                          className="flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-white/10 transition-colors group/event"
+                          className="flex items-center gap-2 px-2 py-1 bg-[var(--bg-elevated)] border-l-2 hover:brightness-125 transition-all group/event"
+                          style={{ borderLeftColor: colorToken }}
                         >
-                          <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", colorClass)} />
-                          <span className="text-[11px] text-gray-400 group-hover/event:text-white truncate">
+                          <span className="text-[10px] text-[var(--text-secondary)] group-hover/event:text-white truncate">
                             {new Date(event.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(' ', '').toLowerCase()} {getEventTitle(event)}
                           </span>
                         </div>
                       )
                     })}
                     {dayEvents.length > 4 && (
-                      <div className="text-[10px] text-gray-500 px-1 pt-1">
-                        {dayEvents.length - 4} more
+                      <div className="text-[9px] text-[var(--text-muted)] font-bold px-1 pt-1 uppercase">
+                        + {dayEvents.length - 4} items
                       </div>
                     )}
                   </div>
@@ -208,43 +205,41 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
 
       {/* Week View */}
       {view === "week" && (
-        <div className="flex-1 overflow-auto bg-transparent rounded-xl border border-white/5">
+        <div className="flex-1 overflow-auto bg-[var(--bg-base)] border border-[var(--border-subtle)]">
           <div className="grid grid-cols-7 h-full min-h-[600px]">
             {days.slice(0, 7).map((day, idx) => {
               const dayEvents = getEventsForDay(day);
               return (
-                <div key={idx} className="flex flex-col border-r border-white/5 last:border-r-0">
+                <div key={idx} className="flex flex-col border-r border-dashed border-[var(--border-subtle)] last:border-r-0">
                   <div className={cn(
-                    "text-center py-3 border-b border-white/5 bg-white/[0.02]",
-                    isToday(day) && "bg-white/[0.04]"
+                    "text-center py-4 border-b border-dashed border-[var(--border-subtle)] bg-[var(--bg-elevated)]",
+                    isToday(day) && "bg-[var(--bg-hover)] border-b-[var(--primary)]"
                   )}>
-                    <div className="text-[10px] font-medium text-gray-500 uppercase tracking-widest mb-1">
+                    <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-1">
                       {day.toLocaleDateString("en-US", { weekday: "short" })}
                     </div>
                     <div className={cn(
-                      "text-sm",
-                      isToday(day) ? "text-white font-bold" : "text-gray-400"
+                      "text-sm font-bold",
+                      isToday(day) ? "text-[var(--primary)]" : "text-[var(--text-secondary)]"
                     )}>
                       {day.getDate()}
                     </div>
                   </div>
-                  <div className="flex-1 p-2 space-y-1.5 hover:bg-white/[0.01] transition-colors relative">
+                  <div className="flex-1 p-2 space-y-2 hover:bg-[var(--bg-hover)] transition-all relative">
                     {dayEvents.map((event) => {
-                      const colorClass = event.source === 'google' ? 'bg-red-400' : event.source === 'microsoft' ? 'bg-blue-400' : 'bg-emerald-400';
+                      const colorToken = event.source === 'google' ? 'var(--accent)' : event.source === 'microsoft' ? 'var(--secondary)' : 'var(--primary)';
                       return (
                         <div
                           key={event.id}
                           onClick={() => onEventClick(event)}
-                          className="group/event p-2 rounded hover:bg-white/5 cursor-pointer transition-colors border border-transparent hover:border-white/5 flex flex-col gap-1"
+                          className="group/event p-3 bg-[var(--bg-elevated)] border-l-2 border-transparent hover:border-l-[var(--primary)] cursor-pointer transition-all border border-[var(--border-subtle)] flex flex-col gap-1"
+                          style={{ borderLeftColor: colorToken }}
                         >
-                          <div className="flex items-center gap-2">
-                            <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", colorClass)} />
-                            <div className="text-xs text-gray-300 group-hover/event:text-white font-medium truncate">
-                              {getEventTitle(event)}
-                            </div>
+                          <div className="text-[11px] text-[var(--text-primary)] font-bold truncate">
+                            {getEventTitle(event)}
                           </div>
-                          <div className="text-[10px] text-gray-500 pl-3.5 flex items-center gap-1">
-                            <Clock className="w-3 h-3 opacity-50" />
+                          <div className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
+                            <Clock className="w-3 h-3 opacity-70" />
                             {new Date(event.start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toLowerCase()}
                           </div>
                         </div>
@@ -260,61 +255,62 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
 
       {/* Day View */}
       {view === "day" && (
-        <div className="flex-1 overflow-auto bg-transparent relative">
-          <div className="max-w-4xl mx-auto py-8">
-            <div className="mb-10 pl-4 border-l-2 border-white/10">
-              <div className="text-sm font-medium text-gray-500 uppercase tracking-widest mb-1">
+        <div className="flex-1 overflow-auto bg-[var(--bg-base)] relative">
+          <div className="max-w-4xl mx-auto py-10 px-6">
+            <div className="mb-12 pl-6 border-l-2 border-[var(--primary)]">
+              <div className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] mb-2">
                 {currentDate.toLocaleDateString("en-US", { weekday: "long" })}
               </div>
-              <div className="text-3xl sm:text-4xl font-light text-white tracking-tight">
+              <div className="text-4xl font-black text-[var(--text-primary)] tracking-tighter uppercase">
                 {currentDate.toLocaleDateString("en-US", { month: "long", day: "numeric" })}
               </div>
             </div>
             
-            <div className="space-y-3 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-white/5 before:to-transparent">
+            <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-[1px] before:border-l before:border-dashed before:border-[var(--border-subtle)]">
               {getEventsForDay(currentDate).map((event) => {
-                const colorClass = event.source === 'google' ? 'bg-red-400' : event.source === 'microsoft' ? 'bg-blue-400' : 'bg-emerald-400';
-                const textClass = event.source === 'google' ? 'text-red-400' : event.source === 'microsoft' ? 'text-blue-400' : 'text-emerald-400';
+                const colorToken = event.source === 'google' ? 'var(--accent)' : event.source === 'microsoft' ? 'var(--secondary)' : 'var(--primary)';
                 
                 return (
                   <motion.div
                     key={event.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
                     onClick={() => onEventClick(event)}
                     className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group cursor-pointer"
                   >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white/10 bg-[#09090b] shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 absolute left-0 md:left-1/2 -translate-x-1/2 z-10 transition-colors group-hover:border-white/20">
-                      <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", colorClass)} />
+                    <div className="flex items-center justify-center w-10 h-10 border border-[var(--border-subtle)] bg-[var(--bg-elevated)] shadow-lg shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 absolute left-0 md:left-1/2 -translate-x-1/2 z-10 transition-all group-hover:border-[var(--primary)]">
+                      <div className="w-2.5 h-2.5 shadow-sm" style={{ background: colorToken }} />
                     </div>
                     
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-all ml-auto md:ml-0 shadow-sm">
-                      <div className="flex items-start justify-between mb-2 gap-4">
-                        <h3 className="text-base font-medium text-white group-hover:text-white transition-colors">{getEventTitle(event)}</h3>
-                        <span className={cn("text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 border border-white/5", textClass)}>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-3rem)] p-6 bg-[var(--bg-card)] border border-[var(--border-subtle)] group-hover:border-[var(--border-bright)] transition-all ml-auto md:ml-0">
+                      <div className="flex items-start justify-between mb-3 gap-4">
+                        <h3 className="text-lg font-bold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors tracking-tight uppercase">{getEventTitle(event)}</h3>
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
                           {event.source}
                         </span>
                       </div>
                       
-                      <div className="flex flex-col gap-1.5 text-xs font-medium text-gray-500">
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" />
+                      <div className="flex flex-col gap-2 text-xs font-bold text-[var(--text-secondary)]">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-[var(--primary)]" />
                           <span>
                             {new Date(event.start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} -{" "}
                             {new Date(event.end_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                           </span>
                         </div>
                         {event.location && (
-                          <div className="flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5" />
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-[var(--accent)]" />
                             <span className="truncate">{event.location}</span>
                           </div>
                         )}
                       </div>
                       
                       {event.description && (
-                        <div className="mt-3 pt-3 border-t border-white/5">
-                          <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">{event.description}</p>
+                         <div className="mt-4 pt-4 border-t border-dashed border-[var(--border-subtle)]">
+                          <p className="text-xs text-[var(--text-muted)] leading-relaxed italic line-clamp-2">
+                            // {event.description}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -323,14 +319,14 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
               })}
               
               {getEventsForDay(currentDate).length === 0 && (
-                <div className="text-center py-24 rounded-2xl border border-white/5 border-dashed bg-white/[0.01]">
-                  <CalendarIcon className="w-10 h-10 mx-auto mb-4 text-gray-600/50" strokeWidth={1.5} />
-                  <h3 className="text-sm font-medium text-gray-400 mb-1">Your day is clear</h3>
+                <div className="text-center py-24 border border-[var(--border-subtle)] border-dashed bg-[var(--bg-elevated)]">
+                  <CalendarIcon className="w-10 h-10 mx-auto mb-4 text-[var(--text-muted)]" strokeWidth={1} />
+                  <h3 className="text-xs font-bold text-[var(--text-muted)] mb-1 uppercase tracking-widest">System idle: No operations scheduled</h3>
                   <button 
                     onClick={onCreateEvent}
-                    className="mt-6 px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-medium rounded-lg transition-colors border border-white/5"
+                    className="mt-6 px-6 py-2 bg-[var(--primary)] text-black text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition-all shadow-[0_0_15px_var(--primary-glow)]"
                   >
-                    Add an Event
+                    Initialize Event
                   </button>
                 </div>
               )}

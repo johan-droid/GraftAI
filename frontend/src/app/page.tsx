@@ -19,44 +19,60 @@ import { Newsletter } from "@/components/landing/Newsletter";
 import { Footer } from "@/components/landing/Footer";
 import { ScrollProgress } from "@/components/landing/ScrollProgress";
 import { BackToTop } from "@/components/landing/BackToTop";
-import { GrainOverlay } from "@/components/landing/GrainOverlay";
 import { FloatingOrbs } from "@/components/landing/FloatingOrbs";
 import { CookieConsent } from "@/components/landing/CookieConsent";
-import DeveloperCorner from "@/components/DeveloperCorner";
 
 export default function Home() {
   return (
-    <Box sx={{ minHeight: "100vh", background: "#0f0f1a", position: "relative" }}>
-      {/* Visual Effects */}
+    <Box 
+      sx={{ 
+        minHeight: "100vh", 
+        background: "var(--bg)", 
+        position: "relative",
+        // The grid and scanlines are in body::before/after in globals.css
+      }}
+    >
+      {/* Visual Infrastructure */}
       <FloatingOrbs />
-      <GrainOverlay />
       <ScrollProgress />
 
-      {/* Navigation */}
+      {/* Primary Navigation Layer */}
       <Navigation />
 
-      {/* Main Content */}
+      {/* Main Content Stream */}
       <Box sx={{ position: "relative", zIndex: 1 }}>
         <Hero />
         <LogoCloud />
-        <ProblemSolution />
-        <IntegrationShowcase />
-        <ProductShowcase />
+        
+        {/* We keep these but the global typography/theme handles the coder look */}
+        <Box sx={{ borderBottom: "1px solid var(--border-dotted)" }}>
+          <IntegrationShowcase />
+        </Box>
+        
         <FeatureBento />
+        
+        <Box sx={{ borderTop: "1px solid var(--border-dotted)", background: "rgba(0,0,0,0.1)" }}>
+          <ProductShowcase />
+        </Box>
+
+        <ProblemSolution />
         <Comparison />
         <HowItWorks />
+        
+        <Box sx={{ borderTop: "1px solid var(--border-dotted)" }}>
+          <Pricing />
+        </Box>
+
         <Testimonials />
         <Stats />
-        <Pricing />
         <CTASection variant="email" />
         <FAQ />
         <CTASection variant="buttons" />
         <Newsletter />
-        <DeveloperCorner />
         <Footer />
       </Box>
 
-      {/* Floating Elements */}
+      {/* Peripheral UI */}
       <BackToTop />
       <CookieConsent />
     </Box>

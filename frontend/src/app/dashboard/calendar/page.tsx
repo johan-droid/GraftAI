@@ -52,10 +52,10 @@ type RBCView = "month" | "week" | "day" | "agenda";
 type CategoryKey = "meeting" | "event" | "birthday" | "task";
 
 const CATEGORIES: Record<CategoryKey, { label: string; color: string }> = {
-  meeting:  { label: "Meeting",  color: "var(--peach)" },
-  event:    { label: "Event",    color: "var(--warning)" },
-  birthday: { label: "Birthday", color: "#F472B6" },
-  task:     { label: "Task",     color: "var(--info)" },
+  meeting:  { label: "Meeting",  color: "var(--primary)" },
+  event:    { label: "Event",    color: "var(--secondary)" },
+  birthday: { label: "Birthday", color: "var(--accent)" },
+  task:     { label: "Task",     color: "var(--text-secondary)" },
 };
 
 const FORM_DEFAULTS: Partial<CalendarEvent> = {
@@ -227,42 +227,51 @@ export default function CalendarPage() {
     const end = new Date(event.resource.end_time);
     const conflict = hasConflict(events, event.resource);
     const isPast = end < now;
+    const catColor = CATEGORIES[event.resource.category as CategoryKey]?.color ?? "var(--primary)";
+    
     return {
       className: cn(
         isPast    && "past-event",
-        conflict  && "conflict-event",
+        conflict  && "conflict-event font-bold",
+        "custom-rbc-event"
       ),
       style: {
-        background: conflict ? "var(--error)"
-          : isPast ? "var(--bg-hover)"
-          : CATEGORIES[event.resource.category as CategoryKey]?.color ?? "var(--peach)",
-        color: isPast || conflict ? undefined : "#1A0F0A",
-        borderRadius: 6,
-        border: "none",
-        fontSize: 12,
-        fontWeight: 600,
+        background: conflict ? "var(--accent)"
+          : isPast ? "rgba(255, 255, 255, 0.05)"
+          : catColor,
+        color: conflict ? "#fff" : (isPast ? "var(--text-muted)" : "#000"),
+        borderRadius: 0,
+        border: conflict ? "1px solid #fff" : "none",
+        fontSize: "10px",
+        fontWeight: 800,
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        boxShadow: isPast ? "none" : `0 0 10px ${catColor}44`,
       },
     };
   }, [events]);
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-8 pb-12 font-mono">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-dashed border-[var(--border-subtle)]">
         <div>
-          <h1 className="text-h1" style={{ color: "var(--text)" }}>Calendar</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            AI-synchronized scheduling
+          <h1 className="text-4xl font-black text-[var(--text-primary)] uppercase tracking-tighter">Calendar</h1>
+          <p className="text-xs mt-2 uppercase tracking-[0.2em] text-[var(--text-muted)]">
+            // [NODE_STATUS: SYNC_READY] // ANALYZING_TEMPORAL_FLUX...
           </p>
         </div>
-        <button className="btn btn-primary self-start" onClick={() => openCreateModal({ start: new Date(), end: new Date(Date.now() + 3600000) })}>
-          <Plus className="w-4 h-4" /> New Event
+        <button 
+          className="tech-btn tech-btn-primary px-8" 
+          onClick={() => openCreateModal({ start: new Date(), end: new Date(Date.now() + 3600000) })}
+        >
+          <Plus className="w-4 h-4" /> Initialize Event
         </button>
       </div>
 
       <ErrorBoundary>
-        <div className="card p-4 md:p-6" style={{ minHeight: 560 }}>
+        <div className="tech-card p-4 md:p-6 bg-[var(--bg-base)] border-dashed" style={{ minHeight: 600 }}>
           {!localizerReady || loading ? (
-            <Skeleton className="w-full" style={{ height: 520 }} />
+            <Skeleton className="w-full bg-[var(--bg-elevated)]" style={{ height: 560 }} />
           ) : (
             <BigCalendar
               localizer={localizerReady}
@@ -277,24 +286,24 @@ export default function CalendarPage() {
               onSelectEvent={openEditModal}
               onEventDrop={handleEventDrop}
               eventPropGetter={eventPropGetter}
-              style={{ height: 520 }}
+              style={{ height: 560 }}
               popup
               views={["month", "week", "day", "agenda"]}
               formats={{
-                dayHeaderFormat: (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+                dayHeaderFormat: (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase(),
               }}
             />
           )}
         </div>
       </ErrorBoundary>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-6 p-4 border border-dashed border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
         {Object.entries(CATEGORIES).map(([key, { label, color }]) => (
-          <div key={key} className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-            <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>{label}</span>
-            <span className="text-xs" style={{ color: "var(--text-faint)" }}>
-              ({events.filter(e => e.category === key).length})
+          <div key={key} className="flex items-center gap-3">
+            <div className="w-3 h-3" style={{ background: color }} />
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">{label}</span>
+            <span className="text-[10px] font-bold text-[var(--text-faint)]">
+              [{events.filter(e => e.category === key).length}]
             </span>
           </div>
         ))}
@@ -354,92 +363,92 @@ function EventModal({ isOpen, title, form, onFormChange, onClose, onSubmit, savi
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-6"
-            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", zIndex: 10, maxHeight: "90vh", overflowY: "auto" }}
+            className="relative w-full sm:max-w-lg p-8 font-mono"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)", zIndex: 10, maxHeight: "90vh", overflowY: "auto" }}
           >
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-h3" style={{ color: "var(--text)" }}>{title}</h2>
-              <button className="p-1 rounded-lg min-h-0 min-w-0" onClick={onClose} style={{ color: "var(--text-muted)" }}>
+            <div className="flex items-center justify-between mb-8 border-b border-dashed border-[var(--border-subtle)] pb-4">
+              <h2 className="text-xl font-black text-[var(--text-primary)] uppercase tracking-tighter">{title}</h2>
+              <button className="p-2 border border-transparent hover:border-[var(--border-subtle)] transition-all" onClick={onClose} style={{ color: "var(--text-muted)" }}>
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {conflictWarning && (
-              <div className="flex items-center gap-2 p-3 rounded-lg mb-4 text-sm"
-                style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.25)", color: "var(--warning)" }}>
+              <div className="flex items-center gap-3 p-4 mb-6 text-xs font-bold uppercase tracking-widest"
+                style={{ background: "rgba(255,0,122,0.1)", border: "1px solid var(--accent)", color: "var(--accent)" }}>
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                Scheduling conflict detected with another event.
+                SYSTEM_ALERT: Temporal Conflict Detected
               </div>
             )}
 
-            <form onSubmit={onSubmit} className="space-y-4">
+            <form onSubmit={onSubmit} className="space-y-6">
               <div>
-                <label className="text-label block mb-1.5" style={{ color: "var(--text-muted)" }}>Title *</label>
-                <input className="input" placeholder="Event title" required
+                <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Target Title *</label>
+                <input className="tech-input focus:ring-0" placeholder="ENTER EVENT IDENTIFIER" required
                   value={form.title ?? ""}
                   onChange={e => onFormChange({ title: e.target.value })} />
               </div>
               <div>
-                <label className="text-label block mb-1.5" style={{ color: "var(--text-muted)" }}>Description</label>
-                <textarea className="input resize-none" rows={3} placeholder="Optional details"
+                <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Documentation</label>
+                <textarea className="tech-input resize-none h-24 focus:ring-0" placeholder="ADDITIONAL_SPECIFICATIONS..."
                   value={form.description ?? ""}
                   onChange={e => onFormChange({ description: e.target.value })} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-label block mb-1.5" style={{ color: "var(--text-muted)" }}>Category</label>
-                  <select className="input appearance-none"
+                  <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Category_Class</label>
+                  <select className="tech-input appearance-none bg-[var(--bg-elevated)]"
                     value={form.category ?? "meeting"}
                     onChange={e => onFormChange({ category: e.target.value as CategoryKey })}>
                     {Object.entries(CATEGORIES).map(([k, v]) => (
-                      <option key={k} value={k}>{v.label}</option>
+                      <option key={k} value={k}>{v.label.toUpperCase()}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="text-label block mb-1.5" style={{ color: "var(--text-muted)" }}>Status</label>
-                  <select className="input appearance-none"
+                  <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Sync_Status</label>
+                  <select className="tech-input appearance-none bg-[var(--bg-elevated)]"
                     value={form.status ?? "confirmed"}
                     onChange={e => onFormChange({ status: e.target.value })}>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="pending">Pending</option>
-                    <option value="canceled">Canceled</option>
+                    <option value="confirmed">CONFIRMED</option>
+                    <option value="pending">PENDING</option>
+                    <option value="canceled">CANCELED</option>
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-label block mb-1.5" style={{ color: "var(--text-muted)" }}>Start</label>
-                  <input className="input" type="datetime-local"
+                  <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Start_Timestamp</label>
+                  <input className="tech-input" type="datetime-local"
                     value={form.start_time ? toDatetimeLocal(form.start_time) : ""}
                     onChange={e => onFormChange({ start_time: new Date(e.target.value).toISOString() })} />
                 </div>
                 <div>
-                  <label className="text-label block mb-1.5" style={{ color: "var(--text-muted)" }}>End</label>
-                  <input className="input" type="datetime-local"
+                  <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">End_Timestamp</label>
+                  <input className="tech-input" type="datetime-local"
                     value={form.end_time ? toDatetimeLocal(form.end_time) : ""}
                     onChange={e => onFormChange({ end_time: new Date(e.target.value).toISOString() })} />
                 </div>
               </div>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 accent-[var(--peach)]"
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <input type="checkbox" className="w-4 h-4 bg-transparent border-[var(--border-subtle)] checked:bg-[var(--primary)] text-[var(--primary)] focus:ring-0 cursor-pointer"
                   checked={form.is_remote ?? false}
                   onChange={e => onFormChange({ is_remote: e.target.checked })} />
-                <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  <MapPin className="w-3.5 h-3.5 inline mr-1" />Remote / Virtual
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]">
+                  <MapPin className="w-3 h-3 inline mr-1 text-[var(--primary)]" />REMOTE_PROTOCOL_ENABLED
                 </span>
               </label>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-4 pt-4">
                 {onDelete && (
-                  <button type="button" className="btn btn-danger px-3" onClick={onDelete}>
+                  <button type="button" className="p-3 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition-all" onClick={onDelete}>
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
-                <button type="button" className="btn btn-ghost flex-1" onClick={onClose}>Cancel</button>
-                <button type="submit" className="btn btn-primary flex-1" disabled={saving}>
+                <button type="button" className="flex-1 px-6 py-3 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--text-muted)] font-bold uppercase text-xs tracking-widest transition-all" onClick={onClose}>Abort</button>
+                <button type="submit" className="flex-1 tech-btn tech-btn-primary" disabled={saving}>
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "EXECUTING..." : "COMMIT_CHANGES"}
                 </button>
               </div>
             </form>

@@ -36,29 +36,26 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
           }}
           sx={{
             "& .MuiOutlinedInput-root": {
-              background: "hsl(240, 24%, 14%)",
-              borderRadius: "12px",
-              border: "1px solid",
+              background: "rgba(255, 255, 255, 0.02)",
+              borderRadius: "0",
+              border: "1px dashed",
               borderColor: errorMessage
-                ? "hsla(346, 84%, 61%, 0.5)"
+                ? "var(--accent)"
                 : isFocused
-                ? "hsla(239, 84%, 67%, 0.6)"
-                : "hsla(239, 84%, 67%, 0.15)",
-              color: "hsl(220, 20%, 98%)",
+                ? "var(--primary)"
+                : "var(--border-subtle)",
+              color: "var(--text-primary)",
               transition: "all 0.2s ease",
-              boxShadow: isFocused ? "0 0 0 3px hsla(239, 84%, 67%, 0.15)" : "none",
+              boxShadow: isFocused ? "0 0 10px rgba(0, 255, 156, 0.1)" : "none",
               "&:hover": {
                 borderColor: errorMessage
-                  ? "hsla(346, 84%, 61%, 0.6)"
-                  : "hsla(239, 84%, 67%, 0.3)",
+                  ? "var(--accent)"
+                  : "var(--primary)",
               },
               "&.Mui-focused": {
                 borderColor: errorMessage
-                  ? "hsla(346, 84%, 61%, 0.7)"
-                  : "hsla(239, 84%, 67%, 0.8)",
-                boxShadow: errorMessage
-                  ? "0 0 0 3px hsla(346, 84%, 61%, 0.15)"
-                  : "0 0 0 3px hsla(239, 84%, 67%, 0.2)",
+                  ? "var(--accent)"
+                  : "var(--primary)",
               },
             },
             "& .MuiOutlinedInput-notchedOutline": {
@@ -67,10 +64,12 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
             "& .MuiInputBase-input": {
               py: 2,
               px: Icon ? 1.5 : 2,
-              fontSize: "0.9375rem",
+              fontSize: "12px",
+              fontFamily: "var(--font-mono)",
               "&::placeholder": {
-                color: "hsl(215, 16%, 35%)",
-                opacity: 1,
+                color: "var(--text-faint)",
+                opacity: 0.5,
+                textTransform: "uppercase",
               },
             },
             ...props.sx,
@@ -80,13 +79,13 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
             startAdornment: Icon ? (
               <InputAdornment position="start">
                 <Icon
-                  size={20}
+                  size={16}
                   style={{
                     color: errorMessage
-                      ? "hsl(346, 84%, 61%)"
+                      ? "var(--accent)"
                       : isFocused
-                      ? "hsl(239, 84%, 67%)"
-                      : "hsl(215, 16%, 40%)",
+                      ? "var(--primary)"
+                      : "var(--text-muted)",
                     transition: "color 0.2s ease",
                   }}
                 />
@@ -103,12 +102,12 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
                     border: "none",
                     cursor: "pointer",
                     p: 0.5,
-                    color: "hsl(215, 16%, 40%)",
-                    "&:hover": { color: "hsl(215, 16%, 70%)" },
+                    color: "var(--text-muted)",
+                    "&:hover": { color: "var(--primary)" },
                     transition: "color 0.2s",
                   }}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </Box>
               </InputAdornment>
             ) : null,
@@ -127,14 +126,16 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
               <Box
                 sx={{
                   mt: 1,
-                  fontSize: "0.8125rem",
-                  color: "hsl(346, 84%, 61%)",
+                  fontSize: "9px",
+                  color: "var(--accent)",
+                  fontFamily: "var(--font-mono)",
+                  textTransform: "uppercase",
                   display: "flex",
                   alignItems: "center",
                   gap: 0.5,
                 }}
               >
-                {errorMessage}
+                ERR_INPUT: {errorMessage}
               </Box>
             </motion.div>
           )}

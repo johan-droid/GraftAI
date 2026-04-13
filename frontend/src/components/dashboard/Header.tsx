@@ -38,12 +38,12 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
         flexWrap: { xs: "wrap", md: "nowrap" },
       }}
     >
-      {/* Left side - hidden on mobile (shown in MobileSidebar) */}
+      {/* Left side - hidden on mobile */}
       <Box sx={{ display: { xs: "none", md: "block" } }} />
 
       {/* Right side actions */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, ml: "auto" }}>
-        {/* New Booking Button */}
+        {/* New Session Button */}
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Box
             component={Link}
@@ -53,76 +53,57 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
               alignItems: "center",
               gap: 1,
               px: 3,
-              py: 1.5,
-              background: "linear-gradient(135deg, hsl(25, 95%, 53%) 0%, hsl(25, 95%, 63%) 100%)",
-              color: "white",
-              borderRadius: "12px",
+              py: 1,
+              background: "var(--primary)",
+              color: "#000",
+              borderRadius: "0",
               textDecoration: "none",
-              fontWeight: 600,
-              fontSize: "0.9375rem",
-              boxShadow: "0 4px 15px hsla(25, 95%, 53%, 0.3)",
-              transition: "all 0.2s ease",
+              fontWeight: 800,
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              border: "1px solid var(--primary)",
               "&:hover": {
-                boxShadow: "0 6px 20px hsla(25, 95%, 53%, 0.4)",
-                transform: "translateY(-1px)",
+                background: "transparent",
+                color: "var(--primary)",
               },
             }}
           >
-            <Plus size={18} />
-            New Booking
+            <Plus size={14} />
+            INIT_SESSION
           </Box>
         </motion.div>
-
-        {/* Mobile New Booking FAB */}
-        <IconButton
-          component={Link}
-          href="/book"
-          sx={{
-            display: { xs: "flex", sm: "none" },
-            background: "linear-gradient(135deg, hsl(25, 95%, 53%) 0%, hsl(25, 95%, 63%) 100%)",
-            color: "white",
-            width: 40,
-            height: 40,
-            borderRadius: "12px",
-            "&:hover": {
-              background: "linear-gradient(135deg, hsl(25, 95%, 48%) 0%, hsl(25, 95%, 58%) 100%)",
-            },
-          }}
-        >
-          <Plus size={20} />
-        </IconButton>
-
-        {/* Theme Toggle */}
-        <ThemeToggle />
 
         {/* Notifications */}
         <IconButton
           sx={{
-            width: 40,
-            height: 40,
-            borderRadius: "12px",
-            background: "hsla(239, 84%, 67%, 0.1)",
-            border: "1px solid hsla(239, 84%, 67%, 0.2)",
-            color: "hsl(220, 20%, 98%)",
-            transition: "all 0.2s ease",
+            width: 36,
+            height: 36,
+            borderRadius: "0",
+            background: "transparent",
+            border: "1px solid var(--border-subtle)",
+            color: "var(--text-primary)",
             "&:hover": {
-              background: "hsla(239, 84%, 67%, 0.2)",
+              borderColor: "var(--primary)",
+              color: "var(--primary)",
             },
           }}
         >
           <Badge
             badgeContent={notificationCount}
-            color="error"
             sx={{
               "& .MuiBadge-badge": {
-                background: "hsl(346, 84%, 61%)",
-                fontSize: "0.625rem",
-                minWidth: 18,
-                height: 18,
+                background: "var(--accent)",
+                color: "white",
+                fontSize: "8px",
+                minWidth: 14,
+                height: 14,
+                borderRadius: "0",
               },
             }}
           >
-            <Bell size={20} />
+            <Bell size={16} />
           </Badge>
         </IconButton>
 
@@ -134,25 +115,27 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
             alignItems: "center",
             gap: 1.5,
             cursor: "pointer",
-            p: 1,
-            borderRadius: "12px",
-            background: "hsla(239, 84%, 67%, 0.05)",
-            border: "1px solid hsla(239, 84%, 67%, 0.1)",
-            transition: "all 0.2s ease",
+            p: "4px 12px 4px 4px",
+            borderRadius: "0",
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid var(--border-subtle)",
             "&:hover": {
-              background: "hsla(239, 84%, 67%, 0.1)",
-              borderColor: "hsla(239, 84%, 67%, 0.2)",
+              borderColor: "var(--primary)",
             },
           }}
         >
           <Avatar
             src={userAvatar}
             sx={{
-              width: 36,
-              height: 36,
-              background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-              fontSize: "0.875rem",
-              fontWeight: 600,
+              width: 28,
+              height: 28,
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "0",
+              fontSize: "10px",
+              fontWeight: 700,
+              fontFamily: "var(--font-mono)",
+              color: "var(--primary)",
             }}
           >
             {!userAvatar && initials}
@@ -160,25 +143,14 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
           <Box sx={{ display: { xs: "none", sm: "block" } }}>
             <Box
               sx={{
-                fontSize: "0.875rem",
-                fontWeight: 600,
-                color: "hsl(220, 20%, 98%)",
-                lineHeight: 1.2,
+                fontSize: "10px",
+                fontWeight: 700,
+                color: "var(--text-primary)",
+                fontFamily: "var(--font-mono)",
+                textTransform: "uppercase",
               }}
             >
               {displayName}
-            </Box>
-            <Box
-              sx={{
-                fontSize: "0.75rem",
-                color: "hsl(215, 16%, 55%)",
-                display: "flex",
-                alignItems: "center",
-                gap: 0.5,
-              }}
-            >
-              Account
-              <ChevronDown size={14} />
             </Box>
           </Box>
         </Box>
@@ -190,48 +162,52 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
           onClose={() => setAnchorEl(null)}
           PaperProps={{
             sx: {
-              background: "hsl(240, 24%, 14%)",
-              border: "1px solid hsla(239, 84%, 67%, 0.2)",
-              borderRadius: "12px",
-              boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
-              minWidth: 200,
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "0",
+              boxShadow: "none",
+              minWidth: 180,
             },
           }}
         >
-          <Box sx={{ px: 2, py: 1.5 }}>
-            <Box sx={{ fontWeight: 600, color: "hsl(220, 20%, 98%)" }}>{displayName}</Box>
+          <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid var(--border-subtle)" }}>
+            <Box sx={{ fontSize: "10px", fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
+              {displayName.toUpperCase()}
+            </Box>
             {userEmail && (
-              <Box sx={{ fontSize: "0.75rem", color: "hsl(215, 16%, 55%)", mt: 0.5 }}>
+              <Box sx={{ fontSize: "9px", color: "var(--text-muted)", mt: 0.5, fontFamily: "var(--font-mono)" }}>
                 {userEmail}
               </Box>
             )}
           </Box>
-          
-          <Divider sx={{ borderColor: "hsla(239, 84%, 67%, 0.1)" }} />
           
           <MenuItem
             component={Link}
             href="/settings"
             onClick={() => setAnchorEl(null)}
             sx={{
-              py: 1.5,
-              color: "hsl(220, 20%, 98%)",
-              "&:hover": { background: "hsla(239, 84%, 67%, 0.1)" },
+              py: 1,
+              fontSize: "10px",
+              fontFamily: "var(--font-mono)",
+              color: "var(--text-primary)",
+              "&:hover": { background: "rgba(0, 255, 156, 0.1)", color: "var(--primary)" },
             }}
           >
-            <Settings size={16} style={{ marginRight: 12 }} />
-            Settings
+            <Settings size={14} style={{ marginRight: 12 }} />
+            SETTINGS_CONFIG
           </MenuItem>
           
           <MenuItem
             sx={{
-              py: 1.5,
-              color: "hsl(346, 84%, 61%)",
-              "&:hover": { background: "hsla(346, 84%, 61%, 0.1)" },
+              py: 1,
+              fontSize: "10px",
+              fontFamily: "var(--font-mono)",
+              color: "var(--accent)",
+              "&:hover": { background: "rgba(255, 0, 122, 0.1)" },
             }}
           >
-            <LogOut size={16} style={{ marginRight: 12 }} />
-            Sign Out
+            <LogOut size={14} style={{ marginRight: 12 }} />
+            TERMINATE_SESSION
           </MenuItem>
         </Menu>
       </Box>

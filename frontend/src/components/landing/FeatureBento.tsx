@@ -1,261 +1,207 @@
 "use client";
 
-import { Box, Typography, Container, Grid, Paper } from "@mui/material";
+import { Box, Typography, Container, Grid, Stack } from "@mui/material";
 import { motion } from "framer-motion";
 import { 
-  Sparkles, 
-  Calendar, 
-  Shield, 
-  Clock, 
-  BarChart3, 
-  Users,
-  Zap,
-  Globe
+  MemoryStick, 
+  Binary, 
+  ShieldCheck, 
+  Workflow, 
+  Terminal, 
+  Cpu,
+  Unplug,
+  Box as BoxIcon,
+  Activity,
+  Layers
 } from "lucide-react";
 
 const features = [
   {
-    icon: Sparkles,
-    title: "AI-Powered Scheduling",
-    description: "Learns your preferences and optimizes your calendar automatically. The more you use it, the smarter it gets.",
-    size: "large",
-    gradient: "linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(236, 72, 153, 0.1) 100%)",
+    icon: MemoryStick,
+    title: "AI_SEMANTIC_MEMORY",
+    tag: "[VECTOR_STORE]",
+    description: "Transforms calendar data into high-dimensional embeddings. GraftAI remembers context across platforms, allowing for truly intelligent scheduling decisions.",
+    id: "01"
   },
   {
-    icon: Calendar,
-    title: "Smart Conflict Resolution",
-    description: "Detects and fixes double-bookings across all your calendars instantly.",
-    size: "medium",
-    gradient: "linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.05) 100%)",
+    icon: Workflow,
+    title: "DISTRIBUTED_QUEUE",
+    tag: "[REDIS_ARQ]",
+    description: "Reliable background processing for syncs, notifications, and heavy lifting. Zero-latency UI with distributed worker nodes.",
+    id: "02"
   },
   {
-    icon: Globe,
-    title: "Cross-Platform Sync",
-    description: "Real-time sync with Google, Outlook, Apple Calendar, and more.",
-    size: "medium",
-    gradient: "linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%)",
+    icon: ShieldCheck,
+    title: "HMAC_VALIDATION",
+    tag: "[SEC_PROTOCOL]",
+    description: "Enterprise-grade security for Google and MS Graph notifications. All incoming payloads are validated via cryptographic signatures.",
+    id: "03"
   },
   {
-    icon: Clock,
-    title: "Focus Time Protection",
-    description: "AI automatically blocks focus sessions and defends them from meeting requests.",
-    size: "medium",
-    gradient: "linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0.05) 100%)",
+    icon: Binary,
+    title: "SLOT_FINDER_V3",
+    tag: "[CACHE_LAYER]",
+    description: "Optimized slot-finding algorithm with intelligent caching. Handles peak loads with <50ms response times for slot lookups.",
+    id: "04"
   },
   {
-    icon: BarChart3,
-    title: "Meeting Analytics",
-    description: "Track time spent in meetings, identify patterns, and optimize your schedule.",
-    size: "small",
-    gradient: "linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%)",
+    icon: Unplug,
+    title: "EDGE_RESILIENCE",
+    tag: "[PWA_PROTO]",
+    description: "Full offline support via Serwist. Schedule while on a plane; we'll resync the moment you're back at the edge.",
+    id: "05"
   },
   {
-    icon: Users,
-    title: "Team Coordination",
-    description: "Find optimal meeting times across your entire team's schedules.",
-    size: "small",
-    gradient: "linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(236, 72, 153, 0.05) 100%)",
+    icon: BoxIcon,
+    title: "MICRO_INTEGRATIONS",
+    tag: "[JSON_API]",
+    description: "A developer-first API designed to be grafted onto any codebase. Simple, predictable, and fully typed.",
+    id: "06"
   },
 ];
 
+function FeatureCard({ feature, index }: { feature: typeof features[0], index: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      transition={{ duration: 0.4, delay: index * 0.05 }}
+      viewport={{ once: true }}
+      style={{ height: "100%" }}
+    >
+      <Box
+        sx={{
+          height: "100%",
+          p: 5,
+          background: "rgba(255,255,255,0.01)",
+          borderRight: "1px dashed var(--border-subtle)",
+          borderBottom: "1px dashed var(--border-subtle)",
+          position: "relative",
+          overflow: "hidden",
+          transition: "all 0.2s ease",
+          "&:hover": {
+            background: "rgba(0, 255, 156, 0.03)",
+            "& .feature-icon": { color: "var(--primary)", transform: "scale(1.1)" },
+            "& .feature-id": { color: "var(--primary)" }
+          },
+        }}
+      >
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
+           <Typography className="feature-id" sx={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--text-faint)", fontWeight: 900 }}>
+              [{feature.id}]
+           </Typography>
+           <feature.icon size={18} className="feature-icon text-[var(--text-faint)] transition-all" />
+        </Stack>
+
+        <Typography
+          sx={{
+            fontFamily: "var(--font-mono)",
+            fontWeight: 900,
+            mb: 2,
+            fontSize: "14px",
+            color: "#fff",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em"
+          }}
+        >
+          {feature.title}
+        </Typography>
+
+        <Typography sx={{ color: "var(--primary)", fontSize: "9px", fontFamily: "var(--font-mono)", fontWeight: 800, mb: 3, letterSpacing: "0.1em" }}>
+           ID_TYPE: {feature.tag}
+        </Typography>
+        
+        <Typography
+          sx={{
+            color: "var(--text-faint)",
+            fontSize: "11px",
+            fontFamily: "var(--font-mono)",
+            lineHeight: 1.8,
+            textTransform: "uppercase"
+          }}
+        >
+          {feature.description}
+        </Typography>
+
+        {/* Decorative elements */}
+        <Box sx={{ position: "absolute", bottom: 8, right: 8, opacity: 0.1 }}>
+           <Layers size={40} />
+        </Box>
+      </Box>
+    </motion.div>
+  );
+}
+
 export function FeatureBento() {
   return (
-    <Box sx={{ py: { xs: 10, md: 16 } }}>
-      <Container maxWidth="lg">
+    <Box sx={{ py: { xs: 10, md: 20 }, background: "#050505", borderTop: "1px dashed var(--border-subtle)" }}>
+      <Container maxWidth="xl">
         {/* Header */}
-        <Box sx={{ textAlign: "center", mb: { xs: 6, md: 10 } }}>
+        <Box sx={{ mb: 12 }}>
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, x: -20 }}
+            whileInView={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
             viewport={{ once: true }}
           >
-            <Typography
-              variant="h2"
-              sx={{ fontSize: { xs: "1.75rem", sm: "2.25rem", md: "3rem" }, fontWeight: 800, mb: 2 }}
-            >
-              Everything You Need for{" "}
-              <Box
-                component="span"
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+              <div className="w-4 h-[1px] bg-[var(--primary)]" />
+              <Typography
                 sx={{
-                  background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
+                  fontSize: "11px",
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--primary)",
+                  letterSpacing: "0.4em",
+                  fontWeight: 900,
+                  textTransform: "uppercase",
                 }}
               >
-                Intelligent Scheduling
-              </Box>
+                Architecture_Overview
+              </Typography>
+            </Stack>
+            <Typography
+              variant="h2"
+              sx={{
+                fontSize: { xs: "2.5rem", md: "4.5rem" },
+                fontWeight: 900,
+                fontFamily: "var(--font-mono)",
+                maxWidth: "1000px",
+                lineHeight: 0.9,
+                letterSpacing: "-0.05em",
+                color: "#fff",
+                textTransform: "uppercase"
+              }}
+            >
+              The Most <Box component="span" sx={{ color: "var(--primary)" }}>Aggressive</Box> <br />
+              Scheduling Engine Ever Built.
             </Typography>
           </motion.div>
         </Box>
 
-        {/* Bento Grid */}
-        <Grid container spacing={3}>
-          {/* Large Feature */}
-          <Grid item xs={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              viewport={{ once: true }}
-              style={{ height: "100%" }}
-            >
-              <Paper
-                sx={{
-                  height: "100%",
-                  minHeight: { xs: 280, md: 350 },
-                  p: { xs: 3, md: 4 },
-                  background: features[0].gradient,
-                  border: "1px solid rgba(99, 102, 241, 0.2)",
-                  borderRadius: 3,
-                  position: "relative",
-                  overflow: "hidden",
-                  transition: "all 0.3s ease",
-                  "&:hover": {
-                    transform: "translateY(-4px)",
-                    borderColor: "rgba(99, 102, 241, 0.4)",
-                    boxShadow: "0 20px 40px -20px rgba(99, 102, 241, 0.3)",
-                  },
-                }}
-              >
-                <Box sx={{ position: "relative", zIndex: 1 }}>
-                  <Box
-                    sx={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 2,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: "rgba(99, 102, 241, 0.2)",
-                      mb: 3,
-                    }}
-                  >
-                    <Sparkles size={28} style={{ color: "#6366f1" }} />
-                  </Box>
-                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-                    {features[0].title}
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: "#94a3b8", maxWidth: 400 }}>
-                    {features[0].description}
-                  </Typography>
-                </Box>
-                {/* Decorative Element */}
-                <Box
-                  sx={{
-                    position: "absolute",
-                    bottom: -30,
-                    right: -30,
-                    width: 150,
-                    height: 150,
-                    background: "radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, transparent 70%)",
-                    borderRadius: "50%",
-                  }}
-                />
-              </Paper>
-            </motion.div>
-          </Grid>
-
-          {/* Right Column */}
-          <Grid item xs={12} md={6}>
-            <Grid container spacing={3}>
-              {features.slice(1, 3).map((feature, index) => (
-                <Grid item xs={12} sm={6} md={12} key={index}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                    viewport={{ once: true }}
-                  >
-                    <Paper
-                      sx={{
-                        p: 3,
-                        height: "100%",
-                        background: feature.gradient,
-                        border: "1px solid rgba(99, 102, 241, 0.1)",
-                        borderRadius: 3,
-                        transition: "all 0.3s ease",
-                        "&:hover": {
-                          transform: "translateY(-4px)",
-                          borderColor: "rgba(99, 102, 241, 0.3)",
-                        },
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 1.5,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          background: "rgba(255, 255, 255, 0.05)",
-                          mb: 2,
-                        }}
-                      >
-                        <feature.icon size={22} style={{ color: "#6366f1" }} />
-                      </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, fontSize: "1.1rem" }}>
-                        {feature.title}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: "#94a3b8" }}>
-                        {feature.description}
-                      </Typography>
-                    </Paper>
-                  </motion.div>
+        {/* Technical Grid Overlay */}
+        <Box sx={{ borderTop: "1px dashed var(--border-subtle)", borderLeft: "1px dashed var(--border-subtle)" }}>
+            <Grid container spacing={0}>
+              {features.map((feature, idx) => (
+                <Grid item xs={12} sm={6} md={4} key={idx}>
+                  <FeatureCard feature={feature} index={idx} />
                 </Grid>
               ))}
             </Grid>
-          </Grid>
+        </Box>
 
-          {/* Bottom Row */}
-          {features.slice(3).map((feature, index) => (
-            <Grid item xs={12} sm={6} md={4} key={index}>
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-              >
-                <Paper
-                  sx={{
-                    p: 3,
-                    height: "100%",
-                    background: feature.gradient,
-                    border: "1px solid rgba(99, 102, 241, 0.1)",
-                    borderRadius: 3,
-                    transition: "all 0.3s ease",
-                    "&:hover": {
-                      transform: "translateY(-4px)",
-                      borderColor: "rgba(99, 102, 241, 0.3)",
-                    },
-                  }}
-                >
-                  <Box
-                    sx={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 1.5,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: "rgba(255, 255, 255, 0.05)",
-                      mb: 2,
-                    }}
-                  >
-                    <feature.icon size={22} style={{ color: "#6366f1" }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, fontSize: "1.1rem" }}>
-                    {feature.title}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: "#94a3b8" }}>
-                    {feature.description}
-                  </Typography>
-                </Paper>
-              </motion.div>
-            </Grid>
-          ))}
-        </Grid>
+        <Box sx={{ mt: 12, p: 4, border: "1px dashed var(--border-subtle)", background: "rgba(255,255,255,0.01)" }}>
+           <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems="center" spacing={4}>
+              <Stack direction="row" spacing={3} alignItems="center">
+                <Activity size={16} className="text-[var(--primary)] animate-pulse" />
+                <Typography sx={{ color: "var(--text-faint)", fontSize: "10px", fontFamily: "var(--font-mono)", fontWeight: 900, letterSpacing: "0.1em" }}>
+                  [ NODE_INTEGRITY: 100% // CLUSTER_STATUS: NOMINAL ]
+                </Typography>
+              </Stack>
+              <Typography sx={{ color: "var(--text-faint)", fontSize: "9px", fontFamily: "var(--font-mono)", fontStyle: "italic", textTransform: "uppercase" }}>
+                 // Distributed Execution Protocol v.3.0.82_STABLE
+              </Typography>
+           </Stack>
+        </Box>
       </Container>
     </Box>
   );

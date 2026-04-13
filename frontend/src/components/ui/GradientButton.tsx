@@ -21,54 +21,58 @@ export function GradientButton({
   ...props
 }: GradientButtonProps) {
   const sizeStyles = {
-    small: { px: 2, py: 0.75, fontSize: "0.875rem" },
-    medium: { px: 3, py: 1.25, fontSize: "1rem" },
-    large: { px: 4, py: 1.75, fontSize: "1.125rem" }
+    small: { px: 2, py: 0.75, fontSize: "10px" },
+    medium: { px: 3, py: 1, fontSize: "11px" },
+    large: { px: 4, py: 1.5, fontSize: "12px" }
   };
 
   const variantStyles = {
     primary: {
-      background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-      color: "white",
-      border: "none",
+      background: "var(--primary)",
+      color: "#000",
+      border: "1px solid var(--primary)",
       "&:hover": {
-        background: "linear-gradient(135deg, #5558e0 0%, #d63d8a 100%)",
-        boxShadow: "0 4px 20px rgba(99, 102, 241, 0.4)"
+        background: "transparent",
+        color: "var(--primary)",
+        boxShadow: "0 0 15px rgba(0, 255, 156, 0.3)"
       }
     },
     secondary: {
-      background: "rgba(99, 102, 241, 0.1)",
-      color: "#a5b4fc",
-      border: "1px solid rgba(99, 102, 241, 0.3)",
+      background: "rgba(0, 255, 156, 0.05)",
+      color: "var(--primary)",
+      border: "1px solid rgba(0, 255, 156, 0.2)",
       "&:hover": {
-        background: "rgba(99, 102, 241, 0.2)",
-        borderColor: "rgba(99, 102, 241, 0.5)"
+        background: "rgba(0, 255, 156, 0.1)",
+        borderColor: "var(--primary)"
       }
     },
     outline: {
       background: "transparent",
-      color: "white",
-      border: "1px solid rgba(255, 255, 255, 0.2)",
+      color: "var(--text-primary)",
+      border: "1px dashed var(--border-subtle)",
       "&:hover": {
-        background: "rgba(255, 255, 255, 0.05)",
-        borderColor: "rgba(255, 255, 255, 0.4)"
+        background: "rgba(255, 255, 255, 0.02)",
+        borderColor: "var(--primary)",
+        color: "var(--primary)"
       }
     }
   };
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
       style={{ display: fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto" }}
     >
       <Button
         {...props}
         fullWidth={fullWidth}
         sx={{
-          textTransform: "none",
-          borderRadius: "12px",
-          fontWeight: 600,
+          textTransform: "uppercase",
+          fontFamily: "var(--font-mono)",
+          letterSpacing: "0.1em",
+          borderRadius: "0",
+          fontWeight: 800,
           transition: "all 0.2s ease",
           ...sizeStyles[size],
           ...variantStyles[gradientVariant],

@@ -11,21 +11,73 @@ import {
   Drawer, 
   List, 
   ListItem, 
-  ListItemText,
   useMediaQuery,
-  useTheme
+  useTheme,
+  Stack,
+  Container
 } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Menu, X, Sparkles } from "lucide-react";
-import { GradientButton } from "@/components/ui/GradientButton";
+import { Menu, X, Terminal, Activity, Cpu, Globe, Database, Fingerprint, Clock as ClockIcon } from "lucide-react";
 
 const navLinks = [
-  { label: "Features", href: "#features" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "How it Works", href: "#how-it-works" },
-  { label: "Docs", href: "/docs" },
+  { label: "// SYSTEMS", href: "#features" },
+  { label: "// NODES", href: "/dashboard" },
+  { label: "// PROTOCOLS", href: "#how-it-works" },
+  { label: "// DEV_HUB", href: "/developers" },
 ];
+
+function Clock() {
+  const [time, setTime] = useState("");
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date().toLocaleTimeString("en-US", { hour12: false }));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return <span>{time || "00:00:00"}</span>;
+}
+
+function TelemetryBar({ isMobile }: { isMobile: boolean }) {
+  if (isMobile) return null;
+
+  return (
+    <Box
+      sx={{
+        py: 0.75,
+        borderBottom: "1px dashed var(--border-subtle)",
+        background: "rgba(0,0,0,0.8)",
+        backdropFilter: "blur(4px)",
+      }}
+    >
+      <Container maxWidth={false}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Stack direction="row" spacing={4} alignItems="center">
+            {[
+              { label: "KERN_V", value: "3.0.82-BETA", icon: Cpu },
+              { label: "PID", value: "2841-SYS", icon: Fingerprint },
+              { label: "LOCAL_NODE", value: "GRAFT_PRIMARY", icon: Globe },
+              { label: "SYS_TIME", value: <Clock />, icon: ClockIcon },
+            ].map((stat, i) => (
+              <Stack key={i} direction="row" spacing={1} alignItems="center">
+                <stat.icon size={10} className="text-[var(--text-faint)]" />
+                <Typography className="telemetry-text">
+                  {stat.label}: <Box component="span" sx={{ color: "var(--primary)" }}>{stat.value}</Box>
+                </Typography>
+              </Stack>
+            ))}
+          </Stack>
+          
+          <Typography sx={{ fontSize: "8px", fontStyle: "italic", fontWeight: 900, color: "var(--text-faint)", fontFamily: "var(--font-mono)" }}>
+             // SECURE_CONNECTION_ESTABLISHED
+          </Typography>
+        </Stack>
+      </Container>
+    </Box>
+  );
+}
 
 export function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -35,15 +87,11 @@ export function Navigation() {
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 50);
+      setScrolled(window.scrollY > 20);
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  const handleNavClick = () => {
-    setMobileMenuOpen(false);
-  };
 
   return (
     <>
@@ -51,107 +99,140 @@ export function Navigation() {
         position="fixed"
         elevation={0}
         sx={{
-          background: scrolled 
-            ? "rgba(15, 15, 26, 0.95)" 
-            : "transparent",
-          backdropFilter: scrolled ? "blur(20px)" : "none",
-          borderBottom: scrolled ? "1px solid rgba(99, 102, 241, 0.1)" : "none",
+          background: scrolled ? "rgba(5, 5, 5, 0.98)" : "rgba(5, 5, 5, 0.5)",
+          borderBottom: "1px solid var(--border-subtle)",
           transition: "all 0.3s ease",
+          zIndex: 1101,
         }}
       >
-        <Toolbar sx={{ justifyContent: "space-between", px: { xs: 2, md: 4 } }}>
-          {/* Logo */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Link href="/" style={{ textDecoration: "none" }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Sparkles size={28} style={{ color: "#6366f1" }} />
-                <Typography
-                  variant="h6"
+        <TelemetryBar isMobile={isMobile} />
+        
+        <Toolbar sx={{ justifyContent: "space-between", px: { xs: 2.5, md: 8 }, height: { xs: 70, md: 80 } }}>
+          {/* Logo Section */}
+          <Link href="/" style={{ textDecoration: "none" }}>
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ position: "relative" }}>
+              <Box sx={{ 
+                width: 36, 
+                height: 36, 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center",
+                border: "1px solid var(--primary)",
+                background: "rgba(0, 255, 156, 0.05)",
+                borderRadius: 0,
+                position: "relative",
+              }}>
+                <Terminal size={20} className="text-[var(--primary)]" />
+              </Box>
+              <Typography
+                sx={{
+                  fontWeight: 900,
+                  fontSize: "1.25rem",
+                  fontFamily: "var(--font-mono)",
+                  letterSpacing: "-0.05em",
+                  color: "var(--text-primary)",
+                  textTransform: "uppercase"
+                }}
+              >
+                GraftAI<Box component="span" sx={{ color: "var(--text-faint)", fontWeight: 400 }}>_NODE</Box>
+              </Typography>
+            </Stack>
+          </Link>
+
+          {/* Desktop Nav */}
+          {!isMobile && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              {navLinks.map((link) => (
+                <Button
+                  key={link.href}
+                  component={Link}
+                  href={link.href}
                   sx={{
+                    color: "var(--text-secondary)",
+                    textTransform: "none",
+                    fontSize: "10px",
                     fontWeight: 800,
-                    background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    letterSpacing: "-0.02em",
+                    fontFamily: "var(--font-mono)",
+                    px: 3,
+                    letterSpacing: "0.15em",
+                    position: "relative",
+                    "&:hover": {
+                      color: "var(--primary)",
+                      background: "rgba(255,255,255,0.02)",
+                    },
                   }}
                 >
-                  GraftAI
-                </Typography>
-              </Box>
-            </Link>
-          </motion.div>
+                  {link.label}
+                </Button>
+              ))}
+              
+              <Box sx={{ width: "1px", height: "16px", background: "var(--border-subtle)", mx: 3 }} />
+              
+              <Button
+                component={Link}
+                href="/login"
+                sx={{
+                  background: "transparent",
+                  border: "1px dashed var(--border-subtle)",
+                  color: "var(--text-primary)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  fontWeight: 900,
+                  borderRadius: "0",
+                  px: 4,
+                  py: 1.5,
+                  letterSpacing: "0.1em",
+                  mr: 2,
+                  "&:hover": {
+                    borderColor: "var(--primary)",
+                    background: "rgba(0, 255, 156, 0.05)"
+                  }
+                }}
+              >
+                // SIGN_IN
+              </Button>
 
-          {/* Desktop Navigation */}
-          {!isMobile && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                {navLinks.map((link) => (
-                  <Button
-                    key={link.href}
-                    component={Link}
-                    href={link.href}
-                    sx={{
-                      color: "#94a3b8",
-                      textTransform: "none",
-                      fontSize: "0.9rem",
-                      px: 2,
-                      position: "relative",
-                      "&::after": {
-                        content: '""',
-                        position: "absolute",
-                        bottom: 6,
-                        left: "50%",
-                        width: 0,
-                        height: 2,
-                        background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                        transition: "all 0.3s ease",
-                        transform: "translateX(-50%)",
-                      },
-                      "&:hover": {
-                        color: "#f8fafc",
-                        "&::after": {
-                          width: "60%",
-                        },
-                      },
-                    }}
-                  >
-                    {link.label}
-                  </Button>
-                ))}
-                <GradientButton
-                  component={Link}
-                  href="/login"
-                  gradientVariant="primary"
-                  size="small"
-                  sx={{ ml: 2 }}
-                >
-                  Get Started
-                </GradientButton>
-              </Box>
-            </motion.div>
+              <Button
+                component={Link}
+                href="/onboarding"
+                sx={{
+                  background: "var(--primary)",
+                  color: "#000",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  fontWeight: 900,
+                  borderRadius: "0",
+                  px: 4,
+                  py: 1.5,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  transition: "all 0.2s ease",
+                  "&:hover": {
+                    background: "#fff",
+                    boxShadow: "0 0 30px rgba(0, 255, 156, 0.3)"
+                  }
+                }}
+              >
+                ACCESS_TERMINAL
+              </Button>
+            </Stack>
           )}
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Toggle */}
           {isMobile && (
-            <IconButton
-              onClick={() => setMobileMenuOpen(true)}
-              sx={{ color: "#f8fafc" }}
-            >
-              <Menu size={24} />
-            </IconButton>
+            <Stack direction="row" spacing={2} alignItems="center">
+               <div className="flex items-center gap-1.5 px-2 py-1 border border-dashed border-[var(--border-subtle)] bg-black/50">
+                  <Box sx={{ width: 4, height: 4, background: "var(--primary)", borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                  <span className="text-[10px] font-mono text-[var(--primary)]"><Clock /></span>
+               </div>
+               <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: "var(--text-primary)", width: 40, height: 40, border: "1px solid var(--border-subtle)", borderRadius: 0 }}>
+                 <Menu size={20} />
+               </IconButton>
+            </Stack>
           )}
         </Toolbar>
       </AppBar>
 
-      {/* Mobile Drawer */}
       <Drawer
         anchor="right"
         open={mobileMenuOpen}
@@ -159,89 +240,70 @@ export function Navigation() {
         PaperProps={{
           sx: {
             width: "100%",
-            maxWidth: 320,
-            background: "linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%)",
-            borderLeft: "1px solid rgba(99, 102, 241, 0.2)",
+            maxWidth: "100%",
+            background: "#050505",
+            borderRadius: 0,
+            backgroundImage: "none"
           },
         }}
       >
-        <Box sx={{ p: 3 }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 4 }}>
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 800,
-                background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              GraftAI
-            </Typography>
-            <IconButton onClick={() => setMobileMenuOpen(false)} sx={{ color: "#f8fafc" }}>
-              <X size={24} />
-            </IconButton>
-          </Box>
+        <Box sx={{ p: 4, height: "100%", display: "flex", flexDirection: "column" }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 8 }}>
+             <Stack direction="row" spacing={1.5} alignItems="center">
+                <Terminal size={20} className="text-[var(--primary)]" />
+                <Typography sx={{ fontFamily: "var(--font-mono)", fontWeight: 900, letterSpacing: "0.1em", fontSize: "14px", color: "#fff" }}>
+                   GRAFT_MENU
+                </Typography>
+             </Stack>
+             <IconButton onClick={() => setMobileMenuOpen(false)} sx={{ color: "var(--text-primary)", border: "1px solid var(--border-subtle)", borderRadius: 0 }}>
+               <X size={20} />
+             </IconButton>
+          </Stack>
 
-          <List>
-            {navLinks.map((link, index) => (
-              <motion.div
-                key={link.href}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <ListItem sx={{ px: 0 }}>
-                  <Link
-                    href={link.href}
-                    onClick={handleNavClick}
-                    style={{ textDecoration: "none", width: "100%" }}
-                  >
-                    <ListItemText
-                      primary={link.label}
-                      sx={{
-                        color: "#94a3b8",
-                        "& .MuiListItemText-primary": {
-                          fontSize: "1.1rem",
-                          fontWeight: 500,
-                        },
-                        "&:hover": {
-                          color: "#f8fafc",
-                        },
-                      }}
-                    />
-                  </Link>
-                </ListItem>
-              </motion.div>
+          <List sx={{ mb: 6, flex: 1 }}>
+            {navLinks.map((link, idx) => (
+              <ListItem key={link.href} sx={{ px: 0, py: 2.5, borderBottom: "1px dashed rgba(255,255,255,0.05)" }}>
+                <Link href={link.href} onClick={() => setMobileMenuOpen(false)} style={{ textDecoration: "none", width: "100%" }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography sx={{ color: "var(--text-primary)", fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                      {link.label}
+                    </Typography>
+                    <Box sx={{ color: "var(--text-faint)", fontSize: "10px", fontFamily: "var(--font-mono)" }}>0{idx + 1}</Box>
+                  </Stack>
+                </Link>
+              </ListItem>
             ))}
           </List>
 
-          <Box sx={{ mt: 4 }}>
-            <GradientButton
-              component={Link}
-              href="/login"
-              gradientVariant="primary"
-              fullWidth
-              size="large"
-              onClick={handleNavClick}
-            >
-              Get Started Free
-            </GradientButton>
-            <Button
-              component={Link}
-              href="/login"
-              fullWidth
-              sx={{
-                mt: 2,
-                color: "#94a3b8",
-                textTransform: "none",
-                fontSize: "1rem",
-              }}
-              onClick={handleNavClick}
-            >
-              Sign In
-            </Button>
+          <Box sx={{ p: 3, border: "1px dashed var(--border-subtle)", background: "rgba(255,255,255,0.02)", mb: 4 }}>
+             <Typography sx={{ fontSize: "9px", color: "var(--primary)", fontFamily: "var(--font-mono)", fontWeight: 900, mb: 1.5, letterSpacing: "0.2em" }}>
+                // KERNEL_STATS
+             </Typography>
+             <Stack spacing={1}>
+                <Typography sx={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>NODE: GRAFT_PRIMARY</Typography>
+                <Typography sx={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>LATENCY: 0.12MS</Typography>
+                <Typography sx={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>LOAD: OPTIMIZED</Typography>
+             </Stack>
           </Box>
+
+          <Button
+            component={Link}
+            href="/login"
+            fullWidth
+            onClick={() => setMobileMenuOpen(false)}
+            sx={{
+              background: "var(--primary)",
+              color: "#000",
+              fontFamily: "var(--font-mono)",
+              fontWeight: 900,
+              fontSize: "13px",
+              borderRadius: "0",
+              py: 2,
+              letterSpacing: "0.1em"
+            }}
+          >
+            INITIATE_SESSION()
+          </Button>
         </Box>
       </Drawer>
     </>

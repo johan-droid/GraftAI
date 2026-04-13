@@ -1,66 +1,63 @@
 "use client";
 
 import { useState } from "react";
-import { Box, Typography, Container, Grid, Paper, Switch, Stack } from "@mui/material";
+import { Box, Typography, Container, Grid, Stack, Button } from "@mui/material";
 import { motion } from "framer-motion";
-import { Check, Sparkles } from "lucide-react";
+import { Check, Terminal, Percent, Calculator, Cpu, Shield, Globe, Activity } from "lucide-react";
 import Link from "next/link";
-import { GradientButton } from "@/components/ui/GradientButton";
 
 const plans = [
   {
-    name: "Free",
-    description: "Perfect for individuals getting started",
+    name: "FREE_TIER",
+    description: "ENTRY_LEVEL_CORE",
     monthlyPrice: 0,
     yearlyPrice: 0,
     features: [
-      "Up to 100 scheduled events/month",
-      "Basic AI assistance",
-      "Email notifications",
-      "Mobile app access",
-      "Google Calendar sync",
+      "100_EVENTS_PER_CYCLE",
+      "BASIC_AI_CORE",
+      "EMAIL_NOTIF_HANDLERS",
+      "MOBILE_KERNEL_ACCESS",
+      "G_CAL_SYNC_PROTOCOL",
     ],
-    cta: "Get Started Free",
-    ctaVariant: "secondary" as const,
-    popular: false,
+    cta: "INIT_FREE_V1",
+    nodeId: "NODE_01",
   },
   {
-    name: "Pro",
-    description: "For professionals who need more power",
+    name: "PRO_KERNEL",
+    description: "DATA_DRIVEN_PROFESSIONAL",
     monthlyPrice: 19,
     yearlyPrice: 15,
     features: [
-      "Unlimited scheduled events",
-      "Advanced AI scheduling",
-      "Priority support",
-      "All calendar integrations",
-      "Team collaboration (up to 5)",
-      "Custom workflows",
-      "Meeting analytics",
-      "Focus time protection",
+      "UNLIMITED_EVENT_STREAM",
+      "ADVANCED_AI_SCHEDULER",
+      "PRIORITY_STACK_SUPPORT",
+      "GLOBAL_CAL_SYNC_v3",
+      "TEAM_LAYER_UP_TO_5",
+      "CUSTOM_WORKFLOW_ENGINE",
+      "MEETING_METRIC_ANALYTICS",
+      "FOCUS_PROTECTION_DAEMON",
     ],
-    cta: "Start Free Trial",
-    ctaVariant: "primary" as const,
+    cta: "DEPLOY_PRO_STABLE",
     popular: true,
+    nodeId: "NODE_02_OP",
   },
   {
-    name: "Enterprise",
-    description: "For organizations with advanced needs",
+    name: "ENTERPRISE_CORE",
+    description: "SCALABLE_CLUSTER_LOGIC",
     monthlyPrice: null,
     yearlyPrice: null,
     features: [
-      "Everything in Pro",
-      "Unlimited team members",
-      "SSO & SAML",
-      "Dedicated support",
-      "Custom integrations",
-      "SLA guarantee",
-      "Advanced analytics",
-      "API access",
+      "ALL_PRO_FEATURES_LOADED",
+      "UNLIMITED_NODE_CLUSTER",
+      "SSO_SAML_AUTH_LAYER",
+      "DEDICATED_OPS_SUPPORT",
+      "CUSTOM_CLUSTER_INTEGRATION",
+      "99.9%_SLA_HANDSHAKE",
+      "ADVANCED_LOG_ANALYTICS",
+      "API_MASTER_KEY_ACCESS",
     ],
-    cta: "Contact Sales",
-    ctaVariant: "outline" as const,
-    popular: false,
+    cta: "CONTACT_CORE_OPS",
+    nodeId: "CLUSTER_ROOT",
   },
 ];
 
@@ -68,97 +65,86 @@ export function Pricing() {
   const [isYearly, setIsYearly] = useState(false);
 
   return (
-    <Box id="pricing" sx={{ py: { xs: 10, md: 16 } }}>
-      <Container maxWidth="lg">
+    <Box id="pricing" sx={{ py: { xs: 10, md: 20 }, background: "var(--bg-base)", borderTop: "1px dashed var(--border-subtle)" }}>
+      <Container maxWidth="xl">
         {/* Header */}
-        <Box sx={{ textAlign: "center", mb: { xs: 6, md: 8 } }}>
+        <Box sx={{ mb: { xs: 8, md: 12 } }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             viewport={{ once: true }}
           >
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+               <Cpu size={14} className="text-[var(--primary)]" />
+               <Typography className="telemetry-text">[ SYSTEM_ACCESS_PROTOCOLS ]</Typography>
+            </Stack>
             <Typography
               variant="h2"
-              sx={{ fontSize: { xs: "1.75rem", sm: "2.25rem", md: "3rem" }, fontWeight: 800, mb: 2 }}
+              sx={{ 
+                fontSize: { xs: "2.5rem", sm: "3.5rem", md: "4.5rem" }, 
+                fontWeight: 900, 
+                fontFamily: "var(--font-mono)",
+                letterSpacing: "-0.05em",
+                color: "var(--text-primary)",
+                textTransform: "uppercase",
+                lineHeight: 1
+              }}
             >
-              Simple, Transparent{" "}
-              <Box
-                component="span"
-                sx={{
-                  background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
+              Licensing <Box component="span" sx={{ color: "var(--text-faint)" }}>Modules</Box>.
+            </Typography>
+          </motion.div>
+
+          {/* Terminal Toggle */}
+          <Box sx={{ mt: 6 }}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={4}
+              alignItems={{ xs: "flex-start", sm: "center" }}
+            >
+              <Box 
+                onClick={() => setIsYearly(false)}
+                sx={{ 
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  color: !isYearly ? "var(--primary)" : "var(--text-faint)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "12px",
+                  fontWeight: 900,
+                  transition: "all 0.2s"
                 }}
               >
-                Pricing
+                {!isYearly ? "[X]" : "[ ]"} MONTHLY_BILLING_CYCLE
               </Box>
-            </Typography>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            viewport={{ once: true }}
-          >
-            <Typography variant="body1" sx={{ color: "#94a3b8", mb: 4, maxWidth: 600, mx: "auto" }}>
-              Choose the plan that fits your needs. All plans include core AI scheduling features.
-            </Typography>
-          </motion.div>
-
-          {/* Toggle */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            viewport={{ once: true }}
-          >
-            <Stack
-              direction="row"
-              spacing={2}
-              alignItems="center"
-              justifyContent="center"
-              sx={{ mb: 6 }}
-            >
-              <Typography variant="body1" sx={{ color: isYearly ? "#64748b" : "#f8fafc", fontWeight: 500 }}>
-                Monthly
-              </Typography>
-              <Switch
-                checked={isYearly}
-                onChange={(e) => setIsYearly(e.target.checked)}
-                sx={{
-                  "& .MuiSwitch-switchBase.Mui-checked": {
-                    color: "#6366f1",
-                  },
-                  "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
-                    background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                  },
+              <Box 
+                onClick={() => setIsYearly(true)}
+                sx={{ 
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  color: isYearly ? "var(--primary)" : "var(--text-faint)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "12px",
+                  fontWeight: 900,
+                  transition: "all 0.2s"
                 }}
-              />
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Typography variant="body1" sx={{ color: isYearly ? "#f8fafc" : "#64748b", fontWeight: 500 }}>
-                  Yearly
-                </Typography>
-                <Box
-                  sx={{
-                    px: 1,
-                    py: 0.5,
-                    background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                    borderRadius: 1,
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    color: "white",
-                  }}
-                >
-                  Save 20%
-                </Box>
+              >
+                {isYearly ? "[X]" : "[ ]"} YEARLY_NODE_RESERVE
+                {isYearly && (
+                  <Box sx={{ ml: 2, px: 1, py: 0.2, border: "1px dashed var(--primary)", fontSize: "9px", color: "var(--primary)" }}>
+                    EFFICIENCY: +20%
+                  </Box>
+                )}
               </Box>
             </Stack>
-          </motion.div>
+          </Box>
         </Box>
 
-        {/* Pricing Cards */}
-        <Grid container spacing={3} alignItems="stretch">
+        {/* Pricing Matrix */}
+        <Grid container spacing={4}>
           {plans.map((plan, index) => (
             <Grid item xs={12} md={4} key={index}>
               <motion.div
@@ -168,104 +154,80 @@ export function Pricing() {
                 viewport={{ once: true }}
                 style={{ height: "100%" }}
               >
-                <Paper
+                <Box
                   sx={{
                     height: "100%",
                     display: "flex",
                     flexDirection: "column",
-                    p: { xs: 3, md: 4 },
-                    background: plan.popular
-                      ? "linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(236, 72, 153, 0.1) 100%)"
-                      : "linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(15, 15, 26, 0.9) 100%)",
-                    border: plan.popular ? "2px solid #6366f1" : "1px solid rgba(99, 102, 241, 0.1)",
-                    borderRadius: 3,
+                    p: { xs: 4, md: 5 },
+                    background: "var(--bg-base)",
+                    border: "1px dashed var(--border-subtle)",
                     position: "relative",
-                    overflow: "visible",
-                    transition: "all 0.3s ease",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                     "&:hover": {
-                      transform: "translateY(-8px)",
-                      boxShadow: plan.popular
-                        ? "0 25px 50px -12px rgba(99, 102, 241, 0.4)"
-                        : "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                      borderColor: "var(--primary)",
+                      background: "rgba(0, 255, 156, 0.02)",
+                      "& .price-box": { borderColor: "var(--primary)" }
                     },
                   }}
                 >
-                  {/* Popular Badge */}
-                  {plan.popular && (
-                    <Box
-                      sx={{
-                        position: "absolute",
-                        top: -12,
-                        left: "50%",
-                        transform: "translateX(-50%)",
-                        background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                        color: "white",
-                        px: 2,
-                        py: 0.5,
-                        borderRadius: 10,
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.5,
-                      }}
-                    >
-                      <Sparkles size={14} />
-                      MOST POPULAR
+                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 6 }}>
+                    <Box>
+                      <Typography sx={{ fontWeight: 900, mb: 1, fontFamily: "var(--font-mono)", fontSize: "20px", color: "var(--text-primary)" }}>
+                        {plan.name}
+                      </Typography>
+                      <Typography className="telemetry-text" sx={{ opacity: 0.6 }}>
+                        ID: {plan.nodeId}
+                      </Typography>
                     </Box>
-                  )}
-
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-                      {plan.name}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: "#94a3b8" }}>
-                      {plan.description}
-                    </Typography>
-                  </Box>
-
-                  {/* Price */}
-                  <Box sx={{ mb: 3 }}>
-                    {plan.monthlyPrice !== null ? (
-                      <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.5 }}>
-                        <Typography variant="h3" sx={{ fontWeight: 800 }}>
-                          ${isYearly ? plan.yearlyPrice : plan.monthlyPrice}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: "#64748b" }}>
-                          /month
-                        </Typography>
+                    {plan.popular && (
+                      <Box sx={{ px: 1.5, py: 0.75, background: "var(--primary)", color: "#000", fontSize: "10px", fontWeight: 900, fontFamily: "var(--font-mono)" }}>
+                        RECOMMENDED
                       </Box>
-                    ) : (
-                      <Typography variant="h3" sx={{ fontWeight: 800 }}>
-                        Custom
-                      </Typography>
                     )}
-                    {isYearly && plan.yearlyPrice !== null && plan.monthlyPrice !== null && (
-                      <Typography variant="caption" sx={{ color: "#10b981", display: "block", mt: 0.5 }}>
-                        Billed annually (${plan.yearlyPrice * 12}/year)
+                  </Stack>
+
+                  {/* Price & Calculation */}
+                  <Box 
+                    className="price-box"
+                    sx={{ 
+                      mb: 6, 
+                      p: 3, 
+                      border: "1px dashed var(--border-subtle)", 
+                      background: "rgba(0,0,0,0.3)",
+                      transition: "border-color 0.3s"
+                    }}
+                  >
+                    {plan.monthlyPrice !== null ? (
+                      <Stack spacing={2}>
+                        <Stack direction="row" alignItems="baseline" spacing={1}>
+                          <Typography sx={{ fontSize: "3rem", fontWeight: 900, fontFamily: "var(--font-mono)", color: "var(--text-primary)", lineHeight: 1 }}>
+                            ${isYearly ? plan.yearlyPrice : plan.monthlyPrice}
+                          </Typography>
+                          <Typography className="telemetry-text">/ CYCLE</Typography>
+                        </Stack>
+                        {isYearly && plan.monthlyPrice > 0 && (
+                          <Box sx={{ pt: 2, borderTop: "1px dashed rgba(255,255,255,0.05)" }}>
+                             <Typography sx={{ fontSize: "10px", color: "var(--primary)", fontFamily: "var(--font-mono)", fontWeight: 800 }}>
+                               SAVINGS_DELTA: -${(plan.monthlyPrice - plan.yearlyPrice) * 12}/YR
+                             </Typography>
+                          </Box>
+                        )}
+                      </Stack>
+                    ) : (
+                      <Typography sx={{ fontSize: "2rem", fontWeight: 900, fontFamily: "var(--font-mono)", color: "var(--primary)" }}>
+                        NEGOTIATE_OPS
                       </Typography>
                     )}
                   </Box>
 
-                  {/* Features */}
-                  <Box sx={{ flexGrow: 1, mb: 3 }}>
+                  {/* Feature Terminal */}
+                  <Box sx={{ flexGrow: 1, mb: 6 }}>
+                    <Typography className="telemetry-text" sx={{ mb: 3, opacity: 0.4 }}>// ENABLED_CAPABILITIES</Typography>
                     {plan.features.map((feature, fIndex) => (
-                      <Box key={fIndex} sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
-                        <Box
-                          sx={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: "50%",
-                            background: plan.popular ? "rgba(99, 102, 241, 0.2)" : "rgba(16, 185, 129, 0.2)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <Check size={12} style={{ color: plan.popular ? "#6366f1" : "#10b981" }} />
-                        </Box>
-                        <Typography variant="body2" sx={{ color: "#e2e8f0" }}>
+                      <Box key={fIndex} sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+                        <Box sx={{ width: 4, height: 4, background: "var(--primary)", borderRadius: "50%" }} />
+                        <Typography sx={{ color: "var(--text-secondary)", fontSize: "11px", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
                           {feature}
                         </Typography>
                       </Box>
@@ -273,20 +235,48 @@ export function Pricing() {
                   </Box>
 
                   {/* CTA */}
-                  <GradientButton
+                  <Button
                     component={Link}
-                    href={plan.name === "Enterprise" ? "/contact" : "/login"}
-                    gradientVariant={plan.ctaVariant}
+                    href={plan.name === "ENTERPRISE_CORE" ? "/contact" : "/login"}
                     fullWidth
-                    size="large"
+                    sx={{
+                      py: 2,
+                      background: plan.popular ? "var(--primary)" : "var(--bg-elevated)",
+                      border: "1px dashed var(--border-subtle)",
+                      color: plan.popular ? "#000" : "var(--text-primary)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "12px",
+                      fontWeight: 900,
+                      borderRadius: 0,
+                      letterSpacing: "0.15em",
+                      "&:hover": {
+                        background: "var(--primary)",
+                        color: "#000",
+                        borderColor: "var(--primary)",
+                        boxShadow: "0 0 30px rgba(0,255,156,0.3)"
+                      }
+                    }}
                   >
-                    {plan.cta}
-                  </GradientButton>
-                </Paper>
+                    {plan.cta}();
+                  </Button>
+                </Box>
               </motion.div>
             </Grid>
           ))}
         </Grid>
+
+        <Box sx={{ mt: 15, display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
+           {[
+             { label: "SOC2_TYPE_II", icon: Shield },
+             { label: "GLOBAL_RESILIENCE", icon: Globe },
+             { label: "SLA_99.99%", icon: Activity }
+           ].map((cert, i) => (
+             <Stack key={i} direction="row" spacing={1.5} alignItems="center">
+                <cert.icon size={16} className="text-[var(--text-faint)]" />
+                <Typography className="telemetry-text">{cert.label}</Typography>
+             </Stack>
+           ))}
+        </Box>
       </Container>
     </Box>
   );

@@ -9,49 +9,53 @@ import {
   Sparkles, 
   Plug, 
   Shield,
-  Check
+  Check,
+  Globe,
+  Lock,
+  Zap,
+  Cpu
 } from "lucide-react";
 
 const tabs = [
   {
     id: "overview",
-    label: "Overview",
+    label: "NODE_OVERVIEW",
     icon: LayoutDashboard,
-    title: "Everything in One Place",
-    description: "Your unified command center for all scheduling needs. View calendars, manage meetings, and track productivity all from a single dashboard.",
-    features: ["Unified calendar view", "Meeting analytics", "Productivity insights", "Quick actions"],
+    title: "System Command Center",
+    description: "Your unified telemetry dashboard for all scheduling operations. Orchestrate meetings, calibrate logic, and monitor productivity throughput from a single high-fidelity terminal.",
+    features: ["UNIFIED_NODE_STATE", "METRIC_ANALYTICS", "THROUGHPUT_INSIGHTS", "RAPID_EXEC_ACTIONS"],
   },
   {
     id: "calendar",
-    label: "Calendar",
+    label: "SYNC_ENGINE",
     icon: Calendar,
-    title: "Smart Calendar Management",
-    description: "AI-powered calendar that learns your preferences and automatically optimizes your schedule for maximum productivity.",
-    features: ["Multi-calendar sync", "AI time blocking", "Conflict detection", "Smart suggestions"],
+    title: "Heuristic Calendar Core",
+    description: "Binary-optimized scheduling that adapts to your work-life heuristics. Automatically clusters workloads for peak focus-efficiency.",
+    features: ["CLUSTER_SYNC", "AI_TIME_BLOCKING", "COLLISION_DETECTION", "SMART_SUGGESTIONS"],
   },
   {
     id: "ai",
-    label: "AI Features",
+    label: "COGNITIVE_AI",
     icon: Sparkles,
-    title: "Intelligent Scheduling",
-    description: "Let our advanced AI handle the heavy lifting. From finding optimal meeting times to protecting your focus hours.",
-    features: ["Natural language scheduling", "Auto-meeting notes", "Smart reminders", "Focus time protection"],
+    title: "Intelligent Kernel Logic",
+    description: "Autonomous scheduling agents handle high-latency coordination. Built on advanced LLM-logic to protect focus-cycles and eliminate scheduling overhead.",
+    features: ["NL_PARSER", "AUTO_SUMMARY", "PROACTIVE_ALERTS", "FOCUS_ISOLATION"],
   },
   {
     id: "integrations",
-    label: "Integrations",
+    label: "CLUSTER_PLUGINS",
     icon: Plug,
-    title: "Connect Your Tools",
-    description: "Seamlessly integrate with your favorite productivity tools. Works with Google, Outlook, Zoom, Slack, and 50+ more.",
-    features: ["Google & Outlook sync", "Zoom & Teams integration", "Slack notifications", "API access"],
+    title: "Seamless Plugin Layer",
+    description: "Modular architecture supports 50+ third-party nodes. Extend your capability with Google, Outlook, Slack, and dedicated API hooks.",
+    features: ["MULTI_NODE_SYNC", "PROTOCOL_BRIDGES", "SLACK_WEBHOOKS", "MASTER_API_ACCESS"],
   },
   {
     id: "security",
-    label: "Security",
+    label: "SECURITY_MESH",
     icon: Shield,
-    title: "Enterprise-Grade Security",
-    description: "Bank-level encryption and compliance standards to keep your data safe. SOC 2 Type II certified and GDPR compliant.",
-    features: ["End-to-end encryption", "SOC 2 compliant", "SSO & SAML", "Audit logs"],
+    title: "Encryption Layer Protection",
+    description: "Hardened security protocols protect every data packet. Built with AES-256 standards and SOC 2 hardened infrastructure.",
+    features: ["E2E_ENCRYPTION", "SOC_2_READY", "SAML_AUTH_V2", "EVENT_AUDIT_LOGS"],
   },
 ];
 
@@ -59,7 +63,7 @@ export function ProductShowcase() {
   const [activeTab, setActiveTab] = useState(0);
 
   return (
-    <Box sx={{ py: { xs: 10, md: 16 }, background: "rgba(26, 26, 46, 0.3)" }}>
+    <Box sx={{ py: { xs: 10, md: 16 }, background: "transparent", position: "relative" }}>
       <Container maxWidth="lg">
         {/* Header */}
         <Box sx={{ textAlign: "center", mb: { xs: 6, md: 8 } }}>
@@ -71,18 +75,22 @@ export function ProductShowcase() {
           >
             <Typography
               variant="h2"
-              sx={{ fontSize: { xs: "1.75rem", sm: "2.25rem", md: "3rem" }, fontWeight: 800, mb: 2 }}
+              sx={{ 
+                fontSize: { xs: "1.75rem", sm: "2.25rem", md: "3rem" }, 
+                fontWeight: 800, 
+                mb: 2,
+                fontFamily: "var(--font-mono)",
+                textTransform: "uppercase"
+              }}
             >
-              Powerful Features for{" "}
+              System Operating{" "}
               <Box
                 component="span"
                 sx={{
-                  background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
+                  color: "var(--primary)",
                 }}
               >
-                Modern Teams
+                Features
               </Box>
             </Typography>
           </motion.div>
@@ -99,15 +107,14 @@ export function ProductShowcase() {
             sx={{
               "& .MuiTabs-flexContainer": {
                 justifyContent: { xs: "flex-start", md: "center" },
-                gap: 1,
+                gap: 2,
               },
               "& .MuiTabs-scrollButtons": {
-                color: "#94a3b8",
+                color: "var(--text-secondary)",
               },
               "& .MuiTabs-indicator": {
-                background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                height: 3,
-                borderRadius: "3px 3px 0 0",
+                background: "var(--primary)",
+                height: 2,
               },
             }}
           >
@@ -116,20 +123,23 @@ export function ProductShowcase() {
                 key={tab.id}
                 label={
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 1 }}>
-                    <tab.icon size={18} />
+                    <tab.icon size={16} />
                     <span>{tab.label}</span>
                   </Box>
                 }
                 sx={{
-                  textTransform: "none",
-                  color: "#94a3b8",
-                  fontWeight: 500,
-                  minWidth: { xs: "auto", md: 140 },
+                  textTransform: "uppercase",
+                  color: "var(--text-secondary)",
+                  fontWeight: 800,
+                  fontSize: "11px",
+                  fontFamily: "var(--font-mono)",
+                  minWidth: { xs: "auto", md: 160 },
                   px: { xs: 2, md: 3 },
-                  borderRadius: "8px 8px 0 0",
+                  borderRadius: 0,
+                  transition: "all 0.2s",
                   "&.Mui-selected": {
-                    color: "#f8fafc",
-                    background: "rgba(99, 102, 241, 0.1)",
+                    color: "var(--primary)",
+                    background: "rgba(0, 255, 156, 0.05)",
                   },
                 }}
               />
@@ -141,53 +151,67 @@ export function ProductShowcase() {
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 10 }}
             transition={{ duration: 0.3 }}
           >
             <Box
               sx={{
                 display: "flex",
                 flexDirection: { xs: "column", md: "row" },
-                gap: { xs: 4, md: 6 },
-                alignItems: "center",
+                gap: { xs: 4, md: 8 },
+                alignItems: "flex-start",
               }}
             >
               {/* Content */}
               <Box sx={{ flex: 1, order: { xs: 2, md: 1 } }}>
                 <Typography
-                  variant="h4"
-                  sx={{ fontWeight: 700, mb: 2, fontSize: { xs: "1.5rem", md: "2rem" } }}
+                  variant="h3"
+                  sx={{ 
+                    fontWeight: 800, 
+                    mb: 3, 
+                    fontSize: { xs: "1.5rem", md: "2.25rem" },
+                    fontFamily: "var(--font-mono)",
+                    textTransform: "uppercase"
+                  }}
                 >
                   {tabs[activeTab].title}
                 </Typography>
-                <Typography variant="body1" sx={{ color: "#94a3b8", mb: 4, fontSize: "1.125rem" }}>
-                  {tabs[activeTab].description}
+                <Typography 
+                  variant="body1" 
+                  sx={{ 
+                    color: "var(--text-muted)", 
+                    mb: 6, 
+                    fontSize: "15px",
+                    lineHeight: 1.8,
+                    fontFamily: "var(--font-mono)"
+                  }}
+                >
+                   {"> "} {tabs[activeTab].description}
                 </Typography>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
                   {tabs[activeTab].features.map((feature, index) => (
                     <motion.div
                       key={feature}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                        <Box
-                          sx={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: "50%",
-                            background: "rgba(16, 185, 129, 0.2)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Check size={14} style={{ color: "#10b981" }} />
-                        </Box>
-                        <Typography sx={{ color: "#e2e8f0" }}>{feature}</Typography>
+                      <Box 
+                        sx={{ 
+                          display: "flex", 
+                          alignItems: "center", 
+                          gap: 1.5,
+                          p: 1.5,
+                          border: "1px dashed var(--border-subtle)",
+                          "&:hover": { borderColor: "var(--primary)" }
+                        }}
+                      >
+                        <Zap size={10} style={{ color: "var(--primary)" }} />
+                        <Typography sx={{ color: "var(--text-primary)", fontSize: "10px", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                          {feature}
+                        </Typography>
                       </Box>
                     </motion.div>
                   ))}
@@ -197,99 +221,144 @@ export function ProductShowcase() {
               {/* Visual Demo */}
               <Box
                 sx={{
-                  flex: 1,
+                  flex: 1.2,
                   order: { xs: 1, md: 2 },
                   width: "100%",
                 }}
               >
                 <Box
                   sx={{
-                    background: "linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(15, 15, 26, 0.95) 100%)",
-                    borderRadius: 3,
-                    border: "1px solid rgba(99, 102, 241, 0.2)",
-                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                    background: "#0a0a0a",
+                    borderRadius: 0,
+                    border: "1px solid var(--border-subtle)",
+                    boxShadow: "0 20px 40px rgba(0, 0, 0, 0.4)",
                     overflow: "hidden",
                     aspectRatio: "16/10",
                     position: "relative",
                   }}
                 >
-                  {/* Fake Browser Header */}
+                  {/* Technical Browser Header */}
                   <Box
                     sx={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 1,
+                      justifyContent: "space-between",
                       px: 2,
                       py: 1.5,
-                      borderBottom: "1px solid rgba(99, 102, 241, 0.1)",
-                      background: "rgba(15, 15, 26, 0.5)",
+                      borderBottom: "1px solid var(--border-subtle)",
+                      background: "rgba(255, 255, 255, 0.05)",
                     }}
                   >
-                    <Box sx={{ display: "flex", gap: 0.5 }}>
-                      <Box sx={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444" }} />
-                      <Box sx={{ width: 10, height: 10, borderRadius: "50%", background: "#f59e0b" }} />
-                      <Box sx={{ width: 10, height: 10, borderRadius: "50%", background: "#10b981" }} />
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <Box sx={{ width: 8, height: 8, background: "var(--border-subtle)" }} />
+                      <Box sx={{ width: 8, height: 8, background: "var(--border-subtle)" }} />
+                      <Box sx={{ width: 8, height: 8, background: "var(--border-subtle)" }} />
                     </Box>
+                    <Typography
+                      sx={{ 
+                        fontSize: "9px", 
+                        fontFamily: "var(--font-mono)", 
+                        color: "var(--text-secondary)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.2em",
+                        fontWeight: 700
+                      }}
+                    >
+                      LOCAL_SYSTEM_MONITOR_v2.0
+                    </Typography>
+                    <Globe size={10} style={{ color: "var(--text-secondary)" }} />
                   </Box>
 
                   {/* Demo Content Based on Tab */}
-                  <Box sx={{ p: 3 }}>
+                  <Box sx={{ p: 4, height: "calc(100% - 40px)", position: "relative" }}>
                     {activeTab === 0 && (
-                      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <Box sx={{ height: 40, background: "rgba(99, 102, 241, 0.1)", borderRadius: 1 }} />
-                        <Box sx={{ display: "flex", gap: 2 }}>
-                          <Box sx={{ flex: 1, height: 120, background: "rgba(99, 102, 241, 0.05)", borderRadius: 1 }} />
-                          <Box sx={{ flex: 1, height: 120, background: "rgba(236, 72, 153, 0.05)", borderRadius: 1 }} />
-                        </Box>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                         <Box sx={{ display: "flex", gap: 3 }}>
+                            <Box sx={{ flex: 1, height: 80, border: "1px dashed var(--primary)", opacity: 0.4 }} />
+                            <Box sx={{ flex: 1, height: 80, border: "1px dashed var(--accent)", opacity: 0.4 }} />
+                            <Box sx={{ flex: 1, height: 80, border: "1px dashed var(--primary)", opacity: 0.4 }} />
+                         </Box>
+                         <Box sx={{ height: 160, border: "1px solid var(--border-subtle)", position: "relative" }}>
+                            <Box sx={{ position: "absolute", top: 20, left: 20, width: "60%", height: 10, background: "var(--primary)", opacity: 0.2 }} />
+                            <Box sx={{ position: "absolute", top: 40, left: 20, width: "40%", height: 10, background: "var(--accent)", opacity: 0.2 }} />
+                            <Box sx={{ position: "absolute", bottom: 20, left: 20, right: 20, height: 40, borderTop: "1px dashed var(--border-subtle)" }} />
+                         </Box>
                       </Box>
                     )}
                     {activeTab === 1 && (
-                      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1 }}>
+                      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1.5 }}>
                         {Array.from({ length: 28 }).map((_, i) => (
                           <Box
                             key={i}
                             sx={{
                               aspectRatio: "1",
-                              background: i % 3 === 0 ? "rgba(99, 102, 241, 0.2)" : "rgba(99, 102, 241, 0.05)",
-                              borderRadius: 0.5,
+                              border: "1px solid var(--border-subtle)",
+                              background: i % 3 === 0 ? "rgba(0, 255, 156, 0.1)" : "transparent",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "8px",
+                              fontFamily: "var(--font-mono)",
+                              color: "var(--text-primary)",
+                              fontWeight: 800
                             }}
-                          />
+                          >
+                            {i + 1}
+                          </Box>
                         ))}
                       </Box>
                     )}
                     {activeTab === 2 && (
-                      <Box sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center", justifyContent: "center", height: "100%" }}>
-                        <Sparkles size={48} style={{ color: "#6366f1", opacity: 0.5 }} />
-                        <Typography sx={{ color: "#64748b" }}>AI Processing...</Typography>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center", justifyContent: "center", height: "100%" }}>
+                        <Cpu size={48} style={{ color: "var(--primary)", opacity: 0.6 }} className="pulse" />
+                        <Typography sx={{ color: "var(--primary)", fontFamily: "var(--font-mono)", fontSize: "12px", textTransform: "uppercase" }}>
+                          PROCESS_SYNC: CORE_LOGIC_ACTIVE
+                        </Typography>
+                        <Box sx={{ width: "200px", height: "2px", background: "var(--border-subtle)", position: "relative" }}>
+                           <motion.div 
+                             animate={{ x: [0, 198, 0] }}
+                             transition={{ duration: 2, repeat: Infinity }}
+                             style={{ width: "20px", height: "2px", background: "var(--primary)", position: "absolute" }} 
+                           />
+                        </Box>
                       </Box>
                     )}
                     {activeTab === 3 && (
-                      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
-                        {["Google", "Zoom", "Slack", "Teams", "Notion"].map((name) => (
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                        {["GOOGLE_SYNC", "ZOOM_CONNECT", "SLACK_RELAY", "MICROSOFT_365", "NOTION_DB", "CUSTOM_HOOK"].map((name) => (
                           <Box
                             key={name}
                             sx={{
-                              px: 3,
-                              py: 1.5,
-                              background: "rgba(99, 102, 241, 0.1)",
-                              borderRadius: 2,
-                              border: "1px solid rgba(99, 102, 241, 0.2)",
+                              p: 2,
+                              background: "rgba(255, 255, 255, 0.02)",
+                              border: "1px dashed var(--border-subtle)",
+                              "&:hover": { borderColor: "var(--primary)" }
                             }}
                           >
-                            <Typography sx={{ color: "#94a3b8" }}>{name}</Typography>
+                            <Typography sx={{ color: "var(--text-muted)", fontSize: "9px", fontFamily: "var(--font-mono)" }}>
+                              {name} :: ACTIVE
+                            </Typography>
                           </Box>
                         ))}
                       </Box>
                     )}
                     {activeTab === 4 && (
-                      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, p: 2, background: "rgba(16, 185, 129, 0.1)", borderRadius: 1 }}>
-                          <Shield size={20} style={{ color: "#10b981" }} />
-                          <Typography sx={{ color: "#10b981" }}>End-to-End Encrypted</Typography>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <Box sx={{ p: 3, border: "1px solid var(--primary)", background: "rgba(0, 255, 156, 0.05)" }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                            <Lock size={16} style={{ color: "var(--primary)" }} />
+                            <Typography sx={{ color: "var(--primary)", fontSize: "11px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+                              ENC_READY
+                            </Typography>
+                          </Box>
+                          <Typography sx={{ color: "var(--text-muted)", fontSize: "9px", fontFamily: "var(--font-mono)" }}>
+                            DATA_PACKET: STATUS=ENCRYPTED :: ALG=AES256
+                          </Typography>
                         </Box>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, p: 2, background: "rgba(99, 102, 241, 0.05)", borderRadius: 1 }}>
-                          <Check size={20} style={{ color: "#6366f1" }} />
-                          <Typography sx={{ color: "#94a3b8" }}>SOC 2 Type II Certified</Typography>
+                        <Box sx={{ p: 3, border: "1px solid var(--border-subtle)", opacity: 0.6 }}>
+                           <Typography sx={{ color: "var(--text-faint)", fontSize: "9px", fontFamily: "var(--font-mono)" }}>
+                              WAITING_FOR_HANDSHAKE...
+                           </Typography>
                         </Box>
                       </Box>
                     )}

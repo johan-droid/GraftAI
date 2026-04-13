@@ -72,6 +72,11 @@ def get_next_quota_reset() -> datetime:
     return now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
 def get_trial_days_left(created_at: datetime) -> int:
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    else:
+        created_at = created_at.astimezone(timezone.utc)
+
     trial_end = created_at + timedelta(days=14)
     now = datetime.now(timezone.utc)
     diff = (trial_end - now).days

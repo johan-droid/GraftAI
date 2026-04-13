@@ -55,7 +55,6 @@ function SettingRow({ icon: Icon, label, description, children }: {
 
 export default function ProfilePage() {
   const { user, refresh } = useAuth();
-  const profileUser = user as UserProfile | null;
 
   const [editingName, setEditingName] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
@@ -80,10 +79,9 @@ export default function ProfilePage() {
     if (user) {
       // Use user.full_name or user.name depending on the API mapping
       setNameDraft(user.full_name || user.name || "");
-      const extraUser = user as UserProfile;
-      setBioDraft(extraUser.bio || "");
-      setJobDraft(extraUser.job_title || "");
-      setLocationDraft(extraUser.location || "");
+      setBioDraft(user.bio || "");
+      setJobDraft(user.job_title || "");
+      setLocationDraft(user.location || "");
     }
   }, [user]);
 
@@ -123,7 +121,7 @@ export default function ProfilePage() {
 
   const currentName = user?.full_name || user?.name || "Anonymous User";
   const userInitials = user?.name
-    ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    ? user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()
     : user?.email?.[0]?.toUpperCase() ?? "U";
 
   if (!user) return null;
@@ -234,7 +232,7 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-300 font-medium">{profileUser?.job_title || jobDraft || "Not set"}</span>
+                  <span className="text-sm text-slate-300 font-medium">{user?.job_title || jobDraft || "Not set"}</span>
                   <button onClick={() => setEditingJob(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
                 </div>
               )}
@@ -254,7 +252,7 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-300 font-medium">{profileUser?.location || locationDraft || "Not set"}</span>
+                  <span className="text-sm text-slate-300 font-medium">{user?.location || locationDraft || "Not set"}</span>
                   <button onClick={() => setEditingLocation(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors">Edit</button>
                 </div>
               )}
@@ -277,7 +275,7 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="w-full flex items-center justify-between">
-                  <p className="text-sm text-slate-400 leading-relaxed italic pr-4 line-clamp-2 max-w-[250px] sm:max-w-md\">{profileUser?.bio || bioDraft || "No bio set yet."}</p>
+                  <p className="text-sm text-slate-400 leading-relaxed italic pr-4 line-clamp-2 max-w-[250px] sm:max-w-md">{user?.bio || bioDraft || "No bio set yet."}</p>
                   <button onClick={() => setEditingBio(true)} className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors shrink-0">Edit Bio</button>
                 </div>
               )}

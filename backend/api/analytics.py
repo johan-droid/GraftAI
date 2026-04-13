@@ -18,6 +18,7 @@ def _parse_range_window(range_str: str) -> int:
 
 
 @router.get("/summary")
+@router.post("/summary")
 async def analytics_summary(
     range: str = Query("30d", description="Time range, e.g. 7d, 30d, 90d"),
     db: AsyncSession = Depends(get_db),

@@ -10,6 +10,7 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { toast } from "@/components/ui/Toast";
 
 interface Plugin {
+  id: string;
   name: string;
   description: string;
   version: string;
@@ -36,15 +37,15 @@ export default function PluginsPage() {
   );
 
   async function handleInstall(plugin: Plugin) {
-    setInstalling(plugin.name);
+    setInstalling(plugin.id);
     try {
-      const res = await fetch(`/api/plugins/${encodeURIComponent(plugin.name)}/enable`, { method: "POST", credentials: "include" });
+      const res = await fetch(`/api/plugins/${encodeURIComponent(plugin.id)}/enable`, { method: "POST", credentials: "include" });
       if (!res.ok) {
         const errText = await res.text();
         toast.error(errText || `Failed to install ${plugin.name}.`);
         return;
       }
-      setInstalled(prev => new Set([...prev, plugin.name]));
+      setInstalled(prev => new Set([...prev, plugin.id]));
       toast.success(`${plugin.name} installed successfully.`);
     } catch {
       toast.error(`Network error installing ${plugin.name}.`);
@@ -97,7 +98,7 @@ export default function PluginsPage() {
             {debouncedSearch && (
               <>
                 <span className="text-white/30">·</span>
-                <span>{filtered.length} results for "{debouncedSearch}"</span>
+                <span>{filtered.length} results for “{debouncedSearch}”</span>
               </>
             )}
           </motion.div>
@@ -113,8 +114,8 @@ export default function PluginsPage() {
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
           >
             {filtered.map((plugin) => {
-              const isInstalled = installed.has(plugin.name) || plugin.enabled;
-              const isBeingInstalled = installing === plugin.name;
+              const isInstalled = installed.has(plugin.id) || plugin.enabled;
+              const isBeingInstalled = installing === plugin.id;
 
               return (
                 <motion.div
@@ -186,11 +187,9 @@ export default function PluginsPage() {
                 : "New integrations are added regularly. Check back soon."
             }
             action={
-              debouncedSearch ? (
-                <button className="btn btn-ghost text-sm" onClick={() => setSearch("")}>
-                  Clear search
-                </button>
-              ) : undefined
+              debouncedSearch
+                ? { label: "Clear search", onClick: () => setSearch("") }
+                : undefined
             }
           />
         )}

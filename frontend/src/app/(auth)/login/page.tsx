@@ -119,6 +119,7 @@ export default function LoginPage() {
               errorMessage={error && !password ? "Password is required" : undefined}
               disabled={isLoading}
               required
+              autoComplete="current-password"
             />
           </motion.div>
 

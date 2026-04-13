@@ -3,15 +3,16 @@
 import { Box } from "@mui/material";
 import { ReactNode } from "react";
 
-type BadgeVariant = "default" | "primary" | "success" | "warning" | "error" | "info";
+type BadgeVariant = "default" | "primary" | "success" | "warning" | "error" | "info" | "secondary";
 type BadgeSize = "sm" | "md" | "lg";
 
 interface BadgeProps {
-  children: ReactNode;
+  children: React.ReactNode;
   variant?: BadgeVariant;
   size?: BadgeSize;
   dot?: boolean;
   pulse?: boolean;
+  className?: string;
 }
 
 const variants: Record<BadgeVariant, { bg: string; color: string; border: string }> = {
@@ -45,6 +46,11 @@ const variants: Record<BadgeVariant, { bg: string; color: string; border: string
     color: "hsl(199, 89%, 48%)",
     border: "hsla(199, 89%, 48%, 0.3)",
   },
+  secondary: {
+    bg: "hsla(240, 5%, 26%, 0.15)",
+    color: "hsl(240, 5%, 70%)",
+    border: "hsla(240, 5%, 26%, 0.3)",
+  },
 };
 
 const sizes: Record<BadgeSize, { px: number; py: number; fontSize: string }> = {
@@ -59,12 +65,14 @@ export function Badge({
   size = "md",
   dot = false,
   pulse = false,
+  className,
 }: BadgeProps) {
   const { bg, color, border } = variants[variant];
   const { px, py, fontSize } = sizes[size];
 
   return (
     <Box
+      className={className}
       sx={{
         display: "inline-flex",
         alignItems: "center",

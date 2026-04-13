@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 router = APIRouter(tags=["Plugins"])
@@ -14,6 +14,8 @@ class PluginItem(BaseModel):
     icon: str
     installed: bool
     author: Optional[str] = None
+
+SUPPORTED_PLUGIN_IDS = {"google", "microsoft", "zoom"}
 
 @router.get("/plugins/list")
 async def list_plugins() -> dict:
@@ -51,3 +53,15 @@ async def list_plugins() -> dict:
     ]
 
     return {"plugins": [plugin.dict() for plugin in plugins]}
+
+@router.post("/plugins/{plugin_id}/enable")
+async def enable_plugin(plugin_id: str) -> dict:
+    if plugin_id not in SUPPORTED_PLUGIN_IDS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin '{plugin_id}' not found",
+        )
+
+    # Placeholder: actual enable/install logic can go here.
+    # For now, we acknowledge the request so the frontend can show install success.
+    return {"plugin_id": plugin_id, "enabled": True}

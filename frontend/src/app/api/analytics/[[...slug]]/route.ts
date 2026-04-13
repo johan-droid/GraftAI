@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth-server";
 import { headers } from "next/headers";
 import { BACKEND_API_URL } from "@/lib/backend";
+import { applyServerAuthCookies, resolveServerAccessToken } from "@/lib/server-auth";
 
 // Redis caching — Upstash compatible
-let redis: { get: (k: string) => Promise<string | null>; setex: (k: string, ttl: number, v: string) => Promise<void> } | null = null;
+let redis: { get: (k: string) => Promise<string | null>; setex: (k: string, ttl: number, v: string) => Promise<any> } | null = null;
 
 async function getRedis() {
   if (redis) return redis;
@@ -18,8 +18,8 @@ async function getRedis() {
   return redis;
 }
 
-async function getAnalytics(session: any) {
-  const cacheKey = `analytics:${session.user?.id || session.session?.token || "user"}`;
+async function getAnalytics(accessToken: string) {
+  const cacheKey = `analytics:${accessToken}`;
   const r = await getRedis();
   
   try {
@@ -31,13 +31,11 @@ async function getAnalytics(session: any) {
     console.error("Redis cache read failed:", err);
   }
 
-  const res = await fetch(`${BACKEND_API_URL}/analytics/summary`, {
-    method: "POST",
+  const res = await fetch(`${BACKEND_API_URL}/analytics/summary?range=7d`, {
+    method: "GET",
     headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${session.session.token}`,
+      "Authorization": `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ range: "7d" }),
   });
 
   if (!res.ok) return NextResponse.json({ error: "Backend error" }, { status: res.status });
@@ -56,14 +54,26 @@ async function getAnalytics(session: any) {
 
 export async function GET() {
   const reqHeaders = await headers();
-  const session = await auth.api.getSession({ headers: reqHeaders });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return getAnalytics(session);
+  const tokenResolution = await resolveServerAccessToken(reqHeaders);
+  if (!tokenResolution.accessToken) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const response = await getAnalytics(tokenResolution.accessToken);
+  if (tokenResolution.refreshed) {
+    applyServerAuthCookies(response, tokenResolution.accessToken, tokenResolution.refreshToken);
+  }
+  return response;
 }
 
 export async function POST(request: Request) {
   const reqHeaders = await headers();
-  const session = await auth.api.getSession({ headers: reqHeaders });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return getAnalytics(session);
+  const tokenResolution = await resolveServerAccessToken(reqHeaders);
+  if (!tokenResolution.accessToken) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const response = await getAnalytics(tokenResolution.accessToken);
+  if (tokenResolution.refreshed) {
+    applyServerAuthCookies(response, tokenResolution.accessToken, tokenResolution.refreshToken);
+  }
+  return response;
 }

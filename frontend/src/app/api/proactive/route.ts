@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth-server";
 import { headers } from "next/headers";
 import { BACKEND_API_URL } from "@/lib/backend";
+import { applyServerAuthCookies, resolveServerAccessToken } from "@/lib/server-auth";
 
 export async function GET() {
   const reqHeaders = await headers();
-  const session = await auth.api.getSession({ headers: reqHeaders });
-  if (!session) return NextResponse.json({ suggestion: null }, { status: 401 });
+  const tokenResolution = await resolveServerAccessToken(reqHeaders);
+  if (!tokenResolution.accessToken) return NextResponse.json({ suggestion: null }, { status: 401 });
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -16,15 +16,22 @@ export async function GET() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.session.token}`,
+        "Authorization": `Bearer ${tokenResolution.accessToken}`,
       },
       body: JSON.stringify({ context: "dashboard" }),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
 
-    if (!res.ok) return NextResponse.json({ suggestion: null });
-    return NextResponse.json(await res.json());
+    const response = res.ok
+      ? NextResponse.json(await res.json())
+      : NextResponse.json({ suggestion: null });
+
+    if (tokenResolution.refreshed) {
+      applyServerAuthCookies(response, tokenResolution.accessToken, tokenResolution.refreshToken);
+    }
+
+    return response;
   } catch (err: any) {
     clearTimeout(timeoutId);
     return NextResponse.json({ suggestion: null });

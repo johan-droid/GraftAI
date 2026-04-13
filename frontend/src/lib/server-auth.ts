@@ -18,6 +18,13 @@ export async function resolveServerAccessToken(reqHeaders: Headers): Promise<Ser
     return { accessToken: sessionToken, refreshed: false };
   }
 
+  // 2. Check Authorization header
+  const authHeader = reqHeaders.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.substring(7);
+    return { accessToken: token, refreshed: false };
+  }
+
   const cookieHeader = reqHeaders.get("cookie");
   if (!cookieHeader) {
     return { accessToken: null, refreshed: false };

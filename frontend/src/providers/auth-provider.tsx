@@ -8,10 +8,25 @@ interface User {
   id: string;
   email: string;
   full_name: string;
+  name?: string; // Alias for UI compatibility
   bio?: string;
   job_title?: string;
   location?: string;
   created_at?: string;
+  tier?: string;
+  daily_ai_count?: number;
+  daily_sync_count?: number;
+  daily_ai_limit?: number;
+  daily_sync_limit?: number;
+  quota_reset_at?: string;
+  ai_remaining?: number;
+  sync_remaining?: number;
+  trial_days_left?: number;
+  trial_expires_at?: string;
+  trial_active?: boolean;
+  subscription_status?: string;
+  razorpay_subscription_id?: string;
+  timezone?: string;
 }
 
 interface AuthResult {
@@ -25,6 +40,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => void;
+  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -33,6 +49,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => ({ error: { message: 'Auth not initialized' } }),
   register: async () => ({ error: { message: 'Auth not initialized' } }),
   logout: () => {},
+  refresh: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -131,8 +148,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const refresh = async () => {
+    const token = localStorage.getItem("token")
+      || localStorage.getItem("graftai_access_token")
+      || sessionStorage.getItem("token")
+      || sessionStorage.getItem("graftai_access_token");
+    
+    if (token) {
+      try {
+        const userData = await apiClient.fetch("/users/me");
+        setUser(userData);
+      } catch (error) {
+        console.error("Refresh failed", error);
+      }
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

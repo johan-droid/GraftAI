@@ -17,7 +17,6 @@ from backend.auth.config import (
     SECRET_KEY,
 )
 from backend.models.tables import UserTable, UserTokenTable
-from backend.services.auth_utils import get_password_hash, verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -89,41 +88,9 @@ async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[UserTable]:
     return (await db.execute(stmt)).scalars().first()
 
 
-async def authenticate_user(form_data, db: AsyncSession) -> UserTable:
-    email = form_data.username.lower().strip()
-    user = await get_user_by_email(db, email)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not user.email_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email address is not verified. Please verify your email before signing in.",
-        )
-
-    if not user.hashed_password:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return user
 
 
-async def create_user_with_dummy_password(
+async def create_user_from_oauth(
     db: AsyncSession,
     email: str,
     full_name: str,
@@ -131,13 +98,13 @@ async def create_user_with_dummy_password(
     username: Optional[str] = None,
     **extra_fields,
 ) -> UserTable:
-    dummy_password = secrets.token_urlsafe(32)[:64]
+    """Create a passwordless user from OAuth identity."""
     user = UserTable(
         email=email,
         username=username,
         full_name=full_name,
-        hashed_password=get_password_hash(dummy_password),
         email_verified=verified,
+        hashed_password=None,  # Pure OAuth 2.0
         **extra_fields,
     )
     db.add(user)

@@ -40,7 +40,7 @@ declare global {
 }
 
 import { useState, useEffect } from "react";
-import { useAuth } from "@/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 import { motion } from "framer-motion";
 import { 
   Check, 

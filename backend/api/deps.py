@@ -7,13 +7,11 @@ from jose import jwt, JWTError
 
 from backend.utils.db import get_db
 from backend.models.tables import UserTable
-from backend.services.api_keys import resolve_user_by_api_key
 
 # This tells FastAPI where the login route is, so Swagger UI knows how to get the token
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/social/exchange")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-college-project-key-change-in-prod")
-ALGORITHM = "HS256"
+from backend.auth.config import SECRET_KEY, ALGORITHM
 
 async def get_current_user_id(
     token: str = Depends(oauth2_scheme),
@@ -39,9 +37,6 @@ async def get_current_user(
         if user_id is None:
             raise credentials_exception
     except JWTError:
-        api_key_user = await resolve_user_by_api_key(db, token)
-        if api_key_user is not None:
-            return api_key_user
         raise credentials_exception
         
     stmt = select(UserTable).where(UserTable.id == user_id)

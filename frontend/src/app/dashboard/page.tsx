@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 import { useQuery } from "@/hooks/useQuery";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useDashboardMetrics } from "@/lib/ai-api";
@@ -40,7 +40,7 @@ import { GradientButton } from "@/components/ui/GradientButton";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuthContext();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
 
   // Redirect if not authenticated
@@ -67,12 +67,9 @@ export default function DashboardPage() {
   // AI Automation Metrics
   const { metrics, loading: metricsLoading, refetch: refetchMetrics } = useDashboardMetrics(30000);
 
-  // Handle 401 unauthorized - redirect to login
-  useEffect(() => {
-    if (analyticsError?.status === 401) {
-      router.replace("/login");
-    }
-  }, [analyticsError, router]);
+  // Global auth errors are handled by AuthProvider. 
+  // We only show an error state here instead of a hard redirect.
+
 
   // Use real analytics data only - no mock fallbacks
   const displayAnalytics = analytics;

@@ -4,39 +4,56 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { composeEndpoint } from "@/lib/api-client";
 
+/**
+ * /auth-callback
+ *
+ * Two entry scenarios:
+ *
+ * 1. NextAuth flow (normal path)
+ *    NextAuth handles the OAuth exchange directly — this page is NOT hit.
+ *    Users land directly on `/dashboard` after sign-in.
+ *
+ * 2. Backend SSO redirect flow (legacy path)
+ *    The backend's /api/v1/auth/{provider}/callback sends the user here with:
+ *      ?access_token=...&refresh_token=...&redirect=...
+ *    We call /api/auth/restore to validate and set HttpOnly cookies,
+ *    then navigate to the target.
+ *
+ * 3. Backend code+state flow
+ *    The backend sends ?code=...&state=... for SSO Enterprise flows.
+ */
 function AuthCallbackInner() {
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState("Processing...");
+  const [status, setStatus] = useState("Processing your sign-in…");
+  const hasFetched = useRef(false);
 
-  const code = searchParams.get("code");
-  const state = searchParams.get("state");
-  const accessToken = searchParams.get("at") || searchParams.get("access_token");
+  const accessToken  = searchParams.get("at") || searchParams.get("access_token");
   const refreshToken = searchParams.get("rt") || searchParams.get("refresh_token");
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const redirectTo   = searchParams.get("redirect") || "/dashboard";
+  const code         = searchParams.get("code");
+  const state        = searchParams.get("state");
 
   const safeReplace = (path: string) => {
-    if (typeof window !== "undefined") {
-      window.location.replace(path);
-    }
+    if (typeof window !== "undefined") window.location.replace(path);
   };
 
-  const hasFetched = useRef(false);
-  
   useEffect(() => {
-    const handleSync = async () => {
-      if (hasFetched.current) return;
-      hasFetched.current = true;
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+
+    const handleCallback = async () => {
       try {
-        const restoreSession = async (accessToken: string, refreshToken?: string) => {
-          setStatus("Restoring your session...");
-          const response = await fetch("/api/auth/restore", {
+        // ── Scenario 2: Backend sent access_token directly ──────────────────
+        if (accessToken) {
+          setStatus("Verifying your credentials…");
+
+          // Let the backend validate the token and set HttpOnly session cookies
+          const res = await fetch("/api/auth/restore", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Accept": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             credentials: "include",
             body: JSON.stringify({
               access_token: accessToken,
@@ -45,123 +62,105 @@ function AuthCallbackInner() {
             }),
           });
 
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `HTTP ${response.status}`);
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${res.status}`);
           }
 
-          const data = await response.json();
-          if (data.access_token) {
-            if (typeof window !== "undefined") {
-              window.localStorage.setItem("token", data.access_token);
-              window.localStorage.setItem("graftai_access_token", data.access_token);
-              sessionStorage.setItem("token", data.access_token);
-              sessionStorage.setItem("graftai_access_token", data.access_token);
-            }
-          }
-          return data;
-        };
-
-        if (accessToken) {
-          try {
-            await restoreSession(accessToken, refreshToken ?? undefined);
-            setStatus("Login successful! Redirecting...");
-            sessionStorage.removeItem("oauth_in_progress");
-            safeReplace(redirectTo);
-            return;
-          } catch (err) {
-            console.error("Session restore failed", err);
-            setStatus("Failed to restore session. Redirecting to login...");
-            setTimeout(() => safeReplace("/login"), 2000);
-            return;
-          }
+          setStatus("Sign-in successful! Redirecting…");
+          safeReplace(redirectTo);
+          return;
         }
 
+        // ── Scenario 3: Backend sent code + state (SSO Enterprise) ──────────
         if (code && state) {
-          setStatus("Authenticating with OAuth provider...");
+          setStatus("Completing OAuth handshake…");
 
           const callbackPath = composeEndpoint("/auth/sso/callback", true);
-          const response = await fetch(
+          const res = await fetch(
             `${callbackPath}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&fetch=true`,
-            {
-              method: "GET",
-              headers: {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-              },
-              credentials: "include",
-            }
+            { headers: { Accept: "application/json" }, credentials: "include" }
           );
 
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const message = errorData.detail || `HTTP ${response.status}`;
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            const msg = err.detail || `HTTP ${res.status}`;
 
-            if (
-              response.status === 410 ||
-              /invalid or expired state/i.test(message) ||
-              /oauth state/i.test(message)
-            ) {
-              setStatus("Session expired during OAuth. Redirecting to login...");
-              sessionStorage.removeItem("oauth_in_progress");
+            if (res.status === 410 || /invalid or expired state/i.test(msg)) {
+              setStatus("Session expired. Redirecting to login…");
               setTimeout(() => safeReplace("/login"), 1500);
               return;
             }
-
-            throw new Error(message);
+            throw new Error(msg);
           }
 
-          const data = await response.json();
+          const data = await res.json();
           if (data.token?.access_token) {
-            try {
-              await restoreSession(data.token.access_token, data.token.refresh_token);
-              setStatus("Login successful! Redirecting to dashboard...");
-              safeReplace(data.redirect_to || "/dashboard");
-              return;
-            } catch (err) {
-              console.error("Session restore failed", err);
-              setStatus("Authentication failed. Redirecting to login...");
-              setTimeout(() => safeReplace("/login"), 2000);
-              return;
+            const restoreRes = await fetch("/api/auth/restore", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                access_token: data.token.access_token,
+                refresh_token: data.token.refresh_token,
+                redirect_to: data.redirect_to || redirectTo,
+              }),
+            });
+
+            if (!restoreRes.ok) {
+              throw new Error("Failed to restore session from SSO tokens");
             }
+
+            setStatus("Sign-in successful! Redirecting…");
+            safeReplace(data.redirect_to || redirectTo);
+            return;
           }
 
-          setStatus(data.detail || "Authentication failed");
-          setTimeout(() => safeReplace("/login"), 2000);
-          return;
-        } else {
-          setStatus("No active session found. Redirecting to login...");
-          setTimeout(() => safeReplace("/login"), 2000);
+          throw new Error(data.detail || "Authentication failed");
         }
+
+        // ── No tokens, no code — nothing to do ──────────────────────────────
+        setStatus("No session found. Redirecting to login…");
+        setTimeout(() => safeReplace("/login"), 1500);
       } catch (err) {
-        console.error("Auth callback failure:", err);
+        console.error("[AuthCallback]", err);
         setStatus(`Error: ${err instanceof Error ? err.message : "Authentication failed"}`);
         setTimeout(() => safeReplace("/login"), 3000);
       }
     };
 
-    handleSync();
-  }, [accessToken, code, redirectTo, refreshToken, state]);
+    handleCallback();
+  }, [accessToken, refreshToken, redirectTo, code, state]);
 
   return (
-    <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">
-      <p className="text-base text-slate-700 dark:text-slate-200">{status}</p>
+    <div className="w-full max-w-md rounded-2xl bg-white/5 p-8 text-center shadow-2xl backdrop-blur border border-white/10">
+      <div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto mb-5" />
+      <p className="text-sm text-slate-300 leading-relaxed">{status}</p>
     </div>
   );
 }
 
 export default function AuthCallback() {
   return (
-    <main className="app-shell flex min-h-screen items-center justify-center px-4 py-8 relative overflow-hidden bg-slate-950">
-      {/* Background Ambience */}
-      <div className="hidden md:block absolute top-0 left-0 w-full h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="hidden md:block absolute bottom-0 right-0 w-[400px] h-[400px] bg-fuchsia-500/5 rounded-full blur-[100px] pointer-events-none" />
-      <div className="z-10 relative">
-        <Suspense fallback={
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-900 border border-slate-800">
-            <p className="text-base text-slate-700 dark:text-slate-200">Preparing secure connection...</p>
-          </div>
-        }>
+    <main className="flex min-h-screen items-center justify-center px-4 py-8 bg-slate-950 relative overflow-hidden">
+      {/* Ambient background */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-indigo-600/10 rounded-full blur-[100px]" />
+        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-fuchsia-500/5 rounded-full blur-[100px]" />
+      </div>
+      <div className="z-10 relative w-full max-w-md">
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-bold text-white tracking-tight">GraftAI</h1>
+          <p className="text-xs text-slate-500 mt-1">Securing your session…</p>
+        </div>
+        <Suspense
+          fallback={
+            <div className="w-full max-w-md rounded-2xl bg-white/5 p-8 text-center shadow-2xl backdrop-blur border border-white/10">
+              <div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto mb-5" />
+              <p className="text-sm text-slate-400">Preparing secure connection…</p>
+            </div>
+          }
+        >
           <AuthCallbackInner />
         </Suspense>
       </div>

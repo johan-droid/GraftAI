@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 import { useQuery } from "@/hooks/useQuery";
 import { MobileSidebar } from "@/components/dashboard/MobileSidebar";
 import { BottomNav } from "@/components/dashboard/BottomNav";
@@ -46,7 +46,7 @@ interface CalendarEvent {
 
 export default function CalendarPage() {
   const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuthContext();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
   
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -61,12 +61,8 @@ export default function CalendarPage() {
   // Use real events only - no mock fallback
   const displayEvents = events || [];
 
-  // Handle 401
-  useEffect(() => {
-    if (eventsError?.status === 401) {
-      router.replace("/login");
-    }
-  }, [eventsError, router]);
+  // Global auth errors are handled by AuthProvider.
+
 
   // Calendar navigation
   const navigateCalendar = (direction: "prev" | "next") => {

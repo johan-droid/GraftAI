@@ -128,7 +128,7 @@ export function Navigation() {
                 ))}
                 <GradientButton
                   component={Link}
-                  href="/register"
+                  href="/login"
                   gradientVariant="primary"
                   size="small"
                   sx={{ ml: 2 }}
@@ -219,7 +219,7 @@ export function Navigation() {
           <Box sx={{ mt: 4 }}>
             <GradientButton
               component={Link}
-              href="/register"
+              href="/login"
               gradientVariant="primary"
               fullWidth
               size="large"

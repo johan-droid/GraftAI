@@ -6,16 +6,14 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from starlette.responses import Response, RedirectResponse
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from jose import jwt
 
 from backend.services.auth_service import (
-    authenticate_user,
     create_access_token,
     create_refresh_token,
-    create_user_with_dummy_password,
+    create_user_from_oauth,
     decode_jwt_token,
     get_user_by_email,
     upsert_user_token,
@@ -57,22 +55,16 @@ from pydantic import BaseModel
 
 class SocialExchangeRequest(BaseModel):
     provider: str
+    # Identity tokens from the social provider
     id_token: Optional[str] = None
     access_token: Optional[str] = None
+    # Refresh token from the social provider (for calendar re-auth)
+    refresh_token: Optional[str] = None
+    # User profile data forwarded from NextAuth
     email: Optional[str] = None
-
-
-class ForgotPasswordRequest(BaseModel):
-    email: str
-
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
-
-
-class VerifyEmailRequest(BaseModel):
-    token: str
+    name: Optional[str] = None
+    image: Optional[str] = None
+    provider_account_id: Optional[str] = None
 
 
 class OnboardingRequest(BaseModel):
@@ -88,50 +80,79 @@ async def social_exchange(req: SocialExchangeRequest, request: Request, db: Asyn
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["login"])
 
-    if req.provider not in ["google", "microsoft", "microsoft-entra-id"]:
+    normalized_provider = req.provider.lower()
+    if normalized_provider not in ["google", "microsoft", "microsoft-entra-id"]:
         raise HTTPException(status_code=400, detail="Invalid provider")
-    
+
     if not req.access_token:
         raise HTTPException(status_code=400, detail="Access token required for social exchange")
-        
+
+    # ── Verify the provider token and extract the user profile ───────────────
     try:
-        if req.provider == "google":
+        if normalized_provider == "google":
             provider_profile = await google_auth.verify_google_token(req.access_token)
         else:
             provider_profile = await microsoft_auth.verify_microsoft_token(req.access_token)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
-    
-    email = provider_profile.get("email") or req.email
+
+    # Prefer verified email from socialised profile; fall back to what NextAuth sent
+    email = (provider_profile.get("email") or req.email or "").lower().strip()
     if not email:
         raise HTTPException(status_code=400, detail="Email required for social login")
 
-    user = await get_user_by_email(db, email.lower().strip())
+    # Prefer provider display name, fall back to what NextAuth forwarded
+    full_name = provider_profile.get("full_name") or req.name or ""
+
+    # ── Upsert the GraftAI user record ────────────────────────────────────────
+    user = await get_user_by_email(db, email)
     if not user:
-        user = await create_user_with_dummy_password(
+        user = await create_user_from_oauth(
             db,
-            email=email.lower().strip(),
-            full_name=provider_profile.get("full_name") or req.name or "",
+            email=email,
+            full_name=full_name,
             verified=True,
         )
-    elif not user.email_verified:
-        user.email_verified = True
+    else:
+        # Keep profile data fresh on every login
+        if not user.email_verified:
+            user.email_verified = True
+        if full_name and not user.full_name:
+            user.full_name = full_name
 
+    # ── Issue GraftAI JWTs ────────────────────────────────────────────────────
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id)
 
-    await upsert_user_token(
-        db,
-        user,
-        req.provider,
-        {
-            "access_token": req.access_token,
-            "id_token": req.id_token,
-        },
-    )
+    # ── Persist the provider OAuth token for calendar / graph integration ─────
+    # Use the canonical backend provider name regardless of what NextAuth sent
+    backend_provider = "microsoft" if normalized_provider == "microsoft-entra-id" else normalized_provider
+    token_payload: dict = {
+        "access_token": req.access_token,
+        "id_token": req.id_token,
+    }
+    # If NextAuth forwarded a provider refresh token, store it for JIT rotation
+    if req.refresh_token:
+        token_payload["refresh_token"] = req.refresh_token
+
+    await upsert_user_token(db, user, backend_provider, token_payload)
     await db.commit()
 
-    return {"access_token": access_token, "refresh_token": refresh_token}
+    # ── Return tokens + user profile (avoids a second /users/me round-trip) ──
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "username": user.username,
+            "tier": user.tier,
+            "subscription_status": user.subscription_status,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+    }
 
 
 def _set_auth_cookies(response: Optional[Response], access_token: str, refresh_token: str):
@@ -190,41 +211,6 @@ async def integration_status(
             "inactive": list(sorted(set(inactive_providers) - set(active_providers))),
         }
     }
-
-
-@router.post("/token", response_model=None)
-async def token(
-    request: Request,
-    response: Response,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db),
-):
-    client_ip = get_client_ip(request)
-    await rate_limit(client_ip, api_limits["login"])
-
-    user = await authenticate_user(form_data, db)
-    access_token = create_access_token(user.id)
-    refresh_token = create_refresh_token(user.id)
-    _set_auth_cookies(response, access_token, refresh_token)
-    return _build_token_response(access_token, refresh_token)
-
-
-@router.post("/login", response_model=None)
-async def login(
-    request: Request,
-    response: Response,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db),
-):
-    """Legacy login route kept for compatibility — delegates to /token logic directly."""
-    client_ip = get_client_ip(request)
-    await rate_limit(client_ip, api_limits["login"])
-
-    user = await authenticate_user(form_data, db)
-    access_token = create_access_token(user.id)
-    refresh_token = create_refresh_token(user.id)
-    _set_auth_cookies(response, access_token, refresh_token)
-    return _build_token_response(access_token, refresh_token)
 
 
 @router.get("/check")
@@ -397,7 +383,7 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
             user = result.scalars().first()
 
         if not user:
-            user = await create_user_with_dummy_password(
+            user = await create_user_from_oauth(
                 db,
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
@@ -508,7 +494,7 @@ async def sso_callback(
             user = result.scalars().first()
         
         if not user:
-            user = await create_user_with_dummy_password(
+            user = await create_user_from_oauth(
                 db,
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
@@ -656,7 +642,7 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
             user = result.scalars().first()
 
         if not user:
-            user = await create_user_with_dummy_password(
+            user = await create_user_from_oauth(
                 db,
                 email=email,
                 full_name=data.get("full_name", email.split("@")[0]),
@@ -703,120 +689,6 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         if "aadsts" in error_msg or "unauthorized_client" in error_msg:
             raise HTTPException(status_code=400, detail="Microsoft OAuth configuration error. Please contact support.")
         raise HTTPException(status_code=500, detail="Authentication failed")
-
-
-@router.post("/forgot-password")
-async def forgot_password(
-    req: ForgotPasswordRequest,
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-):
-    """Send password reset email to user."""
-    client_ip = get_client_ip(request)
-    await rate_limit(client_ip, api_limits["login"])
-    
-    # Find user by email
-    stmt = select(UserTable).where(UserTable.email == req.email.lower().strip())
-    user = (await db.execute(stmt)).scalars().first()
-    
-    if not user:
-        # Don't reveal if email exists (security best practice)
-        return {"message": "If an account exists with this email, you will receive a password reset link."}
-    
-    # Generate reset token
-    import secrets
-    from datetime import datetime, timedelta
-    
-    reset_token = secrets.token_urlsafe(32)
-    user.password_reset_token = reset_token
-    user.password_reset_expires_at = datetime.utcnow() + timedelta(hours=24)
-    
-    await db.commit()
-    
-    # TODO: Send actual email with reset link
-    # For now, log the token for development
-    logger.info(f"Password reset requested for {req.email}")
-    
-    return {"message": "If an account exists with this email, you will receive a password reset link."}
-
-
-@router.post("/change-password")
-async def change_password(
-    req: ChangePasswordRequest,
-    current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Change user password (requires current password)."""
-    from backend.services.auth_service import verify_password, get_password_hash
-    
-    # Verify current password
-    if not verify_password(req.current_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    
-    # Update password
-    current_user.hashed_password = get_password_hash(req.new_password)
-    current_user.password_reset_token = None
-    current_user.password_reset_expires_at = None
-    
-    await db.commit()
-    
-    return {"message": "Password updated successfully"}
-
-
-@router.get("/verify")
-async def verify_email(
-    token: str,
-    db: AsyncSession = Depends(get_db)
-):
-    """Verify user email with token."""
-    from datetime import datetime
-    
-    # Find user with matching verification token
-    stmt = select(UserTable).where(
-        and_(
-            UserTable.email_verification_code == token,
-            UserTable.email_verification_expires_at > datetime.utcnow()
-        )
-    )
-    user = (await db.execute(stmt)).scalars().first()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
-    
-    # Mark email as verified
-    user.email_verified = True
-    user.email_verification_code = None
-    user.email_verification_expires_at = None
-    
-    await db.commit()
-    
-    return {"message": "Email verified successfully"}
-
-
-@router.post("/resend-verification")
-async def resend_verification_email(
-    request: Request,
-    current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Resend email verification link."""
-    client_ip = get_client_ip(request)
-    await rate_limit(client_ip, api_limits["high"])
-    
-    if current_user.email_verified:
-        raise HTTPException(status_code=400, detail="Email already verified")
-    
-    # Generate new verification code
-    import secrets
-    current_user.email_verification_code = secrets.token_urlsafe(32)
-    current_user.email_verification_expires_at = datetime.utcnow() + timedelta(hours=24)
-    
-    await db.commit()
-    
-    # TODO: Send actual email
-    logger.info(f"Resent verification email to {current_user.email}")
-    
-    return {"message": "Verification email sent"}
 
 
 @router.post("/onboarding")

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 import { updateUserProfile, syncUserTimezone } from "@/lib/api";
 import { motion } from "framer-motion";
 import {

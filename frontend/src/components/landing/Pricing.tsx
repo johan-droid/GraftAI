@@ -275,7 +275,7 @@ export function Pricing() {
                   {/* CTA */}
                   <GradientButton
                     component={Link}
-                    href={plan.name === "Enterprise" ? "/contact" : "/register"}
+                    href={plan.name === "Enterprise" ? "/contact" : "/login"}
                     gradientVariant={plan.ctaVariant}
                     fullWidth
                     size="large"

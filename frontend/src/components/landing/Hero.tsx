@@ -153,7 +153,7 @@ export function Hero() {
               >
                 <GradientButton
                   component={Link}
-                  href="/register"
+                  href="/login"
                   gradientVariant="primary"
                   size="large"
                   sx={{ minWidth: 220 }}

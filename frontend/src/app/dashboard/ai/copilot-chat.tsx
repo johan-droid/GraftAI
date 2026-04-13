@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 
-import { useAuth } from "@/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 
 import { useSyncEngine } from "@/hooks/useSyncEngine";
 import { db } from "@/lib/db";

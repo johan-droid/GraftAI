@@ -9,7 +9,6 @@ import uuid
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable, UserTokenTable
-from backend.services.api_keys import create_user_api_key, list_user_api_keys, revoke_user_api_key
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -27,8 +26,6 @@ class UserProfileUpdateRequest(BaseModel):
         return value.lower()
 
 
-class ApiKeyCreateRequest(BaseModel):
-    name: Optional[str] = None
 
 
 class OutOfOfficeBlockCreateRequest(BaseModel):
@@ -183,36 +180,6 @@ async def update_current_user_profile(
     }
 
 
-@router.get("/me/api-keys")
-async def list_current_user_api_keys(current_user: UserTable = Depends(get_current_user)):
-    return {"items": list_user_api_keys(current_user)}
-
-
-@router.post("/me/api-keys")
-async def create_current_user_api_key(
-    payload: ApiKeyCreateRequest,
-    current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    created_key, raw_key = create_user_api_key(current_user, payload.name)
-    await db.commit()
-    await db.refresh(current_user)
-    return {**created_key, "token": raw_key}
-
-
-@router.delete("/me/api-keys/{key_id}")
-async def revoke_current_user_api_key(
-    key_id: str,
-    current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    changed = revoke_user_api_key(current_user, key_id)
-    if not changed:
-        raise HTTPException(status_code=404, detail="API key not found")
-
-    await db.commit()
-    await db.refresh(current_user)
-    return {"status": "revoked", "id": key_id}
 
 
 @router.get("/me/out-of-office")
@@ -264,9 +231,7 @@ async def delete_current_user_account(
     db: AsyncSession = Depends(get_db)
 ):
     """Delete user account (anonymize for data integrity)."""
-    import secrets
     import uuid
-    from backend.services.auth_service import get_password_hash
     
     # Anonymize user instead of hard delete for data integrity
     current_user.email = f"deleted_{current_user.id}_{uuid.uuid4().hex[:8]}@anonymized.com"
@@ -275,7 +240,7 @@ async def delete_current_user_account(
     current_user.deleted_at = datetime.now(timezone.utc)
     
     # Clear sensitive data
-    current_user.hashed_password = get_password_hash(secrets.token_urlsafe(64))
+    current_user.hashed_password = None # Pure OAuth 2.0
     current_user.email_verification_code = None
     current_user.password_reset_token = None
     current_user.preferences = {}

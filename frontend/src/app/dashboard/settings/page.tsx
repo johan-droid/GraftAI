@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/components/ui/Toast";
 import { useTheme, ThemeMode } from "@/contexts/ThemeContext";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 import { setConsent } from "@/lib/api";
 import { MobileSidebar } from "@/components/dashboard/MobileSidebar";
 import { BottomNav } from "@/components/dashboard/BottomNav";
@@ -68,7 +68,7 @@ type ConsentKey = (typeof CONSENT_CONFIG)[number]["key"];
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, logout, isAuthenticated, loading: authLoading } = useAuthContext();
+  const { user, logout, isAuthenticated, loading: authLoading } = useAuth();
   const { mode, setMode, isDark } = useTheme();
 
   const [consents, setConsents] = useState<Record<ConsentKey, boolean>>({
@@ -79,14 +79,9 @@ export default function SettingsPage() {
   const [savingKey, setSavingKey] = useState<ConsentKey | null>(null);
   const [savedKey, setSavedKey] = useState<ConsentKey | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [changingPw, setChangingPw] = useState(false);
-  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.replace("/login");
-    }
-  }, [isAuthenticated, authLoading, router]);
+  // Global auth state is handled by AuthProvider.
+
 
   useEffect(() => {
     fetch("/api/user/preferences", { credentials: "include" })
@@ -117,36 +112,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleChangePassword(e: React.FormEvent) {
-    e.preventDefault();
-    if (pwForm.next !== pwForm.confirm) {
-      toast.error("Passwords don't match.");
-      return;
-    }
-    if (pwForm.next.length < 8) {
-      toast.error("Password must be at least 8 characters.");
-      return;
-    }
-    setChangingPw(true);
-    try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          current_password: pwForm.current,
-          new_password: pwForm.next
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to update password.");
-      setPwForm({ current: "", next: "", confirm: "" });
-      toast.success("Password updated successfully.");
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setChangingPw(false);
-    }
-  }
 
   const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
     { value: "light", label: "Light", icon: Sun },
@@ -321,122 +286,6 @@ export default function SettingsPage() {
                   </Grid>
                 </Paper>
 
-                {/* Change Password */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 3,
-                    background: isDark
-                      ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                      : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-                    border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                    borderRadius: "16px",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "10px",
-                        background: "hsla(239, 84%, 67%, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: "1px solid hsla(239, 84%, 67%, 0.3)",
-                      }}
-                    >
-                      <KeyRound size={20} style={{ color: "hsl(239, 84%, 67%)" }} />
-                    </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                      Change Password
-                    </Typography>
-                  </Box>
-
-                  <Box component="form" onSubmit={handleChangePassword} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <TextField
-                      fullWidth
-                      type="password"
-                      label="Current Password"
-                      placeholder="••••••••"
-                      value={pwForm.current}
-                      onChange={(e) => setPwForm((p) => ({ ...p, current: e.target.value }))}
-                      sx={{
-                        "& .MuiOutlinedInput-root": {
-                          background: "transparent",
-                          borderRadius: "10px",
-                          color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                          "& fieldset": { borderColor: "hsla(239, 84%, 67%, 0.3)" },
-                          "&:hover fieldset": { borderColor: "hsla(239, 84%, 67%, 0.5)" },
-                        },
-                        "& .MuiInputLabel-root": { color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" },
-                      }}
-                    />
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          type="password"
-                          label="New Password"
-                          placeholder="Min. 8 characters"
-                          value={pwForm.next}
-                          onChange={(e) => setPwForm((p) => ({ ...p, next: e.target.value }))}
-                          sx={{
-                            "& .MuiOutlinedInput-root": {
-                              background: "transparent",
-                              borderRadius: "10px",
-                              color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                              "& fieldset": { borderColor: "hsla(239, 84%, 67%, 0.3)" },
-                            },
-                            "& .MuiInputLabel-root": { color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" },
-                          }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          type="password"
-                          label="Confirm Password"
-                          placeholder="Repeat password"
-                          value={pwForm.confirm}
-                          onChange={(e) => setPwForm((p) => ({ ...p, confirm: e.target.value }))}
-                          sx={{
-                            "& .MuiOutlinedInput-root": {
-                              background: "transparent",
-                              borderRadius: "10px",
-                              color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                              "& fieldset": { borderColor: "hsla(239, 84%, 67%, 0.3)" },
-                            },
-                            "& .MuiInputLabel-root": { color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" },
-                          }}
-                        />
-                      </Grid>
-                    </Grid>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      disabled={changingPw || !pwForm.current || !pwForm.next}
-                      sx={{
-                        alignSelf: "flex-start",
-                        mt: 1,
-                        background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                        textTransform: "none",
-                        fontWeight: 600,
-                        borderRadius: "10px",
-                        px: 3,
-                        py: 1,
-                        "&:hover": {
-                          background: "linear-gradient(135deg, hsl(239, 84%, 57%) 0%, hsl(330, 81%, 50%) 100%)",
-                        },
-                        "&:disabled": {
-                          background: isDark ? "hsl(240, 24%, 22%)" : "hsl(220, 14%, 90%)",
-                        },
-                      }}
-                    >
-                      {changingPw ? "Updating..." : "Update Password"}
-                    </Button>
-                  </Box>
-                </Paper>
 
                 {/* Privacy & Consent */}
                 <Paper
@@ -788,7 +637,6 @@ export default function SettingsPage() {
                     {[
                       { label: "Billing & Subscription", href: "/dashboard/settings/billing" },
                       { label: "Connected Integrations", href: "/dashboard/settings/integrations" },
-                      { label: "API Keys", href: "/dashboard/settings/api-keys" },
                     ].map((link) => (
                       <Box
                         key={link.href}

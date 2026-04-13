@@ -36,7 +36,7 @@ import {
   Activity,
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 import { MobileSidebar } from "@/components/dashboard/MobileSidebar";
 import { BottomNav } from "@/components/dashboard/BottomNav";
 import { Header } from "@/components/dashboard/Header";
@@ -72,7 +72,7 @@ const suggestedPrompts = [
 
 export default function CopilotPage() {
   const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuthContext();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);

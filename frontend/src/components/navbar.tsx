@@ -6,7 +6,7 @@ import { Bot, LogIn, Command, Menu, X, ArrowRight, Zap } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 import PulsePing from "./ui/pulse-ping";
 import { useNotificationContext } from "@/providers/notification-provider";
 import { AnimatePresence } from "framer-motion";
@@ -21,7 +21,7 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const { activePing } = useNotificationContext();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isAuthPage = pathname === "/login" || pathname === "/register" || pathname === "/auth-callback";
+  const isAuthPage = pathname === "/login" || pathname === "/auth-callback";
 
   useEffect(() => {
     if (mobileOpen) {

@@ -49,22 +49,6 @@ export function OAuthButtons({ callbackURL = "/dashboard" }: OAuthButtonsProps) 
 
   return (
     <Box>
-      {/* Divider */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-        <Box sx={{ flex: 1, height: 1, background: "hsla(239, 84%, 67%, 0.1)" }} />
-        <Box
-          component="span"
-          sx={{
-            fontSize: "0.875rem",
-            color: "hsl(215, 16%, 40%)",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-          }}
-        >
-          Or continue with
-        </Box>
-        <Box sx={{ flex: 1, height: 1, background: "hsla(239, 84%, 67%, 0.1)" }} />
-      </Box>
 
       {/* OAuth Buttons */}
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>

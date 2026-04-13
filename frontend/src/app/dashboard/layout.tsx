@@ -8,7 +8,7 @@ import {
   Activity, Puzzle, Menu, X, ChevronRight, Sun, Moon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAuthContext } from "@/app/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Toaster } from "@/components/ui/Toast";
 
@@ -23,7 +23,7 @@ const NAV_LINKS = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname  = usePathname();
-  const { logout, user } = useAuthContext();
+  const { logout, user } = useAuth();
   const [drawerOpen, setDrawerOpen]   = useState(false);
   const [darkMode, setDarkMode]       = useState(true);
   const [collapsed, setCollapsed]     = useState(false);

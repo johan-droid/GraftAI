@@ -33,7 +33,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
-  import { useAuthContext } from "@/app/providers/auth-provider";
+  import { useAuth } from "@/app/providers/auth-provider";
 import { MobileSidebar } from "@/components/dashboard/MobileSidebar";
 import { BottomNav } from "@/components/dashboard/BottomNav";
 import { Header } from "@/components/dashboard/Header";
@@ -76,7 +76,7 @@ const categories = [
 
 export default function IntegrationsPage() {
   const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuthContext();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
 
   const [activeCategory, setActiveCategory] = useState("all");
@@ -94,11 +94,8 @@ export default function IntegrationsPage() {
     }>
   >(isAuthenticated ? "/api/integrations" : null);
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.replace("/login");
-    }
-  }, [isAuthenticated, authLoading, router]);
+  // Global auth and route protection is handled by AuthProvider.
+
 
   // Build display integrations from metadata + API data
   const integrations: Integration[] = Object.entries(integrationMetadata).map(([provider, meta]) => {

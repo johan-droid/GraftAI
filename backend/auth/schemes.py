@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.utils.db import get_db
 from backend.models.tables import UserTable
-from backend.services.api_keys import resolve_user_by_api_key
 
 # We make token optional here by setting auto_error=False,
 # so we can manually check cookies if the header is missing.
@@ -58,9 +57,6 @@ async def get_current_user(
         if user_id is None:
             raise credentials_exception
     except JWTError:
-        api_key_user = await resolve_user_by_api_key(db, token)
-        if api_key_user is not None:
-            return api_key_user
         raise credentials_exception
 
     stmt = select(UserTable).where(UserTable.id == user_id)

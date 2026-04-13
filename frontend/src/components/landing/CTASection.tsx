@@ -32,7 +32,7 @@ export function CTASection({ variant = "buttons" }: CTASectionProps) {
     }
 
     setEmailError(null);
-    router.push(`/register?email=${encodeURIComponent(trimmedEmail)}`);
+    router.push("/login");
   };
 
   if (variant === "email") {
@@ -219,7 +219,7 @@ export function CTASection({ variant = "buttons" }: CTASectionProps) {
             >
               <GradientButton
                 component={Link}
-                href="/register"
+                href="/login"
                 gradientVariant="primary"
                 size="large"
                 sx={{ minWidth: 200 }}

@@ -1,6 +1,7 @@
 import { getSession } from "next-auth/react";
 
-// frontend/src/lib/api-client.ts
+// ─── Base URL ────────────────────────────────────────────────────────────────
+
 const rawApiBase =
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -10,73 +11,80 @@ const normalizedBase = rawApiBase.replace(/\/+$/, "");
 const BASE_URL = normalizedBase.endsWith("/api/v1")
   ? normalizedBase
   : `${normalizedBase}/api/v1`;
+
 export const API_BASE_URL = BASE_URL;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ApiRequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | null | undefined>;
   json?: unknown;
+  /** Set to true to skip the automatic 401 → refresh → retry logic */
+  skipRefresh?: boolean;
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 export function composeEndpoint(path: string, includeBaseUrl = false) {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return includeBaseUrl ? `${BASE_URL}${normalized}` : normalized;
 }
 
+/**
+ * Retrieve the backend JWT from whatever context we're in.
+ * - Browser: use NextAuth's `getSession()` (works in React components & RSC)
+ * - Server: caller should pass the token directly via `Authorization` header
+ */
+async function getAuthToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const session = await getSession();
+    return (session as any)?.backendToken ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Export so components that need the raw token can grab it.
+ */
+export { getAuthToken };
+
+// ─── Client ──────────────────────────────────────────────────────────────────
+
 export const apiClient = {
   async fetch(endpoint: string, options: ApiRequestOptions = {}) {
-    const { params, json, ...requestInit } = options;
-    
-    // 1. Build URL with query params if provided
-    let url = `${BASE_URL}${endpoint}`;
+    const { params, json, skipRefresh, ...requestInit } = options;
+
+    // 1. Build URL
+    let url = `${BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
     if (params) {
-      const searchParams = new URLSearchParams();
-      Object.entries(params).forEach(([key, value]) => {
+      const sp = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
         if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
+          sp.append(key, String(value));
         }
-      });
-      const queryString = searchParams.toString();
-      if (queryString) url += `?${queryString}`;
-    }
-
-    // 2. Get the standard JWT token or legacy graftai token
-    let token: string | null = null;
-    if (typeof window !== 'undefined') {
-      try {
-        const session = await getSession();
-        token = (session as any)?.backendToken || (session as any)?.session?.backendToken || null;
-      } catch (error) {
-        console.warn("Failed to retrieve NextAuth session", error);
       }
+      const qs = sp.toString();
+      if (qs) url += `?${qs}`;
     }
 
-    const apiKey = typeof window !== 'undefined'
-      ? localStorage.getItem("graftai_api_key") || sessionStorage.getItem("graftai_api_key")
-      : null;
+    // 2. Get auth token
+    const token = await getAuthToken();
 
-    if (!token && typeof window !== 'undefined') {
-      token = localStorage.getItem("token")
-        || localStorage.getItem("graftai_access_token")
-        || sessionStorage.getItem("token")
-        || sessionStorage.getItem("graftai_access_token");
-    }
-
-    // 3. Set up headers
+    // 3. Headers
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(requestInit.headers as Record<string, string>),
     };
-
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
-    } else if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
-    // 4. Prepare Body
-    const body = json ? JSON.stringify(json) : requestInit.body;
+    // 4. Body
+    const body = json !== undefined ? JSON.stringify(json) : requestInit.body;
 
-    // 5. Make the request
+    // 5. Fetch
     let response: Response;
     try {
       response = await fetch(url, {
@@ -86,25 +94,34 @@ export const apiClient = {
         body,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Network request failed";
+      const message = error instanceof Error ? error.message : "Network error";
       throw new Error(`Failed to reach API at ${url}. ${message}`);
     }
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        if (typeof window !== 'undefined' && !window.location.pathname.includes("/login")) {
-          localStorage.removeItem("token");
-          window.location.href = "/login";
-        }
+    // 6. Handle 401 — attempt a one-time silent token refresh then retry
+    if (response.status === 401 && !skipRefresh && typeof window !== "undefined") {
+      const refreshed = await attemptSessionRefresh();
+      if (refreshed) {
+        // Retry with new token
+        return this.fetch(endpoint, { ...options, skipRefresh: true });
       }
+      // Refresh failed — throw so the caller (AuthProvider) can decide what to do
+      throw new Error("Could not validate credentials");
+    }
+
+    // 7. Other errors
+    if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      const errorMessage = typeof error.detail === 'string' ? error.detail : 
-                          typeof error.message === 'string' ? error.message :
-                          JSON.stringify(error.detail || error.message || error);
+      const errorMessage =
+        typeof error.detail === "string"
+          ? error.detail
+          : typeof error.message === "string"
+          ? error.message
+          : JSON.stringify(error.detail ?? error.message ?? error);
       throw new Error(errorMessage || `API error: ${response.status}`);
     }
 
-    // Handle 204 No Content
+    // 8. No content
     if (response.status === 204) return null;
 
     return response.json();
@@ -124,5 +141,41 @@ export const apiClient = {
 
   delete<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
     return this.fetch(endpoint, { ...options, method: "DELETE" });
-  }
+  },
+
+  put<T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}): Promise<T> {
+    return this.fetch(endpoint, { ...options, method: "PUT", json: body });
+  },
 };
+
+// ─── Silent token refresh helper ─────────────────────────────────────────────
+
+let _refreshPromise: Promise<boolean> | null = null;
+
+async function attemptSessionRefresh(): Promise<boolean> {
+  // Deduplicate concurrent refresh attempts
+  if (_refreshPromise) return _refreshPromise;
+
+  _refreshPromise = (async () => {
+    try {
+      const session = await getSession();
+      const refreshToken = (session as any)?.refreshToken;
+      if (!refreshToken) return false;
+
+      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        cache: "no-store",
+      });
+
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+
+  return _refreshPromise;
+}

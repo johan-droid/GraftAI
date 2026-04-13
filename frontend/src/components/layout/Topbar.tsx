@@ -2,7 +2,7 @@
 
 import { useSyncEngine } from "@/hooks/useSyncEngine";
 import { CloudOff, Wifi, Bell } from "lucide-react";
-import { useAuth } from "@/providers/auth-provider";
+import { useAuth } from "@/app/providers/auth-provider";
 import { Badge } from "@/components/ui/Badge";
 
 export function Topbar() {

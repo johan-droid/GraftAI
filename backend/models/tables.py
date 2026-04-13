@@ -20,7 +20,6 @@ from .base import Base # Re-using central Base for consistency
 if TYPE_CHECKING:
     from backend.models.dsr import DSRRecord, ConsentRecord
     from backend.models.team import Team, TeamMember
-    from backend.models.api_key import APIKey
     from backend.models.integration import Integration
     from backend.models.email_template import EmailTemplate
     from backend.models.video_conference import VideoConferenceConfig
@@ -46,7 +45,7 @@ class UserTable(Base):
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verification_code: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     email_verification_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
+    hashed_password: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     
     # Billing & Quota Fields
     tier: Mapped[str] = mapped_column(String, default="free", nullable=False)
@@ -81,7 +80,6 @@ class UserTable(Base):
     dsr_requests: Mapped[List["DSRRecord"]] = relationship("DSRRecord", back_populates="user", cascade="all, delete-orphan")
     consent_records: Mapped[List["ConsentRecord"]] = relationship("ConsentRecord", back_populates="user", cascade="all, delete-orphan")
     team_memberships: Mapped[List["TeamMember"]] = relationship("TeamMember", back_populates="user", cascade="all, delete-orphan")
-    api_keys: Mapped[List["APIKey"]] = relationship("APIKey", back_populates="user", cascade="all, delete-orphan")
     integrations: Mapped[List["Integration"]] = relationship("Integration", back_populates="user", cascade="all, delete-orphan")
     email_templates: Mapped[List["EmailTemplate"]] = relationship("EmailTemplate", back_populates="user", cascade="all, delete-orphan")
     video_conference_configs: Mapped[List["VideoConferenceConfig"]] = relationship("VideoConferenceConfig", back_populates="user", cascade="all, delete-orphan")

@@ -29,7 +29,7 @@ const docSections = [
     items: [
       { title: 'Quick Start Guide', href: '#quick-start', description: 'Get up and running in 5 minutes' },
       { title: 'Installation', href: '#installation', description: 'Setup your development environment' },
-      { title: 'Authentication', href: '#authentication', description: 'API keys and OAuth setup' },
+      { title: 'Authentication', href: '#authentication', description: 'Standard OAuth 2.0 flow' },
       { title: 'First API Call', href: '#first-call', description: 'Make your first booking' },
     ]
   },
@@ -84,7 +84,7 @@ const codeExamples = {
   javascript: `import { GraftAI } from '@graftai/sdk';
 
 const graft = new GraftAI({
-  apiKey: 'your_api_key'
+  accessToken: 'your_access_token'
 });
 
 // Create a booking
@@ -102,7 +102,7 @@ console.log('Booking created:', booking.id);`,
 
   python: `from graftai import GraftAI
 
-graft = GraftAI(api_key='your_api_key')
+graft = GraftAI(access_token='your_access_token')
 
 # Create a booking
 booking = graft.bookings.create(
@@ -118,7 +118,7 @@ booking = graft.bookings.create(
 print(f'Booking created: {booking.id}')`,
 
   curl: `curl -X POST https://api.graftai.com/v1/bookings \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
     "title": "Team Sync",
@@ -189,16 +189,10 @@ export default function DevelopersPage() {
               </a>
             </nav>
 
-            {/* CTA */}
             <div className="hidden md:flex items-center gap-3">
               <Link href="/login">
-                <button className="px-4 py-2 text-slate-300 hover:text-white transition-colors text-sm">
-                  Sign In
-                </button>
-              </Link>
-              <Link href="/register">
                 <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-sm font-medium transition-colors">
-                  Get API Key
+                  Sign In
                 </button>
               </Link>
             </div>

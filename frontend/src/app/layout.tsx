@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/app/providers/auth-provider";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Toaster } from "@/components/ui/Toast";
+import { SessionProvider } from "next-auth/react";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -79,12 +80,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         style={{ background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font-jakarta), ui-sans-serif, system-ui, sans-serif" }}
         suppressHydrationWarning
       >
-        <AuthProvider>
-          <ThemeProvider>
-            {children}
-            <Toaster />
-          </ThemeProvider>
-        </AuthProvider>
+        <SessionProvider>
+          <AuthProvider>
+            <ThemeProvider>
+              {children}
+              <Toaster />
+            </ThemeProvider>
+          </AuthProvider>
+        </SessionProvider>
       </body>
     </html>
   );

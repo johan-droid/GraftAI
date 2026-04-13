@@ -43,8 +43,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
 });
 
 const serwist = new Serwist({
-  // Disable precaching temporarily to bypass 404 installation errors
-  precacheEntries: [],
+  precacheEntries: self.__SW_MANIFEST,
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,

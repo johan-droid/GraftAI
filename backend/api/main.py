@@ -385,7 +385,6 @@ def create_app() -> FastAPI:
     from backend.routes.calendar_routes import router as calendar_integration_router
     from backend.routes.gdpr_routes import router as gdpr_router
     from backend.api.team_routes import router as team_router
-    from backend.api.api_key_routes import router as api_key_router
     from backend.api.integration_routes import router as integration_router
     from backend.api.email_template_routes import router as email_template_router
     from backend.api.video_conference_routes import router as video_conference_router
@@ -397,9 +396,6 @@ def create_app() -> FastAPI:
     # Registering the new unified Authentication router
     app.include_router(auth_router, prefix="/api/v1/auth")
 
-    # Registering MFA router
-    from backend.auth.mfa import router as mfa_router
-    app.include_router(mfa_router, prefix="/api/v1/auth/mfa")
 
     # Registering calendar integration router
     app.include_router(calendar_integration_router)
@@ -413,8 +409,6 @@ def create_app() -> FastAPI:
     # Registering analytics router
     app.include_router(analytics_router, prefix="/api/v1")
 
-    # Registering API key router
-    app.include_router(api_key_router, prefix="/api/v1")
 
     # Registering integration router
     app.include_router(integration_router, prefix="/api/v1")

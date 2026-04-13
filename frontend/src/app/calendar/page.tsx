@@ -372,7 +372,7 @@ export default function CalendarPage() {
                      <div>
                         <div className="text-[9px] font-black text-[var(--text-faint)] uppercase mb-2 font-mono">CONTEXT_RAW</div>
                         <div className="p-4 bg-[var(--bg-hover)] border-l-2 border-[var(--primary)] font-mono text-[11px] text-[var(--text-muted)] italic leading-relaxed">
-                           > {selectedEvent.description}
+                           {'>'} {selectedEvent.description}
                         </div>
                      </div>
                    )}

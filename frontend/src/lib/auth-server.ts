@@ -1,3 +1,5 @@
+import { auth as nextAuth } from "@/auth";
+
 export const auth = {
   api: {
     getSession: async ({ headers }: { headers: any }) => {
@@ -17,6 +19,16 @@ export const auth = {
         if (authToken) {
           return { session: { token: authToken } };
         }
+      }
+
+      try {
+        const session = await nextAuth();
+        const backendToken = (session as any)?.backendToken || (session as any)?.session?.backendToken;
+        if (backendToken) {
+          return { session: { token: backendToken } };
+        }
+      } catch (error) {
+        console.warn("NextAuth session resolution failed:", error);
       }
 
       return null;

@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     const checkAuth = async () => {
       try {
-        const response = await fetch("/api/auth/session", {
+const response = await fetch("/api/auth/check", {
           method: "GET",
           credentials: "include",
           headers: {

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
+import { auth } from "@/auth";
 import { BACKEND_API_URL } from "@/lib/backend";
-import { applyServerAuthCookies, resolveServerAccessToken } from "@/lib/server-auth";
 
 // Redis caching — Upstash compatible
 let redis: { get: (k: string) => Promise<string | null>; setex: (k: string, ttl: number, v: string) => Promise<any> } | null = null;
@@ -53,27 +52,19 @@ async function getAnalytics(accessToken: string) {
 }
 
 export async function GET() {
-  const reqHeaders = await headers();
-  const tokenResolution = await resolveServerAccessToken(reqHeaders);
-  if (!tokenResolution.accessToken) {
+  const session = await auth();
+  const backendToken = (session as any)?.backendToken || (session as any)?.session?.backendToken;
+  if (!backendToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const response = await getAnalytics(tokenResolution.accessToken);
-  if (tokenResolution.refreshed) {
-    applyServerAuthCookies(response, tokenResolution.accessToken, tokenResolution.refreshToken);
-  }
-  return response;
+  return getAnalytics(backendToken);
 }
 
 export async function POST(request: Request) {
-  const reqHeaders = await headers();
-  const tokenResolution = await resolveServerAccessToken(reqHeaders);
-  if (!tokenResolution.accessToken) {
+  const session = await auth();
+  const backendToken = (session as any)?.backendToken || (session as any)?.session?.backendToken;
+  if (!backendToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const response = await getAnalytics(tokenResolution.accessToken);
-  if (tokenResolution.refreshed) {
-    applyServerAuthCookies(response, tokenResolution.accessToken, tokenResolution.refreshToken);
-  }
-  return response;
+  return getAnalytics(backendToken);
 }

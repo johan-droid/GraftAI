@@ -1,6 +1,7 @@
 import NextAuth, { NextAuthConfig } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
+import CredentialsProvider from "next-auth/providers/credentials";
 
 const nextAuthSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || "your-development-fallback-secret-here";
 if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET && !process.env.AUTH_SECRET) {
@@ -22,15 +23,52 @@ const authOptions: NextAuthConfig = {
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
       tenantId: process.env.MICROSOFT_TENANT_ID || "common",
     }),
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
+
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            username: credentials.email,
+            password: credentials.password,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Invalid email or password");
+        }
+
+        const data = await res.json();
+
+        return {
+          id: credentials.email,
+          email: credentials.email,
+          name: credentials.email,
+          backendToken: data.access_token,
+          refreshToken: data.refresh_token,
+        };
+      },
+    }),
   ],
   pages: {
     signIn: "/login", // The page where you show the Google sign-in button
   },
   callbacks: {
     async signIn({ user, account, profile }) {
+      if (account?.provider === "credentials") {
+        return true;
+      }
+
       try {
-        // Send the Google access token or id token to your backend to sync users
-        // This simulates reconstructing the auth system where the backend creates the user
         const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/social/exchange`, {
           method: "POST",
           headers: {
@@ -49,15 +87,21 @@ const authOptions: NextAuthConfig = {
 
         if (res.ok) {
           const data = await res.json();
-          // Store backend tokens to pass along
           user.backendToken = data.access_token;
           user.refreshToken = data.refresh_token;
           return true;
         }
+
+        const errorText = await res.text();
+        console.error("Backend rejected social token:", errorText);
       } catch (error) {
-        console.error("Failed to sync with backend", error);
+        console.error("Failed to sync with backend (Network Error):", error);
       }
-      return false; // Deny sign-in if backend sync fails (or handle fallback)
+
+      // If your backend is temporarily unavailable during development, you can
+      // return true here until the backend is fixed. Returning false triggers
+      // a silent redirect back to the login page.
+      return false;
     },
     async jwt({ token, user, account }) {
       if (user && "backendToken" in user) {

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
+import { auth } from "@/auth";
 import { BACKEND_API_URL } from "@/lib/backend";
-import { applyServerAuthCookies, resolveServerAccessToken } from "@/lib/server-auth";
 
 export async function GET() {
-  const reqHeaders = await headers();
-  const tokenResolution = await resolveServerAccessToken(reqHeaders);
-  if (!tokenResolution.accessToken) return NextResponse.json([], { status: 401 });
+  const session = await auth();
+  const backendToken = (session as any)?.backendToken || (session as any)?.session?.backendToken;
+  if (!backendToken) {
+    return NextResponse.json([], { status: 401 });
+  }
 
   const now = new Date().toISOString();
   const until = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -18,21 +19,15 @@ export async function GET() {
     const res = await fetch(
       `${BACKEND_API_URL}/calendar/events?start=${encodeURIComponent(now)}&end=${encodeURIComponent(until)}`,
       {
-        headers: { "Authorization": `Bearer ${tokenResolution.accessToken}` },
+        headers: { "Authorization": `Bearer ${backendToken}` },
         signal: controller.signal,
       }
     );
     clearTimeout(timeoutId);
 
-    const response = res.ok
+    return res.ok
       ? NextResponse.json(await res.json())
       : NextResponse.json([], { status: res.status });
-
-    if (tokenResolution.refreshed) {
-      applyServerAuthCookies(response, tokenResolution.accessToken, tokenResolution.refreshToken);
-    }
-
-    return response;
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === "AbortError") {

@@ -1,4 +1,5 @@
-from fastapi import Depends, HTTPException, status
+import os
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy import select
@@ -8,8 +9,9 @@ from backend.utils.db import get_db
 from backend.models.tables import UserTable
 from backend.services.api_keys import resolve_user_by_api_key
 
-# This tells FastAPI where the login route is, so Swagger UI knows how to get the token
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+# We make token optional here by setting auto_error=False,
+# so we can manually check cookies if the header is missing.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False)
 
 from backend.auth.config import ALGORITHM, SECRET_KEY
 
@@ -24,13 +26,15 @@ async def decode_token(token: str) -> dict:
         ) from exc
 
 async def get_current_user_id(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> str:
-    user = await get_current_user(token=token, db=db)
+    user = await get_current_user(request=request, token=token, db=db)
     return user.id
 
 async def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> UserTable:
@@ -39,6 +43,15 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # --- THE FIX: Fallback to checking the HttpOnly cookie ---
+    if not token:
+        token = request.cookies.get("graftai_access_token")
+
+    if not token:
+        raise credentials_exception
+    # ---------------------------------------------------------
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")

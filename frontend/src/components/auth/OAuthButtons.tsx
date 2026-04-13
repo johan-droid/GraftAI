@@ -2,7 +2,7 @@
 
 import { Box, Button } from "@mui/material";
 import { motion } from "framer-motion";
-import { authClient } from "@/lib/auth-client";
+import { signIn } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 
 // Custom SVG icons for OAuth providers
@@ -36,10 +36,7 @@ interface OAuthButtonsProps {
 export function OAuthButtons({ callbackURL = "/dashboard" }: OAuthButtonsProps) {
   const handleOAuth = async (provider: string) => {
     try {
-      await authClient.signIn.social({
-        provider,
-        callbackURL,
-      });
+      await signIn(provider, { callbackUrl: callbackURL });
     } catch (error) {
       console.error(`OAuth error for ${provider}:`, error);
       toast.error(

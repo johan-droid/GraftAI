@@ -10,7 +10,7 @@ import { AuthLayout } from "@/components/auth/AuthLayout";
 import { OAuthButtons } from "@/components/auth/OAuthButtons";
 import { FloatingInput } from "@/components/ui/FloatingInput";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { authClient } from "@/lib/auth-client";
+import { signIn } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 
 export default function LoginPage() {
@@ -32,13 +32,14 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const { error: authError } = await authClient.signIn.email({
+      const res = await signIn("credentials", {
         email: email.trim(),
         password,
+        redirect: false,
       });
 
-      if (authError) {
-        throw new Error(authError.message ?? "Invalid credentials");
+      if (res?.error) {
+        throw new Error(res.error ?? "Invalid credentials");
       }
 
       toast.success("Welcome back!");

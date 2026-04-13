@@ -1,20 +1,16 @@
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { BACKEND_API_URL } from "@/lib/backend";
-import {
-  applyServerAuthCookies,
-  resolveServerAccessToken,
-} from "@/lib/server-auth";
 
 type BackendProfile = {
   preferences?: Record<string, unknown>;
 };
 
 export async function GET() {
-  const reqHeaders = await headers();
-  const tokenResolution = await resolveServerAccessToken(reqHeaders);
+  const session = await auth();
+  const backendToken = (session as any)?.backendToken || (session as any)?.session?.backendToken;
 
-  if (!tokenResolution.accessToken) {
+  if (!backendToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -22,7 +18,7 @@ export async function GET() {
   try {
     backendRes = await fetch(`${BACKEND_API_URL}/users/me`, {
       headers: {
-        Authorization: `Bearer ${tokenResolution.accessToken}`,
+        Authorization: `Bearer ${backendToken}`,
         "Content-Type": "application/json",
       },
       cache: "no-store",
@@ -39,7 +35,7 @@ export async function GET() {
   const data = (await backendRes.json()) as BackendProfile;
   const preferences = data.preferences && typeof data.preferences === "object" ? data.preferences : {};
 
-  const response = NextResponse.json({
+  return NextResponse.json({
     preferences,
     consents: {
       analytics: Boolean((preferences as Record<string, unknown>).consent_analytics ?? true),
@@ -47,14 +43,4 @@ export async function GET() {
       ai_training: Boolean((preferences as Record<string, unknown>).consent_ai_training ?? false),
     },
   });
-
-  if (tokenResolution.refreshed) {
-    applyServerAuthCookies(
-      response,
-      tokenResolution.accessToken,
-      tokenResolution.refreshToken
-    );
-  }
-
-  return response;
 }

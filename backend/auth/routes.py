@@ -17,6 +17,7 @@ from backend.services.auth_service import (
     create_refresh_token,
     create_user_with_dummy_password,
     decode_jwt_token,
+    get_user_by_email,
     upsert_user_token,
 )
 from backend.services.oauth_service import (
@@ -104,16 +105,32 @@ async def social_exchange(req: SocialExchangeRequest, request: Request, db: Asyn
     email = provider_profile.get("email") or req.email
     if not email:
         raise HTTPException(status_code=400, detail="Email required for social login")
-    
-    from backend.services.auth_service import create_user_with_dummy_password
-    user = await create_user_with_dummy_password(db, email=email, full_name=provider_profile.get("full_name") or req.name or "", verified=True)
-    
+
+    user = await get_user_by_email(db, email.lower().strip())
+    if not user:
+        user = await create_user_with_dummy_password(
+            db,
+            email=email.lower().strip(),
+            full_name=provider_profile.get("full_name") or req.name or "",
+            verified=True,
+        )
+    elif not user.email_verified:
+        user.email_verified = True
+
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id)
-    
-    # Store provider logic if needed
-    await upsert_user_token(db, str(user.id), req.provider, req.access_token, req.id_token)
-    
+
+    await upsert_user_token(
+        db,
+        user,
+        req.provider,
+        {
+            "access_token": req.access_token,
+            "id_token": req.id_token,
+        },
+    )
+    await db.commit()
+
     return {"access_token": access_token, "refresh_token": refresh_token}
 
 

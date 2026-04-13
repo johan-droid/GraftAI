@@ -1,15 +1,11 @@
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { BACKEND_API_URL } from "@/lib/backend";
-import {
-  applyServerAuthCookies,
-  resolveServerAccessToken,
-} from "@/lib/server-auth";
 
 export async function GET() {
-  const reqHeaders = await headers();
-  const tokenResolution = await resolveServerAccessToken(reqHeaders);
-  if (!tokenResolution.accessToken) {
+  const session = await auth();
+  const backendToken = (session as any)?.backendToken || (session as any)?.session?.backendToken;
+  if (!backendToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -17,7 +13,7 @@ export async function GET() {
   try {
     backendRes = await fetch(`${BACKEND_API_URL}/auth/check`, {
       headers: {
-        Authorization: `Bearer ${tokenResolution.accessToken}`,
+        Authorization: `Bearer ${backendToken}`,
         "Content-Type": "application/json",
       },
       cache: "no-store",
@@ -32,13 +28,5 @@ export async function GET() {
   }
 
   const data = await backendRes.json();
-  const response = NextResponse.json(data);
-  if (tokenResolution.refreshed) {
-    applyServerAuthCookies(
-      response,
-      tokenResolution.accessToken,
-      tokenResolution.refreshToken
-    );
-  }
-  return response;
+  return NextResponse.json(data);
 }

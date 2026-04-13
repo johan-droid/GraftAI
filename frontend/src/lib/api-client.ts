@@ -1,3 +1,5 @@
+import { getSession } from "next-auth/react";
+
 // frontend/src/lib/api-client.ts
 const rawApiBase =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -38,16 +40,27 @@ export const apiClient = {
     }
 
     // 2. Get the standard JWT token or legacy graftai token
-    const token = typeof window !== 'undefined'
-      ? localStorage.getItem("token")
-        || localStorage.getItem("graftai_access_token")
-        || sessionStorage.getItem("token")
-        || sessionStorage.getItem("graftai_access_token")
-      : null;
+    let token: string | null = null;
+    if (typeof window !== 'undefined') {
+      try {
+        const session = await getSession();
+        token = (session as any)?.backendToken || (session as any)?.session?.backendToken || null;
+      } catch (error) {
+        console.warn("Failed to retrieve NextAuth session", error);
+      }
+    }
+
     const apiKey = typeof window !== 'undefined'
       ? localStorage.getItem("graftai_api_key") || sessionStorage.getItem("graftai_api_key")
       : null;
-    
+
+    if (!token && typeof window !== 'undefined') {
+      token = localStorage.getItem("token")
+        || localStorage.getItem("graftai_access_token")
+        || sessionStorage.getItem("token")
+        || sessionStorage.getItem("graftai_access_token");
+    }
+
     // 3. Set up headers
     const headers: Record<string, string> = {
       "Content-Type": "application/json",

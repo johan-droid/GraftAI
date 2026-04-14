@@ -1,5 +1,11 @@
-import NextAuth, { type NextAuthConfig, type DefaultSession } from "next-auth";
-import { type JWT } from "next-auth/jwt";
+import NextAuth, {
+  type NextAuthConfig,
+  type DefaultSession,
+  type User,
+  type Account,
+  type Session,
+} from "next-auth";
+import type { JWT } from "@auth/core/jwt";
 import GoogleProvider from "next-auth/providers/google";
 import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
 
@@ -10,6 +16,23 @@ import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
  * Prefer server-only BACKEND_URL env var first, then NEXT_PUBLIC_* variants.
  * Never falls back to a relative URL since server-side fetch requires absolute URLs.
  */
+type SocialAuthAccount = Pick<
+  Account,
+  "provider" | "providerAccountId" | "access_token" | "id_token" | "refresh_token"
+>;
+
+type SocialAuthUser = Pick<User, "email" | "name" | "image">;
+
+type NextAuthJwt = JWT & {
+  backendToken?: string;
+  refreshToken?: string;
+  backendTokenExpiresAt?: number;
+  error?: "RefreshTokenError";
+  providerAccessToken?: string;
+  providerRefreshToken?: string;
+  provider?: string;
+};
+
 function getServerBackendUrl(): string {
   const url =
     process.env.BACKEND_URL ||
@@ -17,7 +40,11 @@ function getServerBackendUrl(): string {
     process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/v1$/, "");
 
   if (!url) {
-    throw new Error("Missing BACKEND_URL environment variable");
+    throw new Error(
+      "Missing BACKEND_URL or NEXT_PUBLIC_BACKEND_URL environment variable. " +
+      "Set BACKEND_URL=http://localhost:8000 for local development, or " +
+      "NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 if using browser-exposed API routing."
+    );
   }
 
   return url.replace(/\/+$/, "");
@@ -45,7 +72,7 @@ declare module "next-auth" {
   }
 }
 
-declare module "next-auth/jwt" {
+declare module "@auth/core/jwt" {
   interface JWT {
     backendToken?: string;
     refreshToken?: string;
@@ -131,7 +158,7 @@ const _pendingBackendTokens = new Map<string, {
   backendTokenExpiresAt: number | undefined;
 }>();
 
-async function exchangeBackendTokens(account: any, user: any) {
+async function exchangeBackendTokens(account: SocialAuthAccount, user: SocialAuthUser) {
   const url = `${getBackendApiUrl()}/auth/social/exchange`;
   try {
     const res = await fetch(url, {
@@ -237,7 +264,7 @@ const authOptions: NextAuthConfig = {
     },
 
     // ─── jwt: persists tokens in the encrypted NextAuth cookie ────────────
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account }: { token: NextAuthJwt; user?: User | null; account?: Account | null }) {
       // Initial sign-in — `user` and `account` are present only on first call
       if (user && account) {
         const mapKey = `${account.provider}:${account.providerAccountId}`;
@@ -296,7 +323,7 @@ const authOptions: NextAuthConfig = {
     },
 
     // ─── session: exposes safe data to the frontend ────────────────────────
-    async session({ session, token }) {
+    async session({ session, token }: { session: Session; token: NextAuthJwt }) {
       // Propagate backend token and expiry
       session.backendToken = token.backendToken;
       session.backendTokenExpiresAt = token.backendTokenExpiresAt;

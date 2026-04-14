@@ -268,29 +268,41 @@ const authOptions: NextAuthConfig = {
   callbacks: {
     // ─── signIn: called right after the provider authenticates ────────────
     async signIn({ user, account }) {
-      if (!account) {
-        console.error("[NextAuth:signIn] No account object — aborting");
+      if (!account || !user?.email) {
+        console.error("[NextAuth:signIn] Missing account/email — aborting");
         return false;
       }
 
-      console.log(`[NextAuth:signIn] provider=${account.provider} email=${user.email}`);
-      console.log(`[NextAuth:signIn] access_token present: ${!!account.access_token}, id_token: ${!!account.id_token}`);
+      console.log(`[NextAuth:signIn] Handshaking with backend for ${user.email} via ${account.provider}`);
+      
+      // Perform early exchange to validate user exists/can sign in on backend
+      const data = await exchangeBackendTokens(account, user);
+      if (!data) {
+        console.error("[NextAuth:signIn] Backend exchange failed during initial handshake");
+        return false;
+      }
 
-      // Keep signIn lightweight. The actual backend exchange is retried in jwt
-      // if the in-memory handoff is not available due to serverless execution.
+      // Store in memory for immediate handoff to the jwt callback
+      const mapKey = `${account.provider}:${account.providerAccountId}`;
+      _pendingBackendTokens.set(mapKey, {
+        backendToken: data.access_token,
+        refreshToken: data.refresh_token,
+        backendTokenExpiresAt: decodeJwtExpiry(data.access_token),
+      });
+
       return true;
     },
 
     // ─── jwt: persists tokens in the encrypted NextAuth cookie ────────────
     async jwt({ token, user, account }: { token: NextAuthJwt; user?: User | null; account?: Account | null }) {
-      // Initial sign-in — `user` and `account` are present only on first call
+      // Internal Auth Handshake: initial sign-in
       if (user && account) {
         const mapKey = `${account.provider}:${account.providerAccountId}`;
         let pending = _pendingBackendTokens.get(mapKey);
-        console.log(`[NextAuth:jwt] Initial sign-in. mapKey=${mapKey} pendingFound=${!!pending}`);
-
+        
+        // If not in map (e.g. serverless instance mismatch), retry exchange
         if (!pending) {
-          console.warn(`[NextAuth:jwt] No pending token found for key=${mapKey}. Attempting backend exchange in jwt callback.`);
+          console.warn(`[NextAuth:jwt] Handoff miss for ${mapKey} — Retrying exchange.`);
           const data = await exchangeBackendTokens(account, user);
           if (data) {
             pending = {
@@ -302,7 +314,7 @@ const authOptions: NextAuthConfig = {
         }
 
         if (pending) {
-          _pendingBackendTokens.delete(mapKey);
+          _pendingBackendTokens.delete(mapKey); // Clean up
           token.backendToken = pending.backendToken;
           token.refreshToken = pending.refreshToken;
           token.backendTokenExpiresAt = pending.backendTokenExpiresAt;
@@ -310,9 +322,8 @@ const authOptions: NextAuthConfig = {
           token.providerRefreshToken = account.refresh_token ?? undefined;
           token.provider = account.provider;
           token.error = undefined;
-          console.log(`[NextAuth:jwt] ✅ Backend token assigned. exp=${pending.backendTokenExpiresAt}`);
         } else {
-          console.error(`[NextAuth:jwt] ❌ No backend token available for key=${mapKey}.`);
+          console.error(`[NextAuth:jwt] ❌ FAILED_TO_ESTABLISH_BACKEND_TRUST for ${mapKey}`);
           token.error = "RefreshTokenError";
         }
         return token;

@@ -64,7 +64,7 @@ export function OAuthButtons({ callbackURL = "/dashboard" }: OAuthButtonsProps) 
               onClick={() => handleOAuth(provider.id)}
               fullWidth
               sx={{
-                py: 2,
+                py: 2.5,
                 px: 3,
                 background: "var(--bg-elevated)",
                 border: "1px dashed var(--border-subtle)",
@@ -72,26 +72,41 @@ export function OAuthButtons({ callbackURL = "/dashboard" }: OAuthButtonsProps) 
                 color: "var(--text-primary)",
                 textTransform: "uppercase",
                 fontFamily: "var(--font-mono)",
-                fontSize: "11px",
-                fontWeight: 900,
+                fontSize: "10px",
+                fontWeight: 800,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "flex-start",
-                gap: 2.5,
-                transition: "all 0.15s ease",
-                letterSpacing: "0.15em",
-                "&:hover": {
+                gap: 3,
+                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                letterSpacing: "0.2em",
+                position: "relative",
+                overflow: "hidden",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  width: "2px",
+                  height: "0%",
                   background: "var(--primary)",
+                  transition: "height 0.2s ease",
+                },
+                "&:hover": {
+                  background: "rgba(0, 255, 156, 0.08)",
                   borderColor: "var(--primary)",
-                  color: "black",
+                  color: "white",
+                  "&::before": {
+                    height: "100%",
+                  },
                   "& svg": {
-                    filter: "brightness(0) saturate(100%)",
+                    filter: "drop-shadow(0 0 5px var(--primary))",
                     opacity: 1,
                   }
                 },
                 "& svg": {
-                  filter: "grayscale(100%) brightness(0.8)",
-                  opacity: 0.6,
+                  filter: "grayscale(100%)",
+                  opacity: 0.5,
                   transition: "all 0.3s ease",
                 }
               }}
@@ -99,7 +114,10 @@ export function OAuthButtons({ callbackURL = "/dashboard" }: OAuthButtonsProps) 
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", minWidth: 24 }}>
                 <provider.icon />
               </Box>
-              AUTH_NODE_VIA_{provider.name.toUpperCase()}
+              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                <span style={{ fontSize: '8px', opacity: 0.4, marginBottom: '2px' }}>PROVIDER_NODE_{index.toString().padStart(2, '0')}</span>
+                AUTH_VIA_{provider.name.toUpperCase()}
+              </Box>
             </Button>
           </motion.div>
         ))}

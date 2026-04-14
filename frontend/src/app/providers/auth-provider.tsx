@@ -158,11 +158,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Loading state ─────────────────────────────────────────────────────────────
   if (status === "loading" && !user) {
     return (
-      <div className="flex flex-col h-screen items-center justify-center bg-[#070711] text-white">
-        <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-4" />
-        <p className="font-bold tracking-widest uppercase text-xs opacity-50">
-          Initializing GraftAI...
-        </p>
+      <div className="flex flex-col h-screen items-center justify-center bg-[#050505] text-white relative overflow-hidden">
+        {/* Terminal Grid Background */}
+        <div 
+          className="absolute inset-0 opacity-10"
+          style={{
+            backgroundImage: `
+              linear-gradient(var(--border-subtle) 1px, transparent 1px),
+              linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px)
+            `,
+            backgroundSize: "40px 40px",
+          }}
+        />
+        
+        <div className="relative z-10 flex flex-col items-center">
+          <div className="w-12 h-12 border-2 border-[var(--border-subtle)] border-t-[var(--primary)] rounded-none animate-spin mb-8" />
+          
+          <div className="flex flex-col items-center gap-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-[var(--primary)] font-black">
+              INITIALIZING_GRAFT_ENGINE
+            </p>
+            <div className="flex gap-1">
+              {[0, 1, 2].map((i) => (
+                <div 
+                  key={i}
+                  className="w-1.5 h-1.5 bg-[var(--primary)] animate-pulse"
+                  style={{ animationDelay: `${i * 0.2}s` }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-12 px-4 py-2 border border-dashed border-[var(--border-subtle)] bg-black/40">
+             <p className="font-mono text-[8px] text-[var(--text-faint)] uppercase tracking-widest">
+                [ AUTH_NODE_STABLE // KERNEL_CONNECT_PENDING ]
+             </p>
+          </div>
+        </div>
       </div>
     );
   }

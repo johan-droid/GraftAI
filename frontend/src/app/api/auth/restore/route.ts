@@ -47,11 +47,12 @@ export async function POST(request: Request) {
   const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "lax" as const,
     path: "/",
     maxAge: ACCESS_TOKEN_MAX_AGE,
   };
 
+  // Standardizing on graftai_ prefix for consistency with backend logic
   response.cookies.set("auth_token", access_token, cookieOptions);
   response.cookies.set("graftai_access_token", access_token, cookieOptions);
 

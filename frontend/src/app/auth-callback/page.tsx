@@ -4,8 +4,8 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { composeEndpoint } from "@/lib/api-client";
+import { Box, Typography } from "@mui/material";
 
 /**
  * /auth-callback
@@ -25,9 +25,18 @@ import { composeEndpoint } from "@/lib/api-client";
  * 3. Backend code+state flow
  *    The backend sends ?code=...&state=... for SSO Enterprise flows.
  */
+import { AuthLayout } from "@/components/auth/AuthLayout";
+
+/**
+ * /auth-callback
+ * 
+ * Secure terminal for resolving the authentication handshake.
+ * Supports NextAuth exchange (primary), Direct SSO redirects, and Enterprise Code flows.
+ */
 function AuthCallbackInner() {
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState("Processing your sign-in…");
+  const [status, setStatus] = useState("RESOLVING_AUTH_HANDSHAKE...");
+  const [telemetry, setTelemetry] = useState<string[]>([]);
   const hasFetched = useRef(false);
 
   const accessToken  = searchParams.get("at") || searchParams.get("access_token");
@@ -35,6 +44,10 @@ function AuthCallbackInner() {
   const redirectTo   = searchParams.get("redirect") || "/dashboard";
   const code         = searchParams.get("code");
   const state        = searchParams.get("state");
+
+  const addTelemetry = (msg: string) => {
+    setTelemetry(prev => [...prev.slice(-3), `> ${msg}`]);
+  };
 
   const safeReplace = (path: string) => {
     if (typeof window !== "undefined") window.location.replace(path);
@@ -48,9 +61,10 @@ function AuthCallbackInner() {
       try {
         // ── Scenario 2: Backend sent access_token directly ──────────────────
         if (accessToken) {
-          setStatus("Verifying your credentials…");
+          setStatus("VALIDATING_SOCIAL_CREDENTIALS...");
+          addTelemetry("PKCE_HANDSHAKE_COMPLETE");
+          addTelemetry("INIT_SESSION_RESTORATION");
 
-          // Let the backend validate the token and set HttpOnly session cookies
           const res = await fetch("/api/auth/restore", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -67,14 +81,16 @@ function AuthCallbackInner() {
             throw new Error(err.error || `HTTP ${res.status}`);
           }
 
-          setStatus("Sign-in successful! Redirecting…");
+          addTelemetry("KERNEL_SESSION_MOUNTED_OK");
+          setStatus("SEQUENCE_SUCCESSFUL. REDIRECTING...");
           safeReplace(redirectTo);
           return;
         }
 
         // ── Scenario 3: Backend sent code + state (SSO Enterprise) ──────────
         if (code && state) {
-          setStatus("Completing OAuth handshake…");
+          setStatus("EXCHANGING_SSO_CODE...");
+          addTelemetry("NEGOTIATING_UPSTREAM_PROVIDERS");
 
           const callbackPath = composeEndpoint("/auth/sso/callback", true);
           const res = await fetch(
@@ -87,7 +103,7 @@ function AuthCallbackInner() {
             const msg = err.detail || `HTTP ${res.status}`;
 
             if (res.status === 410 || /invalid or expired state/i.test(msg)) {
-              setStatus("Session expired. Redirecting to login…");
+              setStatus("HANDSHAKE_EXPIRED. RE-INITIALIZING...");
               setTimeout(() => safeReplace("/login"), 1500);
               return;
             }
@@ -96,6 +112,9 @@ function AuthCallbackInner() {
 
           const data = await res.json();
           if (data.token?.access_token) {
+            addTelemetry("PROVIDER_TRUST_ESTABLISHED");
+            setStatus("MOUNTING_PERSISTENT_SESSION...");
+
             const restoreRes = await fetch("/api/auth/restore", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -108,23 +127,25 @@ function AuthCallbackInner() {
             });
 
             if (!restoreRes.ok) {
-              throw new Error("Failed to restore session from SSO tokens");
+              throw new Error("RESTORATION_FAULT_DETECTED");
             }
 
-            setStatus("Sign-in successful! Redirecting…");
+            setStatus("ACCESS_GRANTED_BY_KERNEL.");
             safeReplace(data.redirect_to || redirectTo);
             return;
           }
 
-          throw new Error(data.detail || "Authentication failed");
+          throw new Error(data.detail || "AUTH_NODE_FAULT");
         }
 
-        // ── No tokens, no code — nothing to do ──────────────────────────────
-        setStatus("No session found. Redirecting to login…");
-        setTimeout(() => safeReplace("/login"), 1500);
+        // ── Scenario 1: NextAuth handles directly — should barely blink if we end up here
+        setStatus("POLLING_SESSION_INTEGRITY...");
+        setTimeout(() => safeReplace("/dashboard"), 1000);
+
       } catch (err) {
         console.error("[AuthCallback]", err);
-        setStatus(`Error: ${err instanceof Error ? err.message : "Authentication failed"}`);
+        setStatus(`ERROR_CODE: ${err instanceof Error ? err.message : "AUTH_GENERAL_FAULT"}`);
+        addTelemetry("CRITICAL_NODE_FAILURE");
         setTimeout(() => safeReplace("/login"), 3000);
       }
     };
@@ -133,37 +154,117 @@ function AuthCallbackInner() {
   }, [accessToken, refreshToken, redirectTo, code, state]);
 
   return (
-    <div className="w-full max-w-md rounded-2xl bg-white/5 p-8 text-center shadow-2xl backdrop-blur border border-white/10">
-      <div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto mb-5" />
-      <p className="text-sm text-slate-300 leading-relaxed">{status}</p>
-    </div>
+    <Box sx={{ width: "100%" }}>
+      <Box 
+        sx={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          alignItems: "center", 
+          gap: 4,
+          py: 4 
+        }}
+      >
+        <Box
+          sx={{
+            width: 48,
+            height: 48,
+            border: "2px solid var(--border-subtle)",
+            borderTopColor: "var(--primary)",
+            borderRadius: 0,
+            animation: "spin 1s linear infinite",
+          }}
+        />
+        
+        <Box sx={{ textAlign: "center", width: "100%" }}>
+          <Typography
+            sx={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "14px",
+              fontWeight: 900,
+              color: "var(--primary)",
+              letterSpacing: "0.1em",
+              mb: 2,
+              textTransform: "uppercase",
+            }}
+          >
+            {status}
+          </Typography>
+          
+          <Box 
+            sx={{ 
+              mt: 4, 
+              p: 2, 
+              background: "rgba(0,0,0,0.3)", 
+              border: "1px dashed var(--border-subtle)",
+              textAlign: "left",
+              minHeight: "100px"
+            }}
+          >
+            {telemetry.map((line, i) => (
+              <Typography 
+                key={i} 
+                sx={{ 
+                  fontFamily: "var(--font-mono)", 
+                  fontSize: "10px", 
+                  color: "var(--text-faint)",
+                  mb: 0.5 
+                }}
+              >
+                {line}
+              </Typography>
+            ))}
+            <Box sx={{ 
+              width: "8px", 
+              height: "2px", 
+              background: "var(--primary)", 
+              display: "inline-block",
+              animation: "pulse 1s infinite",
+              verticalAlign: "middle",
+              ml: 1
+            }} />
+          </Box>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 
 export default function AuthCallback() {
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-8 bg-slate-950 relative overflow-hidden">
-      {/* Ambient background */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-indigo-600/10 rounded-full blur-[100px]" />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-fuchsia-500/5 rounded-full blur-[100px]" />
-      </div>
-      <div className="z-10 relative w-full max-w-md">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-white tracking-tight">GraftAI</h1>
-          <p className="text-xs text-slate-500 mt-1">Securing your session…</p>
-        </div>
-        <Suspense
-          fallback={
-            <div className="w-full max-w-md rounded-2xl bg-white/5 p-8 text-center shadow-2xl backdrop-blur border border-white/10">
-              <div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto mb-5" />
-              <p className="text-sm text-slate-400">Preparing secure connection…</p>
-            </div>
-          }
-        >
-          <AuthCallbackInner />
-        </Suspense>
-      </div>
-    </main>
+    <AuthLayout 
+      title="SESSION_RESOLVER" 
+      subtitle="GRAFT_AI :: THREAT_ASSESSMENT_&_IDENTITY_ANCHOR"
+    >
+      <Suspense
+        fallback={
+          <Box 
+            sx={{ 
+              display: "flex", 
+              flexDirection: "column", 
+              alignItems: "center", 
+              gap: 4,
+              py: 8
+            }}
+          >
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                border: "2px solid var(--border-subtle)",
+                borderTopColor: "var(--primary)",
+                borderRadius: 0,
+                animation: "spin 1.5s linear infinite",
+              }}
+            />
+            <Typography sx={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-faint)" }}>
+              INITIALIZING_ANCHOR...
+            </Typography>
+          </Box>
+        }
+      >
+        <AuthCallbackInner />
+      </Suspense>
+    </AuthLayout>
   );
 }
+

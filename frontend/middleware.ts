@@ -1,10 +1,14 @@
-import { auth } from "@/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
+
+const { auth } = NextAuth(authConfig);
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export default auth(async function middleware(request: NextRequest & { auth: any }) {
   // 1. Generate Nonce
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  // Use btoa instead of Buffer to ensure full Edge runtime compatibility in cloud environments
+  const nonce = typeof btoa !== "undefined" ? btoa(crypto.randomUUID()) : "development-fallback-nonce";
 
   // 2. Define CSP Policy
   const cspHeader = `

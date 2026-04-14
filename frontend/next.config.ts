@@ -68,10 +68,14 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
+    const defaultBackend =
+      process.env.NODE_ENV === "production"
+        ? "https://graftai.onrender.com"
+        : "http://127.0.0.1:8000";
     const rawBackendBaseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL ||
       process.env.NEXT_PUBLIC_BACKEND_URL ||
-      "http://127.0.0.1:8000";
+      defaultBackend;
     const normalizedBackendBaseUrl = rawBackendBaseUrl.replace(/\/+$/, "");
     const backendOrigin = normalizedBackendBaseUrl.endsWith("/api/v1")
       ? normalizedBackendBaseUrl.slice(0, -"/api/v1".length)

@@ -72,21 +72,36 @@ export async function GET(req: NextRequest) {
     .filter(Boolean);
 
   // ── 5. Check BACKEND_URL resolution ──────────────────────────────────────
+  const rawBackendResolution =
+    process.env.BACKEND_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://127.0.0.1:8000";
+  const normalizedBackendResolution = rawBackendResolution.replace(/\/+$/, "");
+  const resolvedBackendOrigin = normalizedBackendResolution.replace(/\/api\/v1$/, "");
+  const resolvedApiBaseUrl = normalizedBackendResolution.endsWith("/api/v1")
+    ? normalizedBackendResolution
+    : `${resolvedBackendOrigin}/api/v1`;
+
   const backendUrlResolution = {
     BACKEND_URL:              process.env.BACKEND_URL ?? "(not set)",
     NEXT_PUBLIC_BACKEND_URL:  process.env.NEXT_PUBLIC_BACKEND_URL ?? "(not set)",
     NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "(not set)",
-    resolvedTo: (
-      process.env.BACKEND_URL ||
-      process.env.NEXT_PUBLIC_BACKEND_URL ||
-      "http://127.0.0.1:8000 [FALLBACK]"
-    ),
+    NEXT_PUBLIC_API_URL:      process.env.NEXT_PUBLIC_API_URL ?? "(not set)",
+    effectiveBackendOrigin: resolvedBackendOrigin,
+    effectiveApiBaseUrl: resolvedApiBaseUrl,
   };
 
   const authUrlResolution = {
     NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? "(not set)",
+    AUTH_URL: process.env.AUTH_URL ?? "(not set)",
     AUTH_SECRET: !!process.env.AUTH_SECRET,
     NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
+  };
+
+  const wsUrlResolution = {
+    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL ?? "(not set)",
   };
 
   // ── 6. Provider credentials ───────────────────────────────────────────────
@@ -143,6 +158,7 @@ export async function GET(req: NextRequest) {
     },
     backendValidation: backendCheckResult,
     backendUrlResolution,
+    wsUrlResolution,
     providers,
     cookies: {
       names: cookieNames,

@@ -8,13 +8,18 @@
 //
 // Public NEXT_PUBLIC_* vars are browser-exposed URLs and should only be used
 // when the value must be available in client-side code.
+const defaultBackendBase =
+  process.env.NODE_ENV === "production"
+    ? "https://graftai.onrender.com"
+    : "http://127.0.0.1:8000";
+
 const rawBackendBase =
   process.env.BACKEND_URL ||
   process.env.INTERNAL_BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  "";
+  defaultBackendBase;
 
 const normalizedBackendBase = rawBackendBase
   ? rawBackendBase.replace(/\/api\/v1$/, "").replace(/\/+$/, "")

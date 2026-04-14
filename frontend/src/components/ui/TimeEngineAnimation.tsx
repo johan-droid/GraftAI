@@ -34,8 +34,12 @@ export const TimeEngineAnimation: React.FC = () => {
   useEffect(() => {
     // 1. Establish WebSocket Connection
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000';
-    const wsUrl = `${protocol}//${host}/monitoring/ws`;
+    const configuredWsUrl = process.env.NEXT_PUBLIC_WS_URL;
+    const wsUrl = configuredWsUrl
+      ? configuredWsUrl.startsWith("ws")
+        ? configuredWsUrl
+        : `${protocol}//${configuredWsUrl.replace(/^wss?:\/\//, '').replace(/\/+$/, '')}/monitoring/ws`
+      : `${protocol}//${process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'graftai.onrender.com'}/monitoring/ws`;
 
     const connect = () => {
       try {

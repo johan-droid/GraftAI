@@ -33,7 +33,8 @@ export default function IntegrationsPage() {
   const handleConnect = (provider: string) => {
     const token = localStorage.getItem("token");
     // Standard Monolithic Redirect: Pass JWT in query for the backend to handle OAuth initiation
-    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+    const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "https://graftai.onrender.com/api/v1";
+    const BASE_URL = apiUrl.endsWith("/api/v1") ? apiUrl : `${apiUrl.replace(/\/+$/, "")}/api/v1`;
     window.location.href = `${BASE_URL}/auth/${provider}/login?token=${token}`;
   };
 

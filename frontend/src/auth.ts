@@ -117,18 +117,52 @@ function decodeJwtExpiry(token: string): number | undefined {
 }
 
 /**
- * NextAuth v5 (beta) does NOT allow passing custom data through the `user`
- * object from signIn → jwt. We use a short-lived in-memory map keyed by
- * the provider account ID to bridge the gap.
+ * NextAuth v5 (beta) does NOT allow passing arbitrary custom data through the
+ * `user` object from signIn → jwt. We keep a short-lived in-memory map keyed by
+ * providerAccountId for same-instance callback handoff.
  *
- * The entry is consumed (deleted) by the jwt callback on the initial sign-in
- * request, so it only lives in memory for a few milliseconds.
+ * In serverless environments the signIn and jwt callbacks may run in different
+ * instances, so the map can be missed. In that case, jwt will retry the
+ * backend exchange directly as a fallback.
  */
 const _pendingBackendTokens = new Map<string, {
   backendToken: string;
   refreshToken: string;
   backendTokenExpiresAt: number | undefined;
 }>();
+
+async function exchangeBackendTokens(account: any, user: any) {
+  const url = `${getBackendApiUrl()}/auth/social/exchange`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: account.provider,
+        provider_account_id: account.providerAccountId,
+        email: user.email,
+        name: user.name,
+        image: user.image,
+        access_token: account.access_token,
+        id_token: account.id_token,
+        refresh_token: account.refresh_token,
+      }),
+      cache: "no-store",
+    });
+
+    const responseText = await res.text();
+    console.log(`[NextAuth:exchangeBackendTokens] POST ${url} -> ${res.status}`);
+    if (!res.ok) {
+      console.error(`[NextAuth:exchangeBackendTokens] Backend rejected: ${res.status} — ${responseText}`);
+      return null;
+    }
+
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error("[NextAuth:exchangeBackendTokens] Network error calling backend:", error);
+    return null;
+  }
+}
 
 // ─── NextAuth Config ──────────────────────────────────────────────────────────
 
@@ -194,51 +228,12 @@ const authOptions: NextAuthConfig = {
         return false;
       }
 
-      const url = `${getBackendApiUrl()}/auth/social/exchange`;
       console.log(`[NextAuth:signIn] provider=${account.provider} email=${user.email}`);
-      console.log(`[NextAuth:signIn] Calling backend: POST ${url}`);
       console.log(`[NextAuth:signIn] access_token present: ${!!account.access_token}, id_token: ${!!account.id_token}`);
 
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            provider: account.provider,
-            provider_account_id: account.providerAccountId,
-            email: user.email,
-            name: user.name,
-            image: user.image,
-            access_token: account.access_token,
-            id_token: account.id_token,
-            refresh_token: account.refresh_token,
-          }),
-          cache: "no-store",
-        });
-
-        const responseText = await res.text();
-        console.log(`[NextAuth:signIn] Backend response: ${res.status} — ${responseText.slice(0, 200)}`);
-
-        if (res.ok) {
-          const data = JSON.parse(responseText);
-          // Store in the pending map so the jwt callback can pick it up
-          // Key: providerAccountId (unique per OAuth login)
-          const mapKey = `${account.provider}:${account.providerAccountId}`;
-          _pendingBackendTokens.set(mapKey, {
-            backendToken: data.access_token,
-            refreshToken: data.refresh_token,
-            backendTokenExpiresAt: decodeJwtExpiry(data.access_token),
-          });
-          console.log(`[NextAuth:signIn] ✅ Backend token stored (key=${mapKey})`);
-          return true;
-        }
-
-        console.error(`[NextAuth:signIn] ❌ Backend rejected: ${res.status} — ${responseText}`);
-        return false;
-      } catch (error) {
-        console.error("[NextAuth:signIn] ❌ Network error calling backend:", error);
-        return false;
-      }
+      // Keep signIn lightweight. The actual backend exchange is retried in jwt
+      // if the in-memory handoff is not available due to serverless execution.
+      return true;
     },
 
     // ─── jwt: persists tokens in the encrypted NextAuth cookie ────────────
@@ -246,11 +241,23 @@ const authOptions: NextAuthConfig = {
       // Initial sign-in — `user` and `account` are present only on first call
       if (user && account) {
         const mapKey = `${account.provider}:${account.providerAccountId}`;
-        const pending = _pendingBackendTokens.get(mapKey);
+        let pending = _pendingBackendTokens.get(mapKey);
         console.log(`[NextAuth:jwt] Initial sign-in. mapKey=${mapKey} pendingFound=${!!pending}`);
 
+        if (!pending) {
+          console.warn(`[NextAuth:jwt] No pending token found for key=${mapKey}. Attempting backend exchange in jwt callback.`);
+          const data = await exchangeBackendTokens(account, user);
+          if (data) {
+            pending = {
+              backendToken: data.access_token,
+              refreshToken: data.refresh_token,
+              backendTokenExpiresAt: decodeJwtExpiry(data.access_token),
+            };
+          }
+        }
+
         if (pending) {
-          _pendingBackendTokens.delete(mapKey); // consume immediately
+          _pendingBackendTokens.delete(mapKey);
           token.backendToken = pending.backendToken;
           token.refreshToken = pending.refreshToken;
           token.backendTokenExpiresAt = pending.backendTokenExpiresAt;
@@ -260,8 +267,7 @@ const authOptions: NextAuthConfig = {
           token.error = undefined;
           console.log(`[NextAuth:jwt] ✅ Backend token assigned. exp=${pending.backendTokenExpiresAt}`);
         } else {
-          // signIn may have failed or the map was already consumed — flag it
-          console.error(`[NextAuth:jwt] ❌ No pending token found for key=${mapKey} — signIn probably returned false`);
+          console.error(`[NextAuth:jwt] ❌ No backend token available for key=${mapKey}.`);
           token.error = "RefreshTokenError";
         }
         return token;

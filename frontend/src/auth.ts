@@ -1,14 +1,13 @@
 import NextAuth, {
-  type NextAuthConfig,
   type DefaultSession,
   type User,
   type Account,
   type Session,
 } from "next-auth";
 import type { JWT } from "@auth/core/jwt";
-import GoogleProvider from "next-auth/providers/google";
-import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
+import { authConfig } from "./auth.config";
 
+// Resolve Environment Variables
 if (!process.env.NEXTAUTH_URL) {
   process.env.NEXTAUTH_URL =
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -220,52 +219,13 @@ if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET && !pr
   console.warn("[NextAuth] NEXTAUTH_SECRET/AUTH_SECRET is missing in production!");
 }
 
-const authOptions: NextAuthConfig = {
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-      authorization: {
-        params: {
-          // Request calendar access + offline access for refresh tokens
-          scope: [
-            "openid",
-            "email",
-            "profile",
-            "https://www.googleapis.com/auth/calendar",
-            "https://www.googleapis.com/auth/calendar.events",
-          ].join(" "),
-          access_type: "offline",
-          prompt: "consent", // Force consent to always get refresh_token
-        },
-      },
-    }),
-    MicrosoftEntraId({
-      clientId: process.env.MICROSOFT_CLIENT_ID || "",
-      clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
-      issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID || "common"}/v2.0`,
-      authorization: {
-        params: {
-          // Request calendar access + offline access for refresh tokens
-          scope: [
-            "openid",
-            "email",
-            "profile",
-            "offline_access",
-            "Calendars.ReadWrite",
-            "User.Read",
-          ].join(" "),
-        },
-      },
-    }),
-  ],
-
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
+const authOptions = {
+  ...authConfig,
+  secret: nextAuthSecret,
+  trustHost: true,
 
   callbacks: {
+    ...authConfig.callbacks,
     // ─── signIn: called right after the provider authenticates ────────────
     async signIn({ user, account }) {
       if (!account || !user?.email) {

@@ -269,6 +269,13 @@ def create_app() -> FastAPI:
             "http://127.0.0.1:3000",
         ]
 
+    if os.getenv("ENV", "development").lower() == "production":
+        # Ensure both root and www variants are allowed in production CORS if either is configured.
+        if "https://www.graftai.tech" in allow_origins and "https://graftai.tech" not in allow_origins:
+            allow_origins.append("https://graftai.tech")
+        if "https://graftai.tech" in allow_origins and "https://www.graftai.tech" not in allow_origins:
+            allow_origins.append("https://www.graftai.tech")
+
     trusted_hosts = [
         host
         for host in (

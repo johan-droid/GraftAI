@@ -38,6 +38,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
   const url = new URL(event.request.url);
   if (url.pathname.startsWith("/api/")) {
     event.stopImmediatePropagation();
+    event.respondWith(fetch(event.request));
     return;
   }
 });

@@ -9,6 +9,10 @@ import type { JWT } from "@auth/core/jwt";
 import GoogleProvider from "next-auth/providers/google";
 import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
 
+if (!process.env.NEXTAUTH_URL && process.env.NEXT_PUBLIC_APP_URL) {
+  process.env.NEXTAUTH_URL = process.env.NEXT_PUBLIC_APP_URL;
+}
+
 /**
  * Resolve the backend base URL in a way that works for:
  *  - Next.js server components (Node.js runtime)

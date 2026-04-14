@@ -2,12 +2,12 @@ import os
 import logging
 from urllib.parse import quote_plus
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from starlette.responses import Response, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from jose import jwt
 
 from backend.services.auth_service import (

@@ -56,12 +56,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 if ('serviceWorker' in navigator) {
                   const RESET_KEY = 'graftai_sw_reset_v2';
                   if (!localStorage.getItem(RESET_KEY)) {
-                    navigator.serviceWorker.getRegistrations().then(registrations => {
+                    navigator.serviceWorker.getRegistrations().then(async (registrations) => {
                       for (let registration of registrations) {
-                        registration.unregister();
+                        await registration.unregister();
                         console.log('Unregistered old SW for recovery');
                       }
                       if (registrations.length > 0) {
+                        try {
+                          const cacheNames = await caches.keys();
+                          await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+                          console.log('Cleared service worker caches during recovery');
+                        } catch (cacheError) {
+                          console.warn('Failed to clear caches during SW recovery', cacheError);
+                        }
                         localStorage.setItem(RESET_KEY, 'true');
                         window.location.reload();
                       } else {

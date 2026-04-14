@@ -4,6 +4,7 @@ import NextAuth, {
   type Account,
   type Session,
 } from "next-auth";
+import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "@auth/core/jwt";
 import { authConfig } from "./auth.config";
 
@@ -19,8 +20,8 @@ console.debug("[NextAuth Debug] runtime env", {
   NEXTAUTH_URL: process.env.NEXTAUTH_URL,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   BACKEND_URL: process.env.BACKEND_URL,
-  NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL,
-  NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  GOOGLE_ID_PRESENT: !!(process.env.GOOGLE_CLIENT_ID || process.env.AUTH_GOOGLE_ID),
+  MICROSOFT_ID_PRESENT: !!(process.env.MICROSOFT_CLIENT_ID || process.env.AUTH_MICROSOFT_ENTRA_ID_ID),
   NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
   AUTH_SECRET: !!process.env.AUTH_SECRET,
 });
@@ -219,15 +220,13 @@ if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET && !pr
   console.warn("[NextAuth] NEXTAUTH_SECRET/AUTH_SECRET is missing in production!");
 }
 
-const authOptions = {
+const authOptions: NextAuthConfig = {
   ...authConfig,
-  secret: nextAuthSecret,
-  trustHost: true,
 
   callbacks: {
     ...authConfig.callbacks,
     // ─── signIn: called right after the provider authenticates ────────────
-    async signIn({ user, account }) {
+    async signIn({ user, account }: { user: any; account?: any }) {
       if (!account || !user?.email) {
         console.error("[NextAuth:signIn] Missing account/email — aborting");
         return false;
@@ -326,10 +325,6 @@ const authOptions = {
       return session;
     },
   },
-
-  secret: nextAuthSecret,
-  trustHost: true,
 };
 
 export const { handlers, signIn, signOut, auth } = NextAuth(authOptions);
-

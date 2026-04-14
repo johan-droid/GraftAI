@@ -52,14 +52,12 @@ jobs:
   # 2. Deployment (Automatic trigger to Render)
   deploy:
     needs: backend-checks
+    runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    runs-on: ubuntu-latest
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets['RENDER_DEPLOY_HOOK_URL'] }}
     steps:
       - name: Deploy to Render
-        env:
-          RENDER_DEPLOY_HOOK_URL: "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
         run: |
           if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
             echo "RENDER_DEPLOY_HOOK_URL is not set. Skipping deployment trigger."

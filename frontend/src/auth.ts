@@ -11,13 +11,16 @@ import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
  * Never falls back to a relative URL since server-side fetch requires absolute URLs.
  */
 function getServerBackendUrl(): string {
-  return (
+  const url =
     process.env.BACKEND_URL ||
-    process.env.INTERNAL_BACKEND_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/v1$/, "") ||
-    "http://127.0.0.1:8000"
-  ).replace(/\/+$/, "");
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/v1$/, "");
+
+  if (!url) {
+    throw new Error("Missing BACKEND_URL environment variable");
+  }
+
+  return url.replace(/\/+$/, "");
 }
 
 function getBackendApiUrl(): string {
@@ -307,3 +310,4 @@ const authOptions: NextAuthConfig = {
 };
 
 export const { handlers, signIn, signOut, auth } = NextAuth(authOptions);
+

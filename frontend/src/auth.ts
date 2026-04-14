@@ -222,6 +222,8 @@ if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET && !pr
 
 const authOptions: NextAuthConfig = {
   ...authConfig,
+  secret: nextAuthSecret,
+  trustHost: true,
 
   callbacks: {
     ...authConfig.callbacks,

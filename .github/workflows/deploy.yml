@@ -52,6 +52,7 @@ jobs:
   # 2. Deployment (Automatic trigger to Render)
   deploy:
     needs: backend-checks
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

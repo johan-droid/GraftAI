@@ -42,8 +42,9 @@ function getServerBackendUrl(): string {
   if (!url) {
     throw new Error(
       "Missing BACKEND_URL or NEXT_PUBLIC_BACKEND_URL environment variable. " +
-      "Set BACKEND_URL=http://localhost:8000 for local development, or " +
-      "NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 if using browser-exposed API routing."
+      "For Render, set BACKEND_URL=https://graftai.onrender.com and/or " +
+      "NEXT_PUBLIC_API_BASE_URL=https://graftai.onrender.com/api/v1. " +
+      "For local development, use BACKEND_URL=http://localhost:8000."
     );
   }
 

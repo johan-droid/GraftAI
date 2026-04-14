@@ -83,6 +83,12 @@ export async function GET(req: NextRequest) {
     ),
   };
 
+  const authUrlResolution = {
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? "(not set)",
+    AUTH_SECRET: !!process.env.AUTH_SECRET,
+    NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
+  };
+
   // ── 6. Provider credentials ───────────────────────────────────────────────
   const providers = {
     google: {
@@ -126,6 +132,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     timestamp: new Date().toISOString(),
     diagnosis,
+    authEnv: authUrlResolution,
     session: {
       exists: !!session,
       user: sessionUser,

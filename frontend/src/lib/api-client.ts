@@ -54,6 +54,23 @@ async function getAuthToken(): Promise<string | null> {
     return (session as any)?.backendToken ?? null;
   } catch (error) {
     console.error("[Auth Debug] getSession error", error);
+    try {
+      const sessionUrl = `${window.location.origin}/api/auth/session`;
+      const res = await fetch(sessionUrl, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const text = await res.text();
+      console.error("[Auth Debug] /api/auth/session raw response", {
+        url: sessionUrl,
+        status: res.status,
+        ok: res.ok,
+        text: text.slice(0, 400),
+      });
+    } catch (innerError) {
+      console.error("[Auth Debug] failed to fetch /api/auth/session", innerError);
+    }
     return null;
   }
 }

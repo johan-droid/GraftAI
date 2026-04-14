@@ -70,25 +70,165 @@ export async function verifyMagicLink(email: string, code: string) {
   );
 }
 
+function unwrapApiData<T>(response: T | { data?: T }): T {
+  if (response && typeof response === "object" && "data" in response && (response as { data?: T }).data !== undefined) {
+    return (response as { data: T }).data;
+  }
+  return response as T;
+}
+
 export async function updateUserProfile(data: { 
+  display_name?: string;
   full_name?: string; 
+  username?: string;
   timezone?: string;
   bio?: string;
-  job_title?: string;
-  location?: string;
+  phone?: string;
+  time_format?: string;
+  theme?: string;
+  brand_color_light?: string;
+  brand_color_dark?: string;
+  booking_layout?: string;
+  default_calendar_id?: string;
   preferences?: Record<string, any>;
 }) {
-  return apiClient.patch<{ 
+  const response = await apiClient.patch<{ 
     id: string; 
     email: string; 
+    username?: string; 
     full_name?: string; 
-    timezone?: string;
+    display_name?: string;
+    avatar_url?: string;
     bio?: string;
-    job_title?: string;
-    location?: string;
+    phone?: string;
+    timezone?: string;
+    time_format?: string;
+    theme?: string;
+    brand_color_light?: string;
+    brand_color_dark?: string;
+    booking_layout?: string;
+    default_calendar_id?: string;
     preferences?: Record<string, any>;
+    onboarding_completed?: boolean;
+    completed_steps?: string[];
     created_at?: string;
   }>("/users/me", data);
+  return unwrapApiData(response);
+}
+
+export async function saveUserProfile(data: { 
+  display_name?: string;
+  full_name?: string; 
+  username?: string; 
+  timezone?: string;
+  bio?: string;
+  phone?: string;
+  time_format?: string;
+  theme?: string;
+  brand_color_light?: string;
+  brand_color_dark?: string;
+  booking_layout?: string;
+  default_calendar_id?: string;
+  preferences?: Record<string, any>;
+}) {
+  const response = await apiClient.post<{ 
+    success: boolean;
+    message: string;
+    data: {
+      id: string;
+      email: string;
+      username?: string;
+      full_name?: string;
+      display_name?: string;
+      avatar_url?: string;
+      bio?: string;
+      phone?: string;
+      timezone?: string;
+      time_format?: string;
+      theme?: string;
+      brand_color_light?: string;
+      brand_color_dark?: string;
+      booking_layout?: string;
+      default_calendar_id?: string;
+      preferences?: Record<string, any>;
+      onboarding_completed?: boolean;
+      completed_steps?: string[];
+      created_at?: string;
+    };
+  }>("/users/me/profile", data);
+  return unwrapApiData(response);
+}
+
+export async function uploadProfileAvatar(file: File) {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await apiClient.fetch<{
+    success: boolean;
+    message?: string;
+    data?: { avatar_url?: string };
+    avatar_url?: string;
+    avatarUrl?: string;
+  }>("/users/me/profile/avatar", {
+    method: "POST",
+    body,
+  });
+
+  return response.data?.avatar_url ?? response.avatar_url ?? response.avatarUrl ?? "";
+}
+
+export interface ProfileSetupStatus {
+  completed_steps: string[];
+  onboarding_completed: boolean;
+  profile: {
+    id: string;
+    email: string;
+    username?: string;
+    full_name?: string;
+    display_name?: string;
+    avatar_url?: string;
+    bio?: string;
+    phone?: string;
+    timezone?: string;
+    time_format?: string;
+    theme?: string;
+    brand_color_light?: string;
+    brand_color_dark?: string;
+    booking_layout?: string;
+    default_calendar_id?: string;
+    preferences?: Record<string, any>;
+    onboarding_completed?: boolean;
+    completed_steps?: string[];
+  };
+}
+
+export async function getProfileSetupStatus() {
+  const response = await apiClient.get<ProfileSetupStatus | { success?: boolean; data?: ProfileSetupStatus }>("/users/me/profile/setup-status");
+  return unwrapApiData(response);
+}
+
+export async function getGoogleCalendarAuthUrl() {
+  const response = await apiClient.get<{ authUrl: string; state: string } | { success?: boolean; data?: { authUrl: string; state: string } }>("/users/me/calendars/oauth/google/auth-url");
+  const data = unwrapApiData(response) as { authUrl?: string; auth_url?: string; state: string };
+  return { authUrl: data.authUrl ?? data.auth_url ?? "", state: data.state };
+}
+
+export async function completeOnboardingStep(stepId: string, stepData?: Record<string, any>) {
+  const response = await apiClient.post<{ success: boolean; step: string; completed_steps: string[] } | { success: boolean; data?: { completed_steps: string[]; next_step?: string | null } }>(
+    `/users/me/profile/complete-step/${encodeURIComponent(stepId)}`,
+    stepData || {}
+  );
+  return unwrapApiData(response);
+}
+
+export async function getOnboardingPreview() {
+  const response = await apiClient.get<{ bookingPageUrl: string; isLive: boolean } | { success?: boolean; data?: { bookingPageUrl: string; isLive: boolean } }>("/users/me/onboarding/preview");
+  return unwrapApiData(response);
+}
+
+export async function completeOnboarding() {
+  const response = await apiClient.post<{ success: boolean; redirectUrl: string } | { success?: boolean; data?: { redirectUrl: string } }>("/users/me/onboarding/complete");
+  const data = unwrapApiData(response) as { redirectUrl?: string; redirect_url?: string };
+  return { redirectUrl: data.redirectUrl ?? data.redirect_url ?? "/dashboard" };
 }
 
 export interface ApiKeyItem {
@@ -233,8 +373,21 @@ export async function getAnalyticsRealtime(range: "7d" | "30d" | "90d" = "30d") 
 // ──────────────────────────────────────
 // Services: AI Chat
 // ──────────────────────────────────────
+export interface AiChatActionResult {
+  type: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface AiChatServiceResponse {
+  result: string;
+  model_used?: string;
+  action?: AiChatActionResult;
+  milestone?: string;
+}
+
 export async function sendAiChat(prompt: string, context?: string[], timezone?: string) {
-  return apiClient.post<{ result: string; model_used?: string }>("/ai/chat", { prompt, context, timezone });
+  return apiClient.post<AiChatServiceResponse>("/ai/chat", { prompt, context, timezone });
 }
 
 // ──────────────────────────────────────
@@ -555,6 +708,7 @@ export interface EventTypePayload {
   name: string;
   description?: string;
   slug?: string;
+  color?: string;
   duration_minutes?: number;
   meeting_provider?: string;
   is_public?: boolean;

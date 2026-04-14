@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
+  const displayName = user?.full_name || user?.name || user?.username || user?.email?.split("@")[0] || "Guest";
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -137,15 +138,15 @@ export default function DashboardPage() {
     >
       <MobileSidebar />
 
-      <Container maxWidth="xl" sx={{ px: { xs: 2.5, md: 5 }, py: { xs: 3, md: 6 } }}>
+      <Container maxWidth="lg" sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 4 } }}>
         <motion.div variants={container} initial="hidden" animate="show">
           
           {/* Header & Greeting Layer */}
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-12">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-6">
             <div className="flex-1">
               <motion.div variants={item}>
                 <Greeting
-                  userName={user?.name}
+                  userName={displayName}
                   userEmail={user?.email}
                   isLoading={false}
                 />
@@ -154,7 +155,7 @@ export default function DashboardPage() {
             <div className="lg:w-auto w-full">
               <motion.div variants={item}>
                 <Header
-                  userName={user?.name}
+                  userName={displayName}
                   userEmail={user?.email}
                   userAvatar={user?.avatar}
                   notificationCount={3}
@@ -165,11 +166,11 @@ export default function DashboardPage() {
 
           {/* Primary Stats Matrix */}
           <motion.div variants={item} className="mb-12">
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-4">
                <Activity size={16} className="text-[var(--primary)]" />
                <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--text-muted)]">Core_Telemetry_Matrix</h2>
             </div>
-            <Grid container spacing={3}>
+            <Grid container spacing={2}>
               {analyticsLoading ? (
                 Array(3).fill(0).map((_, i) => (
                   <Grid item xs={12} sm={6} md={4} key={i}>
@@ -216,15 +217,15 @@ export default function DashboardPage() {
           </motion.div>
 
           {/* System Tiles Grid */}
-          <Grid container spacing={3} sx={{ mb: 6 }}>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
             {/* Left Column: Activity & Logs */}
             <Grid item xs={12} lg={8}>
               <div className="flex flex-col gap-6">
                 
                 {/* Activity Stream Tile */}
                 <motion.div variants={item}>
-                  <Box sx={{ background: "var(--bg-base)", border: "1px dashed var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
-                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-dashed border-[var(--border-subtle)]">
+                  <Box sx={{ background: "var(--bg-base)", border: "1px solid var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
+                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-[var(--border-subtle)]">
                       <div className="flex items-center gap-3">
                         <Activity size={18} className="text-[var(--primary)]" />
                         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Activity_Flow_Stream</h3>
@@ -244,9 +245,9 @@ export default function DashboardPage() {
                   </Box>
                 </motion.div>
 
-                {/* System Automation Tiles */}
-                <motion.div variants={item}>
-                   <Box sx={{ background: "var(--bg-elevated)", border: "1px dashed var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
+                 {/* System Automation Tiles */}
+                 <motion.div variants={item}>
+                   <Box sx={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
                       <div className="flex items-center gap-3 mb-6">
                          <Zap size={18} className="text-[var(--secondary)]" />
                          <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Automation_Yield_Matrix</h3>
@@ -279,7 +280,7 @@ export default function DashboardPage() {
                 
                 {/* AI Cortex Console Tile */}
                 <motion.div variants={item} className="h-full">
-                  <Box sx={{ background: "#050505", border: "1px dashed var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0, height: "100%", display: "flex", flexDirection: "column" }}>
+                  <Box sx={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0, height: "100%", display: "flex", flexDirection: "column" }}>
                     <div className="flex items-center gap-3 mb-6">
                        <Sparkles size={18} className="text-[var(--accent)]" />
                        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Cortex_Advisory</h3>
@@ -302,9 +303,9 @@ export default function DashboardPage() {
                   </Box>
                 </motion.div>
 
-                {/* System Log Tile */}
-                <motion.div variants={item}>
-                   <Box sx={{ background: "var(--bg-elevated)", border: "1px dashed var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
+                 {/* System Log Tile */}
+                 <motion.div variants={item}>
+                   <Box sx={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
                       <div className="flex items-center justify-between mb-6">
                          <div className="flex items-center gap-3">
                            <Terminal size={18} className="text-[var(--text-faint)]" />
@@ -313,15 +314,15 @@ export default function DashboardPage() {
                          <div className="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse" />
                       </div>
                       <div className="space-y-3 font-mono text-[9px] text-[var(--text-faint)] uppercase">
-                         <div className="flex justify-between border-b border-dashed border-[var(--border-subtle)] pb-1">
+                         <div className="flex justify-between border-b border-[var(--border-subtle)] pb-1">
                             <span>WS_CONNECTION</span>
                             <span className="text-[var(--primary)]">ESTABLISHED</span>
                          </div>
-                         <div className="flex justify-between border-b border-dashed border-[var(--border-subtle)] pb-1">
+                         <div className="flex justify-between border-b border-[var(--border-subtle)] pb-1">
                             <span>SESSION_KEY</span>
                             <span>{user?.email?.slice(0, 8)}...</span>
                          </div>
-                         <div className="flex justify-between border-b border-dashed border-[var(--border-subtle)] pb-1">
+                         <div className="flex justify-between border-b border-[var(--border-subtle)] pb-1">
                             <span>NODE_SYNC</span>
                             <span className="text-[var(--secondary)]">88%</span>
                          </div>
@@ -334,7 +335,7 @@ export default function DashboardPage() {
           
           {/* Bottom Layer: Secondary Matrices */}
           <motion.div variants={item}>
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 {[
                   { label: "UPTIME", value: "99.98%", icon: Activity },
                   { label: "MEMORY", value: "256MB", icon: Zap },

@@ -45,8 +45,14 @@ export const TimeEngineAnimation: React.FC = () => {
 
         ws.onmessage = (event) => {
           const data = JSON.parse(event.data);
+          const payload = data.type === "metrics_update" ? data.payload : data;
+
+          if (data.type === "notification" && data.payload?.type === "success") {
+            addPulse("var(--success)");
+          }
+
           // React to activity
-          if (data.active_automations > 0 || data.recent_automations?.length > 0) {
+          if (payload.active_automations > 0 || payload.recent_automations?.length > 0) {
             addPulse("var(--secondary)"); // Cyan for real activity
           }
         };

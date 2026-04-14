@@ -45,13 +45,29 @@ export const DeveloperCorner: React.FC = () => {
         const ws = new WebSocket(wsUrl);
         ws.onmessage = (event) => {
           const data = JSON.parse(event.data);
+          const payload = data.type === "metrics_update" ? data.payload : data;
+
           setMetrics(prev => ({
             ...prev,
-            active_automations: data.active_automations || 0,
+            active_automations: payload.active_automations || 0,
           }));
+
+          if (data.type === "notification" && data.payload?.type === "success") {
+            const title = data.payload.title || "Live milestone";
+            const message = data.payload.message || "A background action completed successfully.";
+            setLogs(prev => [
+              ...prev.slice(-49),
+              {
+                timestamp: data.payload.timestamp || new Date().toISOString(),
+                level: "SUCCESS",
+                message: `${title}: ${message}`,
+                event_type: data.payload.metadata?.kind || "milestone",
+              },
+            ]);
+          }
           
-          if (data.recent_automations?.length > 0) {
-            const newLogs = data.recent_automations.map((a: any) => ({
+          if (payload.recent_automations?.length > 0) {
+            const newLogs = payload.recent_automations.map((a: any) => ({
               timestamp: new Date().toISOString(),
               level: 'INFO',
               message: `Automation Event: ${a.type || 'Generic'} - PID: ${a.pid || '2841'}`,

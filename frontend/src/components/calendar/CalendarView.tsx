@@ -76,37 +76,39 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
   const isCurrentMonth = (day: Date) => day.getMonth() === currentDate.getMonth();
 
   return (
-    <div className="flex flex-col h-full lg:h-[750px] bg-transparent font-mono">
+    <div className="flex flex-col h-full lg:h-[700px] bg-transparent font-mono">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-8 gap-4 border-b border-dashed border-[var(--border-subtle)] mb-6">
-        <div className="flex items-center gap-6">
-          <h2 className="text-xl font-bold text-[var(--text-primary)] min-w-[160px] uppercase tracking-tighter">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 gap-4 border-b border-solid border-[var(--border-subtle)] mb-5">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] min-w-[120px]">
             {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           </h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("prev")}
-              className="p-2 border border-[var(--border-subtle)] hover:border-[var(--primary)] text-[var(--text-muted)] hover:text-[var(--primary)] transition-all bg-[var(--bg-elevated)]"
+              aria-label="Previous period"
+              className="p-1.5 border border-[var(--border-subtle)] hover:border-[var(--primary)] text-[var(--text-muted)] hover:text-[var(--primary)] transition-all bg-transparent"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => navigate("next")}
-              className="p-2 border border-[var(--border-subtle)] hover:border-[var(--primary)] text-[var(--text-muted)] hover:text-[var(--primary)] transition-all bg-[var(--bg-elevated)]"
+              aria-label="Next period"
+              className="p-1.5 border border-[var(--border-subtle)] hover:border-[var(--primary)] text-[var(--text-muted)] hover:text-[var(--primary)] transition-all bg-transparent"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-6 w-full sm:w-auto">
+        <div className="flex items-center gap-4 w-full sm:w-auto">
           <div className="flex gap-2">
             {(["month", "week", "day"] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "px-3 py-1 text-xs font-bold transition-all uppercase tracking-widest border",
+                  "px-2 py-1 text-sm font-medium transition-all",
                   view === v 
                     ? "border-[var(--primary)] text-[var(--primary)] bg-[var(--bg-hover)]" 
                     : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
@@ -119,7 +121,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
           <div className="w-px h-4 bg-[var(--border-subtle)] hidden sm:block" />
           <button
             onClick={onCreateEvent}
-            className="flex items-center gap-2 text-black bg-[var(--primary)] px-4 py-2 font-bold transition-all hover:brightness-110 text-xs uppercase"
+            className="flex items-center gap-2 text-white bg-[var(--primary)] px-3 py-1.5 font-medium rounded-sm text-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Event</span>
@@ -133,7 +135,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
           {/* Weekday Headers */}
           <div className="grid grid-cols-7 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)]">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-              <div key={day} className="text-center text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] py-4 bg-[var(--bg-card)]">
+              <div key={day} className="text-center text-xs font-semibold text-[var(--text-muted)] py-2 bg-[var(--bg-card)]">
                 {day}
               </div>
             ))}
@@ -149,10 +151,10 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                   key={idx}
                   onClick={() => isCurrentMonth(day) && onDateClick(day)}
                   className={cn(
-                    "relative flex flex-col p-3 cursor-pointer transition-all border-b border-r border-dashed border-[var(--border-subtle)] last:border-r-0 group h-24 md:h-32",
+                    "relative flex flex-col p-2 cursor-pointer transition-all border-b border-r border-[var(--border-subtle)] last:border-r-0 group h-20 md:h-28",
                     isCurrentMonth(day)
                       ? "hover:bg-[var(--bg-hover)]"
-                      : "opacity-20 cursor-default bg-[var(--bg-elevated)]",
+                      : "opacity-30 cursor-default bg-transparent",
                     (idx + 1) % 7 === 0 && "border-r-0"
                   )}
                 >
@@ -181,17 +183,19 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                             e.stopPropagation();
                             onEventClick(event);
                           }}
-                          className="flex items-center gap-2 px-2 py-1 bg-[var(--bg-elevated)] border-l-2 hover:brightness-125 transition-all group/event"
-                          style={{ borderLeftColor: colorToken }}
+                          className={cn(
+                            "flex items-center gap-2 px-2 py-0.5 bg-transparent border-l-2 transition-all group/event",
+                            event.source === 'google' ? 'border-[var(--accent)]' : event.source === 'microsoft' ? 'border-[var(--secondary)]' : 'border-[var(--primary)]'
+                          )}
                         >
-                          <span className="text-[10px] text-[var(--text-secondary)] group-hover/event:text-white truncate">
-                            {new Date(event.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(' ', '').toLowerCase()} {getEventTitle(event)}
+                          <span className="text-[11px] text-[var(--text-secondary)] truncate">
+                            {new Date(event.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase()} {getEventTitle(event)}
                           </span>
                         </div>
                       )
                     })}
                     {dayEvents.length > 4 && (
-                      <div className="text-[9px] text-[var(--text-muted)] font-bold px-1 pt-1 uppercase">
+                      <div className="text-[11px] text-[var(--text-muted)] font-medium px-1 pt-1">
                         + {dayEvents.length - 4} items
                       </div>
                     )}
@@ -232,8 +236,10 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                         <div
                           key={event.id}
                           onClick={() => onEventClick(event)}
-                          className="group/event p-3 bg-[var(--bg-elevated)] border-l-2 border-transparent hover:border-l-[var(--primary)] cursor-pointer transition-all border border-[var(--border-subtle)] flex flex-col gap-1"
-                          style={{ borderLeftColor: colorToken }}
+                          className={cn(
+                            "group/event p-3 bg-[var(--bg-elevated)] border-l-2 border-transparent hover:border-l-[var(--primary)] cursor-pointer transition-all border border-[var(--border-subtle)] flex flex-col gap-1",
+                            event.source === 'google' ? 'border-[var(--accent)]' : event.source === 'microsoft' ? 'border-[var(--secondary)]' : 'border-[var(--primary)]'
+                          )}
                         >
                           <div className="text-[11px] text-[var(--text-primary)] font-bold truncate">
                             {getEventTitle(event)}
@@ -279,16 +285,10 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                     className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group cursor-pointer"
                   >
                     <div className="flex items-center justify-center w-10 h-10 border border-[var(--border-subtle)] bg-[var(--bg-elevated)] shadow-lg shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 absolute left-0 md:left-1/2 -translate-x-1/2 z-10 transition-all group-hover:border-[var(--primary)]">
-                      <div className="w-2.5 h-2.5 shadow-sm" style={{ background: colorToken }} />
-                    </div>
-                    
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-3rem)] p-6 bg-[var(--bg-card)] border border-[var(--border-subtle)] group-hover:border-[var(--border-bright)] transition-all ml-auto md:ml-0">
-                      <div className="flex items-start justify-between mb-3 gap-4">
-                        <h3 className="text-lg font-bold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors tracking-tight uppercase">{getEventTitle(event)}</h3>
-                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
-                          {event.source}
-                        </span>
-                      </div>
+                            <div className={cn(
+                              "w-2.5 h-2.5 shadow-sm",
+                              event.source === 'google' ? 'bg-[var(--accent)]' : event.source === 'microsoft' ? 'bg-[var(--secondary)]' : 'bg-[var(--primary)]'
+                            )} />
                       
                       <div className="flex flex-col gap-2 text-xs font-bold text-[var(--text-secondary)]">
                         <div className="flex items-center gap-2">

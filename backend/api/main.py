@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import sys
 from pathlib import Path
@@ -98,7 +99,8 @@ async def _self_ping_loop(port: str, interval_seconds: int = 240) -> None:
 async def lifespan(app: FastAPI):
     # Initialize DB (creates tables if they don't exist in monolith mode)
     run_migrations()
-    await _ensure_event_column_migrations()
+    # Inline schema mutations were removed in favor of Alembic-managed migrations
+    # to avoid blocking the main event loop during startup.
 
     port = os.getenv("PORT", "8000")
     ping_enabled = os.getenv("SELF_PING_ENABLED", "true").lower() not in {"0", "false", "no"}
@@ -121,132 +123,8 @@ async def lifespan(app: FastAPI):
     if hasattr(db_utils, "engine"):
         await db_utils.engine.dispose()
 
-async def _ensure_event_column_migrations():
-    if not hasattr(db_utils, "engine") or db_utils.DATABASE_URL is None:
-        return
-
-    from sqlalchemy import text
-
-    try:
-        async with db_utils.engine.begin() as conn:
-            if db_utils.DATABASE_URL.startswith("sqlite"):
-                result = await conn.execute(text("PRAGMA table_info(events);"))
-                event_columns = [row[1] for row in result.fetchall()]
-                if "description" not in event_columns:
-                    await conn.execute(text("ALTER TABLE events ADD COLUMN description TEXT;"))
-                if "location" not in event_columns:
-                    await conn.execute(text("ALTER TABLE events ADD COLUMN location TEXT;"))
-                if "meeting_url" not in event_columns:
-                    await conn.execute(text("ALTER TABLE events ADD COLUMN meeting_url TEXT;"))
-                if "meeting_provider" not in event_columns:
-                    await conn.execute(text("ALTER TABLE events ADD COLUMN meeting_provider TEXT;"))
-                if "is_meeting" not in event_columns:
-                    await conn.execute(text("ALTER TABLE events ADD COLUMN is_meeting BOOLEAN NOT NULL DEFAULT 0;"))
-                if "attendees" not in event_columns:
-                    await conn.execute(text("ALTER TABLE events ADD COLUMN attendees TEXT;"))
-                if "metadata_payload" not in event_columns:
-                    await conn.execute(text("ALTER TABLE events ADD COLUMN metadata_payload TEXT;"))
-                if "event_type_id" not in event_columns:
-                    await conn.execute(text("ALTER TABLE events ADD COLUMN event_type_id TEXT;"))
-
-                result = await conn.execute(text("PRAGMA table_info(users);"))
-                user_columns = [row[1] for row in result.fetchall()]
-                if "username" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN username TEXT;"))
-                if "email_verified" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 0;"))
-                if "email_verification_code" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN email_verification_code TEXT;"))
-                if "email_verification_expires_at" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN email_verification_expires_at TEXT;"))
-                if "tier" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN tier TEXT NOT NULL DEFAULT 'free';"))
-                if "subscription_status" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN subscription_status TEXT NOT NULL DEFAULT 'inactive';"))
-                if "razorpay_customer_id" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN razorpay_customer_id TEXT;"))
-                if "razorpay_subscription_id" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN razorpay_subscription_id TEXT;"))
-                if "daily_ai_count" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN daily_ai_count INTEGER NOT NULL DEFAULT 0;"))
-                if "daily_ai_limit" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN daily_ai_limit INTEGER;"))
-                if "daily_sync_count" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN daily_sync_count INTEGER NOT NULL DEFAULT 0;"))
-                if "daily_sync_limit" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN daily_sync_limit INTEGER;"))
-                if "quota_reset_at" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN quota_reset_at TEXT;"))
-                if "trial_active" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN trial_active BOOLEAN NOT NULL DEFAULT 0;"))
-                if "trial_expires_at" not in user_columns:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN trial_expires_at TEXT;"))
-
-                result = await conn.execute(text("PRAGMA table_info(bookings);"))
-                booking_columns = [row[1] for row in result.fetchall()]
-                if "is_reminder_sent" not in booking_columns:
-                    await conn.execute(text("ALTER TABLE bookings ADD COLUMN is_reminder_sent BOOLEAN NOT NULL DEFAULT 0;"))
-                if "booking_code" not in booking_columns:
-                    await conn.execute(text("ALTER TABLE bookings ADD COLUMN booking_code TEXT;"))
-
-                result = await conn.execute(text("PRAGMA table_info(event_types);"))
-                event_type_columns = [row[1] for row in result.fetchall()]
-                if "recurrence_rule" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN recurrence_rule TEXT;"))
-                if "custom_questions" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN custom_questions TEXT;"))
-                if "requires_attendee_confirmation" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN requires_attendee_confirmation BOOLEAN NOT NULL DEFAULT 0;"))
-                if "travel_time_before_minutes" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN travel_time_before_minutes INTEGER NOT NULL DEFAULT 0;"))
-                if "travel_time_after_minutes" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN travel_time_after_minutes INTEGER NOT NULL DEFAULT 0;"))
-                if "requires_payment" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN requires_payment BOOLEAN NOT NULL DEFAULT 0;"))
-                if "payment_amount" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN payment_amount FLOAT;"))
-                if "payment_currency" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN payment_currency TEXT NOT NULL DEFAULT 'USD';"))
-                if "team_assignment_method" not in event_type_columns:
-                    await conn.execute(text("ALTER TABLE event_types ADD COLUMN team_assignment_method TEXT NOT NULL DEFAULT 'host_only';"))
-            else:
-                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS description TEXT;"))
-                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS location TEXT;"))
-                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS meeting_url TEXT;"))
-                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS meeting_provider TEXT;"))
-                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS is_meeting BOOLEAN;"))
-                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS attendees JSON;"))
-                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS metadata_payload JSON;"))
-                await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS event_type_id TEXT;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_code TEXT;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires_at TIMESTAMP WITH TIME ZONE;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'free';"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'inactive';"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_customer_id TEXT;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_subscription_id TEXT;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_ai_count INTEGER NOT NULL DEFAULT 0;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_ai_limit INTEGER;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_sync_count INTEGER NOT NULL DEFAULT 0;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_sync_limit INTEGER;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS quota_reset_at TIMESTAMP WITH TIME ZONE;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_active BOOLEAN NOT NULL DEFAULT FALSE;"))
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_expires_at TIMESTAMP WITH TIME ZONE;"))
-                await conn.execute(text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE;"))
-                await conn.execute(text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_code TEXT;"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS recurrence_rule TEXT;"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS custom_questions JSON;"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS requires_attendee_confirmation BOOLEAN NOT NULL DEFAULT FALSE;"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS travel_time_before_minutes INTEGER NOT NULL DEFAULT 0;"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS travel_time_after_minutes INTEGER NOT NULL DEFAULT 0;"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS requires_payment BOOLEAN NOT NULL DEFAULT FALSE;"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS payment_amount FLOAT;"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS payment_currency TEXT NOT NULL DEFAULT 'USD';"))
-                await conn.execute(text("ALTER TABLE event_types ADD COLUMN IF NOT EXISTS team_assignment_method TEXT NOT NULL DEFAULT 'host_only';"))
-    except Exception:
-        # If the DB is already in the correct state or unsupported, ignore failures here
-        pass
+# NOTE: _ensure_event_column_migrations removed. Schema should be managed by Alembic
+# and applied before application startup (e.g., as part of container init or CI/CD).
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -308,6 +186,23 @@ def create_app() -> FastAPI:
                 "*.vercel.app",
                 "*.render.com",
             ]
+
+    # If the application is behind a trusted load balancer/proxy, ensure
+    # that proxy headers (X-Forwarded-For, X-Forwarded-Proto) are only
+    # trusted from configured proxy IPs. TRUSTED_PROXY_IPS should be a
+    # comma-separated list (e.g. "127.0.0.1,load_balancer").
+    trusted_proxy_env = os.getenv("TRUSTED_PROXY_IPS", "")
+    trusted_proxy_ips = [ip.strip() for ip in trusted_proxy_env.split(",") if ip.strip()]
+    if trusted_proxy_ips:
+        try:
+            from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+
+            # Add ProxyHeadersMiddleware so downstream frameworks (Starlette/FastAPI)
+            # will populate client/host values from X-Forwarded-* only when the
+            # request originated from a trusted proxy.
+            app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_proxy_ips)
+        except Exception as e:
+            logging.warning("Failed to add ProxyHeadersMiddleware: %s", e)
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
 

@@ -4,9 +4,9 @@ services:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: graftai
-      POSTGRES_PASSWORD: graftai
-      POSTGRES_DB: graftai
+      POSTGRES_USER: ${POSTGRES_USER:-graftai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_ME_CHANGE_IT}
+      POSTGRES_DB: ${POSTGRES_DB:-graftai}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -40,8 +40,7 @@ services:
       - ./backend/.env
     environment:
       ENV: production
-      DATABASE_URL: postgresql+asyncpg://graftai:graftai@postgres:5432/graftai
-      REDIS_URL: redis://redis:6379/0
+      # DATABASE_URL and REDIS_URL are expected to be provided in backend/.env (or environment)
       FORCE_GROQ: "1"
       # CORS origins must trust the load balancer and frontend
       CORS_ORIGINS: http://localhost:8000,http://localhost:3000

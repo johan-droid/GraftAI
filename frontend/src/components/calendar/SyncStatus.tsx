@@ -32,7 +32,14 @@ export function SyncStatus({ status, onSync }: SyncStatusProps) {
           exit={{ opacity: 0, scale: 0.9, y: -10 }}
           className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl border border-emerald-200"
         >
-          <CheckCircle2 className="w-4 h-4" />
+          <motion.span
+            initial={{ scale: 0.7, rotate: -12 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", damping: 14, stiffness: 280 }}
+            className="inline-flex"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+          </motion.span>
           <span className="text-sm font-semibold">Sync complete!</span>
         </motion.div>
       )}
@@ -80,9 +87,10 @@ export function SyncStatusCompact({ status }: { status: "idle" | "syncing" | "su
       {status === "success" && (
         <motion.div
           key="success"
-          initial={{ opacity: 0, scale: 0 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0 }}
+          initial={{ opacity: 0, scale: 0.6, rotate: -10 }}
+          animate={{ opacity: 1, scale: 1, rotate: 0 }}
+          exit={{ opacity: 0, scale: 0, rotate: 10 }}
+          transition={{ type: "spring", damping: 14, stiffness: 280 }}
         >
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
         </motion.div>

@@ -18,6 +18,7 @@ from backend.services import scheduler
 from backend.services.llm_context import build_implementation_context
 from backend.services.langchain_client import llm
 from backend.services.mailbox import get_recent_emails
+from backend.services.messaging import send_message
 from backend.utils.cache import get_cache, set_cache
 from backend.services.usage import check_usage_limit, increment_usage
 from backend.utils.db import get_db
@@ -46,6 +47,22 @@ class AIResponse(BaseModel):
     result: str
     model_used: Optional[str] = None
     action: Optional[Dict[str, Any]] = None
+    milestone: Optional[str] = None
+
+
+def _milestone_for_intent(intent: str, action: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    if not intent:
+        return None
+
+    if action and action.get("status") in {"error", "conflict", "not_found"}:
+        return None
+
+    return {
+        "list": "schedule_reviewed",
+        "schedule": "meeting_scheduled",
+        "update": "meeting_updated",
+        "delete": "meeting_deleted",
+    }.get(intent)
 
 
 def _env_float(name: str, default: float) -> float:
@@ -115,9 +132,9 @@ def _safe_zoneinfo(name: str) -> tzinfo:
             return timezone.utc
 
 
-def to_utc(dt: datetime) -> datetime:
+def to_utc(dt: Optional[datetime]) -> Optional[datetime]:
     if dt is None:
-        return dt
+        return None
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
@@ -731,7 +748,12 @@ async def ai_chat(
             except Exception as exc:
                 logger.warning(f"AI usage bookkeeping failed (offline): {exc}", exc_info=True)
 
-            return AIResponse(result=result_text, model_used="graftai-offline", action=action)
+            return AIResponse(
+                result=result_text,
+                model_used="graftai-offline",
+                action=action,
+                milestone=_milestone_for_intent(intent, action),
+            )
         case _:
             pass
 
@@ -742,7 +764,7 @@ async def ai_chat(
             await increment_usage(db, user_id, "ai_messages")
         except Exception as exc:
             logger.warning(f"AI usage bookkeeping failed (cache hit): {exc}", exc_info=True)
-        return AIResponse(result=cached, model_used="graftai-assistant-cache", action={"type": "none"})
+        return AIResponse(result=cached, model_used="graftai-assistant-cache", action={"type": "none"}, milestone=None)
 
     now = datetime.now(timezone.utc)
 
@@ -779,6 +801,7 @@ async def ai_chat(
         "   - Tier 1 (Draft): Present draft constraints for user confirmation.\n"
         "   - Tier 2 (Trusted): Auto-schedule and strictly notify.\n"
         "   - Tier 3 (Full Auto): Process without UI blocker if calendar permits.\n"
+        "8. When a task succeeds, acknowledge it with a short, tasteful success cue and one clear next step. Do not over-celebrate.\n"
     )
     user_input = (
         f"### IMPLEMENTATION CONTEXT\n{implementation_context}\n\n"
@@ -841,9 +864,28 @@ async def ai_chat(
             "You can ask me to list, schedule, update, or delete calendar events."
         )
 
+    action = {"type": "none"}
+    milestone = _milestone_for_intent(intent, action)
+
     await set_cache(cache_key, result_text, 120)
     try:
         await increment_usage(db, user_id, "ai_messages")
     except Exception as exc:
         logger.warning(f"AI usage bookkeeping failed (online): {exc}", exc_info=True)
-    return AIResponse(result=result_text, model_used=model_used, action={"type": "none"})
+
+    if milestone:
+        try:
+            await send_message(
+                user_id,
+                result_text,
+                {
+                    "kind": "ai_milestone",
+                    "intent": intent,
+                    "milestone": milestone,
+                    "model_used": model_used,
+                },
+            )
+        except Exception as exc:
+            logger.warning(f"AI milestone stream publish failed: {exc}", exc_info=True)
+
+    return AIResponse(result=result_text, model_used=model_used, action=action, milestone=milestone)

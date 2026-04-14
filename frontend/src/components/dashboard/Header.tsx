@@ -43,7 +43,7 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
 
       {/* Right side actions */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, ml: "auto" }}>
-        {/* New Session Button */}
+        {/* New Session Button (compact) */}
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Box
             component={Link}
@@ -52,17 +52,17 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
               display: { xs: "none", sm: "flex" },
               alignItems: "center",
               gap: 1,
-              px: 3,
-              py: 1,
+              px: 2,
+              py: 0.5,
               background: "var(--primary)",
               color: "#000",
-              borderRadius: "0",
+              borderRadius: "4px",
               textDecoration: "none",
-              fontWeight: 800,
+              fontWeight: 700,
               fontFamily: "var(--font-mono)",
-              fontSize: "10px",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
+              fontSize: "9px",
+              textTransform: "none",
+              letterSpacing: "0.05em",
               border: "1px solid var(--primary)",
               "&:hover": {
                 background: "transparent",
@@ -70,8 +70,7 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
               },
             }}
           >
-            <Plus size={14} />
-            INIT_SESSION
+            <Plus size={12} />
           </Box>
         </motion.div>
 
@@ -143,11 +142,11 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
           <Box sx={{ display: { xs: "none", sm: "block" } }}>
             <Box
               sx={{
-                fontSize: "10px",
+                fontSize: "12px",
                 fontWeight: 700,
                 color: "var(--text-primary)",
                 fontFamily: "var(--font-mono)",
-                textTransform: "uppercase",
+                textTransform: "none",
               }}
             >
               {displayName}
@@ -171,11 +170,11 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
           }}
         >
           <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid var(--border-subtle)" }}>
-            <Box sx={{ fontSize: "10px", fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
-              {displayName.toUpperCase()}
+            <Box sx={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-mono)", textTransform: "none" }}>
+              {displayName}
             </Box>
             {userEmail && (
-              <Box sx={{ fontSize: "9px", color: "var(--text-muted)", mt: 0.5, fontFamily: "var(--font-mono)" }}>
+              <Box sx={{ fontSize: "11px", color: "var(--text-muted)", mt: 0.5, fontFamily: "var(--font-mono)" }}>
                 {userEmail}
               </Box>
             )}

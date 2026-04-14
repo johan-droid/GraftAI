@@ -100,7 +100,7 @@ export default function CalendarPage() {
   };
 
   const formatMonthYear = (date: Date) => {
-    return date.toLocaleDateString("en-US", { month: "LONG", year: "NUMERIC" }).toUpperCase();
+    return date.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
   };
 
   const weekDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -287,7 +287,7 @@ export default function CalendarPage() {
                      ].map((l, i) => (
                        <div key={i} className="flex justify-between font-mono text-[9px] uppercase">
                           <span className="text-[var(--text-faint)]">{l.label}</span>
-                          <span style={{ color: l.color }} className="font-black">{l.val}</span>
+                          <span className={l.color === "var(--primary)" ? "font-black text-[var(--primary)]" : "font-black text-[var(--text-faint)]"}>{l.val}</span>
                        </div>
                      ))}
                   </div>

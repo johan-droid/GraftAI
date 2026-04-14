@@ -241,6 +241,15 @@ export interface NotificationMessage {
   type: "info" | "success" | "warning" | "error";
   title: string;
   message: string;
+  metadata?: {
+    kind?: string;
+    milestone?: string;
+    intent?: string;
+    model_used?: string;
+    [key: string]: unknown;
+  };
+  timestamp?: string;
+  source?: string;
 }
 
 export interface WebSocketCallbacks {
@@ -282,11 +291,13 @@ export class WebSocketClient {
   private reconnectDelay = 1000;
   private callbacks: WebSocketCallbacks = {};
   private pingInterval: NodeJS.Timeout | null = null;
+  private shouldReconnect = true;
 
-  constructor(private url: string) {}
+  constructor(private url: string, private authToken: string | null = null) {}
 
   connect(callbacks: WebSocketCallbacks): void {
     this.callbacks = callbacks;
+    this.shouldReconnect = true;
     
     try {
       const normalized = normalizeWebSocketUrl(this.url);
@@ -294,8 +305,13 @@ export class WebSocketClient {
         protocol === "https" ? "wss" : "ws"
       );
       const finalUrl = wsUrl.endsWith("/ws") ? wsUrl : `${wsUrl}/ws`;
-      
-      this.ws = new WebSocket(finalUrl);
+      const socketUrl = new URL(finalUrl);
+
+      if (this.authToken) {
+        socketUrl.searchParams.set("token", this.authToken);
+      }
+
+      this.ws = new WebSocket(socketUrl.toString());
       
       this.ws.onopen = () => {
         console.log("WebSocket connected");
@@ -312,7 +328,9 @@ export class WebSocketClient {
         console.log("WebSocket disconnected");
         this.stopPingInterval();
         this.callbacks.onDisconnect?.();
-        this.attemptReconnect();
+        if (this.shouldReconnect) {
+          this.attemptReconnect();
+        }
       };
       
       this.ws.onerror = (error) => {
@@ -327,6 +345,14 @@ export class WebSocketClient {
   private handleMessage(data: string): void {
     try {
       const message = JSON.parse(data);
+
+      if (
+        !message.type &&
+        (typeof message.active_automations === "number" || Array.isArray(message.recent_automations))
+      ) {
+        this.callbacks.onMetricsUpdate?.(message);
+        return;
+      }
       
       switch (message.type) {
         case "automation_update":
@@ -336,7 +362,7 @@ export class WebSocketClient {
           this.callbacks.onMetricsUpdate?.(message.payload);
           break;
         case "notification":
-          this.callbacks.onNotification?.(message.payload);
+          this.callbacks.onNotification?.(message.payload ?? message);
           break;
         case "pong":
           // Ping response received
@@ -381,6 +407,7 @@ export class WebSocketClient {
   }
 
   disconnect(): void {
+    this.shouldReconnect = false;
     this.stopPingInterval();
     this.ws?.close();
     this.ws = null;
@@ -468,7 +495,7 @@ export function useDashboardMetrics(pollInterval = 30000) {
   return { metrics, loading, error, refetch: fetchMetrics };
 }
 
-export function useWebSocket(url?: string) {
+export function useWebSocket(url?: string, token?: string | null) {
   const [connected, setConnected] = useState(false);
   const [automationUpdate, setAutomationUpdate] = useState<AutomationStatus | null>(null);
   const [metricsUpdate, setMetricsUpdate] = useState<DashboardMetrics | null>(null);
@@ -477,9 +504,10 @@ export function useWebSocket(url?: string) {
 
   useEffect(() => {
     const wsUrl = normalizeWebSocketUrl(url || process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || "https://graftai.onrender.com");
-    wsRef.current = new WebSocketClient(wsUrl);
+    const client = new WebSocketClient(wsUrl, token ?? null);
+    wsRef.current = client;
     
-    wsRef.current.connect({
+    client.connect({
       onConnect: () => setConnected(true),
       onDisconnect: () => setConnected(false),
       onAutomationUpdate: setAutomationUpdate,
@@ -489,9 +517,12 @@ export function useWebSocket(url?: string) {
     });
 
     return () => {
-      wsRef.current?.disconnect();
+      client.disconnect();
+      if (wsRef.current === client) {
+        wsRef.current = null;
+      }
     };
-  }, [url]);
+  }, [url, token]);
 
   const subscribeToAutomation = useCallback((bookingId: string) => {
     wsRef.current?.subscribeToAutomation(bookingId);

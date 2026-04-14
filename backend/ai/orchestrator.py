@@ -225,8 +225,12 @@ class AgentController:
         if future and not future.done():
             future.set_result(response)
         
-        # Log to vector store for learning
-        await self._log_interaction(request, response)
+        # Log to vector store for learning (fire-and-forget so slow vector DB
+        # operations don't block the worker loop).
+        try:
+            asyncio.create_task(self._log_interaction(request, response))
+        except Exception as e:
+            logger.error(f"Failed to spawn logging task: {e}")
     
     async def _log_interaction(self, request: AgentRequest, response: AgentResponse):
         """Log agent interaction for learning"""

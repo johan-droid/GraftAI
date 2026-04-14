@@ -481,6 +481,7 @@ async def get_event_type_config(db: AsyncSession, user_id: str, slug: str) -> Op
         "id": event_type.id,
         "name": event_type.name,
         "duration_minutes": event_type.duration_minutes,
+        "color": event_type.color,
         "meeting_provider": event_type.meeting_provider,
         "timezone": event_type.user.timezone if event_type.user else event_type.user_id,
         "buffer_before_minutes": event_type.buffer_before_minutes,
@@ -528,6 +529,7 @@ async def create_event_type(db: AsyncSession, user_id: str, payload: Dict[str, A
         name=payload["name"],
         slug=slug,
         description=payload.get("description"),
+        color=payload.get("color") or "#3b82f6",
         duration_minutes=payload.get("duration_minutes", 60),
         meeting_provider=payload.get("meeting_provider"),
         is_public=payload.get("is_public", True),
@@ -561,6 +563,8 @@ async def update_event_type(db: AsyncSession, user_id: str, event_type_id: str, 
         event_type.name = payload["name"]
     if "description" in payload:
         event_type.description = payload.get("description")
+    if "color" in payload:
+        event_type.color = payload.get("color") or event_type.color or "#3b82f6"
     if "duration_minutes" in payload:
         event_type.duration_minutes = payload.get("duration_minutes")
     if "meeting_provider" in payload:

@@ -15,6 +15,7 @@ from backend.api.deps import get_current_user
 from backend.models.tables import UserTable, ChatMessageTable
 from backend.ai.llm_core import get_llm_core
 from backend.ai.orchestrator import get_agent_controller, AgentType, AgentRequest
+from backend.services.messaging import send_message
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -51,6 +52,7 @@ class ChatResponse(BaseModel):
     confidence: Optional[float] = None
     phases: Optional[Dict[str, Any]] = None
     entities: Optional[Dict[str, Any]] = None
+    milestone: Optional[str] = None
 
 
 class ConversationListSchema(BaseModel):
@@ -174,6 +176,18 @@ async def extract_entities(user_message: str, intent: str) -> Dict[str, Any]:
     return entities
 
 
+def _milestone_for_intent(intent: str, success: bool) -> Optional[str]:
+    if not success:
+        return None
+
+    return {
+        "schedule_meeting": "meeting_scheduled",
+        "optimize_schedule": "schedule_optimized",
+        "execute_action": "action_completed",
+        "get_analytics": "insight_ready",
+    }.get(intent)
+
+
 async def generate_ai_response(
     user_message: str, 
     user_id: str, 
@@ -246,7 +260,8 @@ async def generate_ai_response(
                 "agent_type": agent_type.value,
                 "intent": intent,
                 "phases": agent_result.result.get("phases", {}) if hasattr(agent_result, 'result') else {},
-                "entities": entities
+                "entities": entities,
+                "milestone": _milestone_for_intent(intent, agent_result.success),
             }
         
         else:
@@ -268,7 +283,8 @@ async def generate_ai_response(
                 "agent_executed": False,
                 "intent": intent,
                 "confidence": response.confidence,
-                "entities": entities
+                "entities": entities,
+                "milestone": _milestone_for_intent(intent, True),
             }
     
     except Exception as e:
@@ -277,7 +293,8 @@ async def generate_ai_response(
             "content": "I apologize, but I encountered an error processing your request. Could you please try again or rephrase your message?",
             "agent_executed": False,
             "intent": "error",
-            "error": str(e)
+            "error": str(e),
+            "milestone": None,
         }
 
 
@@ -292,18 +309,18 @@ async def _format_agent_response(agent_result: Any, intent: str) -> str:
         title = metadata.get("title", "Meeting")
         date = metadata.get("start_time", "TBD")
         
-        return f"✅ **Meeting Scheduled Successfully!**\n\n📅 **{title}**\n🕒 {date}\n\nI've scheduled your meeting and sent invitations. You can view it in your calendar. Is there anything else you'd like me to adjust?"
+        return f"Done — I scheduled **{title}** for **{date}**.\n\nI’ve sent the invitations and you can find it in your calendar. If you want, I can also tighten the timing or add follow-up reminders."
     
     elif intent == "optimize_schedule":
-        return "📊 I've analyzed your schedule and found some optimization opportunities. Check the suggestions panel for personalized recommendations!"
+        return "I reviewed your schedule and found a few cleaner ways to structure it. Check the suggestions panel for the quickest wins, and I can refine it further if you want."
     
     elif intent == "execute_action":
-        return "✅ Action completed successfully!"
+        return "Done — that action is complete."
     
     elif intent == "get_analytics":
-        return "📈 Here are your analytics! Check the reports section for detailed insights."
+        return "I pulled the main insights for you. Open the reports section if you want the full breakdown, or I can summarize the highlights here."
     
-    return "I've processed your request. Is there anything else I can help you with?"
+    return "I’ve processed your request. If you want, I can take the next step with you."
 
 
 async def _format_agent_error(agent_result: Any) -> str:
@@ -325,7 +342,7 @@ async def _format_agent_error(agent_result: Any) -> str:
         return "⏱️ The request timed out. Please try again in a moment."
     
     else:
-        return f"⚠️ I encountered an issue while processing your request. Error: {error}. Would you like to try again?"
+        return f"I hit an issue while processing that request: {error}. If you want, I can try again or help you rephrase it."
 
 
 async def _build_user_context(user_id: str, db: AsyncSession) -> Dict[str, Any]:
@@ -426,6 +443,21 @@ async def send_chat_message(
     db.add(ai_message)
     
     await db.commit()
+
+    if ai_result.get("milestone"):
+        try:
+            await send_message(
+                str(current_user.id),
+                ai_content,
+                {
+                    "kind": "chat_milestone",
+                    "intent": intent,
+                    "milestone": ai_result.get("milestone"),
+                    "agent_executed": agent_executed,
+                },
+            )
+        except Exception as exc:
+            logger.warning(f"Chat milestone stream publish failed: {exc}")
     
     return ChatResponse(
         id=ai_message.id,
@@ -438,7 +470,8 @@ async def send_chat_message(
         intent=intent,
         confidence=confidence,
         phases=phases,
-        entities=entities
+        entities=entities,
+        milestone=ai_result.get("milestone"),
     )
 
 

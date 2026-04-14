@@ -4,12 +4,14 @@ Monitoring and Metrics API Endpoints
 Provides endpoints for Prometheus metrics, health checks, and monitoring dashboard.
 """
 
-from typing import Dict, Any
-from datetime import datetime
+from typing import Dict, Any, Optional
 import asyncio
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 from pydantic import BaseModel
+from jose import JWTError, jwt
+from sqlalchemy import select
 
 # Try to import prometheus_client
 try:
@@ -19,8 +21,13 @@ except ImportError:
     PROMETHEUS_AVAILABLE = False
 
 from backend.api.deps import get_current_user
+from backend.auth.config import ALGORITHM, SECRET_KEY
 from backend.models.tables import UserTable
 from backend.ai.monitoring import get_agent_metrics, LogAnalyzer
+from backend.services.messaging import get_recent_messages
+from backend.services.redis_client import get_redis_client
+from backend.utils.db import get_async_session_maker
+from backend.utils.serialization import serializer
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -54,6 +61,80 @@ class MetricsResponse(BaseModel):
     active_automations: int
     tool_execution_summary: Dict[str, Any]
     timestamp: str
+
+
+def _decode_stream_payload(raw_payload: Any) -> Dict[str, Any]:
+    if raw_payload is None:
+        return {}
+
+    if isinstance(raw_payload, bytes):
+        try:
+            decoded = serializer.from_binary(raw_payload)
+            return decoded if isinstance(decoded, dict) else {"message": decoded}
+        except Exception:
+            return {}
+
+    if isinstance(raw_payload, str):
+        try:
+            decoded = serializer.from_binary(raw_payload.encode("utf-8"))
+            return decoded if isinstance(decoded, dict) else {"message": decoded}
+        except Exception:
+            return {"message": raw_payload}
+
+    if isinstance(raw_payload, dict):
+        return raw_payload
+
+    return {"message": str(raw_payload)}
+
+
+def _stream_event_to_notification(event: Dict[str, Any]) -> Dict[str, Any]:
+    metadata = event.get("metadata") or {}
+    milestone = metadata.get("milestone") or metadata.get("kind") or "action complete"
+    title = str(milestone).replace("_", " ").strip().title()
+    message = str(event.get("message") or "").strip()
+
+    if len(message) > 180:
+        message = f"{message[:177].rstrip()}..."
+
+    if not message:
+        message = "A background action finished successfully."
+
+    return {
+        "type": "success" if metadata.get("kind") in {"ai_milestone", "chat_milestone"} else "info",
+        "title": title or "Live update",
+        "message": message,
+        "metadata": metadata,
+        "timestamp": event.get("timestamp") or datetime.utcnow().isoformat(),
+    }
+
+
+async def _resolve_websocket_user_id(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return None
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        return str(user_id) if user_id else None
+    except JWTError:
+        return None
+
+
+async def _validate_websocket_user(token: Optional[str]) -> Optional[str]:
+    user_id = await _resolve_websocket_user_id(token)
+    if not user_id:
+        return None
+
+    try:
+        session_maker = get_async_session_maker()
+    except Exception:
+        return None
+
+    async with session_maker() as db:
+        stmt = select(UserTable.id).where(UserTable.id == user_id)
+        result = await db.execute(stmt)
+        confirmed_user_id = result.scalar_one_or_none()
+        return confirmed_user_id
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -459,25 +540,72 @@ async def monitoring_websocket(websocket: WebSocket):
     - New errors
     - Metric updates
     """
+    token = websocket.query_params.get("token") or websocket.cookies.get("graftai_access_token")
+    user_id = await _validate_websocket_user(token)
+    redis = await get_redis_client() if user_id else None
+    pubsub = None
+    channel_name = None
+    last_metrics_sent_at = 0.0
+
     try:
         await websocket.accept()
-        
+
+        if user_id and redis:
+            channel_name = f"chat_message_{user_id}"
+            pubsub = redis.pubsub()
+            await pubsub.subscribe(channel_name)
+
+            try:
+                recent_messages = await get_recent_messages(user_id, count=3)
+                for event in reversed(recent_messages):
+                    await websocket.send_json({
+                        "type": "notification",
+                        "payload": _stream_event_to_notification(event),
+                    })
+            except Exception as exc:
+                logger.warning("Failed to seed monitoring websocket with recent messages: %s", exc)
+
         while True:
-            # Send current metrics every 5 seconds
-            data = {
-                "timestamp": datetime.utcnow().isoformat(),
-                "active_automations": 0,
-                "recent_automations": []
-            }
-            
-            await websocket.send_json(data)
-            await asyncio.sleep(5)
+            if pubsub:
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                if message and message.get("type") == "message":
+                    decoded = _decode_stream_payload(message.get("data"))
+                    if decoded:
+                        await websocket.send_json({
+                            "type": "notification",
+                            "payload": _stream_event_to_notification(decoded),
+                        })
+                else:
+                    await asyncio.sleep(0.1)
+            else:
+                await asyncio.sleep(0.1)
+
+            now = datetime.utcnow().timestamp()
+            if now - last_metrics_sent_at >= 5:
+                await websocket.send_json({
+                    "type": "metrics_update",
+                    "payload": {
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "active_automations": 0,
+                        "recent_automations": [],
+                    },
+                })
+                last_metrics_sent_at = now
 
     except WebSocketDisconnect:
         logger.info("Monitoring websocket client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
+        if pubsub and channel_name:
+            try:
+                await pubsub.unsubscribe(channel_name)
+            except Exception:
+                pass
+            try:
+                await pubsub.close()
+            except Exception:
+                pass
         try:
             if websocket.client_state != WebSocketState.DISCONNECTED:
                 await websocket.close()

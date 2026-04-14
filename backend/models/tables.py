@@ -61,6 +61,8 @@ class UserTable(Base):
     
     trial_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     trial_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    onboarding_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     preferences: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
@@ -227,6 +229,7 @@ class EventTypeTable(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String, nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    color: Mapped[str] = mapped_column(String(7), nullable=False, default="#3b82f6")
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
     meeting_provider: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     is_public: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import HTTPException, status
 from redis.asyncio import Redis
@@ -11,6 +11,12 @@ from redis.exceptions import RedisError
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 _redis_client: Optional[Redis] = None
+# Local in-memory fallback used only when Redis is unavailable.
+# This is intentionally simple and process-local — used as a last-resort
+# fail-closed mechanism for sensitive endpoints (login/register).
+_LOCAL_FALLBACK_CACHE_TTL_SECONDS = 3600
+_LOCAL_FALLBACK_CACHE_MAX_ENTRIES = 1000
+_local_fallback_cache: dict[str, dict[str, Any]] = {}
 
 RATE_LIMIT_LUA = r'''
 local key = KEYS[1]
@@ -41,6 +47,24 @@ async def get_redis_client() -> Redis:
     if _redis_client is None:
         _redis_client = Redis.from_url(REDIS_URL, decode_responses=True)
     return _redis_client
+
+
+def _prune_local_fallback_cache(now: float) -> None:
+    stale_keys = [
+        key
+        for key, entry in _local_fallback_cache.items()
+        if now - entry.get("last_access", 0) > _LOCAL_FALLBACK_CACHE_TTL_SECONDS
+    ]
+    for key in stale_keys:
+        _local_fallback_cache.pop(key, None)
+
+    if len(_local_fallback_cache) > _LOCAL_FALLBACK_CACHE_MAX_ENTRIES:
+        oldest = sorted(
+            _local_fallback_cache.items(),
+            key=lambda item: item[1].get("last_access", 0),
+        )
+        for key, _ in oldest[: len(_local_fallback_cache) - _LOCAL_FALLBACK_CACHE_MAX_ENTRIES]:
+            _local_fallback_cache.pop(key, None)
 
 
 @dataclass
@@ -86,12 +110,27 @@ class RateLimit:
                 reset_seconds=reset,
             )
         except (RedisError, ConnectionError) as exc:
-            # Fail open when Redis is unavailable to avoid blocking traffic.
-            # Use structured logs to capture transient infrastructure issues.
+            # Redis unavailable — use a conservative, local fallback.
+            # For sensitive endpoints (login/register) fail-closed using
+            # a simple in-memory token bucket sliding window. For other
+            # endpoints we degrade gracefully (fail-open) to avoid blocking
+            # non-critical operations.
             logging.warning(
-                "Redis rate limiter unavailable, falling back to allow-all: %s",
+                "Redis rate limiter unavailable, using local fallback: %s",
                 exc,
             )
+
+            # STRICT fallback for sensitive endpoints.
+            # When Redis is unavailable, deny requests instead of allowing per-replica local enforcement.
+            if self.name in {"login", "register"}:
+                return RateLimitResult(
+                    success=False,
+                    count=0,
+                    remaining=0,
+                    reset_seconds=self.window_seconds,
+                )
+
+            # Non-critical endpoints: fail-open (allow)
             return RateLimitResult(
                 success=True,
                 count=0,

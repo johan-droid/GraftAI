@@ -38,18 +38,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 
-  type DashUser = { name?: string; email?: string } | null;
+  type DashUser = { full_name?: string; name?: string; username?: string; email?: string } | null;
   const displayUser = user as DashUser;
-  const initials = displayUser?.name
-    ? displayUser.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
-    : displayUser?.email?.[0]?.toUpperCase() ?? "U";
+  const displayName = displayUser?.full_name || displayUser?.name || displayUser?.username || displayUser?.email?.split("@")[0] || "User";
+  const initials = displayName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[var(--bg)]">
       <Toaster />
 
       <aside
-        className={`hidden lg:flex flex-col z-20 border-r transition-[width] duration-200 bg-[var(--bg-surface)] border-[var(--border)] flex-shrink-0 ${collapsed ? 'w-[64px]' : 'w-[220px]'}`}
+        className={`hidden lg:flex flex-col z-20 border-r transition-[width] duration-200 bg-[var(--bg-surface)] border-[var(--border)] flex-shrink-0 ${collapsed ? 'w-[64px]' : 'w-[200px]'}`}
       >
         <div className="flex items-center gap-3 px-4 py-5 border-b min-h-[64px] border-[var(--border-subtle)] bg-[rgba(255,255,255,0.02)]">
           <div className="w-8 h-8 rounded-none flex-shrink-0 flex items-center justify-center font-bold text-sm border border-[var(--primary)] bg-[rgba(0,255,156,0.1)] text-[var(--primary)]">
@@ -123,6 +127,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <button
               onClick={() => setDrawerOpen(true)}
               className="p-2 rounded-lg min-h-0 min-w-0 text-[var(--text-muted)]"
+              aria-label="Open navigation menu"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -146,7 +151,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               >
                 <div className="flex items-center justify-between px-4 py-4 border-b border-[var(--border)]">
                   <span className="font-semibold text-sm text-white">Menu</span>
-                  <button onClick={() => setDrawerOpen(false)} className="p-1 min-h-0 min-w-0 text-[var(--text-muted)]">
+                  <button onClick={() => setDrawerOpen(false)} className="p-1 min-h-0 min-w-0 text-[var(--text-muted)]" aria-label="Close navigation menu">
                     <X className="w-5 h-5" />
                   </button>
                 </div>

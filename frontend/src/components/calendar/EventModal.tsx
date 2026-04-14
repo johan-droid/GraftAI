@@ -154,43 +154,45 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/30 z-50"
           />
 
           {/* Modal */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.98, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg bg-white rounded-3xl shadow-2xl z-50 flex flex-col max-h-[90vh]"
+            exit={{ opacity: 0, scale: 0.98, y: 12 }}
+            className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg bg-[var(--bg-card)] rounded-lg shadow-sm z-50 flex flex-col max-h-[90vh]"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 className="text-2xl font-bold text-gray-900">
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
                 {event ? "Edit Event" : "Create Event"}
               </h2>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                className="p-2 hover:bg-transparent rounded-md transition-colors"
+                aria-label="Close event modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* Title */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="event-title" className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Calendar className="w-4 h-4" />
                   Event Title
                 </label>
                 <input
+                  id="event-title"
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className={cn(
-                    "w-full px-4 py-3 rounded-xl border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                    "w-full px-3 py-2 rounded-md border transition-colors focus:outline-none focus:ring-0",
                     errors.title ? "border-red-300" : "border-gray-200"
                   )}
                   placeholder="Team meeting, Lunch with client..."
@@ -201,16 +203,17 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
 
               {/* Start Time */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="event-start" className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Clock className="w-4 h-4" />
                   Start Time
                 </label>
                 <input
+                  id="event-start"
                   type="datetime-local"
                   value={formData.start_time}
                   onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
                   className={cn(
-                    "w-full px-4 py-3 rounded-xl border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                    "w-full px-3 py-2 rounded-md border transition-colors focus:outline-none focus:ring-0",
                     errors.start_time ? "border-red-300" : "border-gray-200"
                   )}
                   disabled={loading}
@@ -220,16 +223,17 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
 
               {/* End Time */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="event-end" className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Clock className="w-4 h-4" />
                   End Time
                 </label>
                 <input
+                  id="event-end"
                   type="datetime-local"
                   value={formData.end_time}
                   onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
                   className={cn(
-                    "w-full px-4 py-3 rounded-xl border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                    "w-full px-3 py-2 rounded-md border transition-colors focus:outline-none focus:ring-0",
                     errors.end_time ? "border-red-300" : "border-gray-200"
                   )}
                   disabled={loading}
@@ -247,7 +251,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 rounded-md border border-gray-200 transition-colors focus:outline-none focus:ring-0"
                   placeholder="Conference Room A, Zoom link..."
                   disabled={loading}
                 />
@@ -278,8 +282,8 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                       <div>
                         <div className="text-sm font-semibold text-slate-700 mb-2">Meeting Provider</div>
                         <div className="grid gap-2 sm:grid-cols-2">
-                          {availableProviders.map((provider) => (
-                            <label key={provider} className="inline-flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 hover:border-slate-300 transition-colors">
+                              {availableProviders.map((provider) => (
+                                <label key={provider} className="inline-flex items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:border-slate-300 transition-colors">
                               <input
                                 type="radio"
                                 name="meeting_provider"
@@ -308,7 +312,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                         type="text"
                         value={attendeesText}
                         onChange={(e) => setAttendeesText(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 rounded-md border border-gray-200 transition-colors focus:outline-none focus:ring-0"
                         placeholder="Attendee emails, separated by commas"
                         disabled={loading}
                       />
@@ -328,7 +332,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={4}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  className="w-full px-3 py-2 rounded-md border border-gray-200 transition-colors focus:outline-none focus:ring-0 resize-none"
                   placeholder="Add notes, agenda, or details..."
                   disabled={loading}
                 />
@@ -344,13 +348,13 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
             </form>
 
             {/* Footer */}
-            <div className="flex items-center justify-between p-6 border-t border-gray-100 gap-3">
+            <div className="flex items-center justify-between p-4 border-t border-[var(--border-subtle)] gap-3">
               {event && onDelete && event.source === "local" ? (
                 <button
                   type="button"
                   onClick={handleDelete}
                   disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-3 py-1 rounded-md font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete
@@ -363,14 +367,14 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   type="button"
                   onClick={onClose}
                   disabled={loading}
-                  className="px-6 py-2 rounded-xl font-semibold text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 rounded-md font-semibold text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmit}
                   disabled={loading}
-                  className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2 rounded-xl font-semibold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                  className="flex items-center gap-2 bg-[var(--primary)] text-white px-4 py-2 rounded-md font-semibold hover:brightness-95 transition-colors disabled:opacity-50"
                 >
                   <Save className="w-4 h-4" />
                   {loading ? "Saving..." : "Save"}

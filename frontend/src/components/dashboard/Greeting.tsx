@@ -12,11 +12,10 @@ interface GreetingProps {
 }
 
 export function Greeting({ userName, userEmail, isLoading }: GreetingProps) {
-  // Get display name from username, email, or fallback
+  // Minimal display name and simple greeting
   const displayName = userName || (userEmail ? formatUserName(userEmail) : "Guest");
-  
-  // Get time-based greeting
-  const { text, emoji } = getGreeting(displayName);
+  const simpleName = displayName.split(" ")[0];
+  const { emoji } = getGreeting(displayName);
   
   // Get current date
   const today = new Date().toLocaleDateString("en-US", {
@@ -44,28 +43,20 @@ export function Greeting({ userName, userEmail, isLoading }: GreetingProps) {
       >
         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
           <div className="flex items-center gap-2 mb-1">
-             <div className="px-2 py-0.5 bg-[var(--primary)] text-black text-[9px] font-black uppercase tracking-widest">
-                SESSION_ACTIVE
-             </div>
-             <div className="text-[10px] text-[var(--text-faint)] font-bold uppercase tracking-widest font-mono">
-                // AUTH_NODE: {userEmail?.split('@')[0].toUpperCase() || "ROOT"}
-             </div>
+            <div className="px-2 py-0.5 bg-[var(--primary)] text-black text-[9px] font-semibold rounded-sm">
+              Live
+            </div>
+            <div className="text-[12px] text-[var(--text-faint)] font-medium font-mono">{displayName}</div>
           </div>
           <Typography
             sx={{
-              fontSize: { xs: "1.75rem", sm: "2rem", md: "2.5rem" },
-              fontWeight: 900,
+              fontSize: { xs: "1.25rem", sm: "1.5rem", md: "1.75rem" },
+              fontWeight: 700,
               color: "var(--text-primary)",
-              letterSpacing: "-0.04em",
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              lineHeight: 1,
-              textTransform: "uppercase"
+              lineHeight: 1.1,
             }}
           >
-            {text.split(',')[0]}
-            <span className="text-[var(--primary)] drop-shadow-[0_0_10px_var(--primary-glow)]">{displayName.toUpperCase()}</span>
+            {`Welcome back${simpleName ? `, ${simpleName}` : ""}`} <span className="ml-2">{emoji}</span>
           </Typography>
         </Box>
       </motion.div>

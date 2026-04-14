@@ -40,7 +40,7 @@ const BigCalendar = dynamic(async () => {
 }, {
   ssr: false,
   loading: () => (
-    <div className="rounded-xl overflow-hidden" style={{ height: 520 }}>
+    <div className="rounded-xl overflow-hidden h-[520px]">
       <Skeleton className="h-full w-full" />
     </div>
   ),
@@ -56,6 +56,13 @@ const CATEGORIES: Record<CategoryKey, { label: string; color: string }> = {
   event:    { label: "Event",    color: "var(--secondary)" },
   birthday: { label: "Birthday", color: "var(--accent)" },
   task:     { label: "Task",     color: "var(--text-secondary)" },
+};
+
+const CATEGORY_COLOR_CLASS: Record<CategoryKey, string> = {
+  meeting: "bg-[var(--primary)]",
+  event: "bg-[var(--secondary)]",
+  birthday: "bg-[var(--accent)]",
+  task: "bg-[var(--text-secondary)]",
 };
 
 const FORM_DEFAULTS: Partial<CalendarEvent> = {
@@ -156,6 +163,7 @@ export default function CalendarPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title?.trim()) { toast.error("Title is required."); return; }
+    if (!form.start_time || !form.end_time) { toast.error("Start and end times are required."); return; }
     setSaving(true);
     const optimisticId = --tempIdCounter;
     const optimistic: CalendarEvent = {
@@ -228,37 +236,32 @@ export default function CalendarPage() {
     const conflict = hasConflict(events, event.resource);
     const isPast = end < now;
     const catColor = CATEGORIES[event.resource.category as CategoryKey]?.color ?? "var(--primary)";
-    
+
     return {
       className: cn(
-        isPast    && "past-event",
-        conflict  && "conflict-event font-bold",
-        "custom-rbc-event"
+        "custom-rbc-event",
+        conflict && "conflict-event",
+        isPast && "past-event"
       ),
       style: {
-        background: conflict ? "var(--accent)"
-          : isPast ? "rgba(255, 255, 255, 0.05)"
-          : catColor,
-        color: conflict ? "#fff" : (isPast ? "var(--text-muted)" : "#000"),
-        borderRadius: 0,
-        border: conflict ? "1px solid #fff" : "none",
-        fontSize: "10px",
-        fontWeight: 800,
-        textTransform: "uppercase",
-        letterSpacing: "0.05em",
-        boxShadow: isPast ? "none" : `0 0 10px ${catColor}44`,
+        background: conflict ? "var(--accent)" : isPast ? "rgba(255,255,255,0.04)" : catColor,
+        color: conflict ? "#fff" : (isPast ? "var(--text-muted)" : "inherit"),
+        borderRadius: 4,
+        border: conflict ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
+        fontSize: "12px",
+        fontWeight: 600,
+        textTransform: "none",
+        boxShadow: "none",
       },
     };
   }, [events]);
 
   return (
     <div className="space-y-8 pb-12 font-mono">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-dashed border-[var(--border-subtle)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-4 border-b border-solid border-[var(--border-subtle)]">
         <div>
-          <h1 className="text-4xl font-black text-[var(--text-primary)] uppercase tracking-tighter">Calendar</h1>
-          <p className="text-xs mt-2 uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            // [NODE_STATUS: SYNC_READY] // ANALYZING_TEMPORAL_FLUX...
-          </p>
+          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Calendar</h1>
+          <p className="text-sm mt-1 text-[var(--text-muted)]">Sync ready — temporal view.</p>
         </div>
         <button 
           className="tech-btn tech-btn-primary px-8" 
@@ -269,9 +272,9 @@ export default function CalendarPage() {
       </div>
 
       <ErrorBoundary>
-        <div className="tech-card p-4 md:p-6 bg-[var(--bg-base)] border-dashed" style={{ minHeight: 600 }}>
+        <div className="tech-card p-4 md:p-5 bg-[var(--bg-base)] border min-h-[600px]">
           {!localizerReady || loading ? (
-            <Skeleton className="w-full bg-[var(--bg-elevated)]" style={{ height: 560 }} />
+            <Skeleton className="w-full bg-[var(--bg-elevated)] h-[560px]" />
           ) : (
             <BigCalendar
               localizer={localizerReady}
@@ -286,7 +289,7 @@ export default function CalendarPage() {
               onSelectEvent={openEditModal}
               onEventDrop={handleEventDrop}
               eventPropGetter={eventPropGetter}
-              style={{ height: 560 }}
+              className="h-[560px]"
               popup
               views={["month", "week", "day", "agenda"]}
               formats={{
@@ -297,14 +300,12 @@ export default function CalendarPage() {
         </div>
       </ErrorBoundary>
 
-      <div className="flex flex-wrap gap-6 p-4 border border-dashed border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-        {Object.entries(CATEGORIES).map(([key, { label, color }]) => (
+      <div className="flex flex-wrap gap-6 p-4 border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+        {Object.entries(CATEGORIES).map(([key, { label }]) => (
           <div key={key} className="flex items-center gap-3">
-            <div className="w-3 h-3" style={{ background: color }} />
-            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">{label}</span>
-            <span className="text-[10px] font-bold text-[var(--text-faint)]">
-              [{events.filter(e => e.category === key).length}]
-            </span>
+            <div className={cn("w-3 h-3 rounded-sm", CATEGORY_COLOR_CLASS[key as CategoryKey])} />
+            <span className="text-sm font-medium text-[var(--text-secondary)]">{label}</span>
+            <span className="text-sm text-[var(--text-faint)]">[{events.filter(e => e.category === key).length}]</span>
           </div>
         ))}
       </div>
@@ -354,8 +355,7 @@ function EventModal({ isOpen, title, form, onFormChange, onClose, onSubmit, savi
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0"
-            style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={onClose}
           />
           <motion.div
@@ -363,19 +363,21 @@ function EventModal({ isOpen, title, form, onFormChange, onClose, onSubmit, savi
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="relative w-full sm:max-w-lg p-8 font-mono"
-            style={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)", zIndex: 10, maxHeight: "90vh", overflowY: "auto" }}
+            className="relative w-full sm:max-w-lg p-8 font-mono bg-[var(--bg-card)] border border-[var(--border-subtle)] z-10 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-8 border-b border-dashed border-[var(--border-subtle)] pb-4">
               <h2 className="text-xl font-black text-[var(--text-primary)] uppercase tracking-tighter">{title}</h2>
-              <button className="p-2 border border-transparent hover:border-[var(--border-subtle)] transition-all" onClick={onClose} style={{ color: "var(--text-muted)" }}>
+              <button
+                className="p-2 border border-transparent hover:border-[var(--border-subtle)] transition-all text-[var(--text-muted)]"
+                onClick={onClose}
+                aria-label="Close event modal"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {conflictWarning && (
-              <div className="flex items-center gap-3 p-4 mb-6 text-xs font-bold uppercase tracking-widest"
-                style={{ background: "rgba(255,0,122,0.1)", border: "1px solid var(--accent)", color: "var(--accent)" }}>
+              <div className="flex items-center gap-3 p-4 mb-6 text-xs font-bold uppercase tracking-widest bg-[rgba(255,0,122,0.1)] border border-[var(--accent)] text-[var(--accent)]">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                 SYSTEM_ALERT: Temporal Conflict Detected
               </div>
@@ -383,21 +385,21 @@ function EventModal({ isOpen, title, form, onFormChange, onClose, onSubmit, savi
 
             <form onSubmit={onSubmit} className="space-y-6">
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Target Title *</label>
-                <input className="tech-input focus:ring-0" placeholder="ENTER EVENT IDENTIFIER" required
+                <label htmlFor="event-title" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Target Title *</label>
+                <input id="event-title" className="tech-input focus:ring-0" placeholder="ENTER EVENT IDENTIFIER" required
                   value={form.title ?? ""}
                   onChange={e => onFormChange({ title: e.target.value })} />
               </div>
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Documentation</label>
-                <textarea className="tech-input resize-none h-24 focus:ring-0" placeholder="ADDITIONAL_SPECIFICATIONS..."
+                <label htmlFor="event-description" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Documentation</label>
+                <textarea id="event-description" className="tech-input resize-none h-24 focus:ring-0" placeholder="ADDITIONAL_SPECIFICATIONS..."
                   value={form.description ?? ""}
                   onChange={e => onFormChange({ description: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Category_Class</label>
-                  <select className="tech-input appearance-none bg-[var(--bg-elevated)]"
+                  <label htmlFor="event-category" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Category_Class</label>
+                  <select id="event-category" className="tech-input appearance-none bg-[var(--bg-elevated)]"
                     value={form.category ?? "meeting"}
                     onChange={e => onFormChange({ category: e.target.value as CategoryKey })}>
                     {Object.entries(CATEGORIES).map(([k, v]) => (
@@ -406,8 +408,8 @@ function EventModal({ isOpen, title, form, onFormChange, onClose, onSubmit, savi
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Sync_Status</label>
-                  <select className="tech-input appearance-none bg-[var(--bg-elevated)]"
+                  <label htmlFor="event-status" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Sync_Status</label>
+                  <select id="event-status" className="tech-input appearance-none bg-[var(--bg-elevated)]"
                     value={form.status ?? "confirmed"}
                     onChange={e => onFormChange({ status: e.target.value })}>
                     <option value="confirmed">CONFIRMED</option>
@@ -418,16 +420,16 @@ function EventModal({ isOpen, title, form, onFormChange, onClose, onSubmit, savi
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Start_Timestamp</label>
-                  <input className="tech-input" type="datetime-local"
+                  <label htmlFor="event-start" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Start_Timestamp</label>
+                  <input id="event-start" className="tech-input" type="datetime-local"
                     value={form.start_time ? toDatetimeLocal(form.start_time) : ""}
-                    onChange={e => onFormChange({ start_time: new Date(e.target.value).toISOString() })} />
+                      onChange={e => { const v = e.target.value; onFormChange({ start_time: v ? new Date(v).toISOString() : undefined }); }} />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">End_Timestamp</label>
-                  <input className="tech-input" type="datetime-local"
-                    value={form.end_time ? toDatetimeLocal(form.end_time) : ""}
-                    onChange={e => onFormChange({ end_time: new Date(e.target.value).toISOString() })} />
+                  <label htmlFor="event-end" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">End_Timestamp</label>
+                    <input id="event-end" className="tech-input" type="datetime-local"
+                      value={form.end_time ? toDatetimeLocal(form.end_time) : ""}
+                      onChange={e => { const v = e.target.value; onFormChange({ end_time: v ? new Date(v).toISOString() : undefined }); }} />
                 </div>
               </div>
               <label className="flex items-center gap-3 cursor-pointer group">
@@ -441,7 +443,7 @@ function EventModal({ isOpen, title, form, onFormChange, onClose, onSubmit, savi
 
               <div className="flex gap-4 pt-4">
                 {onDelete && (
-                  <button type="button" className="p-3 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition-all" onClick={onDelete}>
+                  <button type="button" aria-label="Delete event" className="p-3 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition-all" onClick={onDelete}>
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}

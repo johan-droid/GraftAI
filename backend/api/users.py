@@ -1,20 +1,37 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, validator
+from pathlib import Path
 from typing import Any, Dict, List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
 import re
 import uuid
 
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from pydantic import BaseModel, validator
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+import pytz
+
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable, UserTokenTable
+from backend.services.google_auth import get_google_auth_url
+from backend.services.oauth_service import build_oauth_state
+from backend.services.storage import storage
+
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 class UserProfileUpdateRequest(BaseModel):
+    display_name: Optional[str] = None
     full_name: Optional[str] = None
     username: Optional[str] = None
+    bio: Optional[str] = None
+    phone: Optional[str] = None
+    timezone: Optional[str] = None
+    time_format: Optional[str] = None
+    theme: Optional[str] = None
+    brand_color_light: Optional[str] = None
+    brand_color_dark: Optional[str] = None
+    booking_layout: Optional[str] = None
+    default_calendar_id: Optional[str] = None
     preferences: Optional[dict] = None
 
     @validator("username")
@@ -24,6 +41,74 @@ class UserProfileUpdateRequest(BaseModel):
         if not re.fullmatch(r"[a-zA-Z0-9_-]{3,30}", value):
             raise ValueError("Username must be 3-30 characters and contain only letters, numbers, hyphens, or underscores.")
         return value.lower()
+
+    @validator("display_name")
+    def display_name_must_be_valid(cls, value: Optional[str]):
+        if value is None:
+            return value
+        normalized = value.strip()
+        if len(normalized) < 1 or len(normalized) > 100:
+            raise ValueError("Display name must be 1-100 characters")
+        if not re.fullmatch(r"[A-Za-z0-9 '\-]+", normalized):
+            raise ValueError("Display name may only include letters, numbers, spaces, apostrophes, and hyphens")
+        return normalized
+
+    @validator("bio")
+    def bio_length(cls, value: Optional[str]):
+        if value is None:
+            return value
+        if len(value.strip()) > 500:
+            raise ValueError("Bio must be under 500 characters")
+        return value.strip()
+
+    @validator("phone")
+    def validate_phone(cls, value: Optional[str]):
+        if value is None or not value.strip():
+            return None
+        normalized = value.strip()
+        if not re.fullmatch(r"\+?[1-9]\d{1,14}", normalized):
+            raise ValueError("Please enter a valid phone number")
+        return normalized
+
+    @validator("timezone")
+    def validate_timezone(cls, value: Optional[str]):
+        if value is None:
+            return value
+        if value not in pytz.all_timezones:
+            raise ValueError("Invalid timezone selected")
+        return value
+
+    @validator("time_format")
+    def validate_time_format(cls, value: Optional[str]):
+        if value is None:
+            return value
+        if value not in {"12h", "24h"}:
+            raise ValueError("Invalid time format")
+        return value
+
+    @validator("theme")
+    def validate_theme(cls, value: Optional[str]):
+        if value is None:
+            return value
+        if value not in {"light", "dark", "system"}:
+            raise ValueError("Invalid theme")
+        return value
+
+    @validator("brand_color_light", "brand_color_dark")
+    def validate_color(cls, value: Optional[str]):
+        if value is None:
+            return value
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
+            raise ValueError("Please select a valid color")
+        return value.lower()
+
+    @validator("booking_layout")
+    def validate_booking_layout(cls, value: Optional[str]):
+        if value is None:
+            return value
+        if value not in {"monthly", "weekly", "daily"}:
+            raise ValueError("Invalid booking layout")
+        return value
 
 
 
@@ -48,12 +133,33 @@ def _normalize_preferences(user: UserTable) -> Dict[str, Any]:
     return dict(prefs)
 
 
+def _set_preferences(user: UserTable, preferences: Dict[str, Any]) -> None:
+    user.preferences = preferences
+
+
 def _serialize_profile(user: UserTable) -> Dict[str, Any]:
+    prefs = _normalize_preferences(user)
+    avatar_key = prefs.get("avatar_key")
+    avatar_url = storage.get_presigned_url(avatar_key) if avatar_key else prefs.get("avatar_url")
     return {
         "id": user.id,
         "email": user.email,
         "username": user.username,
         "full_name": user.full_name,
+        "display_name": prefs.get("display_name") or user.full_name,
+        "avatar_url": avatar_url,
+        "bio": prefs.get("bio"),
+        "phone": prefs.get("phone"),
+        "timezone": user.timezone or prefs.get("timezone") or "UTC",
+        "time_format": prefs.get("time_format", "12h"),
+        "theme": prefs.get("theme", "system"),
+        "brand_color_light": prefs.get("brand_color_light", "#3b82f6"),
+        "brand_color_dark": prefs.get("brand_color_dark", "#1e40af"),
+        "booking_layout": prefs.get("booking_layout", "monthly"),
+        "default_calendar_id": prefs.get("default_calendar_id"),
+        "preferences": prefs,
+        "onboarding_completed": bool(user.onboarding_completed),
+        "completed_steps": prefs.get("completed_steps", []),
         "tier": user.tier,
         "subscription_status": user.subscription_status,
         "razorpay_subscription_id": user.razorpay_subscription_id,
@@ -64,8 +170,84 @@ def _serialize_profile(user: UserTable) -> Dict[str, Any]:
         "quota_reset_at": user.quota_reset_at.isoformat() if user.quota_reset_at else None,
         "trial_active": user.trial_active,
         "trial_expires_at": user.trial_expires_at.isoformat() if user.trial_expires_at else None,
-        "preferences": user.preferences or {},
     }
+
+
+def _build_profile_response(user: UserTable) -> Dict[str, Any]:
+    return {
+        "success": True,
+        "message": "Profile retrieved successfully",
+        "data": _serialize_profile(user),
+    }
+
+
+def _apply_profile_payload(user: UserTable, payload: UserProfileUpdateRequest) -> UserTable:
+    prefs = _normalize_preferences(user)
+
+    if payload.preferences is not None:
+        filtered = {
+            k: v
+            for k, v in payload.preferences.items()
+            if k not in {
+                "display_name",
+                "full_name",
+                "username",
+                "bio",
+                "phone",
+                "timezone",
+                "time_format",
+                "theme",
+                "brand_color_light",
+                "brand_color_dark",
+                "booking_layout",
+                "default_calendar_id",
+            }
+        }
+        prefs.update(filtered)
+
+    if payload.display_name is not None:
+        display_name = payload.display_name.strip()
+        if display_name:
+            prefs["display_name"] = display_name
+
+    if payload.full_name is not None:
+        user.full_name = payload.full_name.strip() or user.full_name
+
+    if payload.username is not None:
+        username = payload.username.strip().lower()
+        if username and username != user.username:
+            user.username = username
+
+    if payload.bio is not None:
+        prefs["bio"] = payload.bio.strip() if payload.bio.strip() else None
+
+    if payload.phone is not None:
+        prefs["phone"] = payload.phone
+
+    if payload.timezone is not None:
+        prefs["timezone"] = payload.timezone
+        user.timezone = payload.timezone
+
+    if payload.time_format is not None:
+        prefs["time_format"] = payload.time_format
+
+    if payload.theme is not None:
+        prefs["theme"] = payload.theme
+
+    if payload.brand_color_light is not None:
+        prefs["brand_color_light"] = payload.brand_color_light
+
+    if payload.brand_color_dark is not None:
+        prefs["brand_color_dark"] = payload.brand_color_dark
+
+    if payload.booking_layout is not None:
+        prefs["booking_layout"] = payload.booking_layout
+
+    if payload.default_calendar_id is not None:
+        prefs["default_calendar_id"] = payload.default_calendar_id
+
+    _set_preferences(user, prefs)
+    return user
 
 
 def _to_utc_iso(value: datetime) -> str:
@@ -95,6 +277,195 @@ def _set_out_of_office_blocks(user: UserTable, blocks: List[Dict[str, Any]]) -> 
 async def get_my_profile(current_user: UserTable = Depends(get_current_user)):
     """Fetch current user profile for the monolithic dashboard."""
     return _serialize_profile(current_user)
+
+
+@router.get("/me/profile")
+async def get_my_profile_details(current_user: UserTable = Depends(get_current_user)):
+    """Fetch the authenticated user's profile data for onboarding."""
+    return _build_profile_response(current_user)
+
+
+@router.post("/me/profile")
+@router.put("/me/profile")
+async def create_or_update_profile(
+    payload: UserProfileUpdateRequest,
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(UserTable).where(UserTable.id == current_user.id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if payload.username is not None:
+        username = payload.username.strip().lower()
+        if username and username != user.username:
+            stmt = select(UserTable).where(UserTable.username == username, UserTable.id != current_user.id)
+            existing = (await db.execute(stmt)).scalars().first()
+            if existing:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
+
+    user = _apply_profile_payload(user, payload)
+    await db.commit()
+    await db.refresh(user)
+
+    return {
+        "success": True,
+        "message": "Profile created successfully",
+        "data": _serialize_profile(user),
+    }
+
+
+@router.get("/me/profile/setup-status")
+async def get_profile_setup_status(current_user: UserTable = Depends(get_current_user)):
+    prefs = _normalize_preferences(current_user)
+    return {
+        "success": True,
+        "message": "Setup status loaded successfully",
+        "data": {
+            "completed_steps": prefs.get("completed_steps", []),
+            "onboarding_completed": bool(current_user.onboarding_completed),
+            "profile": _serialize_profile(current_user),
+        },
+    }
+
+
+@router.get("/me/calendars/oauth/google/auth-url")
+async def get_google_calendar_auth_url(current_user: UserTable = Depends(get_current_user)):
+    state = build_oauth_state(current_user.id, redirect_to="/profile/setup/calendar", provider="google")
+    auth_url = await get_google_auth_url(state)
+    return {
+        "success": True,
+        "message": "Google authorization URL created",
+        "data": {"auth_url": auth_url, "state": state},
+    }
+
+
+@router.post("/me/profile/avatar")
+async def upload_profile_avatar(
+    file: UploadFile = File(...),
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported avatar image type. Use JPEG, PNG, or WEBP.",
+        )
+
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    if file_size > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Avatar file must be 5MB or smaller.",
+        )
+
+    file.file.seek(0)
+    header_sample = file.file.read(16)
+    file.file.seek(0)
+
+    magic_map = {
+        "image/jpeg": b"\xff\xd8\xff",
+        "image/png": b"\x89PNG",
+        "image/webp": b"RIFF",
+    }
+    if file.content_type == "image/webp":
+        if len(header_sample) < 12 or not (header_sample.startswith(b"RIFF") and header_sample[8:12] == b"WEBP"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Avatar content does not match declared file type.",
+            )
+    elif not header_sample.startswith(magic_map[file.content_type]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Avatar content does not match declared file type.",
+        )
+
+    extension = Path(file.filename).suffix.lower() or ".png"
+    if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
+        extension = ".png"
+    upload_key = f"avatars/{current_user.id}/{uuid.uuid4().hex}{extension}"
+
+    try:
+        file.file.seek(0)
+        storage_key = await storage.upload_file(file.file, upload_key, file.content_type)
+        if not storage_key:
+            raise ValueError("Storage upload failed")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not upload avatar at this time.",
+        ) from exc
+
+    avatar_url = storage.get_presigned_url(storage_key)
+    prefs = _normalize_preferences(current_user)
+    prefs["avatar_key"] = storage_key
+    prefs.pop("avatar_url", None)
+    _set_preferences(current_user, prefs)
+    await db.commit()
+    await db.refresh(current_user)
+
+    return {
+        "success": True,
+        "message": "Avatar uploaded successfully",
+        "data": {"avatar_url": avatar_url},
+    }
+
+
+@router.post("/me/profile/complete-step/{step_id}")
+async def complete_profile_setup_step(
+    step_id: str,
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    valid_steps = ["profile", "calendar", "availability", "event_type"]
+    if step_id not in valid_steps:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid onboarding step")
+
+    prefs = _normalize_preferences(current_user)
+    completed_steps = list(dict.fromkeys(list(prefs.get("completed_steps", [])) + [step_id]))
+    prefs["completed_steps"] = completed_steps
+    _set_preferences(current_user, prefs)
+    await db.commit()
+    next_step = None
+    current_index = valid_steps.index(step_id)
+    if current_index < len(valid_steps) - 1:
+        next_step = valid_steps[current_index + 1]
+    return {
+        "success": True,
+        "message": "Onboarding step completed",
+        "data": {"completed_steps": completed_steps, "next_step": next_step},
+    }
+
+
+@router.get("/me/onboarding/preview")
+async def get_onboarding_preview(current_user: UserTable = Depends(get_current_user)):
+    username = current_user.username or current_user.email.split("@")[0]
+    return {
+        "success": True,
+        "message": "Onboarding preview loaded",
+        "data": {
+            "bookingPageUrl": f"/public/users/{username}",
+            "isLive": bool(current_user.onboarding_completed),
+        },
+    }
+
+
+@router.post("/me/onboarding/complete")
+async def complete_onboarding_flow(
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    current_user.onboarding_completed = True
+    current_user.onboarding_completed_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {
+        "success": True,
+        "message": "Onboarding completed successfully",
+        "data": {"redirect_url": "/dashboard"},
+    }
 
 @router.get("/me/integrations")
 async def get_my_integrations(
@@ -140,43 +511,28 @@ async def update_current_user_profile(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update current user profile (Full Name only)."""
-    user_id = current_user.id
-    result = await db.execute(select(UserTable).where(UserTable.id == user_id))
+    result = await db.execute(select(UserTable).where(UserTable.id == current_user.id))
     user = result.scalars().first()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    if payload.full_name is not None:
-        user.full_name = payload.full_name.strip() or user.full_name
 
     if payload.username is not None:
         username = payload.username.strip().lower()
         if username and username != user.username:
-            stmt = select(UserTable).where(UserTable.username == username)
+            stmt = select(UserTable).where(UserTable.username == username, UserTable.id != current_user.id)
             existing = (await db.execute(stmt)).scalars().first()
             if existing:
                 raise HTTPException(status_code=409, detail="Username already taken")
-            user.username = username
 
-    if payload.preferences is not None:
-        # Merge new preferences with existing ones, if any
-        current_prefs = _normalize_preferences(user)
-        new_prefs = current_prefs.copy()
-        new_prefs.update(payload.preferences)
-        user.preferences = new_prefs
-
+    user = _apply_profile_payload(user, payload)
     await db.commit()
     await db.refresh(user)
 
     return {
-        "id": user.id,
-        "email": user.email,
-        "username": user.username,
-        "full_name": user.full_name,
-        "preferences": user.preferences,
-        "created_at": user.created_at,
+        "success": True,
+        "message": "Profile updated successfully",
+        "data": _serialize_profile(user),
     }
 
 

@@ -47,7 +47,7 @@ export function StatCard({
         sx={{
           p: { xs: 2, md: 3 },
           background: "var(--bg-base)",
-          border: "1px dashed var(--border-subtle)",
+          border: "1px solid var(--border-subtle)",
           borderRadius: "0",
         }}
       >
@@ -66,9 +66,9 @@ export function StatCard({
     >
       <Box
         sx={{
-          p: { xs: 2.5, md: 3 },
+          p: { xs: 2, md: 2.5 },
           background: "var(--bg-base)",
-          border: `1px dashed var(--border-subtle)`,
+          border: `1px solid var(--border-subtle)`,
           borderRadius: "0",
           position: "relative",
           overflow: "hidden",
@@ -146,7 +146,7 @@ export function StatCard({
           {/* Value */}
           <Typography
             sx={{
-              fontSize: { xs: "1.75rem", md: "2rem" },
+              fontSize: { xs: "1.5rem", md: "1.85rem" },
               fontWeight: 900,
               color: "var(--text-primary)",
               fontFamily: "var(--font-mono)",

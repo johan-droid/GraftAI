@@ -290,6 +290,23 @@ export default function ProfilePage() {
               </div>
             </SettingRow>
           </Section>
+
+          <motion.div variants={ITEM}>
+            <Section title="Account" description="Authentication, subscription and account metadata">
+              <SettingRow icon={User} label="Username" description="Stable login alias">
+                <span className="text-sm text-slate-300 font-medium">{user?.username || "Not specified"}</span>
+              </SettingRow>
+              <SettingRow icon={Globe} label="Email" description="Primary account email">
+                <span className="text-sm text-slate-300 font-medium">{user?.email || "Not available"}</span>
+              </SettingRow>
+              <SettingRow icon={Shield} label="Subscription" description="Current plan and status">
+                <span className="text-sm text-slate-300 font-medium">{(user?.tier || user?.subscription_status || "Free").toString().toUpperCase()}</span>
+              </SettingRow>
+              <SettingRow icon={Clock} label="Member since" description="Account creation date">
+                <span className="text-sm text-slate-300 font-medium">{user?.created_at ? new Date(user.created_at).toLocaleDateString() : "Unknown"}</span>
+              </SettingRow>
+            </Section>
+          </motion.div>
         </motion.div>
       </motion.div>
     </div>

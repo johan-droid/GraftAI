@@ -104,9 +104,11 @@ export const apiClient = {
 
     // 3. Headers
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
       ...(requestInit.headers as Record<string, string>),
     };
+    if (json !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }

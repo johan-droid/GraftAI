@@ -21,6 +21,7 @@ class EventTypePayload(BaseModel):
     name: str
     description: Optional[str] = None
     slug: Optional[str] = None
+    color: Optional[str] = Field(default="#3b82f6", pattern=r"^#[0-9A-Fa-f]{6}$")
     duration_minutes: int = Field(default=60, ge=1)
     meeting_provider: Optional[str] = None
     is_public: Optional[bool] = True
@@ -69,6 +70,7 @@ class EventTypeResponse(BaseModel):
     name: str
     description: Optional[str] = None
     slug: str
+    color: str
     duration_minutes: int
     meeting_provider: Optional[str] = None
     is_public: bool

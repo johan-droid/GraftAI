@@ -3,6 +3,7 @@
  * Enhanced toast system with precise HSL color grading
  * Import { toast } from "@/components/ui/Toast" everywhere.
  */
+import { motion } from "framer-motion";
 import { toast as sonner, Toaster as SonnerToaster } from "sonner";
 import { CheckCircle2, XCircle, AlertTriangle, Info, Loader2 } from "lucide-react";
 import { ReactNode } from "react";
@@ -30,6 +31,20 @@ const colors = {
   textSecondary: "hsl(215, 16%, 70%)",
 };
 
+function AnimatedSuccessIcon() {
+  return (
+    <motion.span
+      initial={{ scale: 0.7, rotate: -12, opacity: 0 }}
+      animate={{ scale: [0.7, 1.05, 1], rotate: 0, opacity: 1 }}
+      transition={{ duration: 0.24, ease: "easeOut" }}
+      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+      aria-hidden="true"
+    >
+      <CheckCircle2 size={18} color={colors.success} />
+    </motion.span>
+  );
+}
+
 export function Toaster() {
   return (
     <SonnerToaster
@@ -52,7 +67,7 @@ export function Toaster() {
 export const toast = {
   success: (msg: string) =>
     sonner.success(msg, {
-      icon: null,
+      icon: <AnimatedSuccessIcon />,
     }),
   error: (msg: string) =>
     sonner.error(msg, {

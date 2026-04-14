@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Box, Typography, Container, TextField, Stack } from "@mui/material";
 import { motion } from "framer-motion";
@@ -67,7 +65,7 @@ export function CTASection() {
 
                    <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 3, justifyContent: { xs: "center", md: "flex-start" } }}>
                       <button
-                        onClick={() => router.push("/onboarding")}
+                                    onClick={() => router.push("/profile/setup")}
                         className="px-10 py-5 bg-[var(--primary)] text-black text-[11px] font-black font-mono tracking-[0.3em] uppercase hover:bg-white transition-all relative group overflow-hidden"
                       >
                          <span className="relative z-10 flex items-center justify-center gap-3">

@@ -41,18 +41,18 @@ export const DayCell = React.memo(({
       whileHover={{ scale: isCurrentMonth ? 1.02 : 1 }}
       onClick={() => isCurrentMonth && onSelect(day)}
       className={cn(
-        "relative flex flex-col p-1.5 rounded-xl cursor-pointer min-h-[56px] sm:min-h-[80px] md:min-h-[100px] transition-all border",
+        "relative flex flex-col p-1 rounded-md cursor-pointer min-h-[52px] sm:min-h-[72px] md:min-h-[92px] transition-all border",
         isSelected
-          ? "border-indigo-500/60 bg-indigo-600/10"
+          ? "border-indigo-400/40 bg-indigo-50"
           : isCurrentMonth
-          ? "border-white/[0.05] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]"
+          ? "border-transparent bg-transparent hover:bg-[var(--bg-hover)]"
           : "border-transparent opacity-30 cursor-default"
       )}
     >
       <div
         className={cn(
           "w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold mb-1 self-center",
-          isToday ? "bg-indigo-600 text-white" : isSelected ? "text-indigo-300" : "text-slate-400"
+          isToday ? "bg-[var(--primary)] text-white" : isSelected ? "text-[var(--text-secondary)]" : "text-slate-400"
         )}
       >
         {day.getDate()}
@@ -63,8 +63,8 @@ export const DayCell = React.memo(({
           <div
             key={ev.id}
             className={cn(
-              "text-[10px] font-medium px-1.5 py-0.5 rounded-md truncate border",
-              categories[ev.category]?.bg ?? "bg-slate-500/10 border-slate-500/20",
+              "text-[11px] font-medium px-1 py-0.5 rounded-sm truncate",
+              categories[ev.category]?.bg ?? "bg-slate-200/10",
               categories[ev.category]?.text ?? "text-slate-300"
             )}
           >

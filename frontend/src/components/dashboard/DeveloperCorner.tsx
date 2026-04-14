@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { normalizeWebSocketUrl } from '@/lib/ai-api';
 import { 
   Terminal, 
   Activity, 
@@ -35,13 +36,9 @@ export const DeveloperCorner: React.FC = () => {
 
   useEffect(() => {
     // Connect to Telemetry WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const configuredWsUrl = process.env.NEXT_PUBLIC_WS_URL;
-    const wsUrl = configuredWsUrl
-      ? configuredWsUrl.startsWith("ws")
-        ? configuredWsUrl
-        : `${protocol}//${configuredWsUrl.replace(/^wss?:\/\//, '').replace(/\/+$/, '')}/api/v1/ws`
-      : `${protocol}//${process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'graftai.onrender.com'}/api/v1/ws`;
+    const wsUrl = normalizeWebSocketUrl(
+      process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || "https://graftai.onrender.com"
+    );
 
     const connect = () => {
       try {

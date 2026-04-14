@@ -252,6 +252,29 @@ export interface WebSocketCallbacks {
   onError?: (error: Error) => void;
 }
 
+export function normalizeWebSocketUrl(rawUrl?: string): string {
+  const fallbackHost = "graftai.onrender.com";
+  let url = rawUrl?.trim() || fallbackHost;
+
+  if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
+    url = url.replace(/^https?:\/\//, "");
+    if (url.endsWith("/monitoring/ws")) {
+      url = url.replace(/\/monitoring\/ws$/, "/api/v1/ws");
+    } else if (!url.endsWith("/ws")) {
+      url = `${url.replace(/\/+$/, "")}/api/v1/ws`;
+    }
+    return `wss://${url}`;
+  }
+
+  if (url.endsWith("/monitoring/ws")) {
+    return url.replace(/\/monitoring\/ws$/, "/api/v1/ws");
+  }
+  if (!url.endsWith("/ws")) {
+    return `${url.replace(/\/+$/, "")}/api/v1/ws`;
+  }
+  return url;
+}
+
 export class WebSocketClient {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -266,12 +289,13 @@ export class WebSocketClient {
     this.callbacks = callbacks;
     
     try {
-      // Convert http/https to ws/wss
-      const wsUrl = this.url.replace(/^https?/, (protocol) =>
+      const normalized = normalizeWebSocketUrl(this.url);
+      const wsUrl = normalized.replace(/^https?/, (protocol) =>
         protocol === "https" ? "wss" : "ws"
       );
+      const finalUrl = wsUrl.endsWith("/ws") ? wsUrl : `${wsUrl}/ws`;
       
-      this.ws = new WebSocket(`${wsUrl}/ws`);
+      this.ws = new WebSocket(finalUrl);
       
       this.ws.onopen = () => {
         console.log("WebSocket connected");
@@ -452,7 +476,7 @@ export function useWebSocket(url?: string) {
   const wsRef = useRef<WebSocketClient | null>(null);
 
   useEffect(() => {
-    const wsUrl = url || process.env.NEXT_PUBLIC_WS_URL || "wss://graftai.onrender.com";
+    const wsUrl = normalizeWebSocketUrl(url || process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || "https://graftai.onrender.com");
     wsRef.current = new WebSocketClient(wsUrl);
     
     wsRef.current.connect({

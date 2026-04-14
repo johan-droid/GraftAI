@@ -76,8 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body
-        className="min-h-full flex flex-col"
-        style={{ background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font-jakarta), ui-sans-serif, system-ui, sans-serif" }}
+        className="min-h-full flex flex-col app-body"
         suppressHydrationWarning
       >
         <SessionProvider>

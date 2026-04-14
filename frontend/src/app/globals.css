@@ -57,6 +57,12 @@ html, body {
   scroll-behavior: smooth;
 }
 
+.app-body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
 /* ── Global Background Effects ──────────────────────────────────── */
 
 /* Terminal Grid */

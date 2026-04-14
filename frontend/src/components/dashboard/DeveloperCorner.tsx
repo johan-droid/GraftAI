@@ -40,8 +40,8 @@ export const DeveloperCorner: React.FC = () => {
     const wsUrl = configuredWsUrl
       ? configuredWsUrl.startsWith("ws")
         ? configuredWsUrl
-        : `${protocol}//${configuredWsUrl.replace(/^wss?:\/\//, '').replace(/\/+$/, '')}/monitoring/ws`
-      : `${protocol}//${process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'graftai.onrender.com'}/monitoring/ws`;
+        : `${protocol}//${configuredWsUrl.replace(/^wss?:\/\//, '').replace(/\/+$/, '')}/api/v1/ws`
+      : `${protocol}//${process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'graftai.onrender.com'}/api/v1/ws`;
 
     const connect = () => {
       try {

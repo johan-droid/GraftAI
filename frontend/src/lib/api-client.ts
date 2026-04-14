@@ -37,10 +37,23 @@ export function composeEndpoint(path: string, includeBaseUrl = false) {
  */
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
+  console.debug("[Auth Debug] getAuthToken env", {
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
+    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL,
+    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
+  });
   try {
     const session = await getSession();
+    console.debug("[Auth Debug] getSession result", {
+      status: session ? "ok" : "no-session",
+      backendToken: !!(session as any)?.backendToken,
+    });
     return (session as any)?.backendToken ?? null;
-  } catch {
+  } catch (error) {
+    console.error("[Auth Debug] getSession error", error);
     return null;
   }
 }

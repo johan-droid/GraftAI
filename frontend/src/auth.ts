@@ -15,6 +15,17 @@ if (!process.env.NEXTAUTH_URL) {
     (process.env.NODE_ENV === "production" ? "https://www.graftai.tech" : "http://localhost:3000");
 }
 
+console.debug("[NextAuth Debug] runtime env", {
+  NODE_ENV: process.env.NODE_ENV,
+  NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  BACKEND_URL: process.env.BACKEND_URL,
+  NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL,
+  NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
+  AUTH_SECRET: !!process.env.AUTH_SECRET,
+});
+
 /**
  * Resolve the backend base URL in a way that works for:
  *  - Next.js server components (Node.js runtime)

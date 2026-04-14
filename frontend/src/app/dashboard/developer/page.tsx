@@ -27,7 +27,7 @@ const API_PROTOCOLS = [
   { method: "GET", path: "/api/v1/auth/check", detail: "Session validation & user context" },
   { method: "POST", path: "/api/v1/calendar/sync", detail: "Trigger heuristic sync engine" },
   { method: "GET", path: "/api/v1/ai/memory", detail: "Retrieve semantic focus vectors" },
-  { method: "WS", path: "/monitoring/ws", detail: "Real-time system telemetry stream" },
+  { method: "WS", path: "/api/v1/monitoring/ws", detail: "Real-time system telemetry stream" },
 ];
 
 export default function DeveloperCorner() {

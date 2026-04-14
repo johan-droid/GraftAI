@@ -7,7 +7,8 @@ Provides endpoints for Prometheus metrics, health checks, and monitoring dashboa
 from typing import Dict, Any
 from datetime import datetime
 import asyncio
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 from pydantic import BaseModel
 
 # Try to import prometheus_client
@@ -449,7 +450,7 @@ async def get_tool_stats(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.websocket("/ws")
-async def monitoring_websocket(websocket):
+async def monitoring_websocket(websocket: WebSocket):
     """
     WebSocket endpoint for real-time monitoring updates
     
@@ -471,11 +472,18 @@ async def monitoring_websocket(websocket):
             
             await websocket.send_json(data)
             await asyncio.sleep(5)
-            
+
+    except WebSocketDisconnect:
+        logger.info("Monitoring websocket client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
-        await websocket.close()
+        try:
+            if websocket.client_state != WebSocketState.DISCONNECTED:
+                await websocket.close()
+        except RuntimeError:
+            # Connection can already be closing/closed depending on client timing.
+            pass
 
 
 # ═══════════════════════════════════════════════════════════════════

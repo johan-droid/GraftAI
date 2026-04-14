@@ -259,18 +259,18 @@ export function normalizeWebSocketUrl(rawUrl?: string): string {
   if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
     url = url.replace(/^https?:\/\//, "");
     if (url.endsWith("/monitoring/ws")) {
-      url = url.replace(/\/monitoring\/ws$/, "/api/v1/ws");
+      url = url.replace(/\/monitoring\/ws$/, "/api/v1/monitoring/ws");
     } else if (!url.endsWith("/ws")) {
-      url = `${url.replace(/\/+$/, "")}/api/v1/ws`;
+      url = `${url.replace(/\/+$/, "")}/api/v1/monitoring/ws`;
     }
     return `wss://${url}`;
   }
 
   if (url.endsWith("/monitoring/ws")) {
-    return url.replace(/\/monitoring\/ws$/, "/api/v1/ws");
+    return url.replace(/\/monitoring\/ws$/, "/api/v1/monitoring/ws");
   }
   if (!url.endsWith("/ws")) {
-    return `${url.replace(/\/+$/, "")}/api/v1/ws`;
+    return `${url.replace(/\/+$/, "")}/api/v1/monitoring/ws`;
   }
   return url;
 }

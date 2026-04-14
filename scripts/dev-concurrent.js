@@ -1,4 +1,4 @@
-const { spawn } = require("child_process");
+const { spawn, execSync } = require("child_process");
 const http = require("http");
 const path = require("path");
 const os = require("os");
@@ -14,6 +14,7 @@ const backendHost = "127.0.0.1";
 const frontendPort = 3000;
 
 let processes = [];
+let isShuttingDown = false;
 
 function log(service, message) {
   const timestamp = new Date().toLocaleTimeString();
@@ -64,24 +65,32 @@ function waitForHealthCheck(host, port, service, timeoutMs = 60000) {
 
 function spawnProcess(command, args, cwd, service) {
   log(service, `Starting with: ${command} ${args.join(" ")}`);
+  const useShell = isWindows && command.toLowerCase().endsWith(".cmd");
   
   const proc = spawn(command, args, {
     cwd,
-    shell: isWindows,
+    shell: useShell,
     stdio: "inherit",
     env: { ...process.env },
+    windowsHide: true,
   });
 
   proc.on("error", (error) => {
     log(service, `✗ Error: ${error.message}`);
-    cleanup();
+    cleanup(`${service} spawn error`);
   });
 
   proc.on("exit", (code, signal) => {
+    if (isShuttingDown) {
+      return;
+    }
+
     if (signal) {
       log(service, `Terminated by signal: ${signal}`);
+      cleanup(`${service} terminated by signal ${signal}`);
     } else if (code !== 0) {
       log(service, `Exited with code: ${code}`);
+      cleanup(`${service} exited with code ${code}`);
     }
   });
 
@@ -89,12 +98,27 @@ function spawnProcess(command, args, cwd, service) {
   return proc;
 }
 
-function cleanup() {
-  log("MAIN", "Shutting down all services...");
-  processes.forEach((proc) => {
-    if (proc && !proc.killed) {
-      proc.kill();
+function killProcessTree(proc) {
+  if (!proc || proc.killed) return;
+
+  try {
+    if (isWindows) {
+      execSync(`taskkill /PID ${proc.pid} /T /F`, { stdio: "ignore" });
+    } else {
+      proc.kill("SIGTERM");
     }
+  } catch {
+    // Best-effort shutdown; ignore cleanup errors.
+  }
+}
+
+function cleanup(reason = "manual shutdown") {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  log("MAIN", `Shutting down all services... (${reason})`);
+  processes.forEach((proc) => {
+    killProcessTree(proc);
   });
   process.exit(0);
 }
@@ -105,8 +129,17 @@ async function main() {
   log("MAIN", `Python: ${pythonCmd}`);
   log("MAIN", `NPM: ${npmCmd}`);
 
-  process.on("SIGINT", cleanup);
-  process.on("SIGTERM", cleanup);
+  process.on("SIGINT", () => cleanup("SIGINT"));
+  process.on("SIGTERM", () => cleanup("SIGTERM"));
+  process.on("uncaughtException", (error) => {
+    log("MAIN", `✗ Uncaught exception: ${error.message}`);
+    cleanup("uncaughtException");
+  });
+  process.on("unhandledRejection", (error) => {
+    const msg = error instanceof Error ? error.message : String(error);
+    log("MAIN", `✗ Unhandled rejection: ${msg}`);
+    cleanup("unhandledRejection");
+  });
 
   try {
     // Start Backend API
@@ -119,7 +152,7 @@ async function main() {
       await waitForHealthCheck(backendHost, backendPort, "BACKEND", 60000);
     } catch (error) {
       log("MAIN", `✗ Backend failed to start: ${error.message}`);
-      cleanup();
+      cleanup("backend health check failed");
       return;
     }
 
@@ -135,7 +168,7 @@ async function main() {
 
   } catch (error) {
     log("MAIN", `✗ Fatal error: ${error.message}`);
-    cleanup();
+    cleanup("fatal error");
   }
 }
 

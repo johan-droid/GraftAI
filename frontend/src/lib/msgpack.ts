@@ -12,12 +12,22 @@ export const msgpack = {
   decode: <T = unknown>(data: unknown): T => {
     try {
       // If it's already an object/string, return it (JSON fallback)
-      if (typeof data === "string" || (typeof data === "object" && !(data instanceof ArrayBuffer) && !ArrayBuffer.isView(data))) {
-        return typeof data === "string" ? JSON.parse(data) : data;
+      if (typeof data === "string") {
+        return JSON.parse(data) as T;
+      }
+      if (data !== null && typeof data === "object" && !(data instanceof ArrayBuffer) && !ArrayBuffer.isView(data)) {
+        return data as T;
       }
 
       // Ensure we have a Uint8Array for msgpackr
-      const buffer = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+      let buffer: Uint8Array;
+      if (data instanceof ArrayBuffer) {
+        buffer = new Uint8Array(data);
+      } else if (ArrayBuffer.isView(data)) {
+        buffer = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      } else {
+        throw new Error("Unsupported MessagePack payload type");
+      }
       return decode(buffer) as T;
     } catch (error) {
       console.warn("⚠️ Binary decoding failed, attempting raw return:", error);

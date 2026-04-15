@@ -38,7 +38,7 @@ export async function getEventTypeConfig(
   };
 }
 
-export async function getExistingBookings(): Promise<TimeSlot[]> {
+export async function getExistingBookings(_params?: AvailabilityParams): Promise<TimeSlot[]> {
   // Public availability pages do not expose raw booking details.
   // Existing bookings are already reconciled by backend availability responses.
   return [];

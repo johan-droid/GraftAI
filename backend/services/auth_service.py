@@ -16,6 +16,7 @@ from backend.auth.config import (
     SECRET_KEY,
 )
 from backend.models.tables import UserTable, UserTokenTable
+from backend.services.token_encryption import decrypt_token_value, encrypt_token_value
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +127,22 @@ async def upsert_user_token(
         user_token = UserTokenTable(user_id=user.id, provider=provider)
         db.add(user_token)
 
-    user_token.access_token = token_info.get("access_token") or user_token.access_token
-    user_token.refresh_token = token_info.get("refresh_token") or user_token.refresh_token
+    incoming_access_token = token_info.get("access_token")
+    if incoming_access_token:
+        user_token.access_token = encrypt_token_value(incoming_access_token)
+    else:
+        existing_access_token, access_needs_upgrade = decrypt_token_value(user_token.access_token)
+        if access_needs_upgrade and existing_access_token:
+            user_token.access_token = encrypt_token_value(existing_access_token)
+
+    incoming_refresh_token = token_info.get("refresh_token")
+    if incoming_refresh_token:
+        user_token.refresh_token = encrypt_token_value(incoming_refresh_token)
+    elif user_token.refresh_token:
+        existing_refresh_token, refresh_needs_upgrade = decrypt_token_value(user_token.refresh_token)
+        if refresh_needs_upgrade and existing_refresh_token:
+            user_token.refresh_token = encrypt_token_value(existing_refresh_token)
+
     expires_at_raw = token_info.get("expires_at")
     if expires_at_raw is not None:
         expires_at_dt = None

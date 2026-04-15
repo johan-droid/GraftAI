@@ -139,6 +139,21 @@ alembic downgrade gdpr_compliance
 alembic downgrade base
 ```
 
+## OAuth Token Encryption Backfill
+
+After enabling `OAUTH_TOKEN_ENCRYPTION_KEY` (or rotating from plaintext storage),
+backfill existing `user_tokens` rows with:
+
+```bash
+cd backend
+python scripts/migrate_oauth_token_encryption.py
+```
+
+This script is idempotent:
+- Plaintext tokens are encrypted and saved.
+- Already encrypted rows are unchanged.
+- Rows with unreadable ciphertext are reported but not modified.
+
 ## Environment Setup
 
 ### Development

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function useScrollProgress(): number {
   const [progress, setProgress] = useState(0);
@@ -21,8 +21,6 @@ export function useScrollProgress(): number {
 
   return progress;
 }
-
-import { useEffect, useRef, useState } from "react";
 
 export function useScrollDirection(): "up" | "down" | null {
   const [direction, setDirection] = useState<"up" | "down" | null>(null);

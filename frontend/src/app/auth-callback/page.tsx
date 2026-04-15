@@ -18,7 +18,7 @@ import { Box, Typography } from "@mui/material";
  *
  * 2. Backend SSO redirect flow (legacy path)
  *    The backend's /api/v1/auth/{provider}/callback sends the user here with:
- *      ?access_token=...&refresh_token=...&redirect=...
+ *      #at=...&rt=...&redirect=... (or legacy query params)
  *    We call /api/auth/restore to validate and set HttpOnly cookies,
  *    then navigate to the target.
  *
@@ -37,11 +37,13 @@ function AuthCallbackInner() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState("RESOLVING_AUTH_HANDSHAKE...");
   const [telemetry, setTelemetry] = useState<string[]>([]);
+  const [fragmentParams, setFragmentParams] = useState<URLSearchParams | null>(null);
+  const [fragmentReady, setFragmentReady] = useState(false);
   const hasFetched = useRef(false);
 
-  const accessToken  = searchParams.get("at") || searchParams.get("access_token");
-  const refreshToken = searchParams.get("rt") || searchParams.get("refresh_token");
-  const redirectTo   = searchParams.get("redirect") || "/dashboard";
+  const accessToken  = fragmentParams?.get("at") || fragmentParams?.get("access_token") || searchParams.get("at") || searchParams.get("access_token");
+  const refreshToken = fragmentParams?.get("rt") || fragmentParams?.get("refresh_token") || searchParams.get("rt") || searchParams.get("refresh_token");
+  const redirectTo   = fragmentParams?.get("redirect") || searchParams.get("redirect") || "/dashboard";
   const code         = searchParams.get("code");
   const state        = searchParams.get("state");
 
@@ -54,6 +56,26 @@ function AuthCallbackInner() {
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      setFragmentReady(true);
+      return;
+    }
+
+    const hash = window.location.hash.startsWith("#")
+      ? window.location.hash.slice(1)
+      : "";
+
+    const params = new URLSearchParams(hash);
+    setFragmentParams(params);
+    setFragmentReady(true);
+
+    if (params.get("at") || params.get("access_token") || params.get("rt") || params.get("refresh_token")) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!fragmentReady) return;
     if (hasFetched.current) return;
     hasFetched.current = true;
 
@@ -151,7 +173,7 @@ function AuthCallbackInner() {
     };
 
     handleCallback();
-  }, [accessToken, refreshToken, redirectTo, code, state]);
+  }, [accessToken, refreshToken, redirectTo, code, state, fragmentReady]);
 
   return (
     <Box sx={{ width: "100%" }}>

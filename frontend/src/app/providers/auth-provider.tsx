@@ -28,6 +28,17 @@ export type User = {
   created_at?: string;
   tier?: string;
   subscription_status?: string;
+  daily_ai_count?: number;
+  daily_sync_count?: number;
+  daily_ai_limit?: number;
+  daily_sync_limit?: number;
+  ai_remaining?: number;
+  sync_remaining?: number;
+  quota_reset_at?: string;
+  trial_days_left?: number;
+  trial_expires_at?: string;
+  trial_active?: boolean;
+  razorpay_subscription_id?: string;
 };
 
 type AuthContextType = {

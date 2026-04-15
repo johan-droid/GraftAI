@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
 import httpx
 import sentry_sdk
@@ -44,6 +45,17 @@ def _extract_hostname(url: str | None) -> str | None:
     if not url:
         return None
     return url.split("//", 1)[-1].split("/", 1)[0]
+
+
+def _normalize_origin(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 def _validate_production_env() -> None:
@@ -138,21 +150,32 @@ def create_app() -> FastAPI:
         app.add_middleware(SentryAsgiMiddleware)
 
     # Trusted Host and CORS hardening
-    frontend_url = os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "http://localhost:3000"))
-    if frontend_url:
-        allow_origins = [origin.strip() for origin in frontend_url.split(",") if origin.strip()]
-    else:
-        allow_origins = [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ]
+    env = os.getenv("ENV", "development").lower()
+    frontend_candidates = _parse_comma_separated_env("FRONTEND_URL") or _parse_comma_separated_env("FRONTEND_BASE_URL")
+    if not frontend_candidates:
+        frontend_candidates = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
-    if os.getenv("ENV", "development").lower() == "production":
+    extra_cors_origins = _parse_comma_separated_env("EXTRA_CORS_ORIGINS")
+    allow_origins = [
+        origin
+        for origin in (
+            _normalize_origin(value)
+            for value in [*frontend_candidates, *extra_cors_origins]
+        )
+        if origin
+    ]
+    allow_origins = list(dict.fromkeys(allow_origins))
+
+    if env == "production":
         # Ensure both root and www variants are allowed in production CORS if either is configured.
         if "https://www.graftai.tech" in allow_origins and "https://graftai.tech" not in allow_origins:
             allow_origins.append("https://graftai.tech")
         if "https://graftai.tech" in allow_origins and "https://www.graftai.tech" not in allow_origins:
             allow_origins.append("https://www.graftai.tech")
+
+        https_allow_origins = [origin for origin in allow_origins if origin.startswith("https://")]
+        if https_allow_origins:
+            allow_origins = https_allow_origins
 
     trusted_hosts = [
         host
@@ -163,7 +186,6 @@ def create_app() -> FastAPI:
         if host
     ]
     if not trusted_hosts:
-        env = os.getenv("ENV", "development").lower()
         if env == "production":
             trusted_hosts = [
                 _extract_hostname(host)
@@ -195,7 +217,10 @@ def create_app() -> FastAPI:
     trusted_proxy_ips = [ip.strip() for ip in trusted_proxy_env.split(",") if ip.strip()]
     if trusted_proxy_ips:
         try:
-            from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+            import importlib
+
+            proxy_module = importlib.import_module("starlette.middleware.proxy_headers")
+            ProxyHeadersMiddleware = getattr(proxy_module, "ProxyHeadersMiddleware")
 
             # Add ProxyHeadersMiddleware so downstream frameworks (Starlette/FastAPI)
             # will populate client/host values from X-Forwarded-* only when the
@@ -225,20 +250,38 @@ def create_app() -> FastAPI:
             response.headers["X-XSS-Protection"] = "1; mode=block"
             
             # HTTPS enforcement (1 year)
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            if request.url.scheme == "https":
+                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
             
             # Referrer policy
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
             
             # Content Security Policy
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                "style-src 'self' 'unsafe-inline'; "
-                "img-src 'self' data: https:; "
-                "font-src 'self'; "
-                "connect-src 'self' https://api.graftai.tech;"
-            )
+            request_path = request.url.path
+            is_docs_request = request_path in {"/docs", "/redoc", "/openapi.json"} or request_path.startswith("/docs/")
+
+            if is_docs_request:
+                response.headers["Content-Security-Policy"] = (
+                    "default-src 'self' https://cdn.jsdelivr.net; "
+                    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                    "img-src 'self' data: https:; "
+                    "font-src 'self' https://cdn.jsdelivr.net; "
+                    "connect-src 'self'; "
+                    "frame-ancestors 'none';"
+                )
+            else:
+                response.headers["Content-Security-Policy"] = (
+                    "default-src 'none'; "
+                    "base-uri 'none'; "
+                    "form-action 'none'; "
+                    "frame-ancestors 'none'; "
+                    "object-src 'none'; "
+                    "img-src 'self' data:; "
+                    "style-src 'self'; "
+                    "font-src 'self'; "
+                    "connect-src 'self';"
+                )
             
             # Permissions Policy
             response.headers["Permissions-Policy"] = (
@@ -256,10 +299,12 @@ def create_app() -> FastAPI:
 
     app.add_middleware(SecurityHeadersMiddleware)
 
+    allow_origin_regex = r"^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$" if env != "production" else None
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,
-        allow_origin_regex=r"^https?://(?:localhost|127\.0\.0\.1|(?:\d{1,3}\.){3}\d{1,3})(?::\d+)?|.*\.vercel\.app$|.*\.render\.com$",
+        allow_origin_regex=allow_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -14,7 +14,7 @@ export default function IntegrationsPage() {
 
   const fetchIntegrations = async () => {
     try {
-      const data = await apiClient.fetch("/users/me/integrations");
+      const data = await apiClient.fetch<{ active_providers: string[]; inactive_providers: string[] }>("/users/me/integrations");
       setIntegrationStatus({
         active_providers: data.active_providers || [],
         inactive_providers: data.inactive_providers || [],
@@ -31,11 +31,8 @@ export default function IntegrationsPage() {
   }, []);
 
   const handleConnect = (provider: string) => {
-    const token = localStorage.getItem("token");
-    // Standard Monolithic Redirect: Pass JWT in query for the backend to handle OAuth initiation
-    const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "https://graftai.onrender.com/api/v1";
-    const BASE_URL = apiUrl.endsWith("/api/v1") ? apiUrl : `${apiUrl.replace(/\/+$/, "")}/api/v1`;
-    window.location.href = `${BASE_URL}/auth/${provider}/login?token=${token}`;
+    const redirectTo = "/dashboard/settings/integrations";
+    window.location.assign(`/api/auth/social/${provider}?redirect_to=${encodeURIComponent(redirectTo)}`);
   };
 
   const handleDisconnect = async (provider: string) => {
@@ -136,6 +133,7 @@ export default function IntegrationsPage() {
 }
 
 interface IntegrationCardProps {
+  id?: string;
   name: string;
   desc: string;
   icon: ReactNode;

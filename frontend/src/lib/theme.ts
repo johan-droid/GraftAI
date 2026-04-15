@@ -1,7 +1,7 @@
 // Professional Theme System for GraftAI - Developer "Deep Black" Edition
 // Inspired by high-end developer tools and system terminals.
 
-export type ThemeMode = "dark"; // Strictly Dark for the Developer aesthetic
+export type ThemeMode = "light" | "dark" | "auto";
 
 // Precision Technical Palette
 const colors = {
@@ -44,6 +44,30 @@ const colors = {
       focus: { h: 157, s: 100, l: 50 },     // Neon Green Focus
     },
   },
+
+  // Pure White Theme - Light Mode Equivalent
+  light: {
+    background: {
+      base: { h: 0, s: 0, l: 98 },           // Near White
+      elevated: { h: 0, s: 0, l: 100 },      // Pure White
+      surface: { h: 217, s: 15, l: 95 },     // Very Light Slate
+      raised: { h: 0, s: 0, l: 96 },         // Card Light
+      overlay: { h: 0, s: 0, l: 100, a: 0.85 }, // Light overlay
+    },
+    text: {
+      primary: { h: 0, s: 0, l: 10 },       // Deep Black
+      secondary: { h: 0, s: 0, l: 35 },     // Medium Dark Gray
+      tertiary: { h: 0, s: 0, l: 50 },      // Muted Gray
+      muted: { h: 0, s: 0, l: 65 },         // Light Gray
+      inverse: { h: 0, s: 0, l: 98 },       // White
+    },
+    border: {
+      subtle: { h: 0, s: 0, l: 90 },        // Subtle light border
+      light: { h: 157, s: 100, l: 80 },     // Neon Green Tint
+      medium: { h: 0, s: 0, l: 82 },        // Medium
+      focus: { h: 157, s: 100, l: 50 },     // Neon Green Focus
+    },
+  },
 };
 
 // Helper function to convert HSL to string
@@ -57,10 +81,15 @@ export function hsla(color: { h: number; s: number; l: number }, alpha: number):
 
 // Get theme colors based on mode
 export function getThemeColors(mode: ThemeMode = "dark") {
-  const theme = colors.dark; // Always dark
+  let resolvedMode = mode;
+  if (resolvedMode === "auto") {
+    resolvedMode = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  
+  const theme = resolvedMode === "light" ? colors.light : colors.dark;
   
   return {
-    isDark: true,
+    isDark: resolvedMode === "dark",
     brand: colors.brand,
     semantic: colors.semantic,
     background: theme.background,

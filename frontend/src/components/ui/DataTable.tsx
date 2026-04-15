@@ -34,6 +34,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+const MotionTableRow = motion(TableRow);
+
 // Types
 export interface Column<T> {
   key: string;
@@ -428,12 +430,11 @@ export function DataTable<T>({
             ) : (
               // Data rows
               paginatedData.map((row, index) => (
-                <motion.tr
+                <MotionTableRow
                   key={keyExtractor(row)}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  component={TableRow}
                   hover={!!onRowClick}
                   onClick={() => onRowClick?.(row)}
                   sx={{
@@ -458,7 +459,7 @@ export function DataTable<T>({
                       </Box>
                     </TableCell>
                   )}
-                </motion.tr>
+                </MotionTableRow>
               ))
             )}
           </TableBody>

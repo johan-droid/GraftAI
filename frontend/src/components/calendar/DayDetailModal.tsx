@@ -18,7 +18,7 @@ interface DayDetailModalProps {
   onClose: () => void;
   selectedDate: Date | null;
   dayEvents: CalendarEventSummary[];
-  categories: Record<string, { bg?: string; text?: string }>;
+  categories: Record<string, { bg?: string; text?: string; dot?: string }>;
   draftEvent: {
     title: string;
     description?: string;
@@ -148,7 +148,7 @@ const DayDetailModal = ({
                 key={ev.id}
                 className="group flex items-start gap-3 p-3 rounded-xl border border-white/[0.06] bg-white/[0.025] hover:border-white/10 transition-all"
               >
-                <div className={`w-1 h-full min-h-[40px] rounded-full shrink-0 ${categories[ev.category]?.dot ?? "bg-slate-400"}`} />
+                <div className={`w-1 h-full min-h-[40px] rounded-full shrink-0 ${categories[ev.category ?? "event"]?.dot ?? "bg-slate-400"}`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white">{ev.title?.trim() || "Untitled event"}</p>
                   <div className="flex items-center gap-2 mt-1">
@@ -156,7 +156,7 @@ const DayDetailModal = ({
                       <Clock className="w-3 h-3" />
                       {new Date(ev.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
-                    <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border", categories[ev.category]?.bg, categories[ev.category]?.text)}>
+                    <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border", categories[ev.category ?? "event"]?.bg, categories[ev.category ?? "event"]?.text)}>
                       {ev.category || "general"}
                     </span>
                   </div>

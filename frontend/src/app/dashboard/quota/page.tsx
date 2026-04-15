@@ -32,6 +32,8 @@ export default function QuotaPage() {
 
   const aiProgress = stats ? (stats.daily_ai_count / Math.max(1, stats.daily_ai_limit)) * 100 : 0;
   const syncProgress = stats ? (stats.daily_sync_count / Math.max(1, stats.daily_sync_limit)) * 100 : 0;
+  const aiRemaining = Math.max(0, (stats?.daily_ai_limit ?? 0) - (stats?.daily_ai_count ?? 0));
+  const syncRemaining = Math.max(0, (stats?.daily_sync_limit ?? 0) - (stats?.daily_sync_count ?? 0));
   const aiQuotaPercent = Math.min(100, Math.round(aiProgress));
   const syncQuotaPercent = Math.min(100, Math.round(syncProgress));
   const isQuotaWarning = stats?.tier === 'free' && (aiQuotaPercent >= 80 || syncQuotaPercent >= 80);
@@ -97,7 +99,7 @@ export default function QuotaPage() {
               </div>
               <div className="flex justify-between items-center text-[11px] sm:text-xs text-slate-400 font-medium mb-2">
                 <span>{`${Math.min(100, aiProgress).toFixed(1)}% used`}</span>
-                <span>{`${Math.max(0, stats?.daily_ai_limit - stats?.daily_ai_count ?? 0)} remaining`}</span>
+                <span>{`${aiRemaining} remaining`}</span>
               </div>
               <div className="h-2 sm:h-3 w-full bg-slate-800 rounded-full overflow-hidden shadow-inner">
                 <motion.div
@@ -128,7 +130,7 @@ export default function QuotaPage() {
               </div>
               <div className="flex justify-between items-center text-[11px] sm:text-xs text-slate-400 font-medium mb-2">
                 <span>{`${Math.min(100, syncProgress).toFixed(1)}% used`}</span>
-                <span>{`${Math.max(0, stats?.daily_sync_limit - stats?.daily_sync_count ?? 0)} remaining`}</span>
+                <span>{`${syncRemaining} remaining`}</span>
               </div>
               <div className="h-2 sm:h-3 w-full bg-slate-800 rounded-full overflow-hidden shadow-inner">
                 <motion.div

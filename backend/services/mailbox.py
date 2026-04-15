@@ -7,6 +7,7 @@ from anyio import to_thread
 from backend.models.tables import UserTokenTable
 from backend.services.integrations.google_calendar import get_google_credentials
 from backend.services.integrations.ms_graph import get_ms_graph_token
+from backend.services.token_encryption import decrypt_token_value
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,16 @@ async def get_recent_emails(db: AsyncSession, user_id: str, limit: int = 5) -> L
 async def _fetch_gmail_recent(token: UserTokenTable, limit: int) -> List[Dict[str, Any]]:
     from googleapiclient.discovery import build
 
+    access_token, _ = decrypt_token_value(token.access_token)
+    refresh_token, _ = decrypt_token_value(token.refresh_token)
+
+    if access_token is None or refresh_token is None:
+        logger.error(f"Cannot sync Gmail. Token decryption failed for token ID {token.id}")
+        return []
+
     token_data = {
-        "access_token": token.access_token,
-        "refresh_token": token.refresh_token,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "scopes": getattr(token, "scopes", None),
     }
     creds = get_google_credentials(token_data)
@@ -74,9 +82,16 @@ async def _fetch_gmail_recent(token: UserTokenTable, limit: int) -> List[Dict[st
 
 
 async def _fetch_outlook_recent(token: UserTokenTable, limit: int) -> List[Dict[str, Any]]:
+    access_token, _ = decrypt_token_value(token.access_token)
+    refresh_token, _ = decrypt_token_value(token.refresh_token)
+
+    if access_token is None or refresh_token is None:
+        logger.error(f"Cannot sync Outlook. Token decryption failed for token ID {token.id}")
+        return []
+
     token_data = {
-        "access_token": token.access_token,
-        "refresh_token": token.refresh_token,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "scopes": getattr(token, "scopes", None),
     }
     access_token = get_ms_graph_token(token_data)

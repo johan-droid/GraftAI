@@ -144,11 +144,3 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     error,
   };
 }
-
-// TypeScript declarations
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
-}

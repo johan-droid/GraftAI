@@ -69,7 +69,7 @@ export function ProfileForm({ onCompleted }: ProfileFormProps) {
         setValue("bio", profile.bio ?? "");
         setValue("phone", profile.phone ?? "");
         setValue("timezone", profile.timezone ?? "UTC");
-        setValue("time_format", profile.time_format ?? "12h");
+        setValue("time_format", profile.time_format === "24h" ? "24h" : "12h");
         setValue("theme", (profile.theme as ProfileFormValues["theme"]) ?? "system");
         if (profile.avatar_url) {
           setPreviewUrl(profile.avatar_url);
@@ -215,7 +215,7 @@ export function ProfileForm({ onCompleted }: ProfileFormProps) {
             id="avatar"
             type="file"
             accept="image/png,image/jpeg,image/webp"
-            onChange={(event) => handleAvatarChange(event.target.files?.[0] ?? null)}
+            onChange={(event) => handleAvatarChange(event.target.files?.[0])}
             className="block w-full text-sm text-slate-200 file:rounded-full file:border-0 file:bg-indigo-500 file:px-3 file:py-2 file:text-sm file:text-white"
           />
         </div>

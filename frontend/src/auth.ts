@@ -127,6 +127,7 @@ async function refreshBackendToken(refreshToken?: string): Promise<{
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: "include",
       cache: "no-store",
     });
     if (!res.ok) {

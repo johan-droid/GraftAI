@@ -24,8 +24,9 @@ export function useSyncEngine() {
       for (const intent of pendingIntents) {
         // Build the prompt for the backend API
         try {
-          const promptPayload = `[OFFLINE SYNC] Schedule the following: ${JSON.stringify(intent.metadata.payload)}`;
-          await sendAiChat(promptPayload, Intl.DateTimeFormat().resolvedOptions().timeZone);
+          const offlinePayload = intent.metadata?.payload ?? {};
+          const promptPayload = `[OFFLINE SYNC] Schedule the following: ${JSON.stringify(offlinePayload)}`;
+          await sendAiChat(promptPayload, undefined, Intl.DateTimeFormat().resolvedOptions().timeZone);
           
           // Mark as synced or delete from local DB
           await db.chats.delete(intent.id);

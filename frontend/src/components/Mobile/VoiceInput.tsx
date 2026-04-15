@@ -214,7 +214,10 @@ export default function VoiceInput({ onTranscript, onError, disabled }: VoiceInp
 
               {/* Stop button */}
               <button
+                type="button"
                 onClick={stopRecording}
+                aria-label="Stop voice recording"
+                title="Stop voice recording"
                 className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors"
               >
                 <Square className="w-4 h-4 text-red-500" fill="currentColor" />
@@ -226,8 +229,11 @@ export default function VoiceInput({ onTranscript, onError, disabled }: VoiceInp
 
       {/* Main button */}
       <motion.button
+        type="button"
         onClick={toggleRecording}
         disabled={disabled || isProcessing}
+        aria-label={isRecording ? "Stop voice input" : "Start voice input"}
+        title={isRecording ? "Stop voice input" : "Start voice input"}
         whileTap={{ scale: 0.9 }}
         className={`relative p-3 rounded-xl transition-all ${
           isRecording
@@ -259,12 +265,4 @@ export default function VoiceInput({ onTranscript, onError, disabled }: VoiceInp
       </motion.button>
     </div>
   );
-}
-
-// TypeScript declarations for Web Speech API
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
 }

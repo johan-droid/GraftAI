@@ -64,8 +64,8 @@ export const DayCell = React.memo(({
             key={ev.id}
             className={cn(
               "text-[11px] font-medium px-1 py-0.5 rounded-sm truncate",
-              categories[ev.category]?.bg ?? "bg-slate-200/10",
-              categories[ev.category]?.text ?? "text-slate-300"
+              categories[ev.category ?? "event"]?.bg ?? "bg-slate-200/10",
+              categories[ev.category ?? "event"]?.text ?? "text-slate-300"
             )}
           >
             {ev.title?.trim() || "Untitled event"}

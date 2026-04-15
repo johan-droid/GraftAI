@@ -7,6 +7,7 @@ from sqlalchemy import select, and_
 from backend.models.tables import UserTokenTable
 # Removed: NotificationTable deleted
 from backend.services.sso import get_provider_config
+from backend.services.token_encryption import decrypt_token_value, encrypt_token_value
 from backend.utils.http_client import get_client
 
 logger = logging.getLogger(__name__)
@@ -51,13 +52,34 @@ async def ensure_valid_token(db: AsyncSession, user_id: str, provider: str) -> O
         logger.warning(f"[TOKEN] No active {provider} token for user {user_id}")
         return None
 
+    access_token, access_needs_upgrade = decrypt_token_value(token_record.access_token)
+    refresh_token, refresh_needs_upgrade = decrypt_token_value(token_record.refresh_token)
+
+    migrated_plaintext = False
+    if access_needs_upgrade and access_token:
+        token_record.access_token = encrypt_token_value(access_token)
+        migrated_plaintext = True
+    if refresh_needs_upgrade and refresh_token:
+        token_record.refresh_token = encrypt_token_value(refresh_token)
+        migrated_plaintext = True
+
+    if migrated_plaintext:
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+
+    if not access_token:
+        logger.error(f"[TOKEN] Missing or unreadable access token for {provider} (User: {user_id})")
+        return None
+
     # ── Fast path: token still healthy ──────────────────────────────────────
     now = datetime.now(timezone.utc)
     if token_record.expires_at and token_record.expires_at > (now + timedelta(minutes=5)):
-        return token_record.access_token
+        return access_token
 
     # ── Token expired / expiring – need refresh ──────────────────────────────
-    if not token_record.refresh_token:
+    if not refresh_token:
         logger.error(f"[TOKEN] ⚠️ No refresh_token for {provider} (User: {user_id}). Deactivating.")
         await _deactivate_token(db, token_record, user_id, provider)
         return None
@@ -74,7 +96,7 @@ async def ensure_valid_token(db: AsyncSession, user_id: str, provider: str) -> O
         payload = {
             "client_id": config["client_id"],
             "client_secret": config["client_secret"],
-            "refresh_token": token_record.refresh_token,
+            "refresh_token": refresh_token,
             "grant_type": "refresh_token",
         }
 
@@ -95,9 +117,9 @@ async def ensure_valid_token(db: AsyncSession, user_id: str, provider: str) -> O
 
         # ── Success: rotate tokens ───────────────────────────────────────────
         new_data = resp.json()
-        token_record.access_token = new_data["access_token"]
+        token_record.access_token = encrypt_token_value(new_data["access_token"])
         if "refresh_token" in new_data:
-            token_record.refresh_token = new_data["refresh_token"]
+            token_record.refresh_token = encrypt_token_value(new_data["refresh_token"])
 
         expires_in = new_data.get("expires_in", 3600)
         token_record.expires_at = now + timedelta(seconds=expires_in)
@@ -105,7 +127,7 @@ async def ensure_valid_token(db: AsyncSession, user_id: str, provider: str) -> O
 
         await db.commit()
         logger.info(f"[TOKEN] ✅ Rotated {provider} token for user {user_id}")
-        return token_record.access_token
+        return new_data["access_token"]
 
     except Exception as e:
         logger.error(f"[TOKEN] ❌ Critical failure during {provider} refresh: {e}")

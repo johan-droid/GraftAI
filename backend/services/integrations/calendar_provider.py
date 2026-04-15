@@ -9,6 +9,7 @@ from backend.models.tables import EventTable, UserTable, UserTokenTable
 from backend.services.calendar_utils import simple_upsert_event
 from backend.services.integrations.token_service import ensure_valid_token
 from backend.services.integrations import google_calendar, ms_graph
+from backend.services.token_encryption import decrypt_token_value
 
 logger = logging.getLogger(__name__)
 
@@ -80,17 +81,27 @@ class GoogleCalendarSyncProvider(CalendarSyncProvider):
         access_token: str,
         sync_token: Optional[str],
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        refresh_token, _ = decrypt_token_value(self.token_record.refresh_token)
+        if refresh_token is None:
+            logger.error(f"Cannot fetch Google events. Token decryption failed for token ID {self.token_record.id}")
+            raise ValueError(f"Token decryption failed for token ID {self.token_record.id}")
+            
         token_data = {
             "access_token": access_token,
-            "refresh_token": self.token_record.refresh_token,
+            "refresh_token": refresh_token,
         }
         result = await google_calendar.list_google_events(token_data, sync_token=sync_token)
         return result.get("items", []), result.get("nextSyncToken")
 
     async def get_busy_windows(self, db: AsyncSession, start: datetime, end: datetime) -> List[Dict[str, Any]]:
+        refresh_token, _ = decrypt_token_value(self.token_record.refresh_token) 
+        if refresh_token is None:
+            logger.error(f"Cannot get Google busy windows. Token decryption failed for token ID {self.token_record.id}")
+            raise ValueError(f"Token decryption failed for token ID {self.token_record.id}")
+
         token_data = {
             "access_token": await ensure_valid_token(db, self.token_record.user_id, "google"),
-            "refresh_token": self.token_record.refresh_token,
+            "refresh_token": refresh_token,
         }
         if not token_data["access_token"]:
             return []

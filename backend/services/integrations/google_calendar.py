@@ -12,6 +12,7 @@ from googleapiclient.errors import HttpError
 
 from backend.models.tables import UserTokenTable
 from backend.services.integrations.token_service import ensure_valid_token
+from backend.services.token_encryption import decrypt_token_value
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -33,10 +34,17 @@ async def get_google_service(db: AsyncSession, user_id: str):
     )
     res = await db.execute(stmt)
     token = res.scalars().first()
-    
+
+    refresh_token = None
+    if token:
+        refresh_token, _ = decrypt_token_value(token.refresh_token)
+        if refresh_token is None:
+            logger.error(f"Cannot build Google service. Token decryption failed for token ID {token.id}")
+            return None
+
     token_data = {
         "access_token": access_token,
-        "refresh_token": token.refresh_token if token else None,
+        "refresh_token": refresh_token,
         "scopes": token.scopes if token else "",
     }
     creds = get_google_credentials(token_data)

@@ -7,9 +7,11 @@
  * conflict detection, peach dark theme, full mobile support.
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, type ComponentType } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
+import { format, parse, startOfWeek, getDay } from "date-fns";
+import { enUS } from "date-fns/locale";
 import {
   X, Plus, Loader2, Clock, MapPin, Trash2, CheckCircle2,
   ChevronLeft, ChevronRight, Calendar, AlertTriangle,
@@ -35,8 +37,8 @@ const BigCalendar = dynamic(async () => {
     import("react-big-calendar"),
     import("react-big-calendar/lib/addons/dragAndDrop")
   ]);
-  const withDragAndDrop = dnd.default || dnd.withDragAndDrop;
-  return withDragAndDrop(rbc.Calendar);
+  const withDragAndDrop = (dnd as unknown as { default: (component: unknown) => unknown }).default;
+  return withDragAndDrop(rbc.Calendar) as ComponentType<any>;
 }, {
   ssr: false,
   loading: () => (
@@ -44,7 +46,7 @@ const BigCalendar = dynamic(async () => {
       <Skeleton className="h-full w-full" />
     </div>
   ),
-});
+}) as ComponentType<any>;
 
 import("react-big-calendar/lib/css/react-big-calendar.css");
 
@@ -86,11 +88,6 @@ let localizer: ReturnType<typeof import("react-big-calendar").dateFnsLocalizer> 
 async function getLocalizer() {
   if (localizer) return localizer;
   const { dateFnsLocalizer } = await import("react-big-calendar");
-  const { default: format }   = await import("date-fns/format");
-  const { default: parse }    = await import("date-fns/parse");
-  const { default: startOfWeek } = await import("date-fns/startOfWeek");
-  const { default: getDay }   = await import("date-fns/getDay");
-  const enUS = (await import("date-fns/locale/en-US")).enUS;
   localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales: { "en-US": enUS } });
   return localizer;
 }
@@ -167,7 +164,7 @@ export default function CalendarPage() {
     setSaving(true);
     const optimisticId = --tempIdCounter;
     const optimistic: CalendarEvent = {
-      id: optimisticId, user_id: 0, title: form.title!,
+      id: optimisticId, user_id: "0", title: form.title!,
       description: form.description ?? "",
       category: form.category as CategoryKey ?? "meeting",
       start_time: form.start_time!, end_time: form.end_time!,
@@ -206,7 +203,7 @@ export default function CalendarPage() {
     }
   }
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: number | string) {
     if (!confirm("Delete this event?")) return;
     const rollback = remove(id);
     setEditingEvent(null);
@@ -219,7 +216,7 @@ export default function CalendarPage() {
     }
   }
 
-  async function handleEventDrop({ event, start, end }: { event: { id: number; resource: CalendarEvent }; start: Date; end: Date }) {
+  async function handleEventDrop({ event, start, end }: { event: { id: number | string; resource: CalendarEvent }; start: Date; end: Date }) {
     const rollback = update(event.id, { start_time: start.toISOString(), end_time: end.toISOString() });
     try {
       await updateEvent(event.id, { start_time: start.toISOString(), end_time: end.toISOString() });
@@ -280,7 +277,7 @@ export default function CalendarPage() {
               localizer={localizerReady}
               events={rbcEvents}
               view={view}
-              onView={v => setView(v as RBCView)}
+              onView={(v: string) => setView(v as RBCView)}
               date={date}
               onNavigate={setDate}
               selectable

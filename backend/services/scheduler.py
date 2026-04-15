@@ -11,6 +11,7 @@ from backend.services.notifications import notify_event_created, notify_event_up
 from backend.services.integrations.google_calendar import create_google_event, update_google_event, delete_google_event
 from backend.services.integrations.ms_graph import create_ms_event, update_ms_event, delete_ms_event
 from backend.services.integrations.zoom import create_zoom_meeting, update_zoom_meeting, delete_zoom_meeting
+from backend.services.token_encryption import decrypt_token_value
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,6 @@ def _normalize_event_title(value: Any, default: str = "Untitled event") -> str:
 
 
 def to_utc(dt: datetime) -> datetime:
-    if dt is None:
-        return None
     if dt.tzinfo is None:
         return pytz.UTC.localize(dt)
     return dt.astimezone(pytz.UTC)
@@ -42,9 +41,17 @@ async def _get_active_token(db: AsyncSession, user_id: str, provider: str) -> Op
 
 
 def _build_token_data(token: UserTokenTable) -> dict:
+    access_token, _ = decrypt_token_value(token.access_token)
+    refresh_token, _ = decrypt_token_value(token.refresh_token)
+
+    if access_token is None:
+        raise ValueError(f"Failed to decrypt access_token for token ID {token.id}")
+    if refresh_token is None:
+        raise ValueError(f"Failed to decrypt refresh_token for token ID {token.id}")
+
     return {
-        "access_token": token.access_token,
-        "refresh_token": token.refresh_token,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "scopes": getattr(token, "scopes", None),
     }
 
@@ -210,8 +217,16 @@ async def create_event(
     notify: bool = True,
 ) -> EventTable:
     user_id = event_data.get("user_id")
-    st = to_utc(event_data.get("start_time"))
-    et = to_utc(event_data.get("end_time"))
+    if not isinstance(user_id, str):
+        raise ValueError("user_id is required and must be a string")
+
+    start_time = event_data.get("start_time")
+    end_time = event_data.get("end_time")
+    if not isinstance(start_time, datetime) or not isinstance(end_time, datetime):
+        raise ValueError("start_time and end_time are required and must be datetime values")
+
+    st = to_utc(start_time)
+    et = to_utc(end_time)
 
     conflict_stmt = select(EventTable).where(
         and_(EventTable.user_id == user_id, EventTable.start_time < et, EventTable.end_time > st)
@@ -243,13 +258,9 @@ async def create_event(
                 new_event.meeting_url = result.get("meeting_url") or new_event.meeting_url
                 new_event.is_meeting = True
                 new_event.meeting_provider = new_event.meeting_provider or provider
-                new_event.source = result.get("source")
-                break
-
-    if commit:
-        await db.commit()
-    await db.refresh(new_event)
-
+                source = result.get("source")
+                if source:
+                    new_event.source = source
     if notify:
         if background_tasks:
             background_tasks.add_task(_safe_notify, db, "created", user_id, new_event)
@@ -269,6 +280,14 @@ async def update_event(
     event = await db.get(EventTable, event_id)
     if not event or str(event.user_id) != str(user_id):
         return None
+
+    if "start_time" in update_data or "end_time" in update_data:
+        start_time = update_data.get("start_time")
+        end_time = update_data.get("end_time")
+        if start_time is None or end_time is None:
+            raise ValueError("Both start_time and end_time must be provided and non-null when updating event schedule.")
+        if not isinstance(start_time, datetime) or not isinstance(end_time, datetime):
+            raise ValueError("start_time and end_time must be datetime values.")
 
     for k, v in update_data.items():
         if hasattr(event, k):
@@ -296,7 +315,9 @@ async def update_event(
             if result:
                 event.external_id = result.get("external_id")
                 event.meeting_url = result.get("meeting_url")
-                event.source = result.get("source")
+                source = result.get("source")
+                if source:
+                    event.source = source
     except Exception as e:
         logger.error(f"External update/create failed: {e}")
 

@@ -83,7 +83,7 @@ export { getAuthToken };
 // ─── Client ──────────────────────────────────────────────────────────────────
 
 export const apiClient = {
-  async fetch(endpoint: string, options: ApiRequestOptions = {}) {
+  async fetch<T = unknown>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
     const { params, json, skipRefresh, ...requestInit } = options;
 
     // 1. Build URL
@@ -135,7 +135,7 @@ export const apiClient = {
       const refreshed = await attemptSessionRefresh();
       if (refreshed) {
         // Retry with new token
-        return this.fetch(endpoint, { ...options, skipRefresh: true });
+        return this.fetch<T>(endpoint, { ...options, skipRefresh: true });
       }
       // Refresh failed — throw so the caller (AuthProvider) can decide what to do
       throw new Error("Could not validate credentials");
@@ -154,9 +154,9 @@ export const apiClient = {
     }
 
     // 8. No content
-    if (response.status === 204) return null;
+    if (response.status === 204) return null as T;
 
-    return response.json();
+    return response.json() as Promise<T>;
   },
 
   get<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
@@ -198,6 +198,7 @@ async function attemptSessionRefresh(): Promise<boolean> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: "include",
         cache: "no-store",
       });
 

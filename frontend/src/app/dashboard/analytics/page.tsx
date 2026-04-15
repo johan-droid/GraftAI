@@ -7,7 +7,7 @@ import {
   TrendingUp, Calendar, Clock, Activity,
   ArrowUpRight, RefreshCw,
 } from "lucide-react";
-import { StatCardSkeleton, CardSkeleton } from "@/components/ui/Skeleton";
+import { StatCardSkeleton, SkeletonText } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
@@ -18,6 +18,9 @@ export default function AnalyticsPage() {
       meetings: number;
       hours: number;
       growth: number;
+        meetingsTrend?: string;
+        hoursTrend?: string;
+        growthTrend?: string;
       weeklyBreakdown?: { day: string; count: number }[];
       categoryBreakdown?: { category: string; count: number }[];
     };
@@ -93,7 +96,7 @@ export default function AnalyticsPage() {
             </span>
           </div>
           {isLoading ? (
-            <CardSkeleton lines={4} />
+            <SkeletonText lines={4} />
           ) : data?.summary ? (
             <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
               {data.summary}

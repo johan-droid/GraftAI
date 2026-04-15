@@ -3,7 +3,7 @@ import os
 import traceback
 from typing import Any
 
-from fastapi import Request
+from starlette.requests import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -39,7 +39,9 @@ def _get_user_message(category: str, error: Exception) -> str:
     return "An error occurred. Please try again or contact support."
 
 
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+async def http_exception_handler(request: Request, exc: Exception):
+    if not isinstance(exc, StarletteHTTPException):
+        raise exc
     meta = _get_request_meta(request)
     logger.warning(
         "API HTTPException",
@@ -58,7 +60,9 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     )
 
 
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(request: Request, exc: Exception):
+    if not isinstance(exc, RequestValidationError):
+        raise exc
     meta = _get_request_meta(request)
     logger.warning(
         "API validation error",

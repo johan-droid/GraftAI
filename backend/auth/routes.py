@@ -75,6 +75,17 @@ class OnboardingRequest(BaseModel):
     notifications_enabled: Optional[bool] = True
     ai_suggestions_enabled: Optional[bool] = True
 
+
+class RefreshRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
+
+def _get_bearer_token_from_request(request: Request) -> Optional[str]:
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        return auth_header.split(" ", 1)[1].strip()
+    return None
+
 @router.post("/social/exchange")
 async def social_exchange(req: SocialExchangeRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     client_ip = get_client_ip(request)
@@ -219,15 +230,9 @@ async def integration_status(
 @router.get("/check")
 async def check(
     request: Request,
-    token: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    bearer = None
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.lower().startswith("bearer "):
-        bearer = auth_header.split(" ", 1)[1].strip()
-
-    raw_token = token or bearer or request.cookies.get("graftai_access_token")
+    raw_token = _get_bearer_token_from_request(request) or request.cookies.get("graftai_access_token")
     if not raw_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -269,10 +274,13 @@ async def check(
 async def refresh(
     request: Request,
     response: Response,
-    refresh_token: Optional[str] = None,
+    refresh_request: Optional[RefreshRequest] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    token_value = refresh_token or request.query_params.get("refresh_token") or request.cookies.get("graftai_refresh_token")
+    token_value = (
+        (refresh_request.refresh_token if refresh_request else None)
+        or request.cookies.get("graftai_refresh_token")
+    )
     if not token_value:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -280,8 +288,8 @@ async def refresh(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    payload = decode_jwt_token(token_value, expected_type=REFRESH_TOKEN_TYPE)
-    stmt = select(UserTable).where(UserTable.id == payload["sub"])
+    decoded_payload = decode_jwt_token(token_value, expected_type=REFRESH_TOKEN_TYPE)
+    stmt = select(UserTable).where(UserTable.id == decoded_payload["sub"])
     user = (await db.execute(stmt)).scalars().first()
     if user is None:
         raise HTTPException(
@@ -316,29 +324,20 @@ async def logout(response: Response):
 @router.get("/google/login")
 async def google_login(
     request: Request,
-    token: Optional[str] = None,
     redirect_to: Optional[str] = None,
     redirect_uri: Optional[str] = None,
     force_consent: bool = False,
     frontend_url: Optional[str] = None,
 ):
     try:
+        bearer_token = _get_bearer_token_from_request(request)
         user_id = None
-        if token:
+        if bearer_token:
             try:
-                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                payload = jwt.decode(bearer_token, SECRET_KEY, algorithms=[ALGORITHM])
                 user_id = payload.get("sub")
             except Exception:
                 pass
-
-        # Extract frontend URL from query parameter or Referer header
-        if not frontend_url:
-            referer = request.headers.get("referer")
-            if referer:
-                # Extract origin from referer (scheme://host)
-                from urllib.parse import urlparse
-                parsed = urlparse(referer)
-                frontend_url = f"{parsed.scheme}://{parsed.netloc}"
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = build_oauth_state(user_id, redirect_to, provider="google", frontend_url=frontend_url)
@@ -563,7 +562,6 @@ async def sso_start(
     provider: str,
     redirect_to: Optional[str] = None,
     redirect_uri: Optional[str] = None,
-    token: Optional[str] = None,
 ):
     provider = provider.lower()
     if get_provider_config(provider) is None:
@@ -573,8 +571,6 @@ async def sso_start(
     query_parts = []
     if final_redirect:
         query_parts.append(f"redirect_to={quote_plus(final_redirect)}")
-    if token:
-        query_parts.append(f"token={quote_plus(token)}")
 
     target_url = f"/api/v1/auth/{provider}/login"
     if query_parts:
@@ -586,26 +582,19 @@ async def sso_start(
 @router.get("/microsoft/login")
 async def microsoft_login(
     request: Request,
-    token: Optional[str] = None,
     redirect_to: Optional[str] = None,
     redirect_uri: Optional[str] = None,
+    frontend_url: Optional[str] = None,
 ):
     try:
+        bearer_token = _get_bearer_token_from_request(request)
         user_id = None
-        if token:
+        if bearer_token:
             try:
-                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                payload = jwt.decode(bearer_token, SECRET_KEY, algorithms=[ALGORITHM])
                 user_id = payload.get("sub")
             except Exception:
                 pass
-
-        # Extract frontend URL from Referer header
-        frontend_url = None
-        referer = request.headers.get("referer")
-        if referer:
-            from urllib.parse import urlparse
-            parsed = urlparse(referer)
-            frontend_url = f"{parsed.scheme}://{parsed.netloc}"
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
         state = build_oauth_state(user_id, redirect_to, provider="microsoft", frontend_url=frontend_url)

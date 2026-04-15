@@ -129,7 +129,15 @@ export default function PublicBookingPage({ params }: { params: { username: stri
     setLoading(true);
 
     try {
-      const payload: Record<string, unknown> = {
+      const payload: {
+        full_name: string;
+        email: string;
+        start_time: string;
+        end_time: string;
+        time_zone: string;
+        questions?: Record<string, unknown>;
+        metadata?: Record<string, unknown>;
+      } = {
         full_name: fullName,
         email,
         start_time: startTime,

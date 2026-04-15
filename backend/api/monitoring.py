@@ -530,7 +530,7 @@ async def get_tool_stats(
 # WEBSOCKET ENDPOINT FOR REAL-TIME UPDATES
 # ═══════════════════════════════════════════════════════════════════
 
-@router.websocket("/ws")
+@router.websocket("/monitoring/ws")
 async def monitoring_websocket(websocket: WebSocket):
     """
     WebSocket endpoint for real-time monitoring updates

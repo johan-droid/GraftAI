@@ -75,6 +75,40 @@ class RateLimitResult:
     reset_seconds: int
 
 
+def _local_fallback_rate_limit(
+    name: str,
+    identifier: str,
+    max_requests: int,
+    window_seconds: int,
+) -> RateLimitResult:
+    now = time.time()
+    _prune_local_fallback_cache(now)
+
+    key = f"rate_limit:{name}:{identifier}"
+    entry = _local_fallback_cache.setdefault(key, {"calls": [], "last_access": now})
+    entry["last_access"] = now
+
+    calls = [ts for ts in entry["calls"] if ts > now - window_seconds]
+    if len(calls) >= max_requests:
+        reset = int(max(0, window_seconds - (now - min(calls))))
+        entry["calls"] = calls
+        return RateLimitResult(
+            success=False,
+            count=len(calls),
+            remaining=0,
+            reset_seconds=reset,
+        )
+
+    calls.append(now)
+    entry["calls"] = calls
+    return RateLimitResult(
+        success=True,
+        count=len(calls),
+        remaining=max(0, max_requests - len(calls)),
+        reset_seconds=window_seconds,
+    )
+
+
 class RateLimit:
     def __init__(self, name: str, max_requests: int, window_seconds: int):
         self.name = name
@@ -120,14 +154,12 @@ class RateLimit:
                 exc,
             )
 
-            # STRICT fallback for sensitive endpoints.
-            # When Redis is unavailable, deny requests instead of allowing per-replica local enforcement.
             if self.name in {"login", "register"}:
-                return RateLimitResult(
-                    success=False,
-                    count=0,
-                    remaining=0,
-                    reset_seconds=self.window_seconds,
+                return _local_fallback_rate_limit(
+                    self.name,
+                    identifier,
+                    self.max_requests,
+                    self.window_seconds,
                 )
 
             # Non-critical endpoints: fail-open (allow)

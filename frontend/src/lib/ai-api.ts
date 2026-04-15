@@ -265,14 +265,20 @@ export function normalizeWebSocketUrl(rawUrl?: string): string {
   const fallbackHost = "graftai.onrender.com";
   let url = rawUrl?.trim() || fallbackHost;
 
+  const isSecure = url.startsWith("https://") || url.startsWith("wss://");
+  const isInsecure = url.startsWith("http://") || url.startsWith("ws://");
+  const isLocalhost = /^(localhost|127\.0\.0\.1)(:\d+)?($|\/)/.test(url);
+
   if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
+    const scheme = isSecure ? "wss://" : isInsecure ? "ws://" : isLocalhost ? "ws://" : "wss://";
     url = url.replace(/^https?:\/\//, "");
+    url = url.replace(/^ws?:\/\//, "");
     if (url.endsWith("/monitoring/ws")) {
       url = url.replace(/\/monitoring\/ws$/, "/api/v1/monitoring/ws");
     } else if (!url.endsWith("/ws")) {
       url = `${url.replace(/\/+$/, "")}/api/v1/monitoring/ws`;
     }
-    return `wss://${url}`;
+    return `${scheme}${url}`;
   }
 
   if (url.endsWith("/monitoring/ws")) {
@@ -311,6 +317,7 @@ export class WebSocketClient {
         socketUrl.searchParams.set("token", this.authToken);
       }
 
+      console.log("WebSocket connecting to:", socketUrl.toString());
       this.ws = new WebSocket(socketUrl.toString());
       
       this.ws.onopen = () => {

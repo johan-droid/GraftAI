@@ -11,7 +11,8 @@ import {
   ChevronRight,
   Activity,
   Zap,
-  Code as CodeIcon
+  Code as CodeIcon,
+  Sparkles
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { CodeSnippetPreview } from "./CodeSnippetPreview";

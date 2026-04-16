@@ -18,30 +18,30 @@ const GithubIcon = ({ size = 18 }: { size?: number }) => (
 );
 
 const footerLinks = {
-  engine: {
-    title: "// KERNEL_MODULES",
+  product: {
+    title: "Product",
     links: [
-      { label: "CORE_API", href: "#" },
-      { label: "VECTOR_CACHE", href: "#" },
-      { label: "SCHEDULER_V1", href: "#" },
-      { label: "SYNC_PIPELINES", href: "#" },
+      { label: "Features", href: "#" },
+      { label: "AI Memory", href: "#" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Extensions", href: "#" },
     ],
   },
-  dev_hub: {
-    title: "// DEVELOPER_ROOT",
+  resources: {
+    title: "Resources",
     links: [
-      { label: "OS_DOCUMENTATION", href: "/docs" },
-      { label: "API_SPEC_V3", href: "#" },
-      { label: "BUILD_CHANGELOG", href: "#" },
-      { label: "SDK_REGISTRY", href: "#" },
+      { label: "Documentation", href: "/docs" },
+      { label: "API Reference", href: "#" },
+      { label: "Changelog", href: "#" },
+      { label: "Community", href: "#" },
     ],
   },
-  legal: {
-    title: "// SECURITY_PROTOCOLS",
+  company: {
+    title: "Company",
     links: [
-      { label: "GDPR_ENFORCEMENT", href: "/privacy" },
-      { label: "TERMS_OF_SERVICE", href: "/terms" },
-      { label: "SYNC_COMPLIANCE", href: "#" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Security", href: "#" },
     ],
   },
 };
@@ -62,12 +62,12 @@ export function Footer() {
                  <Box sx={{ p: 1, border: "1px solid var(--primary)", background: "rgba(0, 255, 156, 0.05)" }}>
                    <Terminal size={24} className="text-[var(--primary)]" />
                  </Box>
-                 <Typography sx={{ fontWeight: 900, fontFamily: "var(--font-mono)", fontSize: "1.5rem", letterSpacing: "-0.05em", color: "#fff" }}>
-                   GRAFT_AI<Box component="span" sx={{ color: "var(--primary)" }}>_</Box>
+                 <Typography sx={{ fontWeight: 900, fontFamily: "var(--font-sans)", fontSize: "1.5rem", letterSpacing: "-0.05em", color: "#fff" }}>
+                   GraftAI
                  </Typography>
                </Stack>
-               <Typography sx={{ color: "var(--text-faint)", mb: 6, fontSize: "10px", fontFamily: "var(--font-mono)", lineHeight: 1.8, textTransform: "uppercase" }}>
-                 High-performance scheduling infrastructure. Built for distributed teams and programmable availability. Integrated via kernel-level API protocols.
+               <Typography sx={{ color: "var(--text-faint)", mb: 6, fontSize: "11px", fontFamily: "var(--font-sans)", lineHeight: 1.6 }}>
+                 The scheduling assistant for teams that ship. We help you manage your time with AI that remembers your preferences and respects your focus blocks.
                </Typography>
                
                <Stack direction="row" spacing={4} alignItems="center">
@@ -75,8 +75,8 @@ export function Footer() {
                     <GithubIcon />
                   </Link>
                   <Stack direction="row" spacing={1} alignItems="center">
-                     <Box sx={{ width: 8, height: 8, border: "1px solid var(--primary)", background: "rgba(0,255,156,0.2)" }} />
-                     <Typography sx={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--primary)", fontWeight: 900 }}>SYSTEM_READY</Typography>
+                     <Box sx={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)", boxShadow: "0 0 10px var(--primary)" }} />
+                     <Typography sx={{ fontSize: "10px", fontFamily: "var(--font-sans)", color: "var(--primary)", fontWeight: 700 }}>All systems operational</Typography>
                   </Stack>
                </Stack>
             </Box>
@@ -88,7 +88,7 @@ export function Footer() {
               {Object.entries(footerLinks).map(([key, section]) => (
                 <Grid item xs={12} sm={4} key={key} sx={{ borderRight: { sm: "1px dashed var(--border-subtle)" }, borderBottom: { xs: "1px dashed var(--border-subtle)", sm: "none" } }}>
                   <Box sx={{ p: 5, height: "100%", "&:hover": { background: "rgba(255,255,255,0.01)" } }}>
-                    <Typography sx={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--primary)", mb: 4, fontWeight: 900, letterSpacing: "0.2em" }}>
+                    <Typography sx={{ fontFamily: "var(--font-sans)", fontSize: "12px", color: "var(--text-primary)", mb: 4, fontWeight: 800 }}>
                       {section.title}
                     </Typography>
                     <Stack spacing={2}>
@@ -99,18 +99,17 @@ export function Footer() {
                           style={{ textDecoration: "none" }}
                         >
                           <Typography sx={{ 
-                            color: "var(--text-faint)", 
-                            fontSize: "10px", 
-                            fontFamily: "var(--font-mono)",
-                            fontWeight: 700,
-                            letterSpacing: "0.05em",
+                            color: "var(--text-secondary)", 
+                            fontSize: "12px", 
+                            fontFamily: "var(--font-sans)",
+                            fontWeight: 500,
                             transition: "all 0.1s ease",
                             display: "flex",
                             alignItems: "center",
                             gap: 1.5,
-                            "&:hover": { color: "#fff", transform: "translateX(2px)" }
+                            "&:hover": { color: "var(--primary)", transform: "translateX(2px)" }
                           }}>
-                            <span className="text-[var(--primary)] opacity-50">{">"}</span> {link.label}
+                            {link.label}
                           </Typography>
                         </Link>
                       ))}
@@ -125,15 +124,12 @@ export function Footer() {
         <Box sx={{ mt: 10, p: 5, border: "1px dashed var(--border-subtle)", background: "rgba(0,0,0,0.5)" }}>
           <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} spacing={4}>
             <Stack spacing={1.5}>
-              <Typography sx={{ color: "var(--text-faint)", fontSize: "8px", fontFamily: "var(--font-mono)", fontWeight: 900, letterSpacing: "0.2em" }}>
-                © 2026 GRAFT_SYSTEMS_INTL // [ LICENSE: ENTERPRISE_PRO ]
+              <Typography sx={{ color: "var(--text-faint)", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>
+                © 2026 GraftAI. Made for modern teams.
               </Typography>
               <div className="flex gap-4">
-                <Typography sx={{ color: "var(--text-faint)", fontSize: "8px", fontFamily: "var(--font-mono)", fontWeight: 900 }}>
-                  BUILD: <Box component="span" sx={{ color: "var(--primary)" }}>0x82F1A9</Box>
-                </Typography>
-                <Typography sx={{ color: "var(--text-faint)", fontSize: "8px", fontFamily: "var(--font-mono)", fontWeight: 900 }}>
-                  KERNEL: <Box component="span" sx={{ color: "#fff" }}>v.3.0.82</Box>
+                <Typography sx={{ color: "var(--text-faint)", fontSize: "10px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>
+                  Build: <Box component="span" sx={{ color: "var(--text-secondary)" }}>0x82F1A9</Box>
                 </Typography>
               </div>
             </Stack>

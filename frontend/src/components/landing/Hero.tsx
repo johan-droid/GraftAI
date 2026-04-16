@@ -18,17 +18,17 @@ import { CodeSnippetPreview } from "./CodeSnippetPreview";
 import { TimeEngineAnimation } from "../ui/TimeEngineAnimation";
 
 const LOG_LINES = [
-  { text: "> initializing graftai_engine...", delay: 500, type: "system" },
-  { text: "> connecting to redis cluster at 10.0.4.12...", delay: 800, type: "system" },
-  { text: "> LOADED: calendar_sync_v4.py", delay: 400, type: "success" },
-  { text: "> LOADED: ai_semantic_memory.bin", delay: 600, type: "success" },
-  { text: "> indexing vector store user_882 [namespace: personal]", delay: 1000, type: "process" },
-  { text: "> found 42 scheduled events in google_calendar", delay: 300, type: "info" },
-  { text: "> vectorizing event: 'Technical Interview'", delay: 900, type: "process" },
-  { text: "> AI memory updated. Confidence: 0.98", delay: 400, type: "success" },
-  { text: "> webhook incoming: hmac_validated=true", delay: 1200, type: "info" },
-  { text: "> trigger: distributed_sync_job (PID: 2841)", delay: 300, type: "process" },
-  { text: "> graftai is ready. listening on port 8000.", delay: 500, type: "primary" },
+  { text: "> setting up your workspace...", delay: 500, type: "system" },
+  { text: "> connecting to your tools...", delay: 800, type: "system" },
+  { text: "> CONNECTED: Gmail & Outlook", delay: 400, type: "success" },
+  { text: "> CONNECTED: Slack Notifications", delay: 600, type: "success" },
+  { text: "> indexing your preferences...", delay: 1000, type: "process" },
+  { text: "> found 12 available slots this week", delay: 300, type: "info" },
+  { text: "> optimizing calendar for focus time", delay: 900, type: "process" },
+  { text: "> schedule updated for max productivity", delay: 400, type: "success" },
+  { text: "> new message: 'Meeting confirmed'", delay: 1200, type: "info" },
+  { text: "> trigger: automated reminder sent", delay: 300, type: "process" },
+  { text: "> GraftAI is ready for you.", delay: 500, type: "primary" },
 ];
 
 function TerminalWindow() {
@@ -71,7 +71,7 @@ function TerminalWindow() {
            <Box sx={{ width: 6, height: 6, background: "var(--primary)" }} />
         </div>
         <Typography sx={{ fontSize: "9px", color: "var(--primary)", fontFamily: "var(--font-mono)", fontWeight: 900, flex: 1, textTransform: "uppercase", letterSpacing: "0.15em" }}>
-          GRAFT_KERNEL_CLI // SHELL_ROOT
+          LIVE_WORKSPACE // DASHBOARD
         </Typography>
         <div className="flex items-center gap-2">
            <Activity size={10} className="text-[var(--primary)] animate-pulse" />
@@ -161,12 +161,12 @@ export function Hero() {
               <Stack direction="row" spacing={2} sx={{ mb: 4, alignItems: "center" }}>
                 <Box sx={{ px: 2, py: 0.5, background: "var(--primary)", border: "1px dashed var(--primary)", borderRadius: "0" }}>
                   <Typography sx={{ fontSize: "10px", color: "#000", fontWeight: 900, letterSpacing: "0.2em", fontFamily: "var(--font-mono)" }}>
-                    BUILD_v3.0.4A_STABLE
+                    VERSION_3.0_RELEASE
                   </Typography>
                 </Box>
                 <div className="h-[1px] w-12 border-b border-dashed border-[var(--border-subtle)]" />
                 <Typography className="telemetry-text">
-                  // LATENCY: 0.12MS [OPTIMIZED]
+                  // OPTIMIZED FOR YOUR TEAM
                 </Typography>
               </Stack>
 
@@ -183,7 +183,7 @@ export function Hero() {
                   textTransform: "uppercase"
                 }}
               >
-                PROG_AMMABLE <br />
+                SMARTER <br />
                 <Box component="span" sx={{ color: "var(--primary)", textShadow: "0 0 40px rgba(0,255,156,0.3)" }}>
                   SCHEDULING
                 </Box>
@@ -197,12 +197,11 @@ export function Hero() {
                   mb: 6,
                   maxWidth: "600px",
                   fontWeight: 600,
-                  fontFamily: "var(--font-mono)",
-                  textTransform: "uppercase",
+                  fontFamily: "var(--font-sans)",
                   letterSpacing: "-0.01em"
                 }}
               >
-                Zero-trust scheduling infrastructure. Automate availability with vector-backed semantic memory, real-time telemetry, and secure kernel hooks.
+                The scheduling assistant for teams that ship. Automatically manage your time with AI that remembers your preferences, respects your focus blocks, and handles the back-and-forth for you.
               </Typography>
 
               <Stack direction={{ xs: "column", sm: "row" }} spacing={3} sx={{ mb: 8 }}>
@@ -212,31 +211,31 @@ export function Hero() {
                   sx={{
                     background: "var(--primary)",
                     color: "#000",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "12px",
-                    fontWeight: 900,
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "13px",
+                    fontWeight: 800,
                     px: 6,
                     py: 2.5,
                     borderRadius: "0",
                     textTransform: "uppercase",
-                    letterSpacing: "0.15em",
+                    letterSpacing: "0.1em",
                     "&:hover": { background: "#FFF", boxShadow: "0 0 30px rgba(255,255,255,0.4)" }
                   }}
                 >
-                  <CodeIcon size={18} style={{ marginRight: 12 }} />
-                  INIT_SESSION();
+                  <Sparkles size={18} style={{ marginRight: 12 }} />
+                  Start for free
                 </Button>
                 <Button
                   component={Link}
-                  href="/developers"
+                  href="/docs"
                   sx={{
                     color: "var(--text-primary)",
                     borderColor: "var(--border-subtle)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "12px",
-                    fontWeight: 900,
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "13px",
+                    fontWeight: 800,
                     textTransform: "uppercase",
-                    letterSpacing: "0.15em",
+                    letterSpacing: "0.1em",
                     borderRadius: "0",
                     border: "1px dashed",
                     px: 6,
@@ -244,7 +243,7 @@ export function Hero() {
                     "&:hover": { borderColor: "var(--primary)", color: "var(--primary)", background: "rgba(0,255,156,0.03)" }
                   }}
                 >
-                  READ_PROTOCOLS <ChevronRight size={18} />
+                  See how it works <ChevronRight size={18} />
                 </Button>
               </Stack>
 

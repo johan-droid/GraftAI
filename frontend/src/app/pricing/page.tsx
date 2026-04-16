@@ -1,46 +1,8 @@
 "use client";
 
-interface RazorpayInstance {
-  open: () => void;
-  on: (event: string, callback: (response: {
-    razorpay_payment_id: string;
-    razorpay_subscription_id: string;
-    razorpay_signature: string;
-  }) => void) => void;
-}
-
-interface RazorpayOptions {
-  key?: string;
-  subscription_id: string;
-  name: string;
-  description?: string;
-  handler: (response: {
-    razorpay_payment_id: string;
-    razorpay_subscription_id: string;
-    razorpay_signature: string;
-  }) => void;
-  prefill: {
-    name?: string;
-    email?: string;
-    contact?: string;
-  };
-  theme: {
-    color: string;
-  };
-}
-
-interface RazorpayGlobal {
-  new (options: RazorpayOptions): RazorpayInstance;
-}
-
-declare global {
-  interface Window {
-    Razorpay: RazorpayGlobal;
-  }
-}
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/app/providers/auth-provider";
+import { Box, Container, Typography, Stack, Grid, Button, alpha } from "@mui/material";
 import { motion } from "framer-motion";
 import { 
   Check, 
@@ -53,7 +15,10 @@ import {
   ArrowRight,
   Loader2
 } from "lucide-react";
-import Script from "next/script";
+import { Navigation } from "@/components/landing/Navigation";
+import { Footer } from "@/components/landing/Footer";
+import DotField from "@/components/landing/DotField";
+import "@/components/landing/DotField.css";
 import { apiClient } from "@/lib/api-client";
 
 const TIERS = [
@@ -61,82 +26,72 @@ const TIERS = [
     id: "free",
     name: "Standard",
     price: "$0",
-    description: "Perfect for secondary calendar management and casual AI scheduling.",
+    description: "Perfect for managing your personal schedule and trying out AI assistance.",
     features: [
-      "10 AI Copilot Messages / Day",
-      "3 Manual Calendar Syncs / Day",
-      "Google & Outlook Integration",
-      "Standard LLM Processing",
+      "10 AI Assistant Messages / Day",
+      "Sync with Google & Outlook",
+      "Standard Processing Speed",
       "Community Support"
     ],
     highlight: false,
     cta: "Get Started",
-    icon: <Zap className="w-5 h-5" />
+    icon: <Zap size={18} />
   },
   {
     id: "pro",
     name: "Professional",
     price: "$19",
-    description: "The ultimate productivity engine for high-density power users.",
+    description: "The ultimate productivity engine for individuals and power users.",
     features: [
-      "200 AI Copilot Messages / Day",
-      "50 Manual Calendar Syncs / Day",
-      "Priority LLM Processing",
+      "200 AI Assistant Messages / Day",
+      "Priority Processing Speed",
       "Advanced Time Analytics",
       "Custom Meeting Templates",
-      "Priority Email Support"
+      "Priority Support"
     ],
     highlight: true,
     cta: "Upgrade to Pro",
-    icon: <Crown className="w-5 h-5" />
+    icon: <Crown size={18} />
   },
   {
     id: "elite",
-    name: "Elite Sovereign",
+    name: "Enterprise",
     price: "$49",
-    description: "Unbounded AI coordination for executive-level time mastery.",
+    description: "Unbounded AI coordination for teams and high-level mastery.",
     features: [
-      "Unlimited AI Messages*",
-      "Unlimited Calendar Syncs",
-      "Early Access to AI Plugins",
-      "24/7 Concierge Support",
-      "Advanced RAG Search",
-      "Zero-Data-Retention Option"
+      "Unlimited AI Messages",
+      "Unlimited Tool Access",
+      "Early Access to Features",
+      "Dedicated Support",
+      "Custom Privacy Controls"
     ],
     highlight: false,
-    cta: "Contact Sales",
-    icon: <Sparkles className="w-5 h-5" />
+    cta: "Contact Us",
+    icon: <Sparkles size={18} />
   }
 ];
 
 export default function PricingPage() {
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
-  const [region, setRegion] = useState<"US" | "IN">("US"); // Default to Global
+  const [region, setRegion] = useState<"US" | "IN">("US");
   const { user } = useAuth();
 
-  // IP-based Region Detection
   useEffect(() => {
     const detectRegion = async () => {
       try {
         const res = await fetch("https://ipapi.co/json/");
         const data = await res.json();
-        if (data.country_code === "IN") {
-          setRegion("IN");
-        }
-      } catch (err) {
-        console.error("Region detection failed, defaulting to Global:", err);
-      }
+        if (data.country_code === "IN") setRegion("IN");
+      } catch (err) {}
     };
     detectRegion();
   }, []);
 
   const getPrice = (tierId: string) => {
     if (tierId === 'free') return "$0";
-    if (region === "IN") {
-      return tierId === 'pro' ? "₹499" : "₹1499";
-    }
-    return tierId === 'pro' ? "$12" : "$28";
+    if (region === "IN") return tierId === 'pro' ? "₹499" : "₹1499";
+    return tierId === 'pro' ? "$19" : "$49";
   };
 
   const handleSelectTier = async (tierId: string) => {
@@ -144,195 +99,233 @@ export default function PricingPage() {
       window.location.href = "/dashboard";
       return;
     }
-
     if (tierId === 'elite') {
-      setBillingMessage("Elite plan onboarding is handled by our sales team. Please contact support for enterprise activation.");
+      setBillingMessage("Enterprise onboarding requires a quick chat with our team. Reaching out...");
       return;
     }
-
     if (!user) {
       window.location.href = `/login?redirect=${encodeURIComponent('/pricing')}`;
       return;
     }
 
     setLoadingTier(tierId);
-    setBillingMessage(null);
-
     try {
-      // 1. Fetch checkout session simulation metadata
       await apiClient.post("/billing/razorpay/checkout");
-
-      // 2. Simulate payment directly without Razorpay pop-up to avoid requiring valid API keys for the demo
       await apiClient.post("/billing/razorpay/verify-simulation", { 
-        razorpay_payment_id: "pay_dummy_simulated_" + Date.now() 
+        razorpay_payment_id: "pay_sim_" + Date.now() 
       });
-      
-      setBillingMessage("Successfully upgraded to Pro! Redirecting to dashboard...");
-      
-      setTimeout(() => {
-        window.location.href = "/dashboard/settings/billing";
-      }, 1500);
-
+      setBillingMessage("Account upgraded. Taking you to your dashboard...");
+      setTimeout(() => window.location.href = "/dashboard", 1500);
     } catch (err: any) {
-      setBillingMessage(err.message || "An unexpected error occurred during checkout.");
+      setBillingMessage(err.message || "Connection issue during checkout. Please try again.");
     } finally {
       setLoadingTier(null);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#030712] text-white selection:bg-indigo-500/30 selection:text-white">
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
-      
-      {/* Dynamic Sovereign Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-500/10 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full bg-violet-600/10 blur-[100px]" />
-      </div>
+    <Box sx={{ bgcolor: "var(--bg-base)", minHeight: "100vh", position: "relative" }}>
+      <Box sx={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.4, pointerEvents: "none" }}>
+        <DotField />
+      </Box>
 
-      <div className="page-with-floating-nav relative z-10 max-w-7xl mx-auto px-6 pb-24 lg:pb-32">
-        <div className="text-center pt-20 mb-20 space-y-4">
-          <div className="flex justify-center gap-2 mb-8">
-            <button 
-              onClick={() => setRegion("US")}
-              className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${region === 'US' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 ring-1 ring-white/20' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}
-            >
-              $ Global
-            </button>
-            <button 
-              onClick={() => setRegion("IN")}
-              className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${region === 'IN' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 ring-1 ring-white/20' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}
-            >
-              ₹ India
-            </button>
-          </div>
+      <Navigation />
 
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-widest"
+      <Container maxWidth="lg" sx={{ pt: { xs: 20, md: 24 }, pb: 20, position: "relative", zIndex: 1 }}>
+        <Stack spacing={2} sx={{ mb: 12, textAlign: "center" }}>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
           >
-            <Sparkles className="w-3 h-3" /> {region === 'IN' ? 'Competitive Indian Pricing' : 'Global Premium SaaS'}
+            <Box sx={{ 
+              display: "inline-flex", 
+              gap: 1, 
+              mb: 4, 
+              p: 0.5, 
+              bgcolor: "rgba(255,255,255,0.03)", 
+              borderRadius: 99, 
+              border: "1px solid var(--border-subtle)" 
+            }}>
+              <Button 
+                onClick={() => setRegion("US")}
+                sx={{ 
+                  borderRadius: 99, px: 3, py: 0.5, fontSize: 10, fontFamily: "var(--font-mono)", 
+                  color: region === "US" ? "var(--primary)" : "var(--text-muted)",
+                  bgcolor: region === "US" ? "rgba(0, 255, 156, 0.05)" : "transparent",
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.05)" }
+                }}
+              >
+                Global
+              </Button>
+              <Button 
+                onClick={() => setRegion("IN")}
+                sx={{ 
+                  borderRadius: 99, px: 3, py: 0.5, fontSize: 10, fontFamily: "var(--font-mono)", 
+                  color: region === "IN" ? "var(--primary)" : "var(--text-muted)",
+                  bgcolor: region === "IN" ? "rgba(0, 255, 156, 0.05)" : "transparent",
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.05)" }
+                }}
+              >
+                India
+              </Button>
+            </Box>
           </motion.div>
-          <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="font-serif text-5xl md:text-8xl font-black tracking-tight mb-6 bg-gradient-to-b from-white via-white to-slate-500 bg-clip-text text-transparent leading-[1.1]"
+
+          <Typography
+            variant="h1"
+            className="text-gradient-neon"
+            sx={{
+              fontWeight: 900,
+              fontSize: { xs: 42, md: 72 },
+              letterSpacing: "-0.04em",
+              lineHeight: 1,
+              fontFamily: "var(--font-sans)"
+            }}
           >
-            Reclaim Your Time.
-          </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-[17px] md:text-lg text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed"
+            Simple Pricing
+          </Typography>
+          <Typography
+            sx={{
+              color: "var(--text-muted)",
+              fontSize: { xs: 16, md: 18 },
+              maxWidth: 600,
+              mx: "auto",
+              fontFamily: "var(--font-sans)"
+            }}
           >
-            Simple, transparent pricing for power users. {region === 'IN' ? 'Optimized for the Indian market.' : 'No organizations, no seat minimums.'} Just pure productivity.
-          </motion.p>
+            Choose the plan that fits your workflow. From personal use to scaling teams, we've got you covered.
+          </Typography>
           {billingMessage && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mx-auto mt-8 max-w-2xl rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4 text-sm text-amber-100"
             >
-              {billingMessage}
+              <Box sx={{ 
+                mt: 4, px: 3, py: 1.5, borderRadius: 1, border: "1px solid rgba(0, 255, 156, 0.2)", 
+                bgcolor: "rgba(0, 255, 156, 0.05)", color: "var(--primary)", fontSize: "12px", 
+                fontFamily: "var(--font-mono)", display: "inline-block" 
+              }}>
+                [ STATUS: {billingMessage} ]
+              </Box>
             </motion.div>
           )}
-        </div>
+        </Stack>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24">
+        <Grid container spacing={4} sx={{ mb: 16 }}>
           {TIERS.map((tier, idx) => (
-            <motion.div
-              key={tier.id}
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 * idx + 0.3 }}
-              className={`relative flex flex-col p-8 rounded-[2.5rem] transition-all duration-700 group glass-panel ${
-                tier.highlight 
-                ? "bg-indigo-600/[0.04] border-indigo-500/40 shadow-2xl shadow-indigo-500/10 scale-105 z-20 hover:border-indigo-500 hover:shadow-indigo-500/30" 
-                : "bg-white/[0.01] border-white/[0.06] hover:border-white/20 z-10"
-              }`}
-            >
-              {tier.highlight && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-5 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg shadow-indigo-600/40 ring-1 ring-white/20">
-                  Sovereign Choice
-                </div>
-              )}
-
-              <div className="mb-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className={`p-2.5 rounded-xl ${tier.highlight ? 'bg-indigo-500/20 text-indigo-400 ring-1 ring-indigo-500/30' : 'bg-white/5 text-slate-500'}`}>
-                    {tier.icon}
-                  </div>
-                  <h3 className="text-2xl font-black text-white tracking-tight">{tier.name}</h3>
-                </div>
-                <div className="flex items-baseline gap-1 mb-4">
-                  <span className="text-5xl font-black text-white">{getPrice(tier.id)}</span>
-                  <span className="text-slate-500 font-medium">{tier.id !== 'free' && '/ month'}</span>
-                </div>
-                <p className="text-sm text-slate-400 leading-relaxed font-medium">
-                  {tier.description}
-                </p>
-              </div>
-
-              <div className="flex-grow space-y-4 mb-8">
-                {tier.features.map(feature => (
-                  <div key={feature} className="flex items-start gap-3">
-                    <div className={`mt-1 p-0.5 rounded-full ${tier.highlight ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
-                      <Check className="w-3 h-3" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-300">{feature}</span>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={() => handleSelectTier(tier.id)}
-                disabled={loadingTier === tier.id}
-                className={`w-full py-4 rounded-2xl text-sm font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                  tier.highlight
-                  ? "bg-primary text-white shadow-xl shadow-primary/30 hover:bg-primary/90"
-                  : "bg-slate-900 text-white border border-slate-800 hover:bg-slate-800"
-                }`}
+            <Grid item xs={12} md={4} key={tier.id}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                style={{ height: "100%" }}
               >
-                {loadingTier === tier.id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    {tier.cta}
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </motion.div>
-          ))}
-        </div>
+                <Box className="refined-glass" sx={{ 
+                  p: 4, 
+                  height: "100%", 
+                  display: "flex", 
+                  flexDirection: "column",
+                  borderRadius: 2,
+                  border: tier.highlight ? "1px solid var(--primary)" : "1px solid var(--border-subtle)",
+                  position: "relative",
+                  "&:hover": { borderColor: "var(--primary)", transition: "0.3s" }
+                }}>
+                  {tier.highlight && (
+                    <Box sx={{ 
+                      position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", 
+                      bgcolor: "var(--primary)", color: "var(--bg-base)", px: 2, py: 0.5, 
+                      borderRadius: 1, fontSize: 10, fontWeight: 900, letterSpacing: "0.1em",
+                      fontFamily: "var(--font-sans)"
+                    }}>
+                      MOST POPULAR
+                    </Box>
+                  )}
 
-        {/* Feature Highlights Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mt-20">
-          <div className="space-y-4">
-            <ShieldCheck className="w-8 h-8 text-indigo-400" />
-            <h4 className="text-lg font-bold">Privacy First</h4>
-            <p className="text-xs text-slate-400 leading-relaxed">Your data is yours. We never sell your calendar context to third parties.</p>
-          </div>
-          <div className="space-y-4">
-            <Cpu className="w-8 h-8 text-primary" />
-            <h4 className="text-lg font-bold">Zero-Lag Sync</h4>
-            <p className="text-xs text-slate-400 leading-relaxed">Proprietary sync engine designed for high-frequency individual updates.</p>
-          </div>
-          <div className="space-y-4">
-            <Globe className="w-8 h-8 text-emerald-400" />
-            <h4 className="text-lg font-bold">Global Presence</h4>
-            <p className="text-xs text-slate-400 leading-relaxed">Seamless timezone handling across every continent and provider.</p>
-          </div>
-          <div className="space-y-4">
-            <Sparkles className="w-8 h-8 text-amber-400" />
-            <h4 className="text-lg font-bold">Smart Insights</h4>
-            <p className="text-xs text-slate-400 leading-relaxed">AI that learns your scheduling preferences to proactively save you time.</p>
-          </div>
-        </div>
-      </div>
-    </div>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
+                    <Box sx={{ p: 1, bgcolor: "rgba(0, 255, 156, 0.1)", borderRadius: 1 }}>
+                      {tier.icon}
+                    </Box>
+                  </Stack>
+
+                  <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "var(--text-primary)" }}>
+                    {tier.name}
+                  </Typography>
+                  <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 3 }}>
+                    <Typography variant="h3" sx={{ fontWeight: 900, color: "var(--text-primary)" }}>
+                      {getPrice(tier.id)}
+                    </Typography>
+                    <Typography sx={{ color: "var(--text-faint)", fontSize: 14 }}>/ month</Typography>
+                  </Stack>
+                  <Typography sx={{ color: "var(--text-muted)", fontSize: 13, mb: 4, minHeight: 40 }}>
+                    {tier.description}
+                  </Typography>
+
+                  <Stack spacing={2} sx={{ mb: 6, flexGrow: 1 }}>
+                    {tier.features.map(f => (
+                      <Stack key={f} direction="row" spacing={1.5} alignItems="center">
+                        <Check size={14} className="text-primary" />
+                        <Typography sx={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }}>{f}</Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+
+                  <Button
+                    onClick={() => handleSelectTier(tier.id)}
+                    disabled={!!loadingTier}
+                    fullWidth
+                    variant={tier.highlight ? "contained" : "outlined"}
+                    endIcon={loadingTier === tier.id ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+                    sx={{
+                      borderRadius: 1,
+                      py: 1.5,
+                      textTransform: "none",
+                      fontWeight: 700,
+                      fontFamily: "var(--font-sans)",
+                      bgcolor: tier.highlight ? "var(--primary)" : "transparent",
+                      color: tier.highlight ? "var(--bg-base)" : "var(--text-primary)",
+                      borderColor: "var(--primary)",
+                      "&:hover": {
+                        bgcolor: tier.highlight ? alpha("#00ff9c", 0.9) : "rgba(0, 255, 156, 0.05)",
+                        borderColor: "var(--primary)"
+                      }
+                    }}
+                  >
+                    {tier.cta}
+                  </Button>
+                </Box>
+              </motion.div>
+            </Grid>
+          ))}
+        </Grid>
+
+        <Stack 
+          direction={{ xs: "column", md: "row" }} 
+          spacing={8} 
+          sx={{ 
+            p: 6, 
+            borderRadius: 2, 
+            bgcolor: "rgba(255,255,255,0.01)", 
+            border: "1px dashed var(--border-subtle)" 
+          }}
+        >
+          <Stack spacing={2} sx={{ flex: 1 }}>
+            <ShieldCheck size={32} className="text-primary" />
+            <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: "var(--font-sans)" }}>Privacy First</Typography>
+            <Typography sx={{ color: "var(--text-muted)", fontSize: 13, fontFamily: "var(--font-sans)" }}>Your data never leaves your context. Fully encrypted at rest and in transit.</Typography>
+          </Stack>
+          <Stack spacing={2} sx={{ flex: 1 }}>
+            <Cpu size={32} className="text-primary" />
+            <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: "var(--font-sans)" }}>Fast Sync</Typography>
+            <Typography sx={{ color: "var(--text-muted)", fontSize: 13, fontFamily: "var(--font-sans)" }}>High-frequency sync engine for real-time calendar updates without the wait.</Typography>
+          </Stack>
+          <Stack spacing={2} sx={{ flex: 1 }}>
+            <Globe size={32} className="text-primary" />
+            <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: "var(--font-sans)" }}>Works Everywhere</Typography>
+            <Typography sx={{ color: "var(--text-muted)", fontSize: 13, fontFamily: "var(--font-sans)" }}>Seamless synchronization across all continents with 99.9% uptime reliability.</Typography>
+          </Stack>
+        </Stack>
+      </Container>
+      <Footer />
+    </Box>
   );
 }

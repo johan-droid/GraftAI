@@ -8,8 +8,8 @@ import { OAuthButtons } from "@/components/auth/OAuthButtons";
 export default function SignupPage() {
   return (
     <AuthLayout
-      title="CREATE_ACCOUNT"
-      subtitle="GRAFT_AI :: SECURE_KERNEL_ACCESS_GATEWAY"
+      title="Create your account"
+      subtitle="Join the future of smart scheduling"
     >
       <Box sx={{ mt: 2 }}>
         <OAuthButtons callbackURL="/dashboard" />
@@ -18,24 +18,22 @@ export default function SignupPage() {
       <Box sx={{ mt: 6, textAlign: "center" }}>
         <Typography
           sx={{
-            fontSize: "10px",
+            fontSize: "11px",
             color: "var(--text-faint)",
             maxWidth: "320px",
             mx: "auto",
             lineHeight: 1.6,
-            fontFamily: "var(--font-mono)",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
+            fontFamily: "var(--font-sans)",
           }}
         >
-          By creating an account, you accept the {" "}
-          <Link href="/terms" style={{ color: "var(--primary)", textDecoration: "none" }}>ENFORCE_TERMS</Link>
-          {" "}AND{" "}
-          <Link href="/privacy" style={{ color: "var(--primary)", textDecoration: "none" }}>PRIVACY_PROTOCOL</Link>.
+          By creating an account, you agree to our {" "}
+          <Link href="/terms" style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 700 }}>Terms of Service</Link>
+          {" "}and{" "}
+          <Link href="/privacy" style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 700 }}>Privacy Policy</Link>.
         </Typography>
-        <Typography sx={{ mt: 4, fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+        <Typography sx={{ mt: 4, fontSize: "12px", color: "var(--text-muted)", fontFamily: "var(--font-sans)" }}>
           Already have an account? {" "}
-          <Link href="/login" style={{ color: "var(--primary)", textDecoration: "none" }}>Sign in</Link>
+          <Link href="/login" style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 700 }}>Sign in</Link>
         </Typography>
       </Box>
     </AuthLayout>

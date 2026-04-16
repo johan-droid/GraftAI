@@ -42,13 +42,13 @@ import "@/components/landing/DotField.css";
 
 // Animation variants
 const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
+  hidden: { opacity: 0, y: 20 },
   visible: { 
     opacity: 1, 
     y: 0,
     transition: {
       duration: 0.8,
-      ease: [0.22, 1, 0.36, 1] as const
+      ease: [0.165, 0.84, 0.44, 1] as const
     }
   },
 };
@@ -77,26 +77,26 @@ interface FeatureCard {
 
 const FEATURE_CARDS: FeatureCard[] = [
   {
-    title: "AI Orchestration",
-    description: "Intelligent scheduling that learns your team's rhythm and optimizes for deep work.",
+    title: "Your AI Assistant",
+    description: "AI that learns how your team works and protects your time for what matters most.",
     icon: Sparkles,
     color: "#1a73e8", // Google Blue
   },
   {
-    title: "Calendar Harmony",
-    description: "Seamless synchronization across Google, Outlook, and specialized industry tools.",
+    title: "Perfect Sync",
+    description: "Seamless connection across Google, Outlook, and all your favorite productivity tools.",
     icon: CalendarDays,
     color: "#34a853", // Google Green
   },
   {
-    title: "Dynamic Availability",
-    description: "Complex rule-based slots that adapt to your changing timezone and workload.",
+    title: "Flexible Scheduling",
+    description: "Smart availability that adapts to your timezone, workload, and personal preferences.",
     icon: TimerReset,
     color: "#fbbc04", // Google Yellow
   },
   {
-    title: "Enterprise Security",
-    description: "JWT-protected endpoints and OAuth2 standard flows built for scale.",
+    title: "Secure & Private",
+    description: "Top-tier security and privacy features designed to keep your data safe and sound.",
     icon: ShieldCheck,
     color: "#ea4335", // Google Red
   },
@@ -189,44 +189,85 @@ function HeroBackground() {
     >
       <motion.div
         animate={{
-          x: [0, 40, 0],
-          y: [0, 20, 0],
+          x: [0, 60, 0],
+          y: [0, 40, 0],
+          opacity: [0.03, 0.05, 0.03]
         }}
         transition={{
-          duration: 20,
+          duration: 25,
           repeat: Infinity,
           ease: "linear",
         }}
         style={{
           position: "absolute",
-          top: "-10%",
+          top: "-20%",
           left: "20%",
-          width: "60vw",
-          height: "60vw",
-          background: "radial-gradient(circle, rgba(26, 115, 232, 0.03) 0%, transparent 70%)",
-          filter: "blur(80px)",
+          width: "70vw",
+          height: "70vw",
+          background: "radial-gradient(circle, var(--primary) 0%, transparent 70%)",
+          filter: "blur(120px)",
         }}
       />
       <motion.div
         animate={{
-          x: [0, -18, 0],
-          y: [0, -10, 0],
+          x: [0, -30, 0],
+          y: [0, -20, 0],
+          opacity: [0.02, 0.04, 0.02]
         }}
         transition={{
-          duration: 28,
+          duration: 35,
           repeat: Infinity,
           ease: "linear",
         }}
         style={{
           position: "absolute",
-          bottom: "10%",
-          right: "10%",
-          width: "42vw",
-          height: "42vw",
-          background: "radial-gradient(circle, rgba(52, 168, 83, 0.016) 0%, transparent 68%)",
-          filter: "blur(80px)",
+          bottom: "0%",
+          right: "5%",
+          width: "50vw",
+          height: "50vw",
+          background: "radial-gradient(circle, var(--secondary) 0%, transparent 70%)",
+          filter: "blur(120px)",
         }}
       />
+    </Box>
+  );
+}
+
+function TrustedByLine() {
+  const logos = [
+    { name: "Veracity", icon: ShieldCheck },
+    { name: "Apex", icon: Activity },
+    { name: "Helix", icon: Users },
+    { name: "Auralis", icon: Sparkles },
+    { name: "Equinox", icon: Globe },
+    { name: "Synthetix", icon: TimerReset }
+  ];
+
+  return (
+    <Box sx={{ mt: 15, mb: 10, overflow: "hidden", position: "relative", width: "100%" }} className="mask-fade">
+      <Typography sx={{ 
+        textAlign: "center", 
+        fontSize: 10, 
+        fontFamily: "var(--font-mono)", 
+        color: "var(--text-faint)", 
+        textTransform: "uppercase", 
+        letterSpacing: "0.2em",
+        mb: 4
+      }}>
+        Powering scheduling for high-growth technical teams
+      </Typography>
+      <Box className="animate-marquee">
+        {[...Array(4)].map((_, i) => (
+          <Stack key={i} direction="row" spacing={8} sx={{ px: 4, alignItems: "center" }}>
+            {logos.map(logo => (
+              <Stack key={logo.name} direction="row" spacing={1.5} alignItems="center" sx={{ opacity: 0.4, transition: "opacity 0.3s ease", "&:hover": { opacity: 0.8 } }}>
+                <logo.icon size={18} />
+                <Typography sx={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em" }}>{logo.name}</Typography>
+              </Stack>
+            ))}
+          </Stack>
+        ))}
+      </Box>
     </Box>
   );
 }
@@ -413,26 +454,37 @@ function OrchestrationLogs() {
       sx={{ 
         fontFamily: "var(--font-mono)", 
         fontSize: 10, 
-        color: alpha("#1a73e8", 0.6),
-        borderLeft: `1px solid ${alpha("#1a73e8", 0.2)}`,
-        pl: 2,
-        mt: 4,
+        color: alpha("#1a73e8", 0.7),
+        borderLeft: `1px solid ${alpha("#1a73e8", 0.15)}`,
+        pl: 2.5,
+        mt: 6,
         display: "flex",
         flexDirection: "column",
-        gap: 0.5,
-        minHeight: 60,
-        opacity: 0.8
+        gap: 0.75,
+        minHeight: 70,
+        position: "relative"
       }}
     >
+      <Box sx={{ 
+        position: "absolute", 
+        left: -1, 
+        top: 0, 
+        bottom: 0, 
+        width: 1.5, 
+        bgcolor: "#1a73e8",
+        boxShadow: "0 0 10px #1a73e8"
+      }} />
       <AnimatePresence mode="popLayout">
         {logs.map((log, i) => (
           <motion.div
             key={`${log}-${i}`}
-            initial={{ opacity: 0, x: -10 }}
+            initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 10 }}
-            transition={{ duration: 0.4 }}
+            exit={{ opacity: 0, x: 8 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            style={{ display: "flex", alignItems: "center", gap: "8px" }}
           >
+            <Box sx={{ width: 4, height: 4, borderRadius: "50%", bgcolor: alpha("#1a73e8", 0.4) }} />
             {log}
           </motion.div>
         ))}
@@ -730,7 +782,13 @@ export default function Home() {
                       fontSize: { xs: 15, md: 17 },
                       fontWeight: 800,
                       bgcolor: "var(--brand-primary)",
-                      "&:hover": { bgcolor: "var(--brand-primary-light)", boxShadow: "var(--shadow-glow)" },
+                      color: "white",
+                      "&:hover": { 
+                        bgcolor: "var(--brand-primary-light)", 
+                        boxShadow: "0 0 30px rgba(26, 115, 232, 0.4)",
+                        transform: "translateY(-2px)"
+                      },
+                      transition: "all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)",
                       textTransform: "none",
                       letterSpacing: "-0.01em",
                       width: { xs: "100%", sm: "auto" }
@@ -768,6 +826,8 @@ export default function Home() {
           </motion.div>
         </Container>
       </Box>
+
+      <TrustedByLine />
 
       <MobileAppShowcase />
 

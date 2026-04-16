@@ -1,10 +1,28 @@
+"use client";
+
+import { Box, Container, Typography, Stack, Grid, Button, alpha } from "@mui/material";
+import { motion } from "framer-motion";
 import Link from "next/link";
-import { ArrowLeft, BookOpenText, CalendarClock, Code2, ShieldCheck, Workflow } from "lucide-react";
+import { 
+  ArrowLeft, 
+  BookOpenText, 
+  CalendarClock, 
+  Code2, 
+  ShieldCheck, 
+  Workflow,
+  Terminal,
+  ChevronRight
+} from "lucide-react";
+import { Navigation } from "@/components/landing/Navigation";
+import { Footer } from "@/components/landing/Footer";
+import DotField from "@/components/landing/DotField";
+import "@/components/landing/DotField.css";
 
 const sections = [
   {
-    icon: <Workflow className="h-5 w-5 text-indigo-300" />,
-    title: "Architecture",
+    icon: <Workflow className="text-primary" />,
+    title: "Kernel Architecture",
+    code: "KERN_ARCH_v1",
     body: "GraftAI runs as a high-performance monolith: FastAPI backend, Next.js frontend, async SQLAlchemy models, and worker-driven async jobs for non-blocking workflows.",
     bullets: [
       "FastAPI + SQLAlchemy async models",
@@ -13,114 +31,202 @@ const sections = [
     ],
   },
   {
-    icon: <CalendarClock className="h-5 w-5 text-emerald-300" />,
-    title: "Booking Flow",
+    icon: <CalendarClock className="text-primary" />,
+    title: "Orchestration Flow",
+    code: "ORCH_LOGIC_v3",
     body: "Public booking supports availability calculation, conflict prevention, confirmations, reschedule, and cancellation with email lifecycle updates.",
     bullets: [
       "Timezone-aware slot generation",
       "Tokenized attendee management links",
-      "Calendar event synchronization on booking updates",
+      "Calendar event synchronization updates",
     ],
   },
   {
-    icon: <ShieldCheck className="h-5 w-5 text-sky-300" />,
-    title: "Security Baseline",
+    icon: <ShieldCheck className="text-primary" />,
+    title: "Security Protocols",
+    code: "SEC_BASE_v2",
     body: "Security headers, trusted host checks, auth token validation, and per-route rate limiting protect critical API workflows.",
     bullets: [
-      "HSTS and strict content-type/frame policies",
-      "Public action token verification (HMAC)",
-      "Rate limits for booking and availability endpoints",
+      "HSTS and strict frame policies",
+      "HMAC action token verification",
+      "Rate limits for booking endpoints",
     ],
   },
   {
-    icon: <Code2 className="h-5 w-5 text-amber-300" />,
-    title: "Embed Widget",
+    icon: <Code2 className="text-primary" />,
+    title: "Embed Modules",
+    code: "EMBED_LOADER_v1",
     body: "Embed booking directly into external websites through the GraftAI embed loader and dedicated iframe route.",
     bullets: [
       "Drop-in script: /graftai-embed.js",
-      "Autoload with data-graftai-embed container",
-      "Direct route support: /embed/{username}/{eventType}",
+      "Autoload via data-graftai-embed",
+      "Direct username-based route support",
     ],
   },
 ];
 
 export default function DocsPage() {
   return (
-    <main className="min-h-screen bg-[#070711] text-slate-200">
-      <div className="mx-auto w-full max-w-5xl px-5 py-20 sm:px-8 sm:py-24">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 transition-colors hover:text-white"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Home
-        </Link>
+    <Box sx={{ bgcolor: "var(--bg-base)", minHeight: "100vh", position: "relative" }}>
+      <Box sx={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.4, pointerEvents: "none" }}>
+        <DotField />
+      </Box>
 
-        <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-8">
-          <div className="flex items-start gap-3">
-            <span className="mt-1 rounded-xl border border-white/10 bg-white/5 p-2">
-              <BookOpenText className="h-5 w-5 text-violet-300" />
-            </span>
-            <div>
-              <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">GraftAI Documentation</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400 sm:text-base">
-                Technical documentation for the current implementation track. This page summarizes architecture,
-                booking lifecycle behavior, operational safety, and rollout conventions.
-              </p>
-            </div>
-          </div>
-        </div>
+      <Navigation />
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sections.map((section) => (
-            <article
-              key={section.title}
-              className="rounded-3xl border border-white/10 bg-white/[0.02] p-5 sm:p-6"
-            >
-              <div className="mb-3 flex items-center gap-2">
-                {section.icon}
-                <h2 className="text-lg font-bold text-white">{section.title}</h2>
-              </div>
-              <p className="text-sm leading-relaxed text-slate-400">{section.body}</p>
-              <ul className="mt-4 space-y-2 text-sm text-slate-300">
-                {section.bullets.map((bullet) => (
-                  <li key={bullet} className="flex items-start gap-2">
-                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-400" />
-                    <span>{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-            </article>
+      <Container maxWidth="lg" sx={{ pt: { xs: 20, md: 24 }, pb: 20, position: "relative", zIndex: 1 }}>
+        <Stack spacing={2} sx={{ mb: 12 }}>
+          <Button
+            component={Link}
+            href="/"
+            startIcon={<ArrowLeft size={16} />}
+            sx={{ 
+              alignSelf: "start", 
+              color: "var(--text-faint)", 
+              fontSize: 12, 
+              fontFamily: "var(--font-mono)",
+              "&:hover": { color: "var(--primary)" }
+            }}
+          >
+            RETURN_TO_CORE
+          </Button>
+
+          <Stack direction={{ xs: "column", md: "row" }} spacing={4} alignItems="flex-start" justifyContent="space-between">
+            <Box>
+              <Typography
+                variant="h1"
+                className="text-gradient-neon"
+                sx={{
+                  fontWeight: 900,
+                  fontSize: { xs: 42, md: 64 },
+                  letterSpacing: "-0.04em",
+                  lineHeight: 1,
+                  mb: 2
+                }}
+              >
+                Kernel Docs
+              </Typography>
+              <Typography sx={{ color: "var(--text-muted)", fontSize: 16, maxWidth: 600 }}>
+                System-level documentation for the GraftAI orchestration track. Architecture, operational safety, and rollout conventions.
+              </Typography>
+            </Box>
+            
+            <Box className="refined-glass" sx={{ p: 2, borderRadius: 2, display: "flex", gap: 2, alignItems: "center" }}>
+              <Box className="system-status-dot" />
+              <Typography sx={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--primary)", fontWeight: 800 }}>
+                DOCS_LIVE_v3.0.82
+              </Typography>
+            </Box>
+          </Stack>
+        </Stack>
+
+        <Grid container spacing={3} sx={{ mb: 12 }}>
+          {sections.map((section, idx) => (
+            <Grid item xs={12} md={6} key={section.title}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                style={{ height: "100%" }}
+              >
+                <Box className="refined-glass" sx={{ 
+                  p: 4, 
+                  height: "100%", 
+                  borderRadius: 2,
+                  display: "flex",
+                  flexDirection: "column",
+                  "&:hover": { borderColor: "var(--primary)", transition: "0.3s" }
+                }}>
+                  <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                    <Box sx={{ p: 1, bgcolor: "rgba(0, 255, 156, 0.05)", borderRadius: 1 }}>
+                      {section.icon}
+                    </Box>
+                    <Typography sx={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-faint)" }}>
+                      // {section.code}
+                    </Typography>
+                  </Stack>
+
+                  <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, color: "var(--text-primary)" }}>
+                    {section.title}
+                  </Typography>
+                  <Typography sx={{ color: "var(--text-muted)", fontSize: 13, mb: 4, lineHeight: 1.6 }}>
+                    {section.body}
+                  </Typography>
+
+                  <Stack spacing={1.5} sx={{ mt: "auto" }}>
+                    {section.bullets.map((bullet) => (
+                      <Stack key={bullet} direction="row" spacing={1.5} alignItems="center">
+                        <ChevronRight size={12} className="text-primary opacity-50" />
+                        <Typography sx={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }}>{bullet}</Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Box>
+              </motion.div>
+            </Grid>
           ))}
-        </section>
+        </Grid>
 
-        <section className="mt-8 rounded-3xl border border-indigo-500/20 bg-indigo-500/10 p-6 sm:p-8">
-          <h2 className="text-xl font-bold text-white">Operational Notes</h2>
-          <p className="mt-3 text-sm leading-relaxed text-indigo-100/80">
-            For production readiness, keep reminders enabled in workers, monitor email delivery logs,
-            and verify public booking token flow after any auth or route refactor.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3 text-sm">
-            <Link href="/pricing" className="rounded-xl bg-white px-4 py-2 font-semibold text-black hover:bg-slate-200">
-              View Plans
-            </Link>
-            <Link href="/privacy-policy" className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 font-semibold text-white hover:bg-white/10">
-              Privacy Policy
-            </Link>
-            <Link href="/terms-of-service" className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 font-semibold text-white hover:bg-white/10">
-              Terms of Service
-            </Link>
-          </div>
+        <Box sx={{ 
+          p: 6, 
+          borderRadius: 2, 
+          bgcolor: "rgba(255,255,255,0.01)", 
+          border: "1px dashed var(--border-subtle)",
+          position: "relative",
+          overflow: "hidden"
+        }}>
+          <Box sx={{ position: "relative", zIndex: 1 }}>
+            <Typography variant="h4" sx={{ fontWeight: 900, mb: 4, display: "flex", alignItems: "center", gap: 2 }}>
+              <Terminal size={24} className="text-primary" /> System Implementation
+            </Typography>
+            
+            <Grid container spacing={6}>
+              <Grid item xs={12} md={6}>
+                <Typography sx={{ color: "var(--text-muted)", fontSize: 14, mb: 4, lineHeight: 1.6 }}>
+                  For production readiness, ensure neural reminders remain enabled in workers, monitor synchronization delivery logs, and verify public action token flows after any kernel refactor.
+                </Typography>
+                <Stack direction="row" spacing={2}>
+                  <Button
+                    component={Link}
+                    href="/pricing"
+                    variant="contained"
+                    sx={{ bgcolor: "var(--primary)", color: "var(--bg-base)", fontWeight: 800, px: 3, "&:hover": { bgcolor: "var(--primary)", opacity: 0.9 } }}
+                  >
+                    PLAN_SUBSCRIPTION
+                  </Button>
+                  <Button
+                    component={Link}
+                    href="/privacy"
+                    variant="outlined"
+                    sx={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)", px: 3 }}
+                  >
+                    SECURITY_SPEC
+                  </Button>
+                </Stack>
+              </Grid>
 
-          <div className="mt-6 rounded-2xl border border-white/20 bg-black/20 p-4 sm:p-5">
-            <p className="text-xs uppercase tracking-[0.2em] text-indigo-200">Embed Snippet</p>
-            <pre className="mt-3 overflow-x-auto rounded-xl bg-black/40 p-3 text-xs text-indigo-100 sm:text-sm">
-{`<div data-graftai-embed data-username="jane" data-event-type="intro-call"></div>
-<script src="https://www.graftai.tech/graftai-embed.js" defer></script>`}
-            </pre>
-          </div>
-        </section>
-      </div>
-    </main>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ 
+                  p: 3, 
+                  bgcolor: "rgba(0,0,0,0.5)", 
+                  borderRadius: 1, 
+                  border: "1px solid var(--border-subtle)",
+                  fontFamily: "var(--font-mono)"
+                }}>
+                  <Typography sx={{ fontSize: 10, color: "var(--text-faint)", mb: 2, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    // EMBED_PROMPT_v1.0
+                  </Typography>
+                  <Box component="pre" sx={{ fontSize: 12, color: "var(--primary)", overflowX: "auto", m: 0 }}>
+{`<div data-graftai-embed data-user="OPERATIVE_ID"></div>
+<script src="https://graftai.tech/relay.js" defer></script>`}
+                  </Box>
+                </Box>
+              </Grid>
+            </Grid>
+          </Box>
+        </Box>
+      </Container>
+      <Footer />
+    </Box>
   );
 }

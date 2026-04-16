@@ -208,15 +208,29 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               )}
             </Box>
 
-            <div className="relative p-8 border border-dashed border-[var(--border-subtle)] bg-black/20">
-              <div className="relative p-8 landing-form border border-dashed-subtle bg-black/12">
+            <Box className="refined-glass" sx={{ 
+              p: { xs: 4, md: 8 }, 
+              position: "relative",
+              borderRadius: 2,
+              border: "1px solid var(--border-subtle)",
+              overflow: "hidden"
+            }}>
                {/* Decorative corner tags */}
-               <div className="absolute -top-[1px] -left-[1px] w-3 h-3 border-t-2 border-l-2 border-[var(--primary)]" />
-               <div className="absolute -bottom-[1px] -right-[1px] w-3 h-3 border-b-2 border-r-2 border-[var(--primary)]" />
+               <Box 
+                sx={{ 
+                  position: "absolute", top: 0, left: 0, width: 12, height: 12, 
+                  borderTop: "2px solid var(--primary)", borderLeft: "2px solid var(--primary)" 
+                }} 
+              />
+               <Box 
+                sx={{ 
+                  position: "absolute", bottom: 0, right: 0, width: 12, height: 12, 
+                  borderBottom: "2px solid var(--primary)", borderRight: "2px solid var(--primary)" 
+                }} 
+              />
                
               {children}
-            </div>
-           </div>
+            </Box>
 
             {/* Footer */}
             <Box sx={{ mt: 8, textAlign: "center", pt: 6, borderTop: "1px dashed var(--border-subtle)" }}>

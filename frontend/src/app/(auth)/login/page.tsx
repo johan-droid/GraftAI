@@ -1,51 +1,67 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, Stack } from "@mui/material";
 import { motion } from "framer-motion";
-import { Mail, Lock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import Link from "next/link";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { OAuthButtons } from "@/components/auth/OAuthButtons";
-import { FloatingInput } from "@/components/ui/FloatingInput";
-import { GradientButton } from "@/components/ui/GradientButton";
-import { signIn } from "next-auth/react";
-import { toast } from "@/components/ui/Toast";
+import { Lock, Shield, Cpu } from "lucide-react";
 
 export default function LoginPage() {
   return (
     <AuthLayout
-      title="INIT_AUTH_SEQUENCE"
-      subtitle="GRAFT_AI :: SECURE_KERNEL_ACCESS_GATEWAY"
+      title="Welcome back"
+      subtitle="Sign in to your GraftAI workspace"
     >
-      <Box sx={{ mt: 2 }}>
-        <OAuthButtons callbackURL="/dashboard" />
-      </Box>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.5 }}
+      >
+        <Stack spacing={4}>
+          <Box sx={{ textAlign: "center", mb: 2 }}>
+            <Typography
+              sx={{
+                fontSize: "12px",
+                color: "var(--text-secondary)",
+                fontFamily: "var(--font-sans)",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 1.5
+              }}
+            >
+              Let's get you signed in
+            </Typography>
+          </Box>
 
-      <Box sx={{ mt: 6, textAlign: "center" }}>
-        <Typography
-          sx={{
-            fontSize: "10px",
-            color: "var(--text-faint)",
-            maxWidth: "320px",
-            mx: "auto",
-            lineHeight: 1.6,
-            fontFamily: "var(--font-mono)",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-          }}
-        >
-          By signing in, you accept the {" "}
-          <Link href="/terms" style={{ color: "var(--primary)", textDecoration: "none" }}>ENFORCE_TERMS</Link>
-          {" "}AND{" "}
-          <Link href="/privacy" style={{ color: "var(--primary)", textDecoration: "none" }}>PRIVACY_PROTOCOL</Link>.
-        </Typography>
-        <Typography sx={{ mt: 4, fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-          New to GraftAI? {" "}
-          <Link href="/signup" style={{ color: "var(--primary)", textDecoration: "none" }}>Create an account</Link>
-        </Typography>
-      </Box>
+          <OAuthButtons callbackURL="/dashboard" />
+
+          <Box sx={{ mt: 2, textAlign: "center" }}>
+            <Typography
+              sx={{
+                fontSize: "11px",
+                color: "var(--text-faint)",
+                lineHeight: 1.8,
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              By proceeding, you agree to our{" "}
+              <Link href="/terms" style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 700 }}>Terms of Service</Link>
+              {" "}and{" "}
+              <Link href="/privacy" style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 700 }}>Privacy Policy</Link>.
+            </Typography>
+            
+            <Box sx={{ mt: 4, pt: 4, borderTop: "1px solid var(--border-subtle)" }}>
+              <Typography sx={{ fontSize: "12px", color: "var(--text-muted)", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+                New here?{" "}
+                <Link href="/signup" style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 700 }}>Create an account</Link>
+              </Typography>
+            </Box>
+          </Box>
+        </Stack>
+      </motion.div>
     </AuthLayout>
   );
 }

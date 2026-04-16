@@ -17,8 +17,9 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
+import { ArrowRight, CalendarDays, LayoutDashboard, Menu, ShieldCheck, Sparkles, Workflow, X, LogOut, User } from "lucide-react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowRight, CalendarDays, LayoutDashboard, Menu, ShieldCheck, Sparkles, Workflow, X } from "lucide-react";
 
 const navLinks = [
   { label: "Product", href: "#product" },
@@ -56,13 +57,14 @@ function BrandMark() {
         >
           GraftAI
         </Typography>
-        <Typography sx={{ fontSize: 11, color: "var(--text-muted)" }}>Scheduling that stays readable</Typography>
+        <Typography sx={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-sans)", fontWeight: 500 }}>Smart scheduling for modern teams</Typography>
       </Box>
     </Stack>
   );
 }
 
 export function Navigation() {
+  const { status } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const theme = useTheme();
@@ -123,34 +125,65 @@ export function Navigation() {
 
                  <Divider orientation="vertical" flexItem sx={{ mx: 1.5, borderColor: "var(--border-subtle)" }} />
 
-                <Button
-                  component={Link}
-                  href="/login"
-                  variant="text"
-                  sx={{ color: "var(--text-secondary)", textTransform: "none", fontWeight: 600 }}
-                >
-                  Log in
-                </Button>
+                {status === "authenticated" ? (
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      component={Link}
+                      href="/dashboard"
+                      variant="text"
+                      startIcon={<LayoutDashboard size={14} />}
+                      sx={{ color: "var(--text-secondary)", textTransform: "none", fontWeight: 600 }}
+                    >
+                      Dashboard
+                    </Button>
+                    <Button
+                      component={Link}
+                      href="/signout"
+                      variant="text"
+                      startIcon={<LogOut size={14} />}
+                      sx={{ 
+                        color: "var(--text-muted)", 
+                        textTransform: "none", 
+                        fontWeight: 500,
+                        "&:hover": { color: "var(--accent)" }
+                      }}
+                    >
+                      Log out
+                    </Button>
+                  </Stack>
+                ) : (
+                  <>
+                    <Button
+                      component={Link}
+                      href="/login"
+                      variant="text"
+                      sx={{ color: "var(--text-secondary)", textTransform: "none", fontWeight: 600 }}
+                    >
+                      Log in
+                    </Button>
 
-                <Button
-                  component={Link}
-                  href="/profile/setup"
-                  variant="contained"
-                  endIcon={<ArrowRight size={16} />}
-                  sx={{
-                    background: "var(--brand-primary)",
-                    color: "white",
-                    fontWeight: 600,
-                    textTransform: "none",
-                    boxShadow: "none",
-                    borderRadius: 99,
-                    px: 3,
-                    transition: "all 0.2s ease",
-                    "&:hover": { background: "var(--brand-primary-light)", boxShadow: "var(--shadow-glow)" },
-                  }}
-                >
-                  Start setup
-                </Button>
+                    <Button
+                      component={Link}
+                      href="/signup"
+                      variant="contained"
+                      endIcon={<ArrowRight size={16} />}
+                      sx={{
+                        background: "var(--brand-primary)",
+                        color: "white",
+                        fontWeight: 700,
+                        textTransform: "none",
+                        boxShadow: "none",
+                        borderRadius: 99,
+                        px: 3,
+                        fontFamily: "var(--font-sans)",
+                        transition: "all 0.2s ease",
+                        "&:hover": { background: "var(--brand-primary-light)", boxShadow: "var(--shadow-glow)" },
+                      }}
+                    >
+                      Get started
+                    </Button>
+                  </>
+                )}
               </Stack>
             )}
 
@@ -158,7 +191,7 @@ export function Navigation() {
               <Stack direction="row" alignItems="center" spacing={1}>
                 <Button
                   component={Link}
-                  href="/profile/setup"
+                  href="/signup"
                   variant="contained"
                   size="small"
                   sx={{
@@ -170,6 +203,7 @@ export function Navigation() {
                     fontWeight: 800,
                     textTransform: "none",
                     minWidth: "auto",
+                    fontFamily: "var(--font-sans)",
                   }}
                 >
                   Start
@@ -256,7 +290,7 @@ export function Navigation() {
           <Stack spacing={1.25} sx={{ mt: "auto" }}>
             <Button
               component={Link}
-              href="/profile/setup"
+              href="/signup"
               variant="contained"
               fullWidth
               onClick={() => setMobileMenuOpen(false)}
@@ -268,9 +302,10 @@ export function Navigation() {
                 color: "#04110b",
                 fontWeight: 800,
                 textTransform: "none",
+                fontFamily: "var(--font-sans)",
               }}
             >
-              Continue setup
+              Get started
             </Button>
             <Button
               component={Link}

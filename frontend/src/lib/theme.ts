@@ -7,10 +7,10 @@ export type ThemeMode = "light" | "dark" | "auto";
 const colors = {
   // Brand colors - Neon Spectrum
   brand: {
-    primary: { h: 157, s: 100, l: 50 },      // #00FF9C - Neon Green
-    secondary: { h: 187, s: 100, l: 50 },    // #00E0FF - Electric Cyan
-    accent: { h: 331, s: 100, l: 50 },       // #FF007A - Matrix Magenta
-    muted: { h: 157, s: 100, l: 10 },        // Dark Neon Tint
+    primary: { h: 217, s: 89, l: 61 },      // #1a73e8 - Google Blue (Primary)
+    secondary: { h: 157, s: 100, l: 50 },    // Neon Green (Secondary)
+    accent: { h: 5, s: 81, l: 56 },          // Google Red
+    muted: { h: 217, s: 89, l: 15 },         // Dark Blue Tint
   },
   
   // Semantic colors (Technical variants)
@@ -48,24 +48,24 @@ const colors = {
   // Pure White Theme - Light Mode Equivalent
   light: {
     background: {
-      base: { h: 0, s: 0, l: 98 },           // Near White
-      elevated: { h: 0, s: 0, l: 100 },      // Pure White
-      surface: { h: 217, s: 15, l: 95 },     // Very Light Slate
-      raised: { h: 0, s: 0, l: 96 },         // Card Light
-      overlay: { h: 0, s: 0, l: 100, a: 0.85 }, // Light overlay
+      base: { h: 0, s: 0, l: 100 },          // Pure White
+      elevated: { h: 210, s: 40, l: 98 },    // Very subtle blue-tinted white
+      surface: { h: 210, s: 20, l: 96 },     // Light Gray
+      raised: { h: 0, s: 0, l: 100 },         // Card Light
+      overlay: { h: 0, s: 0, l: 100, a: 0.8 }, // Light overlay
     },
     text: {
-      primary: { h: 0, s: 0, l: 10 },       // Deep Black
-      secondary: { h: 0, s: 0, l: 35 },     // Medium Dark Gray
-      tertiary: { h: 0, s: 0, l: 50 },      // Muted Gray
-      muted: { h: 0, s: 0, l: 65 },         // Light Gray
-      inverse: { h: 0, s: 0, l: 98 },       // White
+      primary: { h: 210, s: 25, l: 12 },    // Graphite Black
+      secondary: { h: 210, s: 15, l: 40 },   // Slate Gray
+      tertiary: { h: 210, s: 10, l: 60 },    // Muted Gray
+      muted: { h: 210, s: 10, l: 75 },       // Very Light Gray
+      inverse: { h: 0, s: 0, l: 100 },       // White
     },
     border: {
-      subtle: { h: 0, s: 0, l: 90 },        // Subtle light border
-      light: { h: 157, s: 100, l: 80 },     // Neon Green Tint
-      medium: { h: 0, s: 0, l: 82 },        // Medium
-      focus: { h: 157, s: 100, l: 50 },     // Neon Green Focus
+      subtle: { h: 210, s: 15, l: 92 },      // Subtle border
+      light: { h: 217, s: 89, l: 90 },       // Blue Tint
+      medium: { h: 210, s: 15, l: 85 },      // Medium
+      focus: { h: 217, s: 89, l: 61 },       // Google Blue Focus
     },
   },
 };
@@ -105,10 +105,14 @@ export function getThemeColors(mode: ThemeMode = "dark") {
     
     // Shadows - Technical Depth
     shadows: {
-      card: "0 4px 20px -5px rgba(0, 0, 0, 0.8)",
-      elevated: "0 20px 40px -15px rgba(0, 0, 0, 0.9)",
-      glow: `0 0 20px ${hsla(colors.brand.primary, 0.3)}`,
-      cyan: `0 0 20px ${hsla(colors.brand.secondary, 0.3)}`,
+      card: resolvedMode === "dark" 
+        ? "0 4px 20px -5px rgba(0, 0, 0, 0.8)" 
+        : "0 2px 12px -2px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04)",
+      elevated: resolvedMode === "dark"
+        ? "0 20px 40px -15px rgba(0, 0, 0, 0.9)"
+        : "0 10px 30px -10px rgba(0, 0, 0, 0.1), 0 4px 12px -4px rgba(0, 0, 0, 0.05)",
+      glow: `0 0 20px ${hsla(colors.brand.primary, resolvedMode === "dark" ? 0.3 : 0.1)}`,
+      cyan: `0 0 20px ${hsla(colors.brand.secondary, resolvedMode === "dark" ? 0.3 : 0.1)}`,
     },
     
     // Transitions

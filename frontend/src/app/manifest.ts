@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'AI-powered scheduling that handles timezones, conflicts, and back-and-forth.',
     start_url: '/login',
     display: 'standalone',
-    background_color: '#070711',
-    theme_color: '#070711',
+    background_color: '#FFFFFF',
+    theme_color: '#FFFFFF',
     icons: [
       {
         src: '/icon.png',

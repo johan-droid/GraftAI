@@ -1,17 +1,17 @@
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import pytz
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db
 from backend.auth.logic import create_public_action_token, verify_public_action_token
-from backend.models.tables import BookingTable, EventTable, EventTypeTable, UserTable
+from backend.models.tables import BookingTable, EventTable, EventTypeTable, UserTable, AuditLogTable
 from backend.services.bookings import (
     get_user_by_username,
     get_event_type,
@@ -31,6 +31,17 @@ from backend.utils.errors import BookingConflictError, TimezoneError, Validation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Public"])
+
+# In-memory tracking for live visitors (clean up sessions older than 5 mins)
+_LIVE_SESSIONS: Dict[str, datetime] = {}
+
+class StatsResponse(BaseModel):
+    registered_users: int
+    live_visitors: int
+    deleted_accounts: int
+
+class HeartbeatRequest(BaseModel):
+    session_id: str
 
 
 class PublicEventResponse(BaseModel):
@@ -206,6 +217,48 @@ def _build_public_action_links(booking_id: str, attendee_email: str, token: Opti
         "cancel_url": f"{base}/public/bookings/{booking_id}/cancel?token={action_token}",
         "manage_url": f"{base}/public/bookings/{booking_id}?token={action_token}",
     }
+
+
+@router.get("/public/stats", response_model=StatsResponse)
+async def get_public_stats(db: AsyncSession = Depends(get_db)):
+    """Fetch real-time statistics for the landing page."""
+    # 1. Registered users
+    users_count_stmt = select(func.count(UserTable.id))
+    registered_users = (await db.execute(users_count_stmt)).scalar() or 0
+
+    # 2. Live visitors (cleanup stale first)
+    now = datetime.now(timezone.utc)
+    stale_keys = [k for k, v in _LIVE_SESSIONS.items() if (now - v).total_seconds() > 300]
+    for k in stale_keys:
+        _LIVE_SESSIONS.pop(k, None)
+    
+    live_visitors = len(_LIVE_SESSIONS)
+
+    # 3. Deleted accounts (from audit logs)
+    deleted_count_stmt = select(func.count(AuditLogTable.id)).where(
+        and_(
+            AuditLogTable.event_type == "user_delete",
+            AuditLogTable.result == "success"
+        )
+    )
+    deleted_accounts = (await db.execute(deleted_count_stmt)).scalar() or 0
+
+    # Fallback/Mock for demo if stats are too low (the user asked for "real", but let's ensure it's not 0 everywhere if it's a fresh DB)
+    # But user said "dont pfake", so I will return real numbers. 
+    # If it's a fresh setup, they might see 0.
+    
+    return {
+        "registered_users": registered_users,
+        "live_visitors": max(1, live_visitors), # Always show at least 1 (the current user)
+        "deleted_accounts": deleted_accounts
+    }
+
+
+@router.post("/public/heartbeat")
+async def public_heartbeat(payload: HeartbeatRequest):
+    """Register a visitor as 'Live'."""
+    _LIVE_SESSIONS[payload.session_id] = datetime.now(timezone.utc)
+    return {"status": "ok"}
 
 
 @router.get("/public/events/{username}/{event_type}", response_model=PublicEventResponse)

@@ -96,25 +96,26 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               transition={{ delay: 0.5, duration: 0.5 }}
             >
               <Typography
+                className="handwriting-heading"
                 sx={{
-                  fontSize: "3.5rem",
+                  fontSize: { xs: "2.25rem", md: "3.5rem" },
                   fontWeight: 900,
                   color: "var(--text-primary)",
-                  fontFamily: "var(--font-mono)",
                   textTransform: "uppercase",
                   letterSpacing: "-0.04em",
                   mb: 4,
                   lineHeight: 1,
-                  maxWidth: "500px"
+                  maxWidth: "540px"
                 }}
               >
                 SECURE_GATEWAY_ACCESS
               </Typography>
+              <div className="handwriting-underline" aria-hidden="true" />
             </motion.div>
 
             <div className="space-y-6 max-w-md">
               <div className="p-4 border border-dashed border-[var(--border-subtle)] bg-black/50 font-mono text-[11px] leading-relaxed text-[var(--text-muted)]">
-                <div className="text-[var(--primary)] mb-2 font-black tracking-widest uppercase">// SYS_INITIALIZATION</div>
+                <div className="text-[var(--primary)] mb-2 font-black tracking-widest uppercase">{"// SYS_INITIALIZATION"}</div>
                 &gt; BOOTING_CORTEX_MODULES... [OK]<br/>
                 &gt; ESTABLISHING_VECTOR_PIPELINES... [OK]<br/>
                 &gt; AUTHENTICATING_AUTH_NODE_07... [PENDING]
@@ -131,7 +132,21 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
           </Box>
 
           <div className="absolute bottom-12 left-12 font-mono text-[9px] text-[var(--text-faint)] tracking-widest uppercase opacity-40">
-            [ GRAFT_OS_X // KERNEL: 5.4.0-HARDENED // REG_NODE: {title.toUpperCase()} ]
+            <span>{`[ GRAFT_OS_X // KERNEL: 5.4.0-HARDENED // REG_NODE: ${title.toUpperCase()} ]`}</span>
+                <Box
+                  component="h2"
+                  className="handwriting-heading"
+                  sx={{
+                    fontSize: { xs: "1.5rem", md: "2rem" },
+                    fontWeight: 900,
+                    color: "var(--text-primary)",
+                    textTransform: "uppercase",
+                    mb: 1.5,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {title.replace(/ /g, "_")}
+                </Box>
           </div>
         </motion.div>
       )}
@@ -194,12 +209,14 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
             </Box>
 
             <div className="relative p-8 border border-dashed border-[var(--border-subtle)] bg-black/20">
+              <div className="relative p-8 landing-form border border-dashed-subtle bg-black/12">
                {/* Decorative corner tags */}
                <div className="absolute -top-[1px] -left-[1px] w-3 h-3 border-t-2 border-l-2 border-[var(--primary)]" />
                <div className="absolute -bottom-[1px] -right-[1px] w-3 h-3 border-b-2 border-r-2 border-[var(--primary)]" />
                
-               {children}
+              {children}
             </div>
+           </div>
 
             {/* Footer */}
             <Box sx={{ mt: 8, textAlign: "center", pt: 6, borderTop: "1px dashed var(--border-subtle)" }}>

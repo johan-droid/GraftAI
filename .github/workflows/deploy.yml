@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RENDER_DEPLOY_HOOK_URL: ${{ secrets['RENDER_DEPLOY_HOOK_URL'] }}
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
     steps:
       - name: Deploy to Render
         run: |

@@ -1,8 +1,8 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=Permanent+Marker&display=swap');
 
 /* ── Technical Design Tokens ───────────────────────────────────────── */
-:root {
+[data-theme="dark"] {
   /* Pitch Black Baseline */
   --bg-base:      #050505;
   --bg-surface:   #0C0C0E;
@@ -27,19 +27,48 @@
   --border-bright: rgba(0, 255, 156, 0.25);
   --border-active: var(--primary);
 
-  /* Geometry */
-  --radius-xs:    0px;
-  --radius-sm:    2px;
-  --radius:       4px;
-  --radius-lg:    8px;
-
-  /* Fonts */
-  --font-mono:    'JetBrains Mono', monospace;
-  --font-sans:    'Outfit', sans-serif;
-
   /* Shadows */
   --shadow-glow: 0 0 20px rgba(0, 255, 156, 0.15);
   --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="light"] {
+  --bg-base:      #FFFFFF;
+  --bg-surface:   #F8F9FA;
+  --bg-elevated:  #FFFFFF;
+  --bg-card:      #FFFFFF;
+  --bg-hover:     rgba(26, 115, 232, 0.04);
+
+  --primary:      #1a73e8; /* Google Blue */
+  --secondary:    #34a853; /* Google Green */
+  --accent:       #ea4335; /* Google Red */
+  --primary-glow: rgba(26, 115, 232, 0.1);
+  
+  --text-primary: #202124;
+  --text-secondary: #5f6368;
+  --text-muted:   #70757a;
+  --text-faint:   #9aa0a6;
+
+  --border-subtle: #dadce0;
+  --border-bright: #1a73e8;
+  --border-active: #1a73e8;
+
+  --shadow-glow: 0 0 15px rgba(26, 115, 232, 0.08);
+  --shadow-card: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+}
+
+:root {
+  /* Geometry */
+  --radius-xs:    0px;
+  --radius-sm:    4px;
+  --radius:       8px;
+  --radius-lg:    12px;
+
+  /* Fonts */
+  --font-mono:    'JetBrains Mono', monospace;
+  --font-sans:    'Plus Jakarta Sans', sans-serif;
+  --font-outfit:  'Outfit', sans-serif;
+  --font-handwriting: 'Permanent Marker', cursive;
 }
 
 /* ── Reset & Base ────────────────────────────────────────────────── */
@@ -65,8 +94,8 @@ html, body {
 
 /* ── Global Background Effects ──────────────────────────────────── */
 
-/* Terminal Grid */
-body::before {
+/* Terminal Grid (Dark Only) */
+[data-theme="dark"] body::before {
   content: '';
   position: fixed;
   inset: 0;
@@ -79,8 +108,20 @@ body::before {
   opacity: 0.5;
 }
 
-/* scanlines */
-body::after {
+/* Dots Grid (Light Only) */
+[data-theme="light"] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image: radial-gradient(#dadce0 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.4;
+}
+
+/* scanlines (Dark Only) */
+[data-theme="dark"] body::after {
   content: '';
   position: fixed;
   inset: 0;
@@ -320,6 +361,132 @@ body::after {
   box-shadow: 0 0 20px var(--primary-glow);
 }
 
-.border-dashed-bright {
-  border: 1px dashed var(--primary);
+.layer-shadow {
+  box-shadow: 
+    0 1px 2px rgba(0,0,0,0.02),
+    0 4px 8px rgba(0,0,0,0.02),
+    0 12px 24px rgba(0,0,0,0.03),
+    0 24px 48px rgba(0,0,0,0.03);
+}
+
+.bg-dot-grid {
+  background-image: radial-gradient(var(--border-subtle) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ── Refinement Utilities ────────────────────────────────────── */
+
+.spotlight-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    800px circle at var(--mouse-x) var(--mouse-y),
+    rgba(26, 115, 232, 0.06),
+    transparent 40%
+  );
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.spotlight-card:hover::before {
+  opacity: 1;
+}
+
+/* ── Accessibility & Mobile Refinements ───────────────────────── */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+:where(a,button,input,select,textarea):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px rgba(0,255,156,0.06);
+}
+
+.mobile-menu { padding-bottom: var(--safe-bottom); }
+
+.top-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 300ms ease;
+  z-index: 9999;
+}
+.top-progress.active { transform: scaleX(1); }
+
+/* Ensure interactive elements are keyboard friendly on small screens */
+button, a { -webkit-tap-highlight-color: transparent; }
+
+/* ── Landing / Handwriting Styles ───────────────────────────────── */
+.handwriting-heading {
+  font-family: var(--font-handwriting);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  text-shadow: 0 2px 18px rgba(0,0,0,0.18);
+}
+
+.handwriting-underline {
+  width: 120px;
+  height: 6px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  border-radius: 6px;
+  margin-top: 8px;
+  box-shadow: 0 6px 20px rgba(0,255,156,0.06);
+}
+
+.landing-form {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid var(--border-subtle);
+  padding: 28px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
+}
+
+.landing-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  background: var(--primary);
+  color: #000;
+  border-radius: 8px;
+  font-weight: 800;
+  box-shadow: 0 8px 30px rgba(0,255,156,0.08);
+}
+
+
+.glass-nav {
+  background: var(--bg-overlay);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: all 0.3s ease;
+}
+
+.glass-nav.scrolled {
+  background: rgba(255, 255, 255, 0.85);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="dark"] .glass-nav.scrolled {
+  background: rgba(5, 5, 5, 0.8);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bot, LogIn, Command, Menu, X, ArrowRight, Zap } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/app/providers/auth-provider";
@@ -21,6 +21,7 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const { activePing } = useNotificationContext();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const isAuthPage = pathname === "/login" || pathname === "/auth-callback";
 
   useEffect(() => {
@@ -32,6 +33,24 @@ export function Navbar() {
     return () => { document.body.style.overflow = ""; };
   }, [mobileOpen]);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const id = setTimeout(() => {
+      const menu = document.getElementById("mobile-menu");
+      const first = menu?.querySelector<HTMLElement>('a, button, input, [tabindex]:not([tabindex="-1"])') as HTMLElement | null;
+      first?.focus();
+    }, 50);
+    return () => clearTimeout(id);
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && mobileOpen) setMobileOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
   const visibleNavItems = NAV_ITEMS.filter(item => {
     if (item.href.startsWith("/dashboard")) return !!user;
     return true;
@@ -40,7 +59,7 @@ export function Navbar() {
   if (isAuthPage) return null;
 
   return (
-    <nav className="floating-nav">
+    <nav className="floating-nav" role="navigation" aria-label="Main navigation">
       <Link href="/" className="flex items-center gap-2 pr-3 border-r border-white/10 group">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/25">
           <Zap className="w-5 h-5 text-white fill-white" />
@@ -50,7 +69,7 @@ export function Navbar() {
         </span>
       </Link>
       
-      <div className="flex items-center gap-1 sm:gap-6 px-2 ml-auto sm:ml-0">
+        <div className="flex items-center gap-1 sm:gap-6 px-2 ml-auto sm:ml-0">
         <PulsePing status={activePing} className="mr-1 sm:mr-4" />
         
         <div className="hidden sm:flex items-center gap-6">
@@ -80,6 +99,8 @@ export function Navbar() {
 
         <button
           onClick={() => setMobileOpen(true)}
+          aria-label="Open navigation menu"
+          aria-haspopup="menu"
           className="sm:hidden flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 border border-white/10 text-slate-400 active:scale-95 transition-all"
         >
           <Menu className="w-4 h-4" />
@@ -117,19 +138,25 @@ export function Navbar() {
               exit={{ opacity: 0 }}
               onClick={() => setMobileOpen(false)}
               className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
+              aria-hidden="true"
             />
             <motion.div
+              id="mobile-menu"
+              ref={mobileMenuRef}
+              role="dialog"
+              aria-modal="true"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 right-0 z-[61] w-[min(85vw,320px)] bg-[#070711] border-l border-white/10 p-6 flex flex-col"
+              className="fixed inset-y-0 right-0 z-[61] w-[min(85vw,320px)] bg-[#070711] border-l border-white/10 p-6 flex flex-col mobile-menu"
             >
               <div className="flex items-center justify-between mb-8">
                 <span className="font-bold text-sm tracking-tight text-white/50 uppercase">Menu</span>
                 <button 
                   onClick={() => setMobileOpen(false)}
                   className="p-2 -mr-2 text-slate-400 hover:text-white transition-colors"
+                  aria-label="Close navigation menu"
                 >
                   <X className="w-5 h-5" />
                 </button>

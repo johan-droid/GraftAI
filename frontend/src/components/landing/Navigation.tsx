@@ -36,13 +36,13 @@ function BrandMark() {
           height: 38,
           display: "grid",
           placeItems: "center",
-          borderRadius: 2,
-          border: "1px solid rgba(255,255,255,0.08)",
-          background: "linear-gradient(180deg, rgba(0,255,156,0.12), rgba(255,255,255,0.02))",
-          boxShadow: "0 12px 36px rgba(0,0,0,0.28)",
+          borderRadius: 2.5,
+          border: "1px solid var(--border-subtle)",
+          background: "linear-gradient(180deg, var(--bg-surface), var(--bg-base))",
+          boxShadow: "var(--shadow-card)",
         }}
       >
-        <Sparkles size={18} color="var(--primary)" />
+        <Sparkles size={18} color="var(--brand-primary)" />
       </Box>
       <Box>
         <Typography
@@ -80,11 +80,12 @@ export function Navigation() {
       <AppBar
         position="fixed"
         elevation={0}
+        className={`glass-nav ${scrolled ? "scrolled" : ""}`}
         sx={{
           zIndex: 1200,
-          background: scrolled ? "rgba(7, 10, 14, 0.92)" : "rgba(7, 10, 14, 0.72)",
-          backdropFilter: "blur(18px)",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "transparent",
+          backdropFilter: "none",
+          borderBottom: "none",
         }}
       >
         <Toolbar sx={{ minHeight: { xs: 68, md: 76 }, px: { xs: 2, md: 4 } }}>
@@ -105,21 +106,22 @@ export function Navigation() {
                     component={Link}
                     href={link.href}
                     variant="text"
-                    sx={{
+                     sx={{
                       color: "var(--text-secondary)",
                       textTransform: "none",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      px: 1.5,
+                      fontSize: 14,
+                      fontWeight: 500,
+                      px: 2,
                       minWidth: "auto",
-                      "&:hover": { color: "var(--text-primary)", background: "rgba(255,255,255,0.04)" },
+                      borderRadius: 99,
+                      "&:hover": { color: "var(--brand-primary)", background: "var(--bg-surface)" },
                     }}
                   >
                     {link.label}
                   </Button>
                 ))}
 
-                <Divider orientation="vertical" flexItem sx={{ mx: 1.5, borderColor: "rgba(255,255,255,0.08)" }} />
+                 <Divider orientation="vertical" flexItem sx={{ mx: 1.5, borderColor: "var(--border-subtle)" }} />
 
                 <Button
                   component={Link}
@@ -136,15 +138,15 @@ export function Navigation() {
                   variant="contained"
                   endIcon={<ArrowRight size={16} />}
                   sx={{
-                    borderRadius: 999,
-                    px: 2.25,
-                    py: 1.1,
-                    background: "linear-gradient(90deg, var(--primary), var(--secondary))",
-                    color: "#04110b",
-                    fontWeight: 800,
+                    background: "var(--brand-primary)",
+                    color: "white",
+                    fontWeight: 600,
                     textTransform: "none",
                     boxShadow: "none",
-                    "&:hover": { boxShadow: "0 10px 24px rgba(0,255,156,0.14)" },
+                    borderRadius: 99,
+                    px: 3,
+                    transition: "all 0.2s ease",
+                    "&:hover": { background: "var(--brand-primary-light)", boxShadow: "var(--shadow-glow)" },
                   }}
                 >
                   Start setup
@@ -174,11 +176,11 @@ export function Navigation() {
                 </Button>
                 <IconButton
                   onClick={() => setMobileMenuOpen(true)}
-                  sx={{
+                   sx={{
                     color: "var(--text-primary)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: 2,
-                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: 2.5,
+                    background: "var(--bg-surface)",
                   }}
                   aria-label="Open menu"
                 >
@@ -198,8 +200,8 @@ export function Navigation() {
           sx: {
             width: "100%",
             maxWidth: 360,
-            background: "#070A0F",
-            borderLeft: "1px solid rgba(255,255,255,0.08)",
+             background: "var(--bg-base)",
+            borderLeft: "1px solid var(--border-subtle)",
             p: 2.5,
           },
         }}

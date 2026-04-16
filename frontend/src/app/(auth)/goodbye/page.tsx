@@ -4,7 +4,6 @@ import { Box, Typography, Stack, Button, Container } from "@mui/material";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Sparkles, ArrowLeft, Moon, Power } from "lucide-react";
-import { Navigation } from "@/components/landing/Navigation";
 
 export default function GoodbyePage() {
   return (
@@ -19,8 +18,6 @@ export default function GoodbyePage() {
           pointerEvents: "none",
         }}
       />
-
-      <Navigation />
 
       <Container maxWidth="sm" sx={{ pt: { xs: 20, md: 30 }, pb: 10, position: "relative", zIndex: 1 }}>
         <motion.div

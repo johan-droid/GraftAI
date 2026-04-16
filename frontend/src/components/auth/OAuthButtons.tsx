@@ -1,7 +1,6 @@
 "use client";
 
 import { Box, Button } from "@mui/material";
-import { motion } from "framer-motion";
 import { signIn } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 
@@ -25,15 +24,16 @@ const MicrosoftIcon = () => (
 );
 
 const providers = [
-  { id: "google", name: "Google", icon: GoogleIcon, color: "#4285F4" },
-  { id: "microsoft-entra-id", name: "Microsoft", icon: MicrosoftIcon, color: "#00A4EF" },
+  { id: "google", name: "Google", icon: GoogleIcon },
+  { id: "microsoft-entra-id", name: "Microsoft", icon: MicrosoftIcon },
 ];
 
 interface OAuthButtonsProps {
   callbackURL?: string;
+  actionText?: "Sign in" | "Sign up";
 }
 
-export function OAuthButtons({ callbackURL = "/dashboard" }: OAuthButtonsProps) {
+export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in" }: OAuthButtonsProps) {
   const handleOAuth = async (provider: string) => {
     try {
       await signIn(provider, { callbackUrl: callbackURL });
@@ -48,80 +48,39 @@ export function OAuthButtons({ callbackURL = "/dashboard" }: OAuthButtonsProps) 
   };
 
   return (
-    <Box>
-      {/* OAuth Buttons */}
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {providers.map((provider, index) => (
-          <motion.div
-            key={provider.id}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.1, duration: 0.2 }}
-            whileHover={{ x: 4 }}
-            whileTap={{ scale: 0.99 }}
-          >
-            <Button
-              onClick={() => handleOAuth(provider.id)}
-              fullWidth
-              sx={{
-                py: 2.5,
-                px: 3,
-                background: "var(--bg-elevated)",
-                border: "1px dashed var(--border-subtle)",
-                borderRadius: 0,
-                color: "var(--text-primary)",
-                textTransform: "uppercase",
-                fontFamily: "var(--font-mono)",
-                fontSize: "10px",
-                fontWeight: 800,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-start",
-                gap: 3,
-                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                letterSpacing: "0.2em",
-                position: "relative",
-                overflow: "hidden",
-                "&::before": {
-                  content: '""',
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  width: "2px",
-                  height: "0%",
-                  background: "var(--primary)",
-                  transition: "height 0.2s ease",
-                },
-                "&:hover": {
-                  background: "rgba(0, 255, 156, 0.08)",
-                  borderColor: "var(--primary)",
-                  color: "white",
-                  "&::before": {
-                    height: "100%",
-                  },
-                  "& svg": {
-                    filter: "drop-shadow(0 0 5px var(--primary))",
-                    opacity: 1,
-                  }
-                },
-                "& svg": {
-                  filter: "grayscale(100%)",
-                  opacity: 0.5,
-                  transition: "all 0.3s ease",
-                }
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", minWidth: 24 }}>
-                <provider.icon />
-              </Box>
-              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                <span style={{ fontSize: '8px', opacity: 0.4, marginBottom: '2px' }}>PROVIDER_NODE_{index.toString().padStart(2, '0')}</span>
-                AUTH_VIA_{provider.name.toUpperCase()}
-              </Box>
-            </Button>
-          </motion.div>
-        ))}
-      </Box>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      {providers.map((provider) => (
+        <Button
+          key={provider.id}
+          onClick={() => handleOAuth(provider.id)}
+          fullWidth
+          variant="outlined"
+          startIcon={<provider.icon />}
+          sx={{
+            py: 1.5,
+            px: 3,
+            borderRadius: "100px",
+            textTransform: "none",
+            color: "var(--text-primary, #1f1f1f)",
+            borderColor: "var(--border-subtle, #747775)",
+            fontFamily: "var(--font-sans, 'Google Sans', Roboto, sans-serif)",
+            fontSize: "0.875rem",
+            fontWeight: 500,
+            justifyContent: "center",
+            gap: 1,
+            "&:hover": {
+              backgroundColor: "rgba(0,0,0,0.04)",
+              borderColor: "var(--border-subtle, #747775)",
+            },
+            "& .MuiButton-startIcon": {
+              marginRight: "8px",
+              marginLeft: "-4px",
+            },
+          }}
+        >
+          {actionText} with {provider.name}
+        </Button>
+      ))}
     </Box>
   );
 }

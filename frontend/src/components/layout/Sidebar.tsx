@@ -2,87 +2,93 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { 
-  LayoutDashboard, 
-  CalendarDays, 
-  Bot, 
-  Settings, 
-  Puzzle, 
-  LogOut,
-  MapPin,
-  Terminal,
-  Activity
+  LayoutDashboard, Calendar, PlusCircle, 
+  Users, Zap, BarChart3, Settings 
 } from "lucide-react";
-import { useAuth } from "@/app/providers/auth-provider";
+
+const NAV_ITEMS = [
+  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { name: "My Calendar", href: "/dashboard/calendar", icon: Calendar },
+  { name: "Event Types", href: "/dashboard/event-types", icon: PlusCircle },
+  { name: "Team & Resources", href: "/dashboard/teams", icon: Users },
+  { name: "Workflows", href: "/dashboard/workflows", icon: Zap },
+  { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { logout } = useAuth();
-
-  const NAV_ITEMS = [
-    { label: "OVERVIEW", icon: LayoutDashboard, href: "/dashboard" },
-    { label: "CALENDAR", icon: CalendarDays, href: "/dashboard/calendar" },
-    { label: "EVENT_TYPES", icon: MapPin, href: "/dashboard/event-types" },
-    { label: "COGNITIVE_AI", icon: Bot, href: "/dashboard/ai" },
-    { label: "CLUSTER_PLUGINS", icon: Puzzle, href: "/dashboard/plugins" },
-    { label: "DEV_CORNER", icon: Terminal, href: "/dashboard/developer" },
-    { label: "SYS_SETTINGS", icon: Settings, href: "/dashboard/settings" },
-  ];
 
   return (
-    <aside className="flex h-full flex-col justify-between bg-[var(--bg-base)] border-r border-dashed border-[var(--border-subtle)] font-mono">
-      <div>
-        <div className="mb-10 px-6 flex items-center h-16 border-b border-dashed border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-          <div className="mr-3 flex h-8 w-8 items-center justify-center border border-[var(--primary)] bg-[var(--bg-base)] shadow-[0_0_10px_var(--primary-glow)]">
-             <span className="font-black text-[var(--primary)] text-lg">G</span>
+    <aside className="w-64 bg-[#F8F9FA] border-r border-[#DADCE0] flex flex-col h-screen hidden md:flex shrink-0">
+      {/* App Brand */}
+      <div className="h-16 flex items-center px-6 border-b border-[#DADCE0] shrink-0">
+        <Link href="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+          <div className="w-8 h-8 rounded-lg bg-[#1A73E8] flex items-center justify-center text-white font-bold text-sm shadow-sm">
+            G
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-black tracking-tighter text-[var(--text-primary)] uppercase">GraftAI_OS</span>
-            <span className="text-[9px] text-[var(--primary)] font-bold tracking-widest opacity-80">v3.0.4-STABLE</span>
-          </div>
-        </div>
-
-        <nav className="flex flex-col px-2 space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "group flex items-center px-4 py-3 text-[11px] font-black tracking-widest transition-all duration-200 border-l-2",
-                  isActive 
-                    ? "bg-[var(--bg-hover)] text-[var(--primary)] border-[var(--primary)] shadow-[inset_0_0_15px_var(--primary-glow)]" 
-                    : "text-[var(--text-muted)] border-transparent hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
-                )}
-              >
-                <item.icon className={cn("mr-3 h-4 w-4 transition-colors", isActive ? "text-[var(--primary)]" : "text-[var(--text-faint)] group-hover:text-[var(--primary)]")} />
-                {item.label}
-              </Link>
-            )
-          })}
-        </nav>
+          <span className="font-medium text-lg tracking-tight text-[#202124]">GraftAI</span>
+        </Link>
       </div>
 
-      <div className="p-4 border-t border-dashed border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-         <div className="mb-4 px-2 py-2 border border-dashed border-[var(--border-subtle)] bg-[var(--bg-base)]">
-            <div className="flex items-center justify-between mb-1">
-               <span className="text-[10px] text-[var(--text-faint)] font-bold uppercase">Uptime_Pulse</span>
-               <Activity className="h-3 w-3 text-[var(--primary)] animate-pulse" />
-            </div>
-            <div className="w-full h-1 bg-[var(--bg-hover)]">
-               <div className="w-3/4 h-full bg-[var(--primary)]" />
-            </div>
-         </div>
-         <button
-           onClick={logout}
-           className="group flex w-full items-center px-4 py-3 text-[10px] font-black tracking-widest text-[var(--text-muted)] transition-all hover:bg-[var(--accent)] hover:text-white border border-transparent hover:border-white/20"
-         >
-            <LogOut className="mr-3 h-4 w-4 transition-colors group-hover:text-white" />
-            TERMINATE_SESSION
-         </button>
+      {/* Navigation Links */}
+      <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto custom-scrollbar">
+        <div className="text-[11px] font-bold text-[#5F6368] uppercase tracking-wider mb-4 px-3">
+          Workspace
+        </div>
+        
+        {NAV_ITEMS.map((item) => {
+          const isActive = pathname === item.href || (pathname?.startsWith(`${item.href}/`) && item.href !== '/dashboard');
+          
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-full transition-all text-sm font-medium group ${
+                isActive 
+                  ? "bg-[#E8F0FE] text-[#1967D2]" 
+                  : "text-[#444746] hover:bg-[#F1F3F4] hover:text-[#202124]"
+              }`}
+            >
+              <item.icon 
+                size={20} 
+                className={isActive ? "text-[#1967D2]" : "text-[#5F6368] group-hover:text-[#202124] transition-colors"} 
+              />
+              {item.name}
+            </Link>
+          );
+        })}
+
+        <div className="mt-8 mb-4 px-3 text-[11px] font-bold text-[#5F6368] uppercase tracking-wider">
+          Configuration
+        </div>
+        
+        <Link
+          href="/dashboard/settings"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-full transition-all text-sm font-medium group ${
+            pathname?.startsWith('/dashboard/settings')
+              ? "bg-[#E8F0FE] text-[#1967D2]" 
+              : "text-[#444746] hover:bg-[#F1F3F4] hover:text-[#202124]"
+          }`}
+        >
+          <Settings size={20} className={pathname?.startsWith('/dashboard/settings') ? "text-[#1967D2]" : "text-[#5F6368] group-hover:text-[#202124]"} />
+          Settings
+        </Link>
+      </nav>
+
+      {/* Quota Indicator */}
+      <div className="p-4 border-t border-[#DADCE0] shrink-0 bg-[#F8F9FA]">
+        <div className="bg-white p-4 rounded-2xl border border-[#DADCE0] shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-[#202124]">Pro Plan</p>
+            <Zap size={14} className="text-[#E37400]" />
+          </div>
+          <div className="w-full bg-[#F1F3F4] rounded-full h-1.5 mb-2 overflow-hidden">
+            <div className="bg-[#1A73E8] h-1.5 rounded-full transition-all duration-1000 w-[45%]"></div>
+          </div>
+          <p className="text-[11px] text-[#5F6368]">450 / 1000 AI Automations</p>
+        </div>
       </div>
     </aside>
   );
-}
+}

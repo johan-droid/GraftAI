@@ -13,10 +13,6 @@ import {
   Terminal,
   ChevronRight
 } from "lucide-react";
-import { Navigation } from "@/components/landing/Navigation";
-import { Footer } from "@/components/landing/Footer";
-import DotField from "@/components/landing/DotField";
-import "@/components/landing/DotField.css";
 
 const sections = [
   {
@@ -68,12 +64,6 @@ const sections = [
 export default function DocsPage() {
   return (
     <Box sx={{ bgcolor: "var(--bg-base)", minHeight: "100vh", position: "relative" }}>
-      <Box sx={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.4, pointerEvents: "none" }}>
-        <DotField />
-      </Box>
-
-      <Navigation />
-
       <Container maxWidth="lg" sx={{ pt: { xs: 20, md: 24 }, pb: 20, position: "relative", zIndex: 1 }}>
         <Stack spacing={2} sx={{ mb: 12 }}>
           <Button
@@ -226,7 +216,6 @@ export default function DocsPage() {
           </Box>
         </Box>
       </Container>
-      <Footer />
     </Box>
   );
 }

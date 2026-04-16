@@ -1,97 +1,46 @@
-import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
-import "./globals.css";
-import { AuthProvider } from "@/app/providers/auth-provider";
-import { ThemeProvider } from "@/contexts/ThemeContext";
-import { Toaster } from "@/components/ui/Toast";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
+import { AuthProvider } from "./providers/auth-provider";
+import { QueryProvider } from "./providers/query-provider";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { Toaster } from "react-hot-toast";
+import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  display: "swap",
-});
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: { default: "GraftAI", template: "%s — GraftAI" },
-  description: "AI-powered scheduling and calendar orchestration for modern teams.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://graftai.com"),
-  openGraph: {
-    type: "website",
-    title: "GraftAI",
-    description: "AI-powered scheduling and calendar orchestration.",
-    siteName: "GraftAI",
-  },
-  robots: { index: true, follow: true },
+  title: "GraftAI | Intelligent Scheduling",
+  description: "Scheduling, simplified by AI.",
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)",  color: "#0A0A0B" },
-    { media: "(prefers-color-scheme: light)", color: "#F9F5F2" },
-  ],
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html
-      lang="en"
-      className={`${jakarta.variable} h-full`}
-      data-scroll-behavior="smooth"
-      suppressHydrationWarning
-    >
-      <head>
-        {/* Preconnect to backend */}
-        {apiBase && <link rel="preconnect" href={apiBase} />}
-        {/* SW Recovery: Self-heal stuck workers from previous builds */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                if ('serviceWorker' in navigator) {
-                  const RESET_KEY = 'graftai_sw_reset_v2';
-                  if (!localStorage.getItem(RESET_KEY)) {
-                    navigator.serviceWorker.getRegistrations().then(async (registrations) => {
-                      for (let registration of registrations) {
-                        await registration.unregister();
-                        console.log('Unregistered old SW for recovery');
-                      }
-                      if (registrations.length > 0) {
-                        try {
-                          const cacheNames = await caches.keys();
-                          await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
-                          console.log('Cleared service worker caches during recovery');
-                        } catch (cacheError) {
-                          console.warn('Failed to clear caches during SW recovery', cacheError);
-                        }
-                        localStorage.setItem(RESET_KEY, 'true');
-                        window.location.reload();
-                      } else {
-                        localStorage.setItem(RESET_KEY, 'true');
-                      }
-                    });
-                  }
-                }
-              })();
-            `,
-          }}
-        />
-      </head>
-      <body
-        className="min-h-full flex flex-col app-body"
-        suppressHydrationWarning
-      >
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.variable} font-sans antialiased text-[#202124] bg-[#F8F9FA]`}>
         <SessionProvider>
           <AuthProvider>
-            <ThemeProvider>
-              {children}
-              <Toaster />
-            </ThemeProvider>
+            <QueryProvider>
+              <ThemeProvider>
+                {children}
+                {/* Global Toast Notifications */}
+                <Toaster
+                  position="bottom-right"
+                  toastOptions={{
+                    style: {
+                      background: '#333',
+                      color: '#fff',
+                      borderRadius: '100px',
+                      fontSize: '14px',
+                    },
+                  }}
+                />
+              </ThemeProvider>
+            </QueryProvider>
           </AuthProvider>
         </SessionProvider>
       </body>

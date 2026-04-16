@@ -4,10 +4,6 @@ import { Box, Container, Typography, alpha, Stack, Breadcrumbs } from "@mui/mate
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ChevronRight, Home, ArrowLeft } from "lucide-react";
-import { Navigation } from "@/components/landing/Navigation";
-import { Footer } from "@/components/landing/Footer";
-import DotField from "@/components/landing/DotField";
-import "@/components/landing/DotField.css";
 
 interface StaticPageLayoutProps {
   children: React.ReactNode;
@@ -26,11 +22,6 @@ export function StaticPageLayout({
 }: StaticPageLayoutProps) {
   return (
     <Box sx={{ bgcolor: "var(--bg-base)", minHeight: "100vh", position: "relative" }}>
-      {/* Dynamic Background components from Landing */}
-      <Box sx={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.4, pointerEvents: "none" }}>
-        <DotField />
-      </Box>
-      
       <Box
         sx={{
           position: "fixed",
@@ -65,8 +56,6 @@ export function StaticPageLayout({
             }}
           />
        </Box>
-
-      <Navigation />
 
       <Container maxWidth="md" sx={{ pt: { xs: 16, md: 24 }, pb: 20, position: "relative", zIndex: 1 }}>
         <motion.div
@@ -177,8 +166,6 @@ export function StaticPageLayout({
           </Box>
         </motion.div>
       </Container>
-      
-      <Footer />
     </Box>
   );
 }

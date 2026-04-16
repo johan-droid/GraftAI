@@ -3,17 +3,11 @@
 import { Box, Container, Typography, Stack, Button } from "@mui/material";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { ArrowLeft, ShieldAlert, WifiOff } from "lucide-react";
-import DotField from "@/components/landing/DotField";
-import "@/components/landing/DotField.css";
+import { ArrowLeft, ShieldAlert } from "lucide-react";
 
 export default function NotFound() {
   return (
     <Box sx={{ bgcolor: "var(--bg-base)", minHeight: "100vh", position: "relative", display: "grid", placeItems: "center" }}>
-      <Box sx={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.3, pointerEvents: "none" }}>
-        <DotField />
-      </Box>
-
       <Container maxWidth="sm" sx={{ position: "relative", zIndex: 1, textAlign: "center" }}>
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}

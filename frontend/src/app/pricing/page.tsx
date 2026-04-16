@@ -15,10 +15,6 @@ import {
   ArrowRight,
   Loader2
 } from "lucide-react";
-import { Navigation } from "@/components/landing/Navigation";
-import { Footer } from "@/components/landing/Footer";
-import DotField from "@/components/landing/DotField";
-import "@/components/landing/DotField.css";
 import { apiClient } from "@/lib/api-client";
 
 const TIERS = [
@@ -83,7 +79,8 @@ export default function PricingPage() {
         const res = await fetch("https://ipapi.co/json/");
         const data = await res.json();
         if (data.country_code === "IN") setRegion("IN");
-      } catch (err) {}
+      } catch {
+      }
     };
     detectRegion();
   }, []);
@@ -116,8 +113,9 @@ export default function PricingPage() {
       });
       setBillingMessage("Account upgraded. Taking you to your dashboard...");
       setTimeout(() => window.location.href = "/dashboard", 1500);
-    } catch (err: any) {
-      setBillingMessage(err.message || "Connection issue during checkout. Please try again.");
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error("Connection issue during checkout. Please try again.");
+      setBillingMessage(err.message);
     } finally {
       setLoadingTier(null);
     }
@@ -125,12 +123,6 @@ export default function PricingPage() {
 
   return (
     <Box sx={{ bgcolor: "var(--bg-base)", minHeight: "100vh", position: "relative" }}>
-      <Box sx={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.4, pointerEvents: "none" }}>
-        <DotField />
-      </Box>
-
-      <Navigation />
-
       <Container maxWidth="lg" sx={{ pt: { xs: 20, md: 24 }, pb: 20, position: "relative", zIndex: 1 }}>
         <Stack spacing={2} sx={{ mb: 12, textAlign: "center" }}>
           <motion.div
@@ -193,7 +185,7 @@ export default function PricingPage() {
               fontFamily: "var(--font-sans)"
             }}
           >
-            Choose the plan that fits your workflow. From personal use to scaling teams, we've got you covered.
+            Choose the plan that fits your workflow. From personal use to scaling teams, we&apos;ve got you covered.
           </Typography>
           {billingMessage && (
             <motion.div
@@ -325,7 +317,6 @@ export default function PricingPage() {
           </Stack>
         </Stack>
       </Container>
-      <Footer />
     </Box>
   );
 }

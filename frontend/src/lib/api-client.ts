@@ -1,214 +1,91 @@
-import { getSession } from "next-auth/react";
+import { getSession, signOut } from "next-auth/react";
 
-// ─── Base URL ────────────────────────────────────────────────────────────────
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
-const rawApiBase =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "https://graftai.onrender.com";
-
-const normalizedBase = rawApiBase.replace(/\/+$/, "");
-const BASE_URL = normalizedBase.endsWith("/api/v1")
-  ? normalizedBase
-  : `${normalizedBase}/api/v1`;
-
-export const API_BASE_URL = BASE_URL;
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface ApiRequestOptions extends RequestInit {
-  params?: Record<string, string | number | boolean | null | undefined>;
-  json?: unknown;
-  /** Set to true to skip the automatic 401 → refresh → retry logic */
-  skipRefresh?: boolean;
+interface RequestOptions extends RequestInit {
+  params?: Record<string, string | number | boolean>;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-export function composeEndpoint(path: string, includeBaseUrl = false) {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  return includeBaseUrl ? `${BASE_URL}${normalized}` : normalized;
-}
-
-/**
- * Retrieve the backend JWT from whatever context we're in.
- * - Browser: use NextAuth's `getSession()` (works in React components & RSC)
- * - Server: caller should pass the token directly via `Authorization` header
- */
-async function getAuthToken(): Promise<string | null> {
-  if (typeof window === "undefined") return null;
-  console.debug("[Auth Debug] getAuthToken env", {
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
-    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL,
-    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
-  });
-  try {
-    const session = await getSession();
-    console.debug("[Auth Debug] getSession result", {
-      status: session ? "ok" : "no-session",
-      backendToken: !!(session as any)?.backendToken,
-    });
-    return (session as any)?.backendToken ?? null;
-  } catch (error) {
-    console.error("[Auth Debug] getSession error", error);
-    try {
-      const sessionUrl = `${window.location.origin}/api/auth/session`;
-      const res = await fetch(sessionUrl, {
-        method: "GET",
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-      const text = await res.text();
-      console.error("[Auth Debug] /api/auth/session raw response", {
-        url: sessionUrl,
-        status: res.status,
-        ok: res.ok,
-        text: text.slice(0, 400),
-      });
-    } catch (innerError) {
-      console.error("[Auth Debug] failed to fetch /api/auth/session", innerError);
-    }
-    return null;
-  }
-}
-
-/**
- * Export so components that need the raw token can grab it.
- */
-export { getAuthToken };
-
-// ─── Client ──────────────────────────────────────────────────────────────────
-
-export const apiClient = {
-  async fetch<T = unknown>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
-    const { params, json, skipRefresh, ...requestInit } = options;
-
-    // 1. Build URL
-    let url = `${BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-    if (params) {
-      const sp = new URLSearchParams();
-      for (const [key, value] of Object.entries(params)) {
-        if (value !== undefined && value !== null) {
-          sp.append(key, String(value));
-        }
-      }
-      const qs = sp.toString();
-      if (qs) url += `?${qs}`;
-    }
-
-    // 2. Get auth token
-    const token = await getAuthToken();
-
-    // 3. Headers
+class ApiClient {
+  private async getHeaders(): Promise<HeadersInit> {
     const headers: Record<string, string> = {
-      ...(requestInit.headers as Record<string, string>),
+      "Content-Type": "application/json",
     };
-    if (json !== undefined) {
-      headers["Content-Type"] = "application/json";
-    }
+
+    const session = await getSession();
+    const token = (session as { accessToken?: string } | null)?.accessToken;
+
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    // 4. Body
-    const body = json !== undefined ? JSON.stringify(json) : requestInit.body;
+    return headers;
+  }
 
-    // 5. Fetch
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        credentials: "include",
-        ...requestInit,
-        headers,
-        body,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Network error";
-      throw new Error(`Failed to reach API at ${url}. ${message}`);
+  private buildUrl(endpoint: string, params?: Record<string, string | number | boolean>): string {
+    const url = new URL(`${API_BASE_URL}${endpoint}`);
+    if (params) {
+      Object.keys(params).forEach((key) =>
+        url.searchParams.append(key, String(params[key]))
+      );
     }
+    return url.toString();
+  }
 
-    // 6. Handle 401 — attempt a one-time silent token refresh then retry
-    if (response.status === 401 && !skipRefresh && typeof window !== "undefined") {
-      const refreshed = await attemptSessionRefresh();
-      if (refreshed) {
-        // Retry with new token
-        return this.fetch<T>(endpoint, { ...options, skipRefresh: true });
+  private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    const { params, ...customConfig } = options;
+
+    const url = this.buildUrl(endpoint, params);
+    const headers = await this.getHeaders();
+
+    const config: RequestInit = {
+      ...customConfig,
+      headers: {
+        ...headers,
+        ...customConfig.headers,
+      },
+    };
+
+    try {
+      const response = await fetch(url, config);
+
+      if (response.status === 401) {
+        if (typeof window !== "undefined") {
+          await signOut({ callbackUrl: "/login" });
+        }
+        throw new Error("Unauthorized - Session Expired");
       }
-      // Refresh failed — throw so the caller (AuthProvider) can decide what to do
-      throw new Error("Could not validate credentials");
+
+      const responseData = (await response.json()) as Record<string, unknown>;
+
+      if (!response.ok) {
+        const detail = typeof responseData.detail === "string" ? responseData.detail : undefined;
+        const message = typeof responseData.message === "string" ? responseData.message : undefined;
+        throw new Error(detail || message || "An API error occurred");
+      }
+
+      return responseData as T;
+    } catch (error) {
+      console.error(`[API Error] ${options.method || "GET"} ${endpoint}:`, error);
+      throw error;
     }
+  }
 
-    // 7. Other errors
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      const errorMessage =
-        typeof error.detail === "string"
-          ? error.detail
-          : typeof error.message === "string"
-          ? error.message
-          : JSON.stringify(error.detail ?? error.message ?? error);
-      throw new Error(errorMessage || `API error: ${response.status}`);
-    }
+  public get<T>(endpoint: string, params?: Record<string, unknown>) {
+    return this.request<T>(endpoint, { method: "GET", params });
+  }
 
-    // 8. No content
-    if (response.status === 204) return null as T;
+  public post<T>(endpoint: string, body?: unknown) {
+    return this.request<T>(endpoint, { method: "POST", body: JSON.stringify(body) });
+  }
 
-    return response.json() as Promise<T>;
-  },
+  public patch<T>(endpoint: string, body?: unknown) {
+    return this.request<T>(endpoint, { method: "PATCH", body: JSON.stringify(body) });
+  }
 
-  get<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
-    return this.fetch(endpoint, { ...options, method: "GET" });
-  },
-
-  post<T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}): Promise<T> {
-    return this.fetch(endpoint, { ...options, method: "POST", json: body });
-  },
-
-  patch<T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}): Promise<T> {
-    return this.fetch(endpoint, { ...options, method: "PATCH", json: body });
-  },
-
-  delete<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
-    return this.fetch(endpoint, { ...options, method: "DELETE" });
-  },
-
-  put<T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}): Promise<T> {
-    return this.fetch(endpoint, { ...options, method: "PUT", json: body });
-  },
-};
-
-// ─── Silent token refresh helper ─────────────────────────────────────────────
-
-let _refreshPromise: Promise<boolean> | null = null;
-
-async function attemptSessionRefresh(): Promise<boolean> {
-  // Deduplicate concurrent refresh attempts
-  if (_refreshPromise) return _refreshPromise;
-
-  _refreshPromise = (async () => {
-    try {
-      const session = await getSession();
-      const refreshToken = (session as any)?.refreshToken;
-      if (!refreshToken) return false;
-
-      const res = await fetch(`${BASE_URL}/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      return res.ok;
-    } catch {
-      return false;
-    } finally {
-      _refreshPromise = null;
-    }
-  })();
-
-  return _refreshPromise;
+  public delete<T>(endpoint: string) {
+    return this.request<T>(endpoint, { method: "DELETE" });
+  }
 }
+
+export const apiClient = new ApiClient();

@@ -289,7 +289,7 @@ html, body {
 ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
 /* ── Utility Classes ─────────────────────────────────────────────── */
-.glass { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.glass { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 .border-technical { border: 1px solid var(--border-subtle); }
 .scanline-overlay {
   position: fixed;
@@ -337,6 +337,18 @@ html, body {
   left: 0;
   pointer-events: none;
   animation: scanline 8s linear infinite;
+}
+
+.dot-delay-0 {
+  animation-delay: 0ms;
+}
+
+.dot-delay-150 {
+  animation-delay: 150ms;
+}
+
+.dot-delay-300 {
+  animation-delay: 300ms;
 }
 
 @keyframes scanline {
@@ -436,8 +448,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 /* ── Refined Utilities ────────────────────────────────────────── */
 .refined-glass {
   background: rgba(10, 10, 12, 0.4);
-  backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
+  backdrop-filter: blur(12px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -479,6 +491,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .mask-fade {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
   mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
 }
 

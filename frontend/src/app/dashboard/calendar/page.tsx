@@ -1,465 +1,167 @@
 "use client";
 
-/**
- * Calendar Page — Production
- * Uses react-big-calendar for Month/Week/Day views.
- * Implements: click-to-create, drag-to-reschedule, optimistic updates,
- * conflict detection, peach dark theme, full mobile support.
- */
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { useCalendar } from "@/hooks/useCalendar";
+import { Booking } from "@/types/api";
 
-import { useState, useEffect, useCallback, useMemo, type ComponentType } from "react";
-import dynamic from "next/dynamic";
-import { motion, AnimatePresence } from "framer-motion";
-import { format, parse, startOfWeek, getDay } from "date-fns";
-import { enUS } from "date-fns/locale";
-import {
-  X, Plus, Loader2, Clock, MapPin, Trash2, CheckCircle2,
-  ChevronLeft, ChevronRight, Calendar, AlertTriangle,
-} from "lucide-react";
-import {
-  getEvents, createEvent, updateEvent, deleteEvent,
-  type CalendarEvent,
-} from "@/lib/api";
-import { useOptimisticList } from "@/hooks/useQuery";
-import { toast } from "@/components/ui/Toast";
-import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { cn } from "@/lib/utils";
+const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
+export default function HeavyTileCalendar() {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const { bookings, isLoading } = useCalendar(currentMonth);
+  const router = useRouter();
 
-let tempIdCounter = -1;
+  const handleNewEvent = () => {
+    // Navigate to the new event flow (page may be implemented separately)
+    router.push("/dashboard/calendar/new");
+  };
 
-// ── Lazy-load react-big-calendar (heavy) ──────────────────────────
-const BigCalendar = dynamic(async () => {
-  const [rbc, dnd] = await Promise.all([
-    import("react-big-calendar"),
-    import("react-big-calendar/lib/addons/dragAndDrop")
-  ]);
-  const withDragAndDrop = (dnd as unknown as { default: (component: unknown) => unknown }).default;
-  return withDragAndDrop(rbc.Calendar) as ComponentType<any>;
-}, {
-  ssr: false,
-  loading: () => (
-    <div className="rounded-xl overflow-hidden h-[520px]">
-      <Skeleton className="h-full w-full" />
-    </div>
-  ),
-}) as ComponentType<any>;
+  const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
 
-import("react-big-calendar/lib/css/react-big-calendar.css");
+  const calendarGrid = Array(firstDayOfMonth).fill(null).concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
+  while (calendarGrid.length % 7 !== 0) calendarGrid.push(null);
 
-type RBCView = "month" | "week" | "day" | "agenda";
-type CategoryKey = "meeting" | "event" | "birthday" | "task";
+  const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
 
-const CATEGORIES: Record<CategoryKey, { label: string; color: string }> = {
-  meeting:  { label: "Meeting",  color: "var(--primary)" },
-  event:    { label: "Event",    color: "var(--secondary)" },
-  birthday: { label: "Birthday", color: "var(--accent)" },
-  task:     { label: "Task",     color: "var(--text-secondary)" },
-};
-
-const CATEGORY_COLOR_CLASS: Record<CategoryKey, string> = {
-  meeting: "bg-[var(--primary)]",
-  event: "bg-[var(--secondary)]",
-  birthday: "bg-[var(--accent)]",
-  task: "bg-[var(--text-secondary)]",
-};
-
-const FORM_DEFAULTS: Partial<CalendarEvent> = {
-  title: "", description: "", category: "meeting",
-  is_remote: false, status: "confirmed",
-};
-
-function hasConflict(evts: CalendarEvent[], a: Partial<CalendarEvent>): boolean {
-  if (!a.start_time || !a.end_time) return false;
-  const aStart = new Date(a.start_time).getTime();
-  const aEnd   = new Date(a.end_time).getTime();
-  return evts.some(e => {
-    if (e.id === a.id) return false;
-    const eStart = new Date(e.start_time).getTime();
-    const eEnd   = new Date(e.end_time).getTime();
-    return aStart < eEnd && aEnd > eStart;
-  });
-}
-
-let localizer: ReturnType<typeof import("react-big-calendar").dateFnsLocalizer> | null = null;
-async function getLocalizer() {
-  if (localizer) return localizer;
-  const { dateFnsLocalizer } = await import("react-big-calendar");
-  localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales: { "en-US": enUS } });
-  return localizer;
-}
-
-export default function CalendarPage() {
-  const [date, setDate]     = useState(new Date());
-  const [view, setView]     = useState<RBCView>("month");
-  const [localizerReady, setLocalizerReady] = useState<typeof localizer>(null);
-  const [loading, setLoading] = useState(true);
-
-  const { items: events, setItems, add, update, remove } = useOptimisticList<CalendarEvent>([]);
-
-  const [selectedSlot, setSelectedSlot]   = useState<{ start: Date; end: Date } | null>(null);
-  const [editingEvent, setEditingEvent]   = useState<CalendarEvent | null>(null);
-  const [form, setForm]                   = useState<Partial<CalendarEvent>>(FORM_DEFAULTS);
-  const [saving, setSaving]               = useState(false);
-  const [conflictWarning, setConflict]    = useState(false);
-
-  useEffect(() => {
-    getLocalizer().then(l => setLocalizerReady(l));
-  }, []);
-
-  const fetchRange = useCallback(async (start: Date, end: Date) => {
-    setLoading(true);
-    setItems([]);
-    try {
-      const data = await getEvents(start.toISOString(), end.toISOString());
-      data.forEach(evt => add(evt));
-    } catch {
-      toast.error("Failed to load calendar events.");
-    } finally {
-      setLoading(false);
+  const getTileColor = (status: Booking["status"]) => {
+    switch (status) {
+      case "confirmed":
+        return "bg-[#1A73E8] text-white";
+      case "pending":
+        return "bg-[#E37400] text-white";
+      case "cancelled":
+        return "bg-[#F1F3F4] text-[#5F6368] line-through";
+      case "rescheduled":
+        return "bg-[#9334E6] text-white";
+      default:
+        return "bg-[#1A73E8] text-white";
     }
-  }, [add, setItems]);
+  };
 
-  useEffect(() => {
-    const start = new Date(date.getFullYear(), date.getMonth(), 1);
-    const end   = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-    fetchRange(start, end);
-  }, [date, fetchRange]);
-
-  const rbcEvents = useMemo(() => events.map(e => ({
-    id: e.id,
-    title: e.title,
-    start: new Date(e.start_time),
-    end:   new Date(e.end_time),
-    resource: e,
-  })), [events]);
-
-  function openCreateModal(slot: { start: Date; end: Date }) {
-    const defaultEnd = new Date(slot.start.getTime() + 60 * 60 * 1000);
-    setSelectedSlot({ start: slot.start, end: slot.end.getTime() > slot.start.getTime() ? slot.end : defaultEnd });
-    setForm({
-      ...FORM_DEFAULTS,
-      start_time: slot.start.toISOString(),
-      end_time:   (slot.end.getTime() > slot.start.getTime() ? slot.end : defaultEnd).toISOString(),
-    });
-    setConflict(hasConflict(events, { start_time: slot.start.toISOString(), end_time: defaultEnd.toISOString() }));
-    setEditingEvent(null);
-  }
-
-  function openEditModal(rbcEvt: { resource: CalendarEvent }) {
-    const evt = rbcEvt.resource;
-    setEditingEvent(evt);
-    setForm({ ...evt });
-    setConflict(false);
-    setSelectedSlot(null);
-  }
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.title?.trim()) { toast.error("Title is required."); return; }
-    if (!form.start_time || !form.end_time) { toast.error("Start and end times are required."); return; }
-    setSaving(true);
-    const optimisticId = --tempIdCounter;
-    const optimistic: CalendarEvent = {
-      id: optimisticId, user_id: "0", title: form.title!,
-      description: form.description ?? "",
-      category: form.category as CategoryKey ?? "meeting",
-      start_time: form.start_time!, end_time: form.end_time!,
-      is_remote: form.is_remote ?? false, status: "confirmed",
-    };
-    const rollback = add(optimistic);
-    setSelectedSlot(null);
-    try {
-      const created = await createEvent(form);
-      remove(optimisticId);
-      add(created);
-      toast.success("Event created.");
-    } catch (err) {
-      rollback();
-      toast.error((err as Error).message || "Failed to create event.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleUpdate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editingEvent || !form.title?.trim()) return;
-    setSaving(true);
-    const rollback = update(editingEvent.id, form);
-    setEditingEvent(null);
-    try {
-      const updated = await updateEvent(editingEvent.id, form);
-      update(editingEvent.id, updated);
-      toast.success("Event updated.");
-    } catch (err) {
-      rollback();
-      toast.error("Failed to update event.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(id: number | string) {
-    if (!confirm("Delete this event?")) return;
-    const rollback = remove(id);
-    setEditingEvent(null);
-    try {
-      await deleteEvent(id);
-      toast.success("Event deleted.");
-    } catch {
-      rollback();
-      toast.error("Failed to delete event.");
-    }
-  }
-
-  async function handleEventDrop({ event, start, end }: { event: { id: number | string; resource: CalendarEvent }; start: Date; end: Date }) {
-    const rollback = update(event.id, { start_time: start.toISOString(), end_time: end.toISOString() });
-    try {
-      await updateEvent(event.id, { start_time: start.toISOString(), end_time: end.toISOString() });
-      toast.success("Event rescheduled.");
-    } catch {
-      rollback();
-      toast.error("Failed to reschedule event.");
-    }
-  }
-
-  const eventPropGetter = useCallback((event: { resource: CalendarEvent }) => {
-    const now = new Date();
-    const end = new Date(event.resource.end_time);
-    const conflict = hasConflict(events, event.resource);
-    const isPast = end < now;
-    const catColor = CATEGORIES[event.resource.category as CategoryKey]?.color ?? "var(--primary)";
-
-    return {
-      className: cn(
-        "custom-rbc-event",
-        conflict && "conflict-event",
-        isPast && "past-event"
-      ),
-      style: {
-        background: conflict ? "var(--accent)" : isPast ? "rgba(255,255,255,0.04)" : catColor,
-        color: conflict ? "#fff" : (isPast ? "var(--text-muted)" : "inherit"),
-        borderRadius: 4,
-        border: conflict ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
-        fontSize: "12px",
-        fontWeight: 600,
-        textTransform: "none",
-        boxShadow: "none",
-      },
-    };
-  }, [events]);
+  const formatTime = (isoString: string) => {
+    return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
 
   return (
-    <div className="space-y-8 pb-12 font-mono">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-4 border-b border-solid border-[var(--border-subtle)]">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Calendar</h1>
-          <p className="text-sm mt-1 text-[var(--text-muted)]">Sync ready — temporal view.</p>
-        </div>
-        <button 
-          className="tech-btn tech-btn-primary px-8" 
-          onClick={() => openCreateModal({ start: new Date(), end: new Date(Date.now() + 3600000) })}
-        >
-          <Plus className="w-4 h-4" /> Initialize Event
-        </button>
-      </div>
-
-      <ErrorBoundary>
-        <div className="tech-card p-4 md:p-5 bg-[var(--bg-base)] border min-h-[600px]">
-          {!localizerReady || loading ? (
-            <Skeleton className="w-full bg-[var(--bg-elevated)] h-[560px]" />
-          ) : (
-            <BigCalendar
-              localizer={localizerReady}
-              events={rbcEvents}
-              view={view}
-              onView={(v: string) => setView(v as RBCView)}
-              date={date}
-              onNavigate={setDate}
-              selectable
-              resizable
-              onSelectSlot={openCreateModal}
-              onSelectEvent={openEditModal}
-              onEventDrop={handleEventDrop}
-              eventPropGetter={eventPropGetter}
-              className="h-[560px]"
-              popup
-              views={["month", "week", "day", "agenda"]}
-              formats={{
-                dayHeaderFormat: (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase(),
-              }}
-            />
-          )}
-        </div>
-      </ErrorBoundary>
-
-      <div className="flex flex-wrap gap-6 p-4 border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-        {Object.entries(CATEGORIES).map(([key, { label }]) => (
-          <div key={key} className="flex items-center gap-3">
-            <div className={cn("w-3 h-3 rounded-sm", CATEGORY_COLOR_CLASS[key as CategoryKey])} />
-            <span className="text-sm font-medium text-[var(--text-secondary)]">{label}</span>
-            <span className="text-sm text-[var(--text-faint)]">[{events.filter(e => e.category === key).length}]</span>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full h-full flex flex-col">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4 shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-white border border-[#DADCE0] shadow-sm flex items-center justify-center text-[#1A73E8]">
+            {isLoading ? <Loader2 size={24} className="animate-spin text-[#5F6368]" /> : <CalendarIcon size={24} />}
           </div>
-        ))}
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-normal text-[#202124] tracking-tight">
+              {currentMonth.toLocaleString("default", { month: "long", year: "numeric" })}
+            </h1>
+            <p className="text-sm text-[#5F6368]">Your scheduling overview</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center bg-white border border-[#DADCE0] rounded-full p-1 shadow-sm">
+            <button
+              aria-label="Previous month"
+              title="Previous month"
+              onClick={prevMonth}
+              className="p-2 rounded-full hover:bg-[#F1F3F4] text-[#5F6368] transition-colors"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <button
+              onClick={() => setCurrentMonth(new Date())}
+              className="px-4 text-sm font-medium text-[#202124] hover:bg-[#F1F3F4] rounded-full transition-colors h-full"
+            >
+              Today
+            </button>
+            <button
+              aria-label="Next month"
+              title="Next month"
+              onClick={nextMonth}
+              className="p-2 rounded-full hover:bg-[#F1F3F4] text-[#5F6368] transition-colors"
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+
+          <button
+            onClick={handleNewEvent}
+            aria-label="Create new event"
+            className="hidden sm:flex items-center gap-2 bg-[#1A73E8] text-white hover:bg-[#1557B0] px-5 py-2.5 rounded-full text-sm font-medium transition-colors shadow-sm"
+          >
+            <Plus size={18} />
+            New Event
+          </button>
+        </div>
       </div>
 
-      <EventModal
-        isOpen={!!selectedSlot}
-        title="Create Event"
-        form={form}
-        onFormChange={patch => setForm(f => ({ ...f, ...patch }))}
-        onClose={() => setSelectedSlot(null)}
-        onSubmit={handleCreate}
-        saving={saving}
-        conflictWarning={conflictWarning}
-      />
+      <div className="flex-1 bg-white border border-[#DADCE0] rounded-2xl overflow-hidden shadow-sm flex flex-col min-h-0">
+        <div className="grid grid-cols-7 border-b border-[#DADCE0] bg-[#F8F9FA] shrink-0">
+          {DAYS_OF_WEEK.map((day) => (
+            <div key={day} className="py-3 text-center text-xs font-semibold text-[#5F6368] uppercase tracking-wider">
+              {day}
+            </div>
+          ))}
+        </div>
 
-      <EventModal
-        isOpen={!!editingEvent}
-        title="Edit Event"
-        form={form}
-        onFormChange={patch => setForm(f => ({ ...f, ...patch }))}
-        onClose={() => setEditingEvent(null)}
-        onSubmit={handleUpdate}
-        saving={saving}
-        conflictWarning={false}
-        onDelete={() => editingEvent && handleDelete(editingEvent.id)}
-      />
+        <div className="flex-1 grid grid-cols-7 gap-[1px] bg-[#DADCE0] overflow-y-auto">
+          {calendarGrid.map((day, index) => {
+            const isToday =
+              day === new Date().getDate() &&
+              currentMonth.getMonth() === new Date().getMonth() &&
+              currentMonth.getFullYear() === new Date().getFullYear();
+
+            const dayBookings = bookings?.filter((b) => {
+              if (!day) return false;
+              const bookingDate = new Date(b.start_time);
+              return (
+                bookingDate.getFullYear() === currentMonth.getFullYear() &&
+                bookingDate.getMonth() === currentMonth.getMonth() &&
+                bookingDate.getDate() === day
+              );
+            }) || [];
+
+            return (
+              <div
+                key={index}
+                className={`bg-white min-h-[100px] sm:min-h-[140px] p-1 sm:p-2 transition-colors group ${day ? "hover:bg-[#F8F9FA] cursor-pointer" : ""}`}
+              >
+                {day && (
+                  <>
+                    <div className="flex justify-between items-start mb-2">
+                      <span
+                        className={`flex items-center justify-center w-7 h-7 text-sm font-medium rounded-full ${
+                          isToday ? "bg-[#1A73E8] text-white shadow-sm" : "text-[#5F6368]"
+                        }`}
+                      >
+                        {day}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1 overflow-hidden">
+                      {dayBookings.map((booking) => (
+                        <div
+                          key={booking.id}
+                          title={`${booking.attendee_name} - ${booking.status}`}
+                          className={`px-2 py-1.5 rounded-md text-xs font-medium truncate shadow-sm transition-transform hover:scale-[1.02] ${getTileColor(
+                            booking.status
+                          )}`}
+                        >
+                          <span className="opacity-80 mr-1">{formatTime(booking.start_time)}</span>
+                          {booking.attendee_name}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
-}
-
-interface EventModalProps {
-  isOpen: boolean;
-  title: string;
-  form: Partial<CalendarEvent>;
-  onFormChange: (patch: Partial<CalendarEvent>) => void;
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  saving: boolean;
-  conflictWarning: boolean;
-  onDelete?: () => void;
-}
-
-function EventModal({ isOpen, title, form, onFormChange, onClose, onSubmit, saving, conflictWarning, onDelete }: EventModalProps) {
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="relative w-full sm:max-w-lg p-8 font-mono bg-[var(--bg-card)] border border-[var(--border-subtle)] z-10 max-h-[90vh] overflow-y-auto"
-          >
-            <div className="flex items-center justify-between mb-8 border-b border-dashed border-[var(--border-subtle)] pb-4">
-              <h2 className="text-xl font-black text-[var(--text-primary)] uppercase tracking-tighter">{title}</h2>
-              <button
-                className="p-2 border border-transparent hover:border-[var(--border-subtle)] transition-all text-[var(--text-muted)]"
-                onClick={onClose}
-                aria-label="Close event modal"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {conflictWarning && (
-              <div className="flex items-center gap-3 p-4 mb-6 text-xs font-bold uppercase tracking-widest bg-[rgba(255,0,122,0.1)] border border-[var(--accent)] text-[var(--accent)]">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                SYSTEM_ALERT: Temporal Conflict Detected
-              </div>
-            )}
-
-            <form onSubmit={onSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="event-title" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Target Title *</label>
-                <input id="event-title" className="tech-input focus:ring-0" placeholder="ENTER EVENT IDENTIFIER" required
-                  value={form.title ?? ""}
-                  onChange={e => onFormChange({ title: e.target.value })} />
-              </div>
-              <div>
-                <label htmlFor="event-description" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Documentation</label>
-                <textarea id="event-description" className="tech-input resize-none h-24 focus:ring-0" placeholder="ADDITIONAL_SPECIFICATIONS..."
-                  value={form.description ?? ""}
-                  onChange={e => onFormChange({ description: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="event-category" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Category_Class</label>
-                  <select id="event-category" className="tech-input appearance-none bg-[var(--bg-elevated)]"
-                    value={form.category ?? "meeting"}
-                    onChange={e => onFormChange({ category: e.target.value as CategoryKey })}>
-                    {Object.entries(CATEGORIES).map(([k, v]) => (
-                      <option key={k} value={k}>{v.label.toUpperCase()}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="event-status" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Sync_Status</label>
-                  <select id="event-status" className="tech-input appearance-none bg-[var(--bg-elevated)]"
-                    value={form.status ?? "confirmed"}
-                    onChange={e => onFormChange({ status: e.target.value })}>
-                    <option value="confirmed">CONFIRMED</option>
-                    <option value="pending">PENDING</option>
-                    <option value="canceled">CANCELED</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="event-start" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">Start_Timestamp</label>
-                  <input id="event-start" className="tech-input" type="datetime-local"
-                    value={form.start_time ? toDatetimeLocal(form.start_time) : ""}
-                      onChange={e => { const v = e.target.value; onFormChange({ start_time: v ? new Date(v).toISOString() : undefined }); }} />
-                </div>
-                <div>
-                  <label htmlFor="event-end" className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[var(--text-muted)]">End_Timestamp</label>
-                    <input id="event-end" className="tech-input" type="datetime-local"
-                      value={form.end_time ? toDatetimeLocal(form.end_time) : ""}
-                      onChange={e => { const v = e.target.value; onFormChange({ end_time: v ? new Date(v).toISOString() : undefined }); }} />
-                </div>
-              </div>
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <input type="checkbox" className="w-4 h-4 bg-transparent border-[var(--border-subtle)] checked:bg-[var(--primary)] text-[var(--primary)] focus:ring-0 cursor-pointer"
-                  checked={form.is_remote ?? false}
-                  onChange={e => onFormChange({ is_remote: e.target.checked })} />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]">
-                  <MapPin className="w-3 h-3 inline mr-1 text-[var(--primary)]" />REMOTE_PROTOCOL_ENABLED
-                </span>
-              </label>
-
-              <div className="flex gap-4 pt-4">
-                {onDelete && (
-                  <button type="button" aria-label="Delete event" className="p-3 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition-all" onClick={onDelete}>
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-                <button type="button" className="flex-1 px-6 py-3 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--text-muted)] font-bold uppercase text-xs tracking-widest transition-all" onClick={onClose}>Abort</button>
-                <button type="submit" className="flex-1 tech-btn tech-btn-primary" disabled={saving}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  {saving ? "EXECUTING..." : "COMMIT_CHANGES"}
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-function toDatetimeLocal(iso: string) {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

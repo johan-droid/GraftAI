@@ -212,7 +212,7 @@ async function exchangeBackendTokens(account: SocialAuthAccount, user: SocialAut
 
 // ─── NextAuth Config ──────────────────────────────────────────────────────────
 
-const nextAuthSecret =
+export const nextAuthSecret =
   process.env.NEXTAUTH_SECRET ||
   process.env.AUTH_SECRET ||
   "your-development-fallback-secret-here";
@@ -229,7 +229,7 @@ const authOptions: NextAuthConfig = {
   callbacks: {
     ...authConfig.callbacks,
     // ─── signIn: called right after the provider authenticates ────────────
-    async signIn({ user, account }: { user: any; account?: any }) {
+    async signIn({ user, account }: { user: User | null; account?: Account | null }) {
       if (!account || !user?.email) {
         console.error("[NextAuth:signIn] Missing account/email — aborting");
         return false;

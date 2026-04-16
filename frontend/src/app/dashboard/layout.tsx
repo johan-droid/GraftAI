@@ -1,228 +1,48 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
-import {
-  LayoutDashboard, Calendar, Settings, Bot, LogOut,
-  Activity, Puzzle, Menu, X, ChevronRight, Sun, Moon, Terminal
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useAuth } from "@/app/providers/auth-provider";
-import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
-import { Toaster } from "@/components/ui/Toast";
+import { useSession } from "next-auth/react";
+import { useRouter, usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { Topbar } from "@/components/layout/Topbar";
 
-const NAV_LINKS = [
-  { name: "Overview",   href: "/dashboard",           icon: LayoutDashboard },
-  { name: "Telemetry",  href: "/dashboard/analytics", icon: Activity },
-  { name: "Calendar",   href: "/dashboard/calendar",  icon: Calendar },
-  { name: "AI_Engine",  href: "/dashboard/ai",        icon: Bot },
-  { name: "Developer",  href: "/dashboard/developers",icon: Terminal },
-  { name: "Plugins",    href: "/dashboard/plugins",   icon: Puzzle },
-  { name: "Settings",   href: "/dashboard/settings",  icon: Settings },
-] as const;
-
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname  = usePathname();
-  const { logout, user } = useAuth();
-  const [drawerOpen, setDrawerOpen]   = useState(false);
-  const [darkMode, setDarkMode]       = useState(true);
-  const [collapsed, setCollapsed]     = useState(false);
-
-  useEffect(() => { setDrawerOpen(false); }, [pathname]);
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { status } = useSession();
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    document.documentElement.classList.toggle("light", !darkMode);
-  }, [darkMode]);
+    if (status === "unauthenticated") {
+      router.push(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
+    }
+  }, [status, router, pathname]);
 
-  const isActive = (href: string) =>
-    href === "/dashboard" ? pathname === href : pathname.startsWith(href);
-
-  type DashUser = { full_name?: string; name?: string; username?: string; email?: string } | null;
-  const displayUser = user as DashUser;
-  const displayName = displayUser?.full_name || displayUser?.name || displayUser?.username || displayUser?.email?.split("@")[0] || "User";
-  const initials = displayName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  return (
-    <div className="flex h-screen w-full overflow-hidden bg-[var(--bg)]">
-      <Toaster />
-
-      <aside
-        className={`hidden lg:flex flex-col z-20 border-r transition-[width] duration-200 bg-[var(--bg-surface)] border-[var(--border)] flex-shrink-0 ${collapsed ? 'w-[64px]' : 'w-[200px]'}`}
-      >
-        <div className="flex items-center gap-3 px-4 py-5 border-b min-h-[64px] border-[var(--border-subtle)] bg-[rgba(255,255,255,0.02)]">
-          <div className="w-8 h-8 rounded-none flex-shrink-0 flex items-center justify-center font-bold text-sm border border-[var(--primary)] bg-[rgba(0,255,156,0.1)] text-[var(--primary)]">
-            G_
-          </div>
-          {!collapsed && (
-            <span className="font-bold text-base tracking-tight text-white font-mono">GRAFT_AI</span>
-          )}
-        </div>
-
-        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-hide">
-          {NAV_LINKS.map(({ name, href, icon: Icon }) => {
-            const active = isActive(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                title={collapsed ? name : undefined}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-bold font-mono transition-all relative group uppercase tracking-wider ${active ? 'bg-[rgba(0,255,156,0.08)] text-[var(--primary)] border-l-2 border-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[rgba(255,255,255,0.03)] hover:text-white'}`}
-              >
-                <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-[var(--primary)]' : 'text-[var(--text-muted)]'}`} />
-                {!collapsed && <span>{name}</span>}
-                {collapsed && (
-                  <span className="absolute left-full ml-4 px-2 py-1 rounded-none text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 bg-[#000] text-[var(--primary)] border border-[var(--primary)] font-mono">
-                    {name}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="p-2 border-t space-y-1 border-[var(--border-subtle)] bg-[rgba(0,0,0,0.2)]">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse" />
-            {!collapsed && <span className="text-[10px] font-mono text-[var(--primary)] font-bold tracking-widest">SYSTEM_LIVE</span>}
-          </div>
-
-          <button
-            onClick={() => setCollapsed(v => !v)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-none text-[10px] font-mono font-bold uppercase tracking-widest transition-colors text-[var(--text-muted)] hover:text-[var(--primary)] hover:bg-[rgba(0,255,156,0.05)]"
-          >
-            <Menu className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>Collapse_View</span>}
-          </button>
-
-          <button
-            onClick={logout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[var(--text-muted)]"
-            title={collapsed ? "Sign out" : undefined}
-          >
-            <LogOut className="w-5 h-5 flex-shrink-0" />
-            {!collapsed && <span>Sign out</span>}
-          </button>
-        </div>
-      </aside>
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="lg:hidden flex items-center justify-between px-4 border-b sticky top-0 z-30 h-[56px] bg-[var(--bg-surface)] border-[var(--border)]">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm bg-peach text-[#1A0F0A]">G</div>
-            <span className="font-bold text-sm text-white">GraftAI</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setDarkMode(v => !v)}
-              className="p-2 rounded-lg min-h-0 min-w-0 text-[var(--text-muted)]"
-            >
-              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={() => setDrawerOpen(true)}
-              className="p-2 rounded-lg min-h-0 min-w-0 text-[var(--text-muted)]"
-              aria-label="Open navigation menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
-
-        <AnimatePresence>
-          {drawerOpen && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="fixed inset-0 z-40 lg:hidden bg-[rgba(0,0,0,0.6)] backdrop-blur-[4px]"
-                onClick={() => setDrawerOpen(false)}
-              />
-              <motion.aside
-                initial={{ x: "100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "100%" }}
-                transition={{ type: "spring", damping: 28, stiffness: 250 }}
-                className="fixed inset-y-0 right-0 z-50 flex flex-col w-72 lg:hidden bg-[var(--bg-surface)] border-l border-[var(--border)]"
-              >
-                <div className="flex items-center justify-between px-4 py-4 border-b border-[var(--border)]">
-                  <span className="font-semibold text-sm text-white">Menu</span>
-                  <button onClick={() => setDrawerOpen(false)} className="p-1 min-h-0 min-w-0 text-[var(--text-muted)]" aria-label="Close navigation menu">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="px-4 py-3 border-b border-[var(--border)]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-peach text-[#1A0F0A]">{initials}</div>
-                    <div>
-                      <p className="text-sm font-medium text-white">{displayUser?.name ?? "User"}</p>
-                      <p className="text-xs text-[var(--text-muted)]">{displayUser?.email ?? ""}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <nav className="flex-1 px-3 py-4 space-y-0.5">
-                  {NAV_LINKS.map(({ name, href, icon: Icon }) => {
-                    const active = isActive(href);
-                    return (
-                      <Link key={href} href={href}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active ? 'bg-[var(--peach-ghost)] text-[var(--peach)]' : 'text-[var(--text-muted)]'}`}
-                      >
-                        <Icon className="w-5 h-5" />
-                        {name}
-                      </Link>
-                    );
-                  })}
-                </nav>
-
-                <div className="p-3 border-t border-[var(--border)]">
-                  <button onClick={logout}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-muted)]"
-                  >
-                    <LogOut className="w-5 h-5" /> Sign out
-                  </button>
-                </div>
-              </motion.aside>
-            </>
-          )}
-        </AnimatePresence>
-
-        <main className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-8 pb-24 lg:pb-8">
-            <ErrorBoundary>
-              <motion.div
-                key={pathname}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-              >
-                {children}
-              </motion.div>
-            </ErrorBoundary>
-          </div>
-        </main>
-
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex border-t bg-[var(--bg-surface)] border-[var(--border)] pb-[env(safe-area-inset-bottom)]">
-          {NAV_LINKS.slice(0, 5).map(({ name, href, icon: Icon }) => {
-            const active = isActive(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 text-center min-h-0 transition-colors ${active ? 'text-[var(--peach)]' : 'text-[var(--text-faint)]'}`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-[10px] font-semibold">{name.split(" ")[0]}</span>
-              </Link>
-            );
-          })}
-        </nav>
+  if (status === "loading") {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#F8F9FA]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#1A73E8]" />
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (status === "authenticated") {
+    return (
+      <div className="flex h-screen bg-white overflow-hidden selection:bg-[#D2E3FC] selection:text-[#1967D2]">
+        <Sidebar />
+        <div className="flex flex-col flex-1 min-w-0 bg-[#F8F9FA]">
+          <Topbar />
+          <main className="flex-1 overflow-y-auto relative">
+            {children}
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

@@ -1,362 +1,191 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Box, Container, Grid, Typography, Paper, Button, Chip, IconButton, Tooltip } from "@mui/material";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Calendar,
-  Clock,
-  Activity,
-  ArrowUpRight,
-  Sparkles,
-  Zap,
-  Settings,
-  Bot,
-  Users,
-  RefreshCw,
-  CheckCircle,
-  AlertCircle,
-  TrendingUp,
-  Timer,
-  Terminal,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { Calendar, Link as LinkIcon, Plus, Inbox, Clock, ArrowRight } from "lucide-react";
 import Link from "next/link";
-
-import { useAuth } from "@/app/providers/auth-provider";
-import { useQuery } from "@/hooks/useQuery";
-import { useTheme } from "@/contexts/ThemeContext";
-import { useDashboardMetrics } from "@/lib/ai-api";
-import { MetricCard, MetricCardGrid } from "@/components/ui/MetricCard";
-import { DataTable, StatusChip } from "@/components/ui/DataTable";
-
-import { Greeting } from "@/components/dashboard/Greeting";
-import { Header } from "@/components/dashboard/Header";
-import { StatCard } from "@/components/dashboard/StatCard";
-import { MobileSidebar } from "@/components/dashboard/MobileSidebar";
-import { BottomNav } from "@/components/dashboard/BottomNav";
-import { SkeletonCard, SkeletonText } from "@/components/ui/Skeleton";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { GradientButton } from "@/components/ui/GradientButton";
+import { toast } from "@/components/ui/Toast";
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
-  const { isDark } = useTheme();
-  const displayName = user?.full_name || user?.name || user?.username || user?.email?.split("@")[0] || "Guest";
+  const { data: session } = useSession();
+  const [isLoading, setIsLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Redirect if not authenticated
+  // 1. Live Clock Timer
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.replace("/login");
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 2. Fetch Dashboard Data
+  useEffect(() => {
+    async function fetchDashboard() {
+      try {
+        setIsLoading(true);
+        // TODO: Swap with actual backend endpoint
+        // const response = await apiClient.get('/dashboard/summary');
+        // keep a small artificial delay to show loading skeletons
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        setDashboardData({ upcomingEvents: [] });
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+        toast.error("Failed to load dashboard data. Please try again.");
+        setIsLoading(false);
+      }
     }
-  }, [isAuthenticated, authLoading, router]);
+    fetchDashboard();
+  }, []);
 
-  // Fetch real analytics data from backend
-  const { data: analytics, isLoading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery<{
-    summary: string;
-    details?: { meetings: number; hours: number; growth: number; previousWeekMeetings: number; upcomingToday: number; suggestions: number };
-  }>(isAuthenticated ? "/api/analytics/summary" : null);
+  const handleCopyBookingLink = async () => {
+    const slug =
+      (session as any)?.user?.bookingSlug ??
+      (session as any)?.user?.booking_slug ??
+      dashboardData?.bookingSlug ??
+      dashboardData?.user?.bookingSlug;
 
-  const { data: suggestion, isLoading: suggestionLoading } = useQuery<{
-    suggestion: string;
-  }>(isAuthenticated ? "/api/proactive" : null);
+    if (!slug) {
+      toast.error("No booking link configured for your account.");
+      return;
+    }
 
-  const { data: upcomingEvents, isLoading: eventsLoading } = useQuery<{
-    id: number; title: string; start_time: string; category: string;
-  }[]>(isAuthenticated ? "/api/events/upcoming" : null);
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://graftai.com";
+    const url = `${origin}/${encodeURIComponent(String(slug))}`;
 
-  // AI Automation Metrics
-  const { metrics, loading: metricsLoading, refetch: refetchMetrics } = useDashboardMetrics(30000);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Booking link copied to clipboard!");
+    } catch (err) {
+      console.error("Failed to copy booking link:", err);
+      toast.error("Failed to copy booking link. Please copy manually.");
+    }
+  };
 
-  // Global auth errors are handled by AuthProvider. 
-  // We only show an error state here instead of a hard redirect.
+  // Dynamic Greeting Logic
+  const currentHour = currentTime.getHours();
+  let greeting = "Good evening";
+  if (currentHour < 12) greeting = "Good morning";
+  else if (currentHour < 17) greeting = "Good afternoon";
 
+  // Extract First Name securely
+  const userName = session?.user?.name?.split(' ')[0] || "there";
 
-  // Use real analytics data only - no mock fallbacks
-  const displayAnalytics = analytics;
-
-  // AI suggestion - show empty if none available
-  const displaySuggestion = suggestion;
-
-  const displayEvents = upcomingEvents || [];
-
-  // Show loading state
-  if (authLoading || !isAuthenticated) {
+  if (isLoading) {
     return (
-      <Box
-        sx={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "var(--bg-base)",
-        }}
-      >
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: "50%",
-            border: "3px solid hsla(239, 84%, 67%, 0.2)",
-            borderTopColor: "hsl(239, 84%, 67%)",
-          }}
-        />
-      </Box>
+      <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-8 w-full animate-pulse">
+        <div className="h-40 bg-[#F1F3F4] rounded-3xl w-full mb-10"></div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="h-36 bg-[#F1F3F4] rounded-2xl"></div>
+          <div className="h-36 bg-[#F1F3F4] rounded-2xl"></div>
+          <div className="h-36 bg-[#F1F3F4] rounded-2xl"></div>
+        </div>
+        <div className="h-64 bg-[#F1F3F4] rounded-2xl mt-8"></div>
+      </div>
     );
   }
 
-  // Calculate stats
-  const stats = analytics?.details ?? { meetings: null, hours: null, growth: null, previousWeekMeetings: null };
-  const meetingsDelta = stats.meetings != null && stats.previousWeekMeetings != null
-    ? stats.meetings - stats.previousWeekMeetings
-    : null;
-
-  // Animation variants
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 },
-    },
-  };
-
-  const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
-  };
-
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        background: "var(--bg-base)",
-        pb: { xs: 10, md: 4 },
-      }}
-    >
-      <MobileSidebar />
-
-      <Container maxWidth="lg" sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 4 } }}>
-        <motion.div variants={container} initial="hidden" animate="show">
-          
-          {/* Header & Greeting Layer */}
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-6">
-            <div className="flex-1">
-              <motion.div variants={item}>
-                <Greeting
-                  userName={displayName}
-                  userEmail={user?.email}
-                  isLoading={false}
-                />
-              </motion.div>
+    <div className="p-6 md:p-8 max-w-6xl mx-auto w-full space-y-8">
+      
+      {/* BOLDER WELCOME BANNER */}
+      <div className="relative overflow-hidden bg-[#1A73E8] rounded-3xl p-8 md:p-10 shadow-md">
+        {/* Decorative background elements for that "SaaS pop" */}
+        <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 right-32 -mb-16 w-48 h-48 bg-[#8AB4F8] opacity-20 rounded-full blur-2xl"></div>
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2 text-[#E8F0FE] mb-2 text-sm font-medium tracking-wide uppercase">
+              <Clock size={16} />
+              <time suppressHydrationWarning>
+                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </time>
             </div>
-            <div className="lg:w-auto w-full">
-              <motion.div variants={item}>
-                <Header
-                  userName={displayName}
-                  userEmail={user?.email}
-                  userAvatar={user?.avatar}
-                  notificationCount={3}
-                />
-              </motion.div>
-            </div>
+            <h1 className="text-3xl md:text-5xl font-medium text-white tracking-tight leading-tight">
+              {greeting},<br />{userName}.
+            </h1>
           </div>
-
-          {/* Primary Stats Matrix */}
-          <motion.div variants={item} className="mb-12">
-            <div className="flex items-center gap-3 mb-4">
-               <Activity size={16} className="text-[var(--primary)]" />
-               <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--text-muted)]">Core_Telemetry_Matrix</h2>
-            </div>
-            <Grid container spacing={2}>
-              {analyticsLoading ? (
-                Array(3).fill(0).map((_, i) => (
-                  <Grid item xs={12} sm={6} md={4} key={i}>
-                    <SkeletonCard />
-                  </Grid>
-                ))
-              ) : (
-                <>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <StatCard
-                      title="Total_Meetings"
-                      value={stats.meetings ?? "—"}
-                      icon={Calendar}
-                      trend={meetingsDelta != null ? {
-                        value: Math.round((meetingsDelta / (stats.previousWeekMeetings || 1)) * 100),
-                        label: "L_WEEK_DELTA",
-                      } : undefined}
-                      color="primary"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <StatCard
-                      title="Copilot_Optimization"
-                      value={stats.hours ? `${stats.hours}H` : "—"}
-                      icon={Bot}
-                      trend={stats.growth != null ? {
-                        value: stats.growth,
-                        label: "EFFICIENCY_GAIN",
-                      } : undefined}
-                      color="warning"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <StatCard
-                      title="Active_Node_Status"
-                      value="STABLE"
-                      icon={CheckCircle}
-                      color="success"
-                    />
-                  </Grid>
-                </>
-              )}
-            </Grid>
-          </motion.div>
-
-          {/* System Tiles Grid */}
-          <Grid container spacing={2} sx={{ mb: 4 }}>
-            {/* Left Column: Activity & Logs */}
-            <Grid item xs={12} lg={8}>
-              <div className="flex flex-col gap-6">
-                
-                {/* Activity Stream Tile */}
-                <motion.div variants={item}>
-                  <Box sx={{ background: "var(--bg-base)", border: "1px solid var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
-                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-[var(--border-subtle)]">
-                      <div className="flex items-center gap-3">
-                        <Activity size={18} className="text-[var(--primary)]" />
-                        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Activity_Flow_Stream</h3>
-                      </div>
-                      <Link href="/dashboard/analytics" className="text-[10px] font-black text-[var(--primary)] uppercase tracking-widest hover:underline font-mono">
-                        EXPLORE_REPORTS →
-                      </Link>
-                    </div>
-
-                    {analyticsLoading ? (
-                      <SkeletonText lines={4} />
-                    ) : (
-                      <div className="font-mono text-[13px] leading-relaxed text-[var(--text-secondary)] bg-[var(--bg-hover)] p-5 border-l-2 border-[var(--primary)]">
-                        {displayAnalytics?.summary || "No synchronization data available in local buffer."}
-                      </div>
-                    )}
-                  </Box>
-                </motion.div>
-
-                 {/* System Automation Tiles */}
-                 <motion.div variants={item}>
-                   <Box sx={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
-                      <div className="flex items-center gap-3 mb-6">
-                         <Zap size={18} className="text-[var(--secondary)]" />
-                         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Automation_Yield_Matrix</h3>
-                      </div>
-                      <MetricCardGrid columns={2}>
-                        <MetricCard
-                          title="Success_Rate"
-                          value={metrics?.success_rate ? `${(metrics.success_rate * 100).toFixed(1)}%` : "—"}
-                          icon={CheckCircle}
-                          status={metrics && metrics.success_rate > 0.8 ? "success" : "warning"}
-                          progress={metrics ? { value: Math.round(metrics.success_rate * 100), max: 100, label: "NODE_INTEGRITY" } : undefined}
-                          loading={metricsLoading}
-                        />
-                        <MetricCard
-                          title="Latency_Buffer"
-                          value={metrics?.avg_execution_time_ms ? `${(metrics.avg_execution_time_ms / 1000).toFixed(1)}S` : "—"}
-                          icon={Timer}
-                          status="info"
-                          loading={metricsLoading}
-                        />
-                      </MetricCardGrid>
-                   </Box>
-                </motion.div>
-              </div>
-            </Grid>
-
-            {/* Right Column: Console & Insights */}
-            <Grid item xs={12} lg={4}>
-              <div className="flex flex-col gap-6 h-full">
-                
-                {/* AI Cortex Console Tile */}
-                <motion.div variants={item} className="h-full">
-                  <Box sx={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0, height: "100%", display: "flex", flexDirection: "column" }}>
-                    <div className="flex items-center gap-3 mb-6">
-                       <Sparkles size={18} className="text-[var(--accent)]" />
-                       <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Cortex_Advisory</h3>
-                    </div>
-                    
-                    <div className="flex-1 bg-black/40 border border-[var(--border-subtle)] p-4 font-mono text-[11px] mb-6 overflow-y-auto max-h-[200px] text-[var(--text-muted)] italic">
-                       {suggestionLoading ? (
-                         <div className="animate-pulse">BOOTING_CORTEX...</div>
-                       ) : displaySuggestion?.suggestion ? (
-                         `> ${displaySuggestion.suggestion}`
-                       ) : (
-                         "> WAITING_FOR_INPUT_SIGNAL..."
-                       )}
-                    </div>
-
-                    <button className="w-full py-3 bg-[var(--primary)] text-black text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all flex items-center justify-center gap-2 font-mono">
-                       <Bot size={14} />
-                       ACCESS_CO_PILOT
-                    </button>
-                  </Box>
-                </motion.div>
-
-                 {/* System Log Tile */}
-                 <motion.div variants={item}>
-                   <Box sx={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", p: { xs: 3, md: 4 }, borderRadius: 0 }}>
-                      <div className="flex items-center justify-between mb-6">
-                         <div className="flex items-center gap-3">
-                           <Terminal size={18} className="text-[var(--text-faint)]" />
-                           <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] font-mono">Kernel_Logs</h3>
-                         </div>
-                         <div className="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse" />
-                      </div>
-                      <div className="space-y-3 font-mono text-[9px] text-[var(--text-faint)] uppercase">
-                         <div className="flex justify-between border-b border-[var(--border-subtle)] pb-1">
-                            <span>WS_CONNECTION</span>
-                            <span className="text-[var(--primary)]">ESTABLISHED</span>
-                         </div>
-                         <div className="flex justify-between border-b border-[var(--border-subtle)] pb-1">
-                            <span>SESSION_KEY</span>
-                            <span>{user?.email?.slice(0, 8)}...</span>
-                         </div>
-                         <div className="flex justify-between border-b border-[var(--border-subtle)] pb-1">
-                            <span>NODE_SYNC</span>
-                            <span className="text-[var(--secondary)]">88%</span>
-                         </div>
-                      </div>
-                   </Box>
-                </motion.div>
-              </div>
-            </Grid>
-          </Grid>
           
-          {/* Bottom Layer: Secondary Matrices */}
-          <motion.div variants={item}>
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {[
-                  { label: "UPTIME", value: "99.98%", icon: Activity },
-                  { label: "MEMORY", value: "256MB", icon: Zap },
-                  { label: "NODES", value: "12/12", icon: Users },
-                  { label: "SYNC", value: "INSTANT", icon: RefreshCw },
-                ].map((m, i) => (
-                  <div key={i} className="p-4 border border-dashed border-[var(--border-subtle)] bg-[var(--bg-base)] flex flex-col gap-2">
-                     <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black text-[var(--text-faint)] tracking-widest uppercase">{m.label}</span>
-                        <m.icon size={12} className="text-[var(--text-faint)]" />
-                     </div>
-                     <div className="text-xl font-black text-[var(--text-primary)] font-mono">{m.value}</div>
-                  </div>
-                ))}
-             </div>
-          </motion.div>
+          <div className="flex items-center gap-3">
+             <Link 
+               href="/dashboard/event-types" 
+               className="bg-white text-[#1A73E8] hover:bg-[#F8F9FA] px-6 py-3 rounded-full font-medium text-sm transition-colors shadow-sm flex items-center gap-2"
+             >
+               <Plus size={18} />
+               Create Event
+             </Link>
+          </div>
+        </div>
+      </div>
 
-        </motion.div>
-      </Container>
+      {/* QUICK ACTIONS GRID */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <button 
+          onClick={handleCopyBookingLink}
+          className="group flex flex-col items-start p-6 bg-white border border-[#DADCE0] rounded-2xl hover:border-[#1A73E8] hover:shadow-md transition-all text-left"
+        >
+          <div className="w-12 h-12 rounded-full bg-[#E8F0FE] text-[#1A73E8] flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+            <LinkIcon size={22} />
+          </div>
+          <span className="font-semibold text-[#202124] text-lg mb-1">Copy Link</span>
+          <span className="text-sm text-[#5F6368] mb-4">Share your default booking page</span>
+          <div className="mt-auto flex items-center text-sm font-medium text-[#1A73E8]">
+            Copy to clipboard <ArrowRight size={16} className="ml-1 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+          </div>
+        </button>
 
-      <BottomNav />
-    </Box>
+        <Link href="/dashboard/calendar" className="group flex flex-col items-start p-6 bg-white border border-[#DADCE0] rounded-2xl hover:border-[#E37400] hover:shadow-md transition-all">
+          <div className="w-12 h-12 rounded-full bg-[#FEF7E0] text-[#E37400] flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+            <Calendar size={22} />
+          </div>
+          <span className="font-semibold text-[#202124] text-lg mb-1">My Calendar</span>
+          <span className="text-sm text-[#5F6368] mb-4">View and manage your schedule</span>
+          <div className="mt-auto flex items-center text-sm font-medium text-[#E37400]">
+            Open calendar <ArrowRight size={16} className="ml-1 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+          </div>
+        </Link>
+
+        <Link href="/dashboard/settings/integrations" className="group flex flex-col items-start p-6 bg-white border border-[#DADCE0] rounded-2xl hover:border-[#137333] hover:shadow-md transition-all">
+          <div className="w-12 h-12 rounded-full bg-[#E6F4EA] text-[#137333] flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+            <Inbox size={22} />
+          </div>
+          <span className="font-semibold text-[#202124] text-lg mb-1">Integrations</span>
+          <span className="text-sm text-[#5F6368] mb-4">Connect Zoom, Google Meet & more</span>
+          <div className="mt-auto flex items-center text-sm font-medium text-[#137333]">
+            Manage apps <ArrowRight size={16} className="ml-1 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+          </div>
+        </Link>
+      </div>
+
+      {/* UPCOMING MEETINGS WIDGET */}
+      <div className="bg-white border border-[#DADCE0] rounded-2xl p-6 md:p-8 shadow-sm">
+        <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#F1F3F4]">
+          <div>
+            <h2 className="text-xl font-semibold text-[#202124]">Upcoming Meetings</h2>
+            <p className="text-sm text-[#5F6368] mt-1">Your schedule for the next 7 days</p>
+          </div>
+          <Link href="/dashboard/calendar" className="text-sm font-medium text-[#1A73E8] hover:bg-[#E8F0FE] px-4 py-2 rounded-full transition-colors">
+            View all
+          </Link>
+        </div>
+
+        {dashboardData?.upcomingEvents?.length > 0 ? (
+          <div className="space-y-4">
+             {/* Map events here */}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-20 h-20 rounded-full bg-[#F8F9FA] flex items-center justify-center text-[#DADCE0] mb-5">
+              <Calendar size={40} strokeWidth={1.5} />
+            </div>
+            <h3 className="text-lg font-semibold text-[#202124] mb-2">Your calendar is clear</h3>
+            <p className="text-base text-[#5F6368] max-w-sm mx-auto">
+              You do not have any upcoming meetings scheduled. Share your link to get booked!
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

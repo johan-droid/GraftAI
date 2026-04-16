@@ -1,687 +1,336 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Box,
-  Container,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  Avatar,
-  Switch,
-  Divider,
-  Chip,
-  Grid,
-} from "@mui/material";
+import { useState, useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
-import {
-  User,
-  Shield,
-  Bell,
-  Eye,
-  Loader2,
-  Check,
-  LogOut,
-  KeyRound,
-  Trash2,
-  AlertTriangle,
-  Palette,
-  Moon,
-  Sun,
-  Monitor,
-} from "lucide-react";
 import { toast } from "@/components/ui/Toast";
-import { useTheme, ThemeMode } from "@/contexts/ThemeContext";
-import { useAuth } from "@/app/providers/auth-provider";
-import { setConsent } from "@/lib/api";
-import { MobileSidebar } from "@/components/dashboard/MobileSidebar";
-import { BottomNav } from "@/components/dashboard/BottomNav";
-import { Header } from "@/components/dashboard/Header";
+import { 
+  User, Mail, Globe, Clock, Calendar, 
+  ShieldAlert, Camera, Check, Loader2 
+} from "lucide-react";
 
-const CONSENT_CONFIG = [
-  {
-    key: "analytics",
-    label: "Analytics & Usage Data",
-    description: "Share anonymized usage data to help improve GraftAI. No personal content is shared.",
-    icon: Eye,
-    defaultEnabled: true,
-  },
-  {
-    key: "notifications",
-    label: "Email Notifications",
-    description: "Receive booking reminders, meeting summaries, and AI insights via email.",
-    icon: Bell,
-    defaultEnabled: true,
-  },
-  {
-    key: "ai_training",
-    label: "AI Model Training",
-    description: "Allow anonymized interaction patterns to improve AI scheduling accuracy. Opt out anytime.",
-    icon: Shield,
-    defaultEnabled: false,
-  },
-] as const;
-
-type ConsentKey = (typeof CONSENT_CONFIG)[number]["key"];
-
-export default function SettingsPage() {
-  const router = useRouter();
-  const { user, logout, isAuthenticated, loading: authLoading } = useAuth();
-  const { mode, setMode, isDark } = useTheme();
-
-  const [consents, setConsents] = useState<Record<ConsentKey, boolean>>({
-    analytics: true,
-    notifications: true,
-    ai_training: false,
-  });
-  const [savingKey, setSavingKey] = useState<ConsentKey | null>(null);
-  const [savedKey, setSavedKey] = useState<ConsentKey | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-
-  // Global auth state is handled by AuthProvider.
-
-
-  useEffect(() => {
-    fetch("/api/user/preferences", { credentials: "include" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.consents) {
-          setConsents(data.consents);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load preferences:", err);
-      });
-  }, []);
-
-  async function handleToggle(key: ConsentKey) {
-    const next = !consents[key];
-    setSavingKey(key);
-    try {
-      await setConsent(key, next);
-      setConsents((prev) => ({ ...prev, [key]: next }));
-      setSavedKey(key);
-      setTimeout(() => setSavedKey(null), 2200);
-      toast.success(`${next ? "Enabled" : "Disabled"} ${key} preference.`);
-    } catch {
-      toast.error("Failed to update preference. Please try again.");
-    } finally {
-      setSavingKey(null);
-    }
+// --- Animation Config ---
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
   }
+};
 
+const bentoVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { 
+    opacity: 1, 
+    y: 0,
+    transition: { type: "spring", stiffness: 260, damping: 24 }
+  }
+};
 
-  const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
-    { value: "light", label: "Light", icon: Sun },
-    { value: "dark", label: "Dark", icon: Moon },
-    { value: "auto", label: "System", icon: Monitor },
-  ];
+// --- Types ---
+interface UserProfile {
+  name: string;
+  email: string;
+  bio: string;
+  timezone: string;
+  timeFormat: "12h" | "24h";
+  bufferMinutes: number;
+}
 
-  if (authLoading) {
+export default function SettingsProfilePage() {
+  const { data: session, update } = useSession();
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const [profile, setProfile] = useState<UserProfile>({
+    name: "",
+    email: "",
+    bio: "",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timeFormat: "12h",
+    bufferMinutes: 15,
+  });
+  // Keep a ref to the latest session to avoid stale closures inside timeouts
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  // 1. Read from Backend (simulated)
+  useEffect(() => {
+    setIsLoading(true);
+    const timeoutId = setTimeout(() => {
+      const s = sessionRef.current;
+      setProfile(prev => ({
+        ...prev,
+        name: s?.user?.name || "System Admin",
+        email: s?.user?.email || "admin@graftai.com",
+        bio: "Scheduling meetings efficiently via GraftAI.",
+      }));
+      setIsLoading(false);
+    }, 800);
+
+    return () => clearTimeout(timeoutId);
+  }, [session]);
+
+  // 2. Save to Backend
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      // TODO: Uncomment when backend route is ready
+      // await apiClient.patch('/users/me', profile);
+      
+      // Update NextAuth session if name changed
+      if (profile.name !== session?.user?.name) {
+        await update({ name: profile.name });
+      }
+
+      setTimeout(() => {
+        setIsSaving(false);
+        toast.success("Profile updated successfully!");
+      }, 600);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      toast.error("Failed to save changes.");
+      setIsSaving(false);
+    }
+  };
+
+  // Placeholder handlers for security actions
+  const handleChangePassword = () => {
+    // TODO: wire to backend password change flow
+    toast.info("Change Password flow is not implemented yet.");
+  };
+
+  const handleDeleteAccount = () => {
+    // TODO: implement account deletion flow with confirmation modal
+    if (!confirm("Are you sure you want to delete your account? This action is irreversible.")) return;
+    toast.error("Delete Account flow is not implemented.");
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setProfile(prev => ({ ...prev, [name]: value }));
+  };
+
+  // --- Loading Skeleton ---
+  if (isLoading) {
     return (
-      <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: "50%",
-            border: "3px solid hsla(239, 84%, 67%, 0.2)",
-            borderTopColor: "hsl(239, 84%, 67%)",
-          }}
-        />
-      </Box>
+      <div className="p-6 md:p-10 max-w-6xl mx-auto w-full animate-pulse">
+        <div className="h-10 bg-[#F1F3F4] rounded-lg w-1/4 mb-10"></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="col-span-1 md:col-span-2 h-[400px] bg-[#F1F3F4] rounded-3xl"></div>
+          <div className="col-span-1 h-[400px] bg-[#F1F3F4] rounded-3xl"></div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        background: isDark ? "hsl(240, 24%, 7%)" : "hsl(220, 14%, 96%)",
-        pb: { xs: 10, md: 4 },
-      }}
-    >
-      <MobileSidebar />
-
-      <Container maxWidth="lg" sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 4 } }}>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+    <div className="p-6 md:p-10 max-w-6xl mx-auto w-full">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-medium text-[#202124] tracking-tight mb-2">
+            Profile Settings
+          </h1>
+          <p className="text-[#5F6368] text-base">
+            Manage your personal information and scheduling preferences.
+          </p>
+        </div>
+        <button 
+          onClick={handleSave}
+          disabled={isSaving}
+          className="inline-flex items-center justify-center gap-2 bg-[#1A73E8] text-white hover:bg-[#1557B0] px-6 py-2.5 rounded-full text-sm font-medium transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
         >
-          {/* Header */}
-          <Header
-            userName={(user as any)?.name}
-            userEmail={user?.email}
-            userAvatar={(user as any)?.avatar}
-            notificationCount={0}
-          />
+          {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+          {isSaving ? "Saving..." : "Save Changes"}
+        </button>
+      </div>
 
-          {/* Page Title */}
-          <Box sx={{ mb: 4 }}>
-            <Typography
-              variant="h4"
-              sx={{
-                fontWeight: 700,
-                color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                mb: 1,
-              }}
-            >
-              Settings
-            </Typography>
-            <Typography sx={{ color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-              Manage your account preferences and privacy
-            </Typography>
-          </Box>
+      {/* Bento Grid */}
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+      >
+        
+        {/* BENTO 1: Identity (Spans 2 columns) */}
+        <motion.div variants={bentoVariants} className="md:col-span-2 bg-white border border-[#DADCE0] rounded-3xl p-8 shadow-sm relative overflow-hidden group">
+          <h2 className="text-lg font-semibold text-[#202124] mb-6">Personal Information</h2>
+          
+          <div className="flex flex-col sm:flex-row gap-8">
+            {/* Avatar Upload UI */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative w-28 h-28 rounded-full bg-[#E8F0FE] border border-[#DADCE0] flex items-center justify-center text-[#1A73E8] text-3xl font-medium overflow-hidden group-hover:border-[#1A73E8] transition-colors">
+                {profile.name.charAt(0).toUpperCase()}
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-sm">
+                  <Camera size={24} className="text-white" />
+                </div>
+              </div>
+              <span className="text-xs font-medium text-[#1A73E8] cursor-pointer hover:underline">Change Picture</span>
+            </div>
 
-          <Grid container spacing={3}>
-            {/* Left Column */}
-            <Grid item xs={12} lg={8}>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                {/* Profile Card */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 3,
-                    background: isDark
-                      ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                      : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-                    border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                    borderRadius: "16px",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "10px",
-                        background: "hsla(239, 84%, 67%, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: "1px solid hsla(239, 84%, 67%, 0.3)",
-                      }}
-                    >
-                      <User size={20} style={{ color: "hsl(239, 84%, 67%)" }} />
-                    </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                      Profile
-                    </Typography>
-                  </Box>
+            {/* Inputs */}
+            <div className="flex-1 space-y-5">
+              <div>
+                <label htmlFor="name" className="block text-xs font-semibold text-[#5F6368] uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <User size={14} /> Full Name
+                </label>
+                <input 
+                  id="name"
+                  type="text" 
+                  name="name"
+                  value={profile.name}
+                  onChange={handleInputChange}
+                  className="w-full bg-[#F8F9FA] border border-[#DADCE0] rounded-xl px-4 py-3 text-[#202124] focus:outline-none focus:ring-2 focus:ring-[#1A73E8]/20 focus:border-[#1A73E8] transition-all"
+                />
+              </div>
 
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 4 }}>
-                    <Avatar
-                      src={(user as any)?.avatar}
-                      sx={{
-                        width: 80,
-                        height: 80,
-                        background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                        fontSize: "1.5rem",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {(user as any)?.name?.charAt(0) || (user as any)?.email?.charAt(0) || "U"}
-                    </Avatar>
-                    <Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                        {(user as any)?.name || "User"}
-                      </Typography>
-                      <Typography sx={{ color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                        {user?.email}
-                      </Typography>
-                      <Chip
-                        label="Pro Plan"
-                        size="small"
-                        sx={{
-                          mt: 1,
-                          background: "hsla(239, 84%, 67%, 0.15)",
-                          color: "hsl(239, 84%, 67%)",
-                          fontWeight: 600,
-                          fontSize: "0.75rem",
-                        }}
-                      />
-                    </Box>
-                  </Box>
+              <div>
+                <label htmlFor="email" className="block text-xs font-semibold text-[#5F6368] uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <Mail size={14} /> Email Address
+                </label>
+                <input 
+                  id="email"
+                  type="email" 
+                  name="email"
+                  value={profile.email}
+                  onChange={handleInputChange}
+                  disabled
+                  className="w-full bg-[#F1F3F4] border border-[#DADCE0] rounded-xl px-4 py-3 text-[#5F6368] cursor-not-allowed"
+                />
+                <p className="text-[11px] text-[#5F6368] mt-1.5">Email cannot be changed directly. Contact support.</p>
+              </div>
 
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        label="Full Name"
-                        value={(user as any)?.name || ""}
-                        InputProps={{ readOnly: true }}
-                        sx={{
-                          "& .MuiOutlinedInput-root": {
-                            background: isDark ? "hsla(239, 84%, 67%, 0.05)" : "hsla(239, 84%, 67%, 0.03)",
-                            borderRadius: "10px",
-                            color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                            "& fieldset": { borderColor: "hsla(239, 84%, 67%, 0.2)" },
-                          },
-                          "& .MuiInputLabel-root": { color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" },
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        label="Email Address"
-                        value={user?.email || ""}
-                        InputProps={{ readOnly: true }}
-                        sx={{
-                          "& .MuiOutlinedInput-root": {
-                            background: isDark ? "hsla(239, 84%, 67%, 0.05)" : "hsla(239, 84%, 67%, 0.03)",
-                            borderRadius: "10px",
-                            color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                            "& fieldset": { borderColor: "hsla(239, 84%, 67%, 0.2)" },
-                          },
-                          "& .MuiInputLabel-root": { color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" },
-                        }}
-                      />
-                    </Grid>
-                  </Grid>
-                </Paper>
-
-
-                {/* Privacy & Consent */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 3,
-                    background: isDark
-                      ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                      : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-                    border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                    borderRadius: "16px",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "10px",
-                        background: "hsla(239, 84%, 67%, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: "1px solid hsla(239, 84%, 67%, 0.3)",
-                      }}
-                    >
-                      <Shield size={20} style={{ color: "hsl(239, 84%, 67%)" }} />
-                    </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                      Privacy & Consent
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {CONSENT_CONFIG.map((item) => {
-                      const isSaving = savingKey === item.key;
-                      const isSaved = savedKey === item.key;
-                      const enabled = consents[item.key];
-
-                      return (
-                        <Paper
-                          key={item.key}
-                          elevation={0}
-                          sx={{
-                            p: 2,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 2,
-                            background: isDark ? "hsla(239, 84%, 67%, 0.05)" : "hsla(239, 84%, 67%, 0.03)",
-                            border: "1px solid hsla(239, 84%, 67%, 0.1)",
-                            borderRadius: "12px",
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: "10px",
-                              background: isDark ? "hsla(239, 84%, 67%, 0.1)" : "hsla(239, 84%, 67%, 0.05)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}
-                          >
-                            <item.icon size={18} style={{ color: "hsl(239, 84%, 67%)" }} />
-                          </Box>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                              {item.label}
-                            </Typography>
-                            <Typography sx={{ fontSize: "0.875rem", color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                              {item.description}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                            {isSaved && (
-                              <Check size={16} style={{ color: "hsl(160, 84%, 39%)" }} />
-                            )}
-                            <Switch
-                              checked={enabled}
-                              onChange={() => handleToggle(item.key)}
-                              disabled={isSaving}
-                              sx={{
-                                "& .MuiSwitch-switchBase.Mui-checked": {
-                                  color: "hsl(239, 84%, 67%)",
-                                },
-                                "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
-                                  backgroundColor: "hsl(239, 84%, 67%)",
-                                },
-                              }}
-                            />
-                          </Box>
-                        </Paper>
-                      );
-                    })}
-                  </Box>
-                </Paper>
-
-                {/* Danger Zone */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 3,
-                    background: isDark
-                      ? "linear-gradient(135deg, hsla(346, 84%, 61%, 0.1) 0%, hsla(346, 84%, 61%, 0.05) 100%)"
-                      : "linear-gradient(135deg, hsla(346, 84%, 61%, 0.05) 0%, hsla(346, 84%, 61%, 0.02) 100%)",
-                    border: "1px solid hsla(346, 84%, 61%, 0.3)",
-                    borderRadius: "16px",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-                    <AlertTriangle size={20} style={{ color: "hsl(346, 84%, 61%)" }} />
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: "hsl(346, 84%, 61%)" }}>
-                      Danger Zone
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexDirection: { xs: "column", sm: "row" },
-                        alignItems: { xs: "flex-start", sm: "center" },
-                        justifyContent: "space-between",
-                        gap: 2,
-                        py: 2,
-                        borderBottom: "1px solid hsla(346, 84%, 61%, 0.1)",
-                      }}
-                    >
-                      <Box>
-                        <Typography sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                          Sign Out
-                        </Typography>
-                        <Typography sx={{ fontSize: "0.875rem", color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                          End your current session securely.
-                        </Typography>
-                      </Box>
-                      <Button
-                        onClick={logout}
-                        variant="outlined"
-                        startIcon={<LogOut size={16} />}
-                        sx={{
-                          borderColor: "hsla(346, 84%, 61%, 0.5)",
-                          color: "hsl(346, 84%, 61%)",
-                          textTransform: "none",
-                          fontWeight: 600,
-                          borderRadius: "10px",
-                          "&:hover": {
-                            borderColor: "hsl(346, 84%, 61%)",
-                            background: "hsla(346, 84%, 61%, 0.1)",
-                          },
-                        }}
-                      >
-                        Sign Out
-                      </Button>
-                    </Box>
-
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexDirection: { xs: "column", sm: "row" },
-                        alignItems: { xs: "flex-start", sm: "center" },
-                        justifyContent: "space-between",
-                        gap: 2,
-                        py: 2,
-                      }}
-                    >
-                      <Box>
-                        <Typography sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                          Delete Account
-                        </Typography>
-                        <Typography sx={{ fontSize: "0.875rem", color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                          Permanently delete your account and all data. This cannot be undone.
-                        </Typography>
-                      </Box>
-                      {!deleteConfirm ? (
-                        <Button
-                          onClick={() => setDeleteConfirm(true)}
-                          variant="contained"
-                          startIcon={<Trash2 size={16} />}
-                          sx={{
-                            background: "hsl(346, 84%, 61%)",
-                            textTransform: "none",
-                            fontWeight: 600,
-                            borderRadius: "10px",
-                            "&:hover": {
-                              background: "hsl(346, 84%, 51%)",
-                            },
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      ) : (
-                        <Box sx={{ display: "flex", gap: 1 }}>
-                          <Button
-                            onClick={async () => {
-                              try {
-                                const res = await fetch("/api/users/me", {
-                                  method: "DELETE",
-                                  credentials: "include",
-                                });
-                                if (res.ok) {
-                                  toast.success("Account deleted successfully");
-                                  router.push("/login");
-                                } else {
-                                  throw new Error("Failed to delete account");
-                                }
-                              } catch (error) {
-                                toast.error(error instanceof Error ? error.message : "Failed to delete account");
-                              } finally {
-                                setDeleteConfirm(false);
-                              }
-                            }}
-                            variant="contained"
-                            sx={{
-                              background: "hsl(346, 84%, 61%)",
-                              color: "white",
-                              textTransform: "none",
-                              fontWeight: 600,
-                              borderRadius: "8px",
-                              "&:hover": {
-                                background: "hsl(346, 84%, 51%)",
-                              },
-                            }}
-                          >
-                            Confirm
-                          </Button>
-                          <Button
-                            onClick={() => setDeleteConfirm(false)}
-                            variant="outlined"
-                            sx={{
-                              borderColor: "hsla(346, 84%, 61%, 0.5)",
-                              color: "hsl(346, 84%, 61%)",
-                              textTransform: "none",
-                              fontWeight: 600,
-                              borderRadius: "8px",
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </Box>
-                      )}
-                    </Box>
-                  </Box>
-                </Paper>
-              </Box>
-            </Grid>
-
-            {/* Right Column - Theme & Quick Links */}
-            <Grid item xs={12} lg={4}>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                {/* Theme Settings */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 3,
-                    background: isDark
-                      ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                      : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-                    border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                    borderRadius: "16px",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "10px",
-                        background: "hsla(239, 84%, 67%, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: "1px solid hsla(239, 84%, 67%, 0.3)",
-                      }}
-                    >
-                      <Palette size={20} style={{ color: "hsl(239, 84%, 67%)" }} />
-                    </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }}>
-                      Appearance
-                    </Typography>
-                  </Box>
-
-                  <Typography sx={{ mb: 2, color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-                    Choose your preferred theme
-                  </Typography>
-
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                    {themeOptions.map((option) => (
-                      <Paper
-                        key={option.value}
-                        onClick={() => setMode(option.value)}
-                        elevation={0}
-                        sx={{
-                          p: 2,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 2,
-                          cursor: "pointer",
-                          background: mode === option.value ? "hsla(239, 84%, 67%, 0.15)" : "transparent",
-                          border: `1px solid ${mode === option.value ? "hsla(239, 84%, 67%, 0.5)" : "hsla(239, 84%, 67%, 0.1)"}`,
-                          borderRadius: "10px",
-                          transition: "all 0.2s ease",
-                          "&:hover": {
-                            background: "hsla(239, 84%, 67%, 0.1)",
-                            borderColor: "hsla(239, 84%, 67%, 0.3)",
-                          },
-                        }}
-                      >
-                        <option.icon
-                          size={20}
-                          style={{
-                            color: mode === option.value ? "hsl(239, 84%, 67%)" : isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)",
-                          }}
-                        />
-                        <Typography
-                          sx={{
-                            flex: 1,
-                            fontWeight: mode === option.value ? 600 : 400,
-                            color: mode === option.value ? "hsl(239, 84%, 67%)" : isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                          }}
-                        >
-                          {option.label}
-                        </Typography>
-                        {mode === option.value && <Check size={18} style={{ color: "hsl(239, 84%, 67%)" }} />}
-                      </Paper>
-                    ))}
-                  </Box>
-                </Paper>
-
-                {/* Quick Links */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 3,
-                    background: isDark
-                      ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                      : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-                    border: "1px solid hsla(239, 84%, 67%, 0.15)",
-                    borderRadius: "16px",
-                  }}
-                >
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)", mb: 2 }}>
-                    Quick Links
-                  </Typography>
-
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                    {[
-                      { label: "Billing & Subscription", href: "/dashboard/settings/billing" },
-                      { label: "Connected Integrations", href: "/dashboard/settings/integrations" },
-                    ].map((link) => (
-                      <Box
-                        key={link.href}
-                        component="a"
-                        href={link.href}
-                        sx={{
-                          p: 1.5,
-                          borderRadius: "10px",
-                          color: isDark ? "hsl(215, 16%, 70%)" : "hsl(215, 16%, 47%)",
-                          textDecoration: "none",
-                          transition: "all 0.2s ease",
-                          "&:hover": {
-                            background: isDark ? "hsla(239, 84%, 67%, 0.1)" : "hsla(239, 84%, 67%, 0.05)",
-                            color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                          },
-                        }}
-                      >
-                        {link.label}
-                      </Box>
-                    ))}
-                  </Box>
-                </Paper>
-
-                {/* Version Info */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    background: "transparent",
-                    border: "1px solid hsla(239, 84%, 67%, 0.1)",
-                    borderRadius: "10px",
-                    textAlign: "center",
-                  }}
-                >
-                  <Typography sx={{ fontSize: "0.875rem", color: isDark ? "hsl(215, 16%, 40%)" : "hsl(215, 16%, 60%)" }}>
-                    GraftAI v1.0.0
-                  </Typography>
-                </Paper>
-              </Box>
-            </Grid>
-          </Grid>
+              <div>
+                <label htmlFor="bio" className="block text-xs font-semibold text-[#5F6368] uppercase tracking-wider mb-2">
+                  Bio / Welcome Message
+                </label>
+                <textarea 
+                  id="bio"
+                  name="bio"
+                  value={profile.bio}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className="w-full bg-[#F8F9FA] border border-[#DADCE0] rounded-xl px-4 py-3 text-[#202124] focus:outline-none focus:ring-2 focus:ring-[#1A73E8]/20 focus:border-[#1A73E8] transition-all resize-none"
+                  placeholder="Welcome to my booking page..."
+                />
+              </div>
+            </div>
+          </div>
         </motion.div>
-      </Container>
 
-      <BottomNav />
-    </Box>
+        {/* BENTO 2: Localization */}
+        <motion.div variants={bentoVariants} className="bg-white border border-[#DADCE0] rounded-3xl p-8 shadow-sm flex flex-col">
+          <h2 className="text-lg font-semibold text-[#202124] mb-6">Localization</h2>
+          
+          <div className="space-y-6 flex-1">
+            <div>
+              <label htmlFor="timezone" className="block text-xs font-semibold text-[#5F6368] uppercase tracking-wider mb-2 flex items-center gap-2">
+                <Globe size={14} /> Timezone
+              </label>
+              <select 
+                id="timezone"
+                name="timezone"
+                value={profile.timezone}
+                onChange={handleInputChange}
+                className="w-full bg-[#F8F9FA] border border-[#DADCE0] rounded-xl px-4 py-3 text-[#202124] focus:outline-none focus:border-[#1A73E8] transition-all appearance-none cursor-pointer"
+              >
+                <option value="Asia/Kolkata">India Standard Time (IST)</option>
+                <option value="America/New_York">Eastern Time (ET)</option>
+                <option value="Europe/London">Greenwich Mean Time (GMT)</option>
+                <option value="America/Los_Angeles">Pacific Time (PT)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#5F6368] uppercase tracking-wider mb-2 flex items-center gap-2">
+                <Clock size={14} /> Time Format
+              </label>
+              <div className="flex bg-[#F8F9FA] border border-[#DADCE0] rounded-xl p-1" role="group" aria-label="Time format selection">
+                <button 
+                  type="button"
+                  onClick={() => setProfile(prev => ({ ...prev, timeFormat: "12h" }))}
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${profile.timeFormat === "12h" ? "bg-white shadow-sm border border-[#DADCE0] text-[#1A73E8]" : "text-[#5F6368] hover:text-[#202124]"}`}
+                >
+                  12-hour (AM/PM)
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setProfile(prev => ({ ...prev, timeFormat: "24h" }))}
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${profile.timeFormat === "24h" ? "bg-white shadow-sm border border-[#DADCE0] text-[#1A73E8]" : "text-[#5F6368] hover:text-[#202124]"}`}
+                >
+                  24-hour
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* BENTO 3: Global Scheduling Preferences */}
+        <motion.div variants={bentoVariants} className="md:col-span-2 bg-white border border-[#DADCE0] rounded-3xl p-8 shadow-sm">
+          <h2 className="text-lg font-semibold text-[#202124] mb-6">Default Scheduling Rules</h2>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="p-5 rounded-2xl border border-[#DADCE0] bg-[#F8F9FA] hover:border-[#1A73E8] transition-colors">
+              <div className="flex items-center gap-3 mb-3 text-[#202124]">
+                <div className="p-2 bg-[#E8F0FE] text-[#1A73E8] rounded-lg">
+                  <Calendar size={18} />
+                </div>
+                <span className="font-medium">Buffer Time</span>
+              </div>
+              <p className="text-xs text-[#5F6368] mb-4 line-clamp-2">
+                Add extra time before and after events to avoid back-to-back meetings.
+              </p>
+              <label htmlFor="bufferMinutes" className="sr-only">Buffer time in minutes</label>
+              <select 
+                id="bufferMinutes"
+                name="bufferMinutes"
+                value={profile.bufferMinutes}
+                onChange={handleInputChange}
+                className="w-full bg-white border border-[#DADCE0] rounded-xl px-4 py-2.5 text-sm text-[#202124] focus:outline-none focus:border-[#1A73E8]"
+              >
+                <option value={0}>No buffer</option>
+                <option value={5}>5 minutes</option>
+                <option value={15}>15 minutes</option>
+                <option value={30}>30 minutes</option>
+              </select>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* BENTO 4: Danger Zone */}
+        <motion.div variants={bentoVariants} className="bg-white border border-[#DADCE0] rounded-3xl p-8 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-[#D93025]"></div>
+          <h2 className="text-lg font-semibold text-[#D93025] mb-2 flex items-center gap-2">
+            <ShieldAlert size={18} /> Security
+          </h2>
+          <p className="text-sm text-[#5F6368] mb-6">
+            Manage your account security or permanently delete your account data.
+          </p>
+          
+          <div className="space-y-3 mt-auto">
+            <button
+              onClick={handleChangePassword}
+              type="button"
+              className="w-full py-2.5 px-4 text-sm font-medium text-[#202124] border border-[#DADCE0] rounded-xl hover:bg-[#F8F9FA] transition-colors text-left"
+            >
+              Change Password
+            </button>
+            <button
+              onClick={handleDeleteAccount}
+              type="button"
+              className="w-full py-2.5 px-4 text-sm font-medium text-[#D93025] border border-[#FCE8E6] bg-[#FCE8E6]/50 rounded-xl hover:bg-[#FCE8E6] transition-colors text-left"
+            >
+              Delete Account
+            </button>
+          </div>
+        </motion.div>
+
+      </motion.div>
+    </div>
   );
 }

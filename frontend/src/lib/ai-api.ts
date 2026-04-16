@@ -262,32 +262,40 @@ export interface WebSocketCallbacks {
 }
 
 export function normalizeWebSocketUrl(rawUrl?: string): string {
-  const fallbackHost = "graftai.onrender.com";
-  let url = rawUrl?.trim() || fallbackHost;
+  const fallbackUrl = "https://graftai.onrender.com";
+  const value = rawUrl?.trim() || fallbackUrl;
+  let normalized = value;
 
-  const isSecure = url.startsWith("https://") || url.startsWith("wss://");
-  const isInsecure = url.startsWith("http://") || url.startsWith("ws://");
-  const isLocalhost = /^(localhost|127\.0\.0\.1)(:\d+)?($|\/)/.test(url);
-
-  if (!url.startsWith("ws://") && !url.startsWith("wss://")) {
-    const scheme = isSecure ? "wss://" : isInsecure ? "ws://" : isLocalhost ? "ws://" : "wss://";
-    url = url.replace(/^https?:\/\//, "");
-    url = url.replace(/^ws?:\/\//, "");
-    if (url.endsWith("/monitoring/ws")) {
-      url = url.replace(/\/monitoring\/ws$/, "/api/v1/monitoring/ws");
-    } else if (!url.endsWith("/ws")) {
-      url = `${url.replace(/\/+$/, "")}/api/v1/monitoring/ws`;
-    }
-    return `${scheme}${url}`;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(normalized)) {
+    normalized = normalized.replace(/^\/+/, "");
+    const isLocalhost = /^(localhost|127(?:\.\d+){0,2}\.\d+)(:\d+)?($|\/)/.test(normalized);
+    const scheme = isLocalhost ? "http://" : "https://";
+    normalized = `${scheme}${normalized}`;
   }
 
-  if (url.endsWith("/monitoring/ws")) {
-    return url.replace(/\/monitoring\/ws$/, "/api/v1/monitoring/ws");
+  let url: URL;
+  try {
+    url = new URL(normalized);
+  } catch (error) {
+    return "wss://graftai.onrender.com/api/v1/monitoring/ws";
   }
-  if (!url.endsWith("/ws")) {
-    return `${url.replace(/\/+$/, "")}/api/v1/monitoring/ws`;
+
+  if (url.protocol === "http:") {
+    url.protocol = "ws:";
+  } else if (url.protocol === "https:") {
+    url.protocol = "wss:";
   }
-  return url;
+
+  const trimmedPath = url.pathname.replace(/\/+$/, "");
+  if (trimmedPath.endsWith("/api/v1/monitoring/ws")) {
+    url.pathname = trimmedPath;
+  } else if (trimmedPath.endsWith("/monitoring/ws")) {
+    url.pathname = trimmedPath.replace(/\/monitoring\/ws$/, "/api/v1/monitoring/ws");
+  } else {
+    url.pathname = "/api/v1/monitoring/ws";
+  }
+
+  return url.toString();
 }
 
 export class WebSocketClient {
@@ -306,12 +314,7 @@ export class WebSocketClient {
     this.shouldReconnect = true;
     
     try {
-      const normalized = normalizeWebSocketUrl(this.url);
-      const wsUrl = normalized.replace(/^https?/, (protocol) =>
-        protocol === "https" ? "wss" : "ws"
-      );
-      const finalUrl = wsUrl.endsWith("/ws") ? wsUrl : `${wsUrl}/ws`;
-      const socketUrl = new URL(finalUrl);
+      const socketUrl = new URL(normalizeWebSocketUrl(this.url));
 
       if (this.authToken) {
         socketUrl.searchParams.set("token", this.authToken);
@@ -324,7 +327,6 @@ export class WebSocketClient {
         console.log("WebSocket connected");
         this.reconnectAttempts = 0;
         this.callbacks.onConnect?.();
-        this.startPingInterval();
       };
       
       this.ws.onmessage = (event) => {
@@ -383,11 +385,8 @@ export class WebSocketClient {
   }
 
   private startPingInterval(): void {
-    this.pingInterval = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: "ping" }));
-      }
-    }, 30000); // 30 seconds
+    // Ping is intentionally disabled because the backend monitoring websocket does not consume incoming messages.
+    // If a ping implementation is added server-side, this can be restored.
   }
 
   private stopPingInterval(): void {
@@ -510,7 +509,13 @@ export function useWebSocket(url?: string, token?: string | null) {
   const wsRef = useRef<WebSocketClient | null>(null);
 
   useEffect(() => {
-    const wsUrl = normalizeWebSocketUrl(url || process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || "https://graftai.onrender.com");
+    const wsUrl = normalizeWebSocketUrl(
+      url ||
+      process.env.NEXT_PUBLIC_WS_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      "https://graftai.onrender.com"
+    );
     const client = new WebSocketClient(wsUrl, token ?? null);
     wsRef.current = client;
     

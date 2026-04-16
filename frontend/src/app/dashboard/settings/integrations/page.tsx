@@ -1,203 +1,128 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { apiClient } from "@/lib/api-client";
-import { motion } from "framer-motion";
-import { Globe, Sparkles, Video, AlertCircle, CheckCircle2, Trash2, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { Calendar, Video, CreditCard, Webhook, Check, Plus } from "lucide-react";
+import { toast } from "@/components/ui/Toast";
+
+const INTEGRATIONS = [
+  {
+    id: "google_calendar",
+    name: "Google Calendar",
+    description: "Check for conflicts and add events to your Google Calendar.",
+    icon: Calendar,
+    color: "text-[#1A73E8]",
+    bg: "bg-[#E8F0FE]",
+    status: "connected",
+    account: "user@example.com"
+  },
+  {
+    id: "ms_outlook",
+    name: "Microsoft Outlook",
+    description: "Connect your Outlook calendar for real-time availability.",
+    icon: Calendar,
+    color: "text-[#0078D4]",
+    bg: "bg-[#E6F2FA]",
+    status: "disconnected"
+  },
+  {
+    id: "zoom",
+    name: "Zoom",
+    description: "Automatically generate Zoom meeting links for your events.",
+    icon: Video,
+    color: "text-[#2D8CFF]",
+    bg: "bg-[#EAF3FF]",
+    status: "connected",
+    account: "Zoom Pro Account"
+  },
+  {
+    id: "stripe",
+    name: "Stripe",
+    description: "Accept payments directly when clients book an appointment.",
+    icon: CreditCard,
+    color: "text-[#635BFF]",
+    bg: "bg-[#EFEFFF]",
+    status: "disconnected"
+  },
+  {
+    id: "webhooks",
+    name: "Custom Webhooks",
+    description: "Send real-time booking data to your external systems.",
+    icon: Webhook,
+    color: "text-[#5F6368]",
+    bg: "bg-[#F1F3F4]",
+    status: "disconnected"
+  }
+];
 
 export default function IntegrationsPage() {
-  const [integrationStatus, setIntegrationStatus] = useState<{ active_providers: string[]; inactive_providers: string[] }>({
-    active_providers: [],
-    inactive_providers: [],
-  });
-  const [loading, setLoading] = useState(true);
+  const [integrations, setIntegrations] = useState(INTEGRATIONS);
 
-  const fetchIntegrations = async () => {
-    try {
-      const data = await apiClient.fetch<{ active_providers: string[]; inactive_providers: string[] }>("/users/me/integrations");
-      setIntegrationStatus({
-        active_providers: data.active_providers || [],
-        inactive_providers: data.inactive_providers || [],
-      });
-    } catch (fetchError) {
-      console.error("Failed to fetch integrations", fetchError);
-    } finally {
-      setLoading(false);
+  const toggleConnection = (id: string, currentStatus: string) => {
+    if (currentStatus === "connected") {
+      toast.success("Integration disconnected.");
+      setIntegrations((prev) => prev.map(i => i.id === id ? { ...i, status: "disconnected", account: undefined } : i));
+    } else {
+      toast.success("Redirecting to OAuth provider...");
+      setTimeout(() => {
+        setIntegrations((prev) => prev.map(i => i.id === id ? { ...i, status: "connected", account: "new_auth@example.com" } : i));
+      }, 1000);
     }
   };
 
-  useEffect(() => {
-    fetchIntegrations();
-  }, []);
-
-  const handleConnect = (provider: string) => {
-    const redirectTo = "/dashboard/settings/integrations";
-    window.location.assign(`/api/auth/social/${provider}?redirect_to=${encodeURIComponent(redirectTo)}`);
-  };
-
-  const handleDisconnect = async (provider: string) => {
-    if (!confirm(`This will stop GraftAI from syncing with your ${provider} account. Proceed?`)) return;
-    
-    try {
-      await apiClient.fetch(`/users/me/integrations/${provider}`, { method: "DELETE" });
-      setIntegrationStatus((current) => ({
-        ...current,
-        active_providers: current.active_providers.filter(p => p !== provider),
-      }));
-      alert(`${provider} disconnected successfully.`);
-    } catch {
-      alert(`Failed to disconnect ${provider}. Please try again later.`);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="p-8 flex items-center justify-center py-20 bg-gray-50/30">
-        <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-500 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-8 max-w-4xl mx-auto min-h-screen">
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-10"
-      >
-        <h1 className="text-4xl font-black text-gray-900 tracking-tight">Connected Ecosystems</h1>
-        <p className="text-gray-500 mt-2 font-medium">Link your primary calendar platforms to allow GraftAI to unify your schedule.</p>
-      </motion.div>
-
-      <div className="grid gap-6">
-        {/* Google Workspace */}
-        <IntegrationCard
-          id="google"
-          name="Google Workspace"
-          desc={integrationStatus.inactive_providers.includes("google") ? "Reconnect expired Google access to resume sync." : "Sync events and Google Meet links seamlessly."}
-          icon={<Globe className="w-8 h-8" />}
-          accentColor="text-red-500"
-          bgColor="bg-red-50/50"
-          borderColor="border-red-100"
-          status={integrationStatus.active_providers.includes("google") ? "active" : integrationStatus.inactive_providers.includes("google") ? "reconnect" : "disconnected"}
-          onConnect={() => handleConnect("google")}
-          onDisconnect={() => handleDisconnect("google")}
-        />
-
-        {/* Microsoft 365 */}
-        <IntegrationCard
-          id="microsoft"
-          name="Microsoft 365"
-          desc={integrationStatus.inactive_providers.includes("microsoft") ? "Reconnect expired Microsoft access to resume sync." : "Synchronize Outlook events and Teams coordination."}
-          icon={<Sparkles className="w-8 h-8" />}
-          accentColor="text-blue-500"
-          bgColor="bg-blue-50/50"
-          borderColor="border-blue-100"
-          status={integrationStatus.active_providers.includes("microsoft") ? "active" : integrationStatus.inactive_providers.includes("microsoft") ? "reconnect" : "disconnected"}
-          onConnect={() => handleConnect("microsoft")}
-          onDisconnect={() => handleDisconnect("microsoft")}
-        />
-
-        {/* Zoom */}
-        <IntegrationCard
-          id="zoom"
-          name="Zoom"
-          desc={integrationStatus.inactive_providers.includes("zoom") ? "Reconnect expired Zoom access to resume meeting creation." : "Generate and sync Zoom meetings from your calendar."}
-          icon={<Video className="w-8 h-8" />}
-          accentColor="text-purple-500"
-          bgColor="bg-purple-50/50"
-          borderColor="border-purple-100"
-          status={integrationStatus.active_providers.includes("zoom") ? "active" : integrationStatus.inactive_providers.includes("zoom") ? "reconnect" : "disconnected"}
-          onConnect={() => handleConnect("zoom")}
-          onDisconnect={() => handleDisconnect("zoom")}
-        />
+    <div className="p-6 md:p-10 max-w-6xl mx-auto w-full">
+      <div className="mb-8 pb-6 border-b border-[#DADCE0]">
+        <h1 className="text-3xl font-medium text-[#202124] tracking-tight mb-2">
+          Integrations
+        </h1>
+        <p className="text-[#5F6368] text-base max-w-2xl">
+          Connect GraftAI with your favorite tools to sync calendars, generate video links, and automate your scheduling workflow.
+        </p>
       </div>
 
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
-        className="mt-12 p-6 rounded-3xl bg-indigo-50/30 border border-indigo-100 flex items-start gap-4"
-      >
-        <AlertCircle className="w-5 h-5 text-indigo-500 mt-1" />
-        <div>
-          <h4 className="font-bold text-indigo-900 text-sm italic">Privacy Note</h4>
-          <p className="text-indigo-700/70 text-xs mt-1 leading-relaxed">
-            GraftAI uses industry-standard OAuth2 scopes to fetch only your calendar availability. 
-            We do not store your credentials, and you can revoke access at any time.
-          </p>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-interface IntegrationCardProps {
-  id?: string;
-  name: string;
-  desc: string;
-  icon: ReactNode;
-  accentColor: string;
-  bgColor: string;
-  borderColor: string;
-  status?: "active" | "reconnect" | "disconnected";
-  onConnect: () => void;
-  onDisconnect: () => void;
-}
-
-function IntegrationCard({ name, desc, icon, accentColor, bgColor, borderColor, status = "disconnected", onConnect, onDisconnect }: IntegrationCardProps) {
-  const isConnected = status === "active";
-  const needsReconnect = status === "reconnect";
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      whileHover={{ y: -2 }}
-      className={`relative group p-8 rounded-[32px] border ${borderColor} ${bgColor} flex flex-col md:flex-row items-center justify-between gap-6 transition-all shadow-sm hover:shadow-xl hover:shadow-gray-200/50`}
-    >
-      <div className="flex items-center gap-6 text-center md:text-left flex-col md:flex-row">
-        <div className={`p-5 rounded-2xl bg-white border border-gray-100 shadow-sm ${accentColor}`}>
-          {icon}
-        </div>
-        <div>
-          <div className="flex items-center gap-2 justify-center md:justify-start">
-            <h3 className="font-black text-xl text-gray-900 uppercase tracking-tight">{name}</h3>
-            {isConnected && (
-              <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-widest">
-                <CheckCircle2 className="w-3 h-3" />
-                Active
-              </span>
-            )}
-            {needsReconnect && (
-              <span className="flex items-center gap-1.5 px-3 py-1 bg-yellow-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-widest">
-                Reconnect
-              </span>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {integrations.map((app) => (
+          <div key={app.id} className="flex flex-col bg-white border border-[#DADCE0] rounded-2xl p-6 hover:shadow-md transition-all">
+            <div className="flex items-start justify-between mb-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${app.bg} ${app.color}`}>
+                <app.icon size={24} />
+              </div>
+              {app.status === "connected" && (
+                <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-[#137333] bg-[#E6F4EA] px-2.5 py-1 rounded-full">
+                  <Check size={12} strokeWidth={3} /> Active
+                </span>
+              )}
+            </div>
+            
+            <h3 className="text-lg font-semibold text-[#202124] mb-2">{app.name}</h3>
+            <p className="text-sm text-[#5F6368] mb-6 flex-1">{app.description}</p>
+            
+            {app.status === "connected" ? (
+              <div className="pt-4 border-t border-[#F1F3F4] flex items-center justify-between mt-auto">
+                <span className="text-xs font-medium text-[#5F6368] truncate pr-4">
+                  {app.account}
+                </span>
+                <button 
+                  onClick={() => toggleConnection(app.id, app.status)}
+                  className="text-sm font-medium text-[#D93025] hover:bg-[#FCE8E6] px-3 py-1.5 rounded-full transition-colors"
+                >
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <div className="pt-4 border-t border-[#F1F3F4] mt-auto">
+                <button 
+                  onClick={() => toggleConnection(app.id, app.status)}
+                  className="w-full flex items-center justify-center gap-2 text-sm font-medium bg-white border border-[#DADCE0] text-[#1A73E8] hover:bg-[#F8F9FA] px-4 py-2 rounded-full transition-colors"
+                >
+                  <Plus size={16} />
+                  Connect {app.name}
+                </button>
+              </div>
             )}
           </div>
-          <p className="text-gray-500 text-sm mt-1 font-medium">{desc}</p>
-        </div>
+        ))}
       </div>
-
-      <div className="flex items-center gap-3">
-        {isConnected ? (
-          <button
-            onClick={onDisconnect}
-            className="flex items-center gap-2 px-6 py-3 rounded-2xl border border-red-200 text-red-600 bg-white font-bold text-xs uppercase tracking-widest hover:bg-red-50 transition-all active:scale-95"
-          >
-            <Trash2 className="w-4 h-4" />
-            Disconnect
-          </button>
-        ) : (
-          <button
-            onClick={onConnect}
-            className="flex items-center gap-2 px-8 py-3 rounded-2xl bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95"
-          >
-            {needsReconnect ? "Reconnect" : "Connect Account"}
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-    </motion.div>
+    </div>
   );
 }

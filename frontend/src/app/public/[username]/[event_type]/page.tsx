@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import {
   bookPublicEvent,
   confirmPublicPaymentIntent,
@@ -37,7 +38,8 @@ function parseInviteeSlot(slotLabel: string) {
   return new Date(year, month - 1, day, hour, minute, 0, 0);
 }
 
-export default function PublicBookingPage({ params }: { params: { username: string; event_type: string } }) {
+export default function PublicBookingPage() {
+  const params = useParams<{ username: string; event_type: string }>();
   const [browserTimezone, setBrowserTimezone] = useState<string>("");
   const [eventDetails, setEventDetails] = useState<PublicEventDetailsResponse | null>(null);
   const [availability, setAvailability] = useState<PublicAvailabilityResponse | null>(null);

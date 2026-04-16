@@ -1,11 +1,12 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { cancelPublicBooking } from "@/lib/api";
 import CancellationModal from "@/components/booking/CancellationModal";
 
-export default function CancelBookingPage({ params }: { params: { bookingId: string } }) {
+export default function CancelBookingPage() {
+  const params = useParams<{ bookingId: string }>();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
   const [isSubmitting, setIsSubmitting] = useState(false);

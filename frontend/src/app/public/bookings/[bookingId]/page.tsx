@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { PublicBookingDetailsResponse, getPublicBookingDetails } from "@/lib/api";
 
-export default function PublicBookingDetailsPage({ params }: { params: { bookingId: string } }) {
+export default function PublicBookingDetailsPage() {
+  const params = useParams<{ bookingId: string }>();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
   const [booking, setBooking] = useState<PublicBookingDetailsResponse | null>(null);

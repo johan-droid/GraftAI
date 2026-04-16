@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   PublicAvailabilitySlot,
   PublicBookingDetailsResponse,
@@ -19,7 +19,8 @@ function slotLabel(slot: PublicAvailabilitySlot) {
   return `${slot.invitee_start} - ${slot.invitee_end} (${slot.invitee_zone})`;
 }
 
-export default function RescheduleBookingPage({ params }: { params: { bookingId: string } }) {
+export default function RescheduleBookingPage() {
+  const params = useParams<{ bookingId: string }>();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
   const [timeZone, setTimeZone] = useState("UTC");

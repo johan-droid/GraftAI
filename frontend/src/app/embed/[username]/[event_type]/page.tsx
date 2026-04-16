@@ -1,15 +1,16 @@
 import Link from "next/link";
 
 type EmbedPageProps = {
-  params: {
+  params: Promise<{
     username: string;
     event_type: string;
-  };
+  }>;
 };
 
-export default function EmbedBookingPage({ params }: EmbedPageProps) {
-  const username = encodeURIComponent(params.username);
-  const eventType = encodeURIComponent(params.event_type);
+export default async function EmbedBookingPage({ params }: EmbedPageProps) {
+  const { username: usernameParam, event_type: eventTypeParam } = await params;
+  const username = encodeURIComponent(usernameParam);
+  const eventType = encodeURIComponent(eventTypeParam);
   const publicBookingPath = `/public/${username}/${eventType}`;
 
   return (
@@ -17,7 +18,7 @@ export default function EmbedBookingPage({ params }: EmbedPageProps) {
       <div className="mx-auto w-full max-w-5xl px-3 py-4 sm:px-4 sm:py-6">
         <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 sm:text-sm">
           <span>
-            Embedded booking for {params.username}/{params.event_type}
+            Embedded booking for {usernameParam}/{eventTypeParam}
           </span>
           <Link href={publicBookingPath} target="_blank" className="font-semibold text-indigo-600 hover:text-indigo-700">
             Open full page

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -22,9 +22,10 @@ const timezones = ["UTC", "America/New_York", "America/Chicago", "America/Denver
 const workHourOptions = ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00"];
 const bufferOptions = [0, 15, 30, 45, 60, 90, 120];
 
-export default function StepPage({ params }: { params: { step: string } }) {
+export default function StepPage() {
   const router = useRouter();
-  const { step } = params;
+  const params = useParams<{ step: string }>();
+  const step = params.step;
   const { markStepComplete } = useOnboarding();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 

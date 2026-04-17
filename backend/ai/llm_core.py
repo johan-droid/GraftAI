@@ -3,14 +3,26 @@ LLaMA Model Core for GraftAI
 Handles natural language understanding, decision making, and tool selection
 """
 from typing import Dict, Any, List, Optional, AsyncGenerator
+import os
+import json
+from groq import AsyncGroq
 from dataclasses import dataclass
 from enum import Enum
 import json
 import re
 from backend.utils.logger import get_logger
+
+# Optional: Async OpenAI client for streaming responses
+try:
+    from openai import AsyncOpenAI
+    _OPENAI_AVAILABLE = True
+except Exception:
+    AsyncOpenAI = None  # type: ignore
+    _OPENAI_AVAILABLE = False
 from backend.ai.prompts import (
     BOOKING_DECISION_SYSTEM_PROMPT,
     AGENT_SYSTEM_PROMPT,
+    HUMANIZED_SYSTEM_PROMPT,
     format_agent_cognition_prompt
 )
 
@@ -57,10 +69,21 @@ class LLaMACore:
     
     def __init__(self, model: LLaMAModel = LLaMAModel.LLAMA_3_1_70B):
         self.model = model
-        self.system_prompt = self._load_system_prompt()
+        # prefer the HUMANIZED_SYSTEM_PROMPT for system behavior
+        self.system_prompt = HUMANIZED_SYSTEM_PROMPT
         self.conversation_history: Dict[str, List[ConversationMessage]] = {}
         self.tools: List[Dict[str, Any]] = []
-        
+
+        # Initialize AsyncGroq client for Groq API if configured
+        self.client = None
+        try:
+            groq_key = os.getenv("GROQ_API_KEY")
+            if groq_key:
+                self.client = AsyncGroq(api_key=groq_key)
+                logger.info(f"AsyncGroq client initialized for model: {self.model}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize AsyncGroq client: {e}")
+
         logger.info(f"LLaMACore initialized with model: {model.value}")
     
     def _load_system_prompt(self) -> str:
@@ -142,7 +165,7 @@ class LLaMACore:
         # Add user message
         messages.append(ConversationMessage(role="user", content=user_message))
         
-        # Call LLM (placeholder for actual LLaMA integration)
+        # Call LLM
         response = await self._call_llm(messages)
         
         # Parse tool calls if any
@@ -183,31 +206,67 @@ class LLaMACore:
         Yields:
             Chunks of the response as they become available
         """
-        # Build messages (same as generate_response)
-        messages = [
+        # Ensure conversation_id exists
+        if conversation_id is None:
+            import uuid
+            conversation_id = str(uuid.uuid4())
+
+        # Build ConversationMessage list
+        messages_cm: List[ConversationMessage] = [
             ConversationMessage(role="system", content=self.system_prompt)
         ]
-        
+
         if context:
             context_str = self._format_context(context)
-            messages.append(ConversationMessage(role="system", content=context_str))
-        
+            messages_cm.append(ConversationMessage(role="system", content=context_str))
+
         if conversation_id in self.conversation_history:
-            messages.extend(self.conversation_history[conversation_id])
-        
-        messages.append(ConversationMessage(role="user", content=user_message))
-        
-        # Stream from LLM
+            messages_cm.extend(self.conversation_history[conversation_id])
+
+        messages_cm.append(ConversationMessage(role="user", content=user_message))
+
+        # Stream via Groq if client available
         full_response = ""
-        async for chunk in self._stream_llm(messages):
-            full_response += chunk
-            yield chunk
-        
-        # Update history
+        if self.client is not None:
+            try:
+                formatted_messages = [{"role": m.role, "content": m.content} for m in messages_cm]
+                stream = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=formatted_messages,
+                    stream=True,
+                    temperature=0.7,
+                )
+
+                async for chunk in stream:
+                    try:
+                        delta = chunk.choices[0].delta
+                        if hasattr(delta, "content") and delta.content:
+                            text = delta.content
+                        elif isinstance(delta, dict):
+                            text = delta.get("content")
+                        else:
+                            text = None
+                    except Exception:
+                        text = None
+
+                    if text:
+                        full_response += text
+                        yield text
+
+            except Exception as e:
+                logger.warning(f"Groq streaming failed, falling back to local streamer: {e}")
+
+        # Fallback
+        if not full_response:
+            async for chunk in self._stream_llm(messages_cm):
+                full_response += chunk
+                yield chunk
+
+        # Update conversation history
         if conversation_id:
             if conversation_id not in self.conversation_history:
                 self.conversation_history[conversation_id] = []
-            
+
             self.conversation_history[conversation_id].append(
                 ConversationMessage(role="user", content=user_message)
             )
@@ -261,7 +320,7 @@ Respond in this JSON format:
 }}"""
         
         messages = [ConversationMessage(role="user", content=prompt)]
-        response = await self._call_llm(messages)
+        response = await self._call_llm(messages, require_json=True)
         
         # Parse JSON response
         try:
@@ -310,7 +369,7 @@ Select the tools needed and provide parameters. Respond in JSON format:
 ]"""
         
         messages = [ConversationMessage(role="user", content=prompt)]
-        response = await self._call_llm(messages)
+        response = await self._call_llm(messages, require_json=True)
         
         try:
             selected_tools = json.loads(response.content)
@@ -355,7 +414,7 @@ Extract and respond in JSON format:
 }}"""
         
         messages = [ConversationMessage(role="user", content=prompt)]
-        response = await self._call_llm(messages)
+        response = await self._call_llm(messages, require_json=True)
         
         try:
             understanding = json.loads(response.content)
@@ -428,73 +487,63 @@ Extract and respond in JSON format:
     
     async def _call_llm(
         self,
-        messages: List[ConversationMessage]
+        messages: List[ConversationMessage],
+        require_json: bool = False
     ) -> LLMResponse:
         """
-        Call the LLaMA model (placeholder for actual implementation)
-        
-        In production, this would:
-        1. Connect to LLaMA API (Hugging Face, AWS Bedrock, or local)
-        2. Send messages with tools
-        3. Parse response
-        4. Return structured response
+        Call the LLM (Groq preferred) for completions.
+
+        If `require_json` is True, request structured JSON from the model.
         """
-        # Placeholder implementation
-        # In production, integrate with actual LLaMA API
-        
+        formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
+        response_format = {"type": "json_object"} if require_json else None
+
+        # Try Groq first
+        if self.client is not None:
+            try:
+                completion = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=formatted_messages,
+                    response_format=response_format,
+                    temperature=0.2 if require_json else 0.7,
+                )
+
+                # Extract content and token usage
+                content = None
+                tokens = 0
+                try:
+                    choice = completion.choices[0]
+                    # Groq's SDK may provide message.content
+                    content = getattr(choice, "message", {}).get("content") if isinstance(choice, dict) else getattr(choice.message, "content", None)
+                except Exception:
+                    # Fallback: try to access as nested dict
+                    try:
+                        content = completion.choices[0]["message"]["content"]
+                    except Exception:
+                        content = getattr(completion, "text", None) or ""
+
+                try:
+                    tokens = getattr(completion, "usage", {}).get("total_tokens", 0) if isinstance(completion, dict) else getattr(completion.usage, "total_tokens", 0)
+                except Exception:
+                    tokens = 0
+
+                return LLMResponse(content=content or "", tool_calls=[], tokens_used=int(tokens))
+
+            except Exception as e:
+                logger.error(f"Groq API Error: {e}")
+                # Fall through to local fallback below
+
+        # Fallback: simple rule-based placeholder (retained for offline/dev)
         last_message = messages[-1].content if messages else ""
-        
-        # Simple rule-based responses for demo
+
         if "schedule" in last_message.lower() or "book" in last_message.lower():
-            content = """I'd be happy to help you schedule a meeting. To get started, I'll need a few details:
-
-1. **Meeting Title** - What is this meeting about?
-2. **Date and Time** - When would you like to meet?
-3. **Duration** - How long should the meeting be?
-4. **Attendees** - Who else should be invited?
-
-Once you provide these details, I can check everyone's availability and suggest the best time slots."""
-        
+            content = "I'd be happy to help you schedule a meeting. To get started, I'll need a few details: 1) Meeting title 2) Date/time 3) Duration 4) Attendees."
         elif "availability" in last_message.lower() or "free" in last_message.lower():
-            content = """Let me check your availability. Based on your calendar, here are your open slots for the next few days:
-
-**Today:**
-- 2:00 PM - 3:00 PM
-- 4:30 PM - 6:00 PM
-
-**Tomorrow:**
-- 9:00 AM - 10:30 AM
-- 2:00 PM - 4:00 PM
-
-Would you like me to book a meeting in any of these slots?"""
-        
-        elif "optimize" in last_message.lower() or "focus" in last_message.lower():
-            content = """I can help you optimize your schedule for better focus time. Here are my recommendations:
-
-1. **Block Focus Time** - I suggest blocking 2-3 hour focus sessions on Tuesday and Thursday mornings
-2. **Meeting Batching** - Group similar meetings together (e.g., all 1:1s on Tuesdays)
-3. **Reduce Context Switching** - You currently have 15-minute gaps between meetings, consider adding 30-minute buffers
-
-Would you like me to implement any of these optimizations?"""
-        
+            content = "I can check availability. Please provide the date range or a proposed time."
         else:
-            content = """I understand you're asking about scheduling. I can help you with:
+            content = "How can I help with your schedule today?"
 
-- 📅 **Schedule meetings** - Book new meetings with optimal timing
-- 🔍 **Check availability** - Find free slots in your calendar
-- ⚡ **Optimize schedule** - Improve your meeting load and focus time
-- 👥 **Coordinate groups** - Find times that work for everyone
-- 📊 **Analyze patterns** - Get insights on your scheduling habits
-
-What would you like to do?"""
-        
-        return LLMResponse(
-            content=content,
-            tool_calls=[],
-            reasoning="Generated response based on user intent",
-            confidence=0.85,
-            tokens_used=150
-        )
+        return LLMResponse(content=content, tool_calls=[], reasoning="fallback", confidence=0.6, tokens_used=0)
     
     async def _stream_llm(
         self,
@@ -505,10 +554,32 @@ What would you like to do?"""
         
         In production, this would connect to streaming API endpoint
         """
-        # Placeholder: return full response as single chunk
+        # If Groq client is available, stream directly from it
+        if self.client is not None:
+            try:
+                formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
+                stream = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=formatted_messages,
+                    stream=True,
+                    temperature=0.7,
+                )
+
+                async for chunk in stream:
+                    try:
+                        delta = chunk.choices[0].delta
+                        if hasattr(delta, "content") and delta.content:
+                            yield delta.content
+                        elif isinstance(delta, dict) and delta.get("content"):
+                            yield delta.get("content")
+                    except Exception:
+                        continue
+                return
+            except Exception as e:
+                logger.error(f"Groq Streaming Error: {str(e)}")
+
+        # Fallback: return full response as single chunk and yield words
         response = await self._call_llm(messages)
-        
-        # Simulate streaming by yielding word by word
         words = response.content.split()
         for word in words:
             yield word + " "
@@ -541,8 +612,8 @@ What would you like to do?"""
             ConversationMessage(role="user", content=prompt)
         ]
         
-        # Generate response
-        response = await self._call_llm(messages)
+        # Generate response (expect JSON)
+        response = await self._call_llm(messages, require_json=True)
         
         # Parse JSON response
         try:
@@ -583,8 +654,8 @@ What would you like to do?"""
             ConversationMessage(role="user", content=prompt)
         ]
         
-        # Generate response
-        response = await self._call_llm(messages)
+        # Generate response (expect JSON)
+        response = await self._call_llm(messages, require_json=True)
         
         # Parse JSON response
         try:

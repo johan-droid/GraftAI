@@ -1,6 +1,11 @@
 import { getSession, signOut } from "next-auth/react";
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+// Normalize API base URL so frontend endpoint calls (which use paths like
+// "/analytics/summary") target the backend API prefix `/api/v1` even when
+// the environment variable is set to just the host (e.g. `http://localhost:8000`).
+const _rawBase = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const _trimmed = _rawBase.replace(/\/+$/g, "");
+export const API_BASE_URL = _trimmed.endsWith("/api/v1") ? _trimmed : `${_trimmed}/api/v1`;
 
 export function composeEndpoint(endpoint: string, absolute = false) {
   return absolute ? `${API_BASE_URL}${endpoint}` : endpoint;
@@ -38,6 +43,10 @@ class ApiClient {
     }
 
     return headers;
+  }
+
+  public async getAuthHeaders(): Promise<HeadersInit> {
+    return this.getHeaders();
   }
 
   private buildUrl(endpoint: string, params?: Record<string, string | number | boolean>): string {

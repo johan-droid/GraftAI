@@ -16,6 +16,8 @@ from .agent_prompts import (
     format_agent_cognition_prompt
 )
 
+from .agent_prompts import HUMANIZED_SYSTEM_PROMPT
+
 __all__ = [
     # Booking prompts
     "BOOKING_DECISION_SYSTEM_PROMPT",
@@ -25,4 +27,5 @@ __all__ = [
     "AGENT_SYSTEM_PROMPT",
     "AGENT_COGNITION_PROMPT_TEMPLATE",
     "format_agent_cognition_prompt"
+    ,"HUMANIZED_SYSTEM_PROMPT"
 ]

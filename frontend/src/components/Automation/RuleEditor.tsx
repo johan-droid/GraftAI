@@ -24,6 +24,9 @@ interface Action {
   params: Record<string, string>;
 }
 
+type ConditionPayload = Record<string, { operator: string; value: string }>;
+type ActionPayload = Record<string, Record<string, string>>;
+
 export default function RuleEditor() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -123,13 +126,13 @@ export default function RuleEditor() {
         conditions: conditions.reduce((acc, c) => {
           acc[c.field] = { operator: c.operator, value: c.value };
           return acc;
-        }, {} as Record<string, any>),
+        }, {} as ConditionPayload),
         actions: actions.reduce((acc, a) => {
           acc[a.type] = a.params;
           return acc;
-        }, {} as Record<string, any>),
+        }, {} as ActionPayload),
         confidence_threshold: confidenceThreshold,
-        requireConfirmation,
+        require_confirmation: requireConfirmation,
       }),
     });
 
@@ -152,8 +155,9 @@ export default function RuleEditor() {
       {/* Basic Info */}
       <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700/50 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Rule Name</label>
+          <label htmlFor="rule-name" className="block text-sm font-medium text-slate-300 mb-2">Rule Name</label>
           <input
+            id="rule-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -163,8 +167,9 @@ export default function RuleEditor() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
+          <label htmlFor="rule-description" className="block text-sm font-medium text-slate-300 mb-2">Description</label>
           <textarea
+            id="rule-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Describe what this rule does..."
@@ -175,8 +180,9 @@ export default function RuleEditor() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Rule Type</label>
+            <label htmlFor="rule-type" className="block text-sm font-medium text-slate-300 mb-2">Rule Type</label>
             <select
+              id="rule-type"
               value={ruleType}
               onChange={(e) => setRuleType(e.target.value)}
               className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
@@ -191,8 +197,9 @@ export default function RuleEditor() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Confidence Threshold: {confidenceThreshold}%</label>
+            <label htmlFor="confidence-threshold" className="block text-sm font-medium text-slate-300 mb-2">Confidence Threshold: {confidenceThreshold}%</label>
             <input
+              id="confidence-threshold"
               type="range"
               min="0"
               max="100"
@@ -238,6 +245,8 @@ export default function RuleEditor() {
               <div key={condition.id} className="flex items-center gap-2">
                 <span className="text-slate-500 text-sm">{index + 1}.</span>
                 <select
+                  aria-label={`Condition ${index + 1} field`}
+                  title={`Condition ${index + 1} field`}
                   value={condition.field}
                   onChange={(e) => updateCondition(condition.id, { field: e.target.value })}
                   className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
@@ -247,6 +256,8 @@ export default function RuleEditor() {
                   ))}
                 </select>
                 <select
+                  aria-label={`Condition ${index + 1} operator`}
+                  title={`Condition ${index + 1} operator`}
                   value={condition.operator}
                   onChange={(e) => updateCondition(condition.id, { operator: e.target.value })}
                   className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
@@ -263,6 +274,9 @@ export default function RuleEditor() {
                   className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
                 />
                 <button
+                  type="button"
+                  aria-label={`Remove condition ${index + 1}`}
+                  title={`Remove condition ${index + 1}`}
                   onClick={() => removeCondition(condition.id)}
                   className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
                 >
@@ -295,6 +309,8 @@ export default function RuleEditor() {
               <div key={action.id} className="flex items-center gap-2">
                 <span className="text-slate-500 text-sm">{index + 1}.</span>
                 <select
+                  aria-label={`Action ${index + 1} type`}
+                  title={`Action ${index + 1} type`}
                   value={action.type}
                   onChange={(e) => updateAction(action.id, { type: e.target.value })}
                   className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
@@ -312,6 +328,9 @@ export default function RuleEditor() {
                   className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
                 />
                 <button
+                  type="button"
+                  aria-label={`Remove action ${index + 1}`}
+                  title={`Remove action ${index + 1}`}
                   onClick={() => removeAction(action.id)}
                   className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
                 >

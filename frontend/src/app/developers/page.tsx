@@ -13,12 +13,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import Link from 'next/link';
 import { 
-  Code2, Terminal, FileText, BookOpen, 
+  Code2, FileText, BookOpen, 
   Zap, GitBranch, Cpu, Layers, ArrowRight,
-  ExternalLink, Copy, CheckCircle2, Search,
+  Copy, CheckCircle2, Search,
   ChevronRight, ChevronDown, Menu, X,
-  Globe, KeyRound, Database, Webhook,
-  Smartphone, Palette, Box, Shield
+  Webhook,
+  Palette, Box
 } from 'lucide-react';
 
 const docSections = [
@@ -223,6 +223,7 @@ export default function DevelopersPage() {
                 <a 
                   href="https://github.com/graftai" 
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="block text-slate-300 hover:text-white py-2"
                 >
                   GitHub
@@ -511,6 +512,7 @@ export default function DevelopersPage() {
               <a 
                 href="https://status.graftai.com" 
                 target="_blank"
+                rel="noopener noreferrer"
                 className="text-slate-500 hover:text-white text-sm transition-colors flex items-center gap-1"
               >
                 <span className="w-2 h-2 bg-green-500 rounded-full" />

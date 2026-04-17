@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'GraftAI',
     short_name: 'GraftAI',
     description: 'AI-powered scheduling that handles timezones, conflicts, and back-and-forth.',
-    start_url: '/login',
+    start_url: '/dashboard',
     display: 'standalone',
     background_color: '#FFFFFF',
     theme_color: '#FFFFFF',

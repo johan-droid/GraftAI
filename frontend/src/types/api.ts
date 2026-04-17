@@ -70,11 +70,18 @@ export interface TeamMember {
 // ---------------------------------------------------------
 export interface AutomationRule {
   id: string;
-  event_type_id: string;
-  trigger: "booking_created" | "booking_cancelled" | "reminder_24h" | "reminder_1h";
-  action: "send_email" | "send_sms" | "webhook";
-  payload: Record<string, unknown>; // Flexible JSON payload for the worker
-  active: boolean;
+  name: string;
+  description: string | null;
+  rule_type: string;
+  conditions: Record<string, unknown>;
+  actions: Record<string, unknown>;
+  is_enabled: boolean;
+  confidence_threshold: number;
+  require_confirmation: boolean;
+  max_executions_per_day: number | null;
+  execution_count_today: number;
+  priority: number;
+  created_at: string;
 }
 
 // ---------------------------------------------------------

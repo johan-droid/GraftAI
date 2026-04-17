@@ -390,6 +390,151 @@ export async function sendAiChat(prompt: string, context?: string[], timezone?: 
   return apiClient.post<AiChatServiceResponse>("/ai/chat", { prompt, context, timezone });
 }
 
+export interface AiChatStreamPhaseEvent {
+  phase?: string;
+  status?: string;
+  detail?: string;
+  [key: string]: unknown;
+}
+
+export interface AiChatStreamHandlers {
+  onChunk?: (chunk: string) => void;
+  onPhase?: (phase: AiChatStreamPhaseEvent) => void;
+  onDone?: (response: AiChatServiceResponse) => void;
+  onError?: (error: unknown) => void;
+  onFunctionCall?: (payload: Record<string, unknown>) => void;
+}
+
+export async function streamAiChat(
+  prompt: string,
+  context?: string[],
+  timezone?: string,
+  handlers: AiChatStreamHandlers = {}
+) {
+  const controller = new AbortController();
+  const headers = await apiClient.getAuthHeaders();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+
+  void (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/ai/stream`, {
+        method: "POST",
+        headers: {
+          ...(headers as Record<string, string>),
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({ prompt, context, timezone }),
+        signal: controller.signal,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => "");
+        throw new Error(errorBody || response.statusText || `Request failed with status ${response.status}`);
+      }
+
+      if (!response.body) {
+        throw new Error("Streaming response body is unavailable");
+      }
+
+      reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let sawDone = false;
+
+      const processBlock = (block: string) => {
+        if (!block.trim()) {
+          return;
+        }
+
+        const lines = block.split(/\r?\n/);
+        let eventName = "message";
+        const dataLines: string[] = [];
+
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            eventName = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trim());
+          }
+        }
+
+        const rawData = dataLines.join("\n");
+        let parsed: unknown = rawData;
+        if (rawData) {
+          try {
+            parsed = JSON.parse(rawData);
+          } catch {
+            parsed = rawData;
+          }
+        }
+
+        if (eventName === "message") {
+          const chunk = typeof parsed === "object" && parsed !== null && "chunk" in parsed && typeof (parsed as { chunk?: unknown }).chunk === "string"
+            ? (parsed as { chunk: string }).chunk
+            : typeof parsed === "string"
+              ? parsed
+              : rawData;
+          if (chunk) {
+            handlers.onChunk?.(chunk);
+          }
+          return;
+        }
+
+        if (eventName === "phase") {
+          handlers.onPhase?.(parsed as AiChatStreamPhaseEvent);
+          return;
+        }
+
+        if (eventName === "function_call") {
+          handlers.onFunctionCall?.(parsed as Record<string, unknown>);
+          return;
+        }
+
+        if (eventName === "done") {
+          sawDone = true;
+          handlers.onDone?.(parsed as AiChatServiceResponse);
+          return;
+        }
+
+        if (eventName === "error") {
+          handlers.onError?.(parsed);
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split(/\n\n/);
+        for (let index = 0; index < blocks.length - 1; index += 1) {
+          processBlock(blocks[index]);
+        }
+        buffer = blocks[blocks.length - 1];
+      }
+
+      if (buffer.trim()) {
+        processBlock(buffer);
+      }
+
+      if (!sawDone) {
+        handlers.onDone?.({ result: "" });
+      }
+    } catch (error) {
+      if ((error as { name?: string }).name !== "AbortError") {
+        handlers.onError?.(error);
+      }
+    } finally {
+      reader?.releaseLock();
+    }
+  })();
+
+  return controller;
+}
+
 // ──────────────────────────────────────
 // Services: Proactive Suggestions
 // ──────────────────────────────────────

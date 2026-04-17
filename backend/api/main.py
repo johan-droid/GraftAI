@@ -299,6 +299,26 @@ def create_app() -> FastAPI:
 
     app.add_middleware(SecurityHeadersMiddleware)
 
+    # Additional security middleware from utils.security_middleware
+    from backend.utils.security_middleware import (
+        InputValidationMiddleware,
+        RequestLoggingMiddleware,
+    )
+    app.add_middleware(InputValidationMiddleware)
+    app.add_middleware(RequestLoggingMiddleware)
+
+    # Rate Limiting Middleware
+    from backend.utils.rate_limiter import RateLimitMiddleware
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    app.add_middleware(
+        RateLimitMiddleware,
+        redis_url=redis_url,
+        default_limit=100,
+        default_window=60,
+        strategy="sliding_window",
+        skip_paths=["/health", "/", "/docs", "/redoc", "/openapi.json", "/metrics"]
+    )
+
     allow_origin_regex = r"^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$" if env != "production" else None
 
     app.add_middleware(

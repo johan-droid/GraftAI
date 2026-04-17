@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Card, CardContent, Typography, Box, Chip, Skeleton } from "@mui/material";
+import { Card, CardContent, Typography, Box, Skeleton, type TypographyProps } from "@mui/material";
 import { motion } from "framer-motion";
 import {
   TrendingUp,
@@ -118,19 +118,19 @@ export function MetricCard({
     small: {
       padding: "16px",
       iconSize: 32,
-      titleSize: "caption",
+      titleSize: "caption" as TypographyProps["variant"],
       valueSize: "h6",
     },
     medium: {
       padding: "24px",
       iconSize: 40,
-      titleSize: "body2",
+      titleSize: "body2" as TypographyProps["variant"],
       valueSize: "h5",
     },
     large: {
       padding: "32px",
       iconSize: 48,
-      titleSize: "body1",
+      titleSize: "body1" as TypographyProps["variant"],
       valueSize: "h4",
     },
   };
@@ -165,7 +165,7 @@ export function MetricCard({
             <Box className="flex-1">
               {/* Title */}
               <Typography
-                variant={styles.titleSize as any}
+                variant={styles.titleSize}
                 sx={{
                   color: "var(--text-muted)",
                   fontWeight: 800,
@@ -218,9 +218,7 @@ export function MetricCard({
                 <Box className="flex items-center gap-1.5 mt-3">
                   <TrendIcon
                     size={14}
-                    style={{ 
-                       color: trend.direction === "up" ? "var(--primary)" : "var(--accent)"
-                    }}
+                    color={trend.direction === "up" ? "var(--primary)" : "var(--accent)"}
                   />
                   <Typography
                     sx={{
@@ -255,7 +253,7 @@ export function MetricCard({
                 ml: 2,
               }}
             >
-              <Icon size={styles.iconSize / 2.2} style={{ color: colors.border }} />
+              <Icon size={styles.iconSize / 2.2} color={colors.border} />
             </Box>
           </Box>
 
@@ -278,11 +276,12 @@ export function MetricCard({
                   overflow: "hidden",
                 }}
               >
-                <motion.div
+                <Box
+                  component={motion.div}
                   initial={{ width: 0 }}
                   animate={{ width: `${(progress.value / progress.max) * 100}%` }}
                   transition={{ duration: 1, ease: "easeOut" }}
-                  style={{
+                  sx={{
                     height: "100%",
                     backgroundColor: colors.border,
                   }}
@@ -295,10 +294,14 @@ export function MetricCard({
           {status !== "neutral" && !loading && (
             <Box className="mt-4">
                <div className="inline-flex items-center px-1.5 py-0.5 border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-                  <div className="w-1.5 h-1.5 mr-2 rounded-full animate-pulse" style={{ background: colors.text }} />
-                  <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: colors.text }}>
+                  <Box
+                    component="span"
+                    className="w-1.5 h-1.5 mr-2 rounded-full animate-pulse"
+                    sx={{ backgroundColor: colors.text }}
+                  />
+                  <Box component="span" className="text-[9px] font-black uppercase tracking-widest" sx={{ color: colors.text }}>
                     {status}
-                  </span>
+                  </Box>
                </div>
             </Box>
           )}

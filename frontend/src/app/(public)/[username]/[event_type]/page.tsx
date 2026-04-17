@@ -4,11 +4,16 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Video, Globe, ChevronLeft, ChevronRight, Calendar as CalendarIcon, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { getPublicEventDetails, getPublicEventAvailability, getPublicEventAvailabilityByDate, type PublicEventDetailsResponse, type PublicAvailabilitySlot } from "@/lib/api";
 
 const WEEK_DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
-export default function PublicBookingPage({ params }: { params: { username: string; event_type: string } }) {
+export default function PublicBookingPage() {
+  const params = useParams<{ username: string; event_type: string }>();
+  const username = Array.isArray(params.username) ? params.username[0] : params.username;
+  const eventType = Array.isArray(params.event_type) ? params.event_type[0] : params.event_type;
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<number | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -27,6 +32,10 @@ export default function PublicBookingPage({ params }: { params: { username: stri
   const today = useMemo(() => new Date(), []);
 
   useEffect(() => {
+    if (!username || !eventType) {
+      return;
+    }
+
     const loadEvent = async () => {
       setIsLoading(true);
       setErrorMessage(null);
@@ -35,11 +44,11 @@ export default function PublicBookingPage({ params }: { params: { username: stri
       setDailySlots([]);
 
       try {
-        const event = await getPublicEventDetails(params.username, params.event_type);
+        const event = await getPublicEventDetails(username, eventType);
         setEventDetails(event);
 
         const timeZone = event.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const availability = await getPublicEventAvailability(params.username, params.event_type, monthKey, timeZone);
+        const availability = await getPublicEventAvailability(username, eventType, monthKey, timeZone);
         setMonthlyAvailability(availability.availability ?? {});
       } catch {
         setErrorMessage("Unable to load booking details. Please try again later.");
@@ -49,11 +58,15 @@ export default function PublicBookingPage({ params }: { params: { username: stri
     };
 
     loadEvent();
-  }, [params.username, params.event_type, monthKey]);
+  }, [username, eventType, monthKey]);
 
   useEffect(() => {
     if (selectedDate === null) {
       setDailySlots([]);
+      return;
+    }
+
+    if (!username || !eventType) {
       return;
     }
 
@@ -62,7 +75,7 @@ export default function PublicBookingPage({ params }: { params: { username: stri
       setSelectedTime(null);
       try {
         const selectedDateString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate).padStart(2, "0")}`;
-        const response = await getPublicEventAvailabilityByDate(params.username, params.event_type, selectedDateString, eventDetails?.timezone);
+        const response = await getPublicEventAvailabilityByDate(username, eventType, selectedDateString, eventDetails?.timezone);
         setDailySlots(response.slots ?? []);
       } catch {
         setDailySlots([]);
@@ -72,7 +85,7 @@ export default function PublicBookingPage({ params }: { params: { username: stri
     };
 
     loadDaySlots();
-  }, [selectedDate, params.username, params.event_type, currentDate, eventDetails?.timezone]);
+  }, [selectedDate, username, eventType, currentDate, eventDetails?.timezone]);
 
   const daysInMonth = useMemo(
     () => new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate(),
@@ -112,8 +125,8 @@ export default function PublicBookingPage({ params }: { params: { username: stri
     return selectedDate === day ? "selected" : "available";
   };
 
-  const eventTitle = eventDetails?.title ?? `${params.event_type.replace(/-/g, " ")}`;
-  const hostName = eventDetails?.username ?? params.username;
+  const eventTitle = eventDetails?.title ?? `${eventType?.replace(/-/g, " ") ?? "Event"}`;
+  const hostName = eventDetails?.username ?? username ?? "Host";
   const eventDescription = eventDetails?.description ?? "Choose a time below to lock in your slot.";
   const eventDuration = eventDetails ? `${eventDetails.duration_minutes} min` : "—";
   const locationLabel = eventDetails?.meeting_provider ? eventDetails.meeting_provider : "Video Call";

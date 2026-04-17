@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Send, X, Calendar, Clock, Users, Sparkles, Bot, Loader2 } from "lucide-react";
 import { sendAiChat, getEvents } from "@/lib/api";
+import MarkdownRenderer from "@/components/AIChat/MarkdownRenderer";
 
 interface Message {
   id: string;
@@ -202,7 +203,7 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
                   : "bg-white border border-[#DADCE0] text-[#202124] rounded-2xl rounded-tl-sm"
               }`}
             >
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <MarkdownRenderer content={message.content} />
               <p className="text-[10px] opacity-60 mt-2 text-right">
                 {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </p>

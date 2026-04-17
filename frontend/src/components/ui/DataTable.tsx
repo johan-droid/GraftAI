@@ -1,6 +1,18 @@
+/**
+ * Mobile-Responsive DataTable Component
+ * 
+ * Following Material Design 3 principles:
+ * - Card-based layout on mobile (< 640px)
+ * - Horizontal scroll table on tablet/desktop
+ * - Responsive touch targets (min 48dp)
+ * - Dark mode support
+ * 
+ * @see https://m3.material.io/components/data-tables/overview
+ */
+
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -11,7 +23,7 @@ import {
   Paper,
   TablePagination,
   TableSortLabel,
-  Chip,
+  Chip as MuiChip,
   IconButton,
   Tooltip,
   Box,
@@ -31,10 +43,22 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
+  MoreVertical,
+  Eye,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useBreakpoint, isCompact } from "@/theme/breakpoints";
 
 const MotionTableRow = motion(TableRow);
+
+// M3 Motion tokens
+const m3Motion = {
+  standard: { duration: 0.15, ease: "easeOut" as const },
+  emphasized: { duration: 0.3, ease: "easeInOut" as const },
+};
 
 // Types
 export interface Column<T> {
@@ -96,18 +120,45 @@ const statusColors: Record<string, { bg: string; color: string }> = {
   critical: { bg: "#fee2e2", color: "#7f1d1d" },
 };
 
-// Utility function to render status chip
-export const StatusChip = ({ status, size = "small" }: { status: string; size?: "small" | "medium" }) => {
+// Utility function to render status chip with dark mode support
+export const StatusChip = ({ 
+  status, 
+  size = "small",
+  isDark = false,
+}: { 
+  status: string; 
+  size?: "small" | "medium";
+  isDark?: boolean;
+}) => {
   const normalizedStatus = status.toLowerCase().replace(/\s+/g, "_");
-  const colors = statusColors[normalizedStatus] || { bg: "#f3f4f6", color: "#374151" };
+  const colors = statusColors[normalizedStatus] || { bg: isDark ? "#49454F" : "#f3f4f6", color: isDark ? "#E6E1E5" : "#374151" };
+  
+  // Dark mode color overrides
+  const darkModeColors: Record<string, { bg: string; color: string }> = {
+    completed: { bg: "#1E4C30", color: "#84D9A6" },
+    success: { bg: "#1E4C30", color: "#84D9A6" },
+    pending: { bg: "#5C3B00", color: "#FFDEA2" },
+    in_progress: { bg: "#004878", color: "#AAC7FF" },
+    failed: { bg: "#5C1009", color: "#FFB4AB" },
+    error: { bg: "#5C1009", color: "#FFB4AB" },
+    cancelled: { bg: "#49454F", color: "#938F99" },
+    high: { bg: "#5C1009", color: "#FFB4AB" },
+    medium: { bg: "#5C3B00", color: "#FFDEA2" },
+    low: { bg: "#1E4C30", color: "#84D9A6" },
+    critical: { bg: "#5C1009", color: "#FFB4AB" },
+  };
+
+  const finalColors = isDark && darkModeColors[normalizedStatus] 
+    ? darkModeColors[normalizedStatus] 
+    : colors;
   
   return (
-    <Chip
+    <MuiChip
       label={status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
       size={size}
       sx={{
-        backgroundColor: colors.bg,
-        color: colors.color,
+        backgroundColor: finalColors.bg,
+        color: finalColors.color,
         fontWeight: 600,
         fontSize: size === "small" ? "0.75rem" : "0.875rem",
         borderRadius: "6px",
@@ -142,12 +193,21 @@ export function DataTable<T>({
   maxHeight = 600,
   className,
 }: DataTableProps<T>) {
+  const { mode } = useTheme();
+  const isDark = mode === "dark";
+  const breakpoint = useBreakpoint();
+  const isMobile = isCompact(breakpoint);
+  
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(false);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  
+  // Use card view on mobile
+  const useCardView = isMobile;
 
   // Handle search
   const handleSearch = useCallback(
@@ -232,36 +292,193 @@ export function DataTable<T>({
     return processedData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
   }, [processedData, page, rowsPerPage, pagination]);
 
-  // Empty state
+  // Empty state - M3 styled
   if (!loading && data.length === 0 && emptyState) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col items-center justify-center py-16 px-4"
+        transition={m3Motion.emphasized}
+        className={`
+          flex flex-col items-center justify-center py-12 sm:py-16 px-4
+          rounded-2xl border
+          ${isDark ? "bg-[#1C1B1F] border-[#49454F]" : "bg-white border-[#DADCE0]"}
+        `}
       >
-        <Box
-          sx={{
-            width: 120,
-            height: 120,
-            borderRadius: "50%",
-            backgroundColor: "hsl(var(--muted))",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            mb: 3,
-          }}
-        >
-          <Search size={48} color="hsl(var(--muted-foreground))" />
-        </Box>
-        <Typography variant="h6" className="text-center mb-2 font-semibold">
+        <div className={`
+          w-20 h-20 sm:w-24 sm:h-24 rounded-full 
+          flex items-center justify-center mb-4
+          ${isDark ? "bg-[#49454F] text-[#938F99]" : "bg-[#F8F9FA] text-[#DADCE0]"}
+        `}>
+          <Search size={32} className="sm:w-10 sm:h-10" />
+        </div>
+        <h3 className={`text-lg font-semibold mb-2 ${isDark ? "text-[#E6E1E5]" : "text-[#202124]"}`}>
           {emptyState.title}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" className="text-center mb-4 max-w-md">
+        </h3>
+        <p className={`text-sm sm:text-base text-center mb-4 max-w-md ${isDark ? "text-[#938F99]" : "text-[#5F6368]"}`}>
           {emptyState.description}
-        </Typography>
+        </p>
         {emptyState.action}
       </motion.div>
+    );
+  }
+  
+  // Mobile Card View
+  if (useCardView && !loading) {
+    return (
+      <div className={`space-y-3 ${className || ""}`}>
+        {/* Mobile Header */}
+        <div className="flex items-center justify-between gap-2 mb-4">
+          {title && (
+            <div>
+              <h2 className={`text-lg font-semibold ${isDark ? "text-[#E6E1E5]" : "text-[#202124]"}`}>
+                {title}
+              </h2>
+              {subtitle && (
+                <p className={`text-sm ${isDark ? "text-[#938F99]" : "text-[#5F6368]"}`}>
+                  {subtitle}
+                </p>
+              )}
+            </div>
+          )}
+          
+          <div className="flex items-center gap-1">
+            {onRefresh && (
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={onRefresh}
+                className={`
+                  p-2 rounded-full transition-colors
+                  ${isDark ? "hover:bg-[#49454F] text-[#938F99]" : "hover:bg-[#F1F3F4] text-[#5F6368]"}
+                `}
+              >
+                <RefreshCw size={18} />
+              </motion.button>
+            )}
+          </div>
+        </div>
+        
+        {/* Mobile Search */}
+        {searchable && (
+          <div className={`
+            relative mb-4
+            ${isDark ? "bg-[#1C1B1F]" : "bg-white"}
+            rounded-xl border ${isDark ? "border-[#49454F]" : "border-[#DADCE0]"}
+          `}>
+            <Search size={18} className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDark ? "text-[#938F99]" : "text-[#5F6368]"}`} />
+            <input
+              type="text"
+              placeholder={searchPlaceholder}
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              className={`
+                w-full py-3 pl-10 pr-4 rounded-xl
+                bg-transparent text-sm
+                focus:outline-none focus:ring-2 focus:ring-[#1A73E8]/30
+                ${isDark ? "text-[#E6E1E5] placeholder-[#938F99]" : "text-[#202124] placeholder-[#5F6368]"}
+              `}
+            />
+          </div>
+        )}
+        
+        {/* Mobile Cards */}
+        <div className="space-y-3">
+          {paginatedData.map((row, index) => (
+            <motion.div
+              key={keyExtractor(row)}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...m3Motion.standard, delay: index * 0.05 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                onRowClick?.(row);
+                setExpandedCard(expandedCard === keyExtractor(row) ? null : keyExtractor(row));
+              }}
+              className={`
+                rounded-xl p-4
+                border transition-all
+                ${isDark 
+                  ? "bg-[#1C1B1F] border-[#49454F] active:bg-[#2D2D30]" 
+                  : "bg-white border-[#DADCE0] active:bg-[#F8F9FA]"
+                }
+                ${onRowClick ? "cursor-pointer" : ""}
+              `}
+            >
+              {/* Card Header - First column as title */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex-1 min-w-0">
+                  <h3 className={`font-semibold truncate ${isDark ? "text-[#E6E1E5]" : "text-[#202124]"}`}>
+                    {columns[0]?.render 
+                      ? columns[0].render(row) 
+                      : (row as any)[columns[0]?.key]}
+                  </h3>
+                </div>
+                {actions && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {actions(row)}
+                  </div>
+                )}
+              </div>
+              
+              {/* Card Body - Remaining columns */}
+              <div className="grid grid-cols-2 gap-2">
+                {columns.slice(1).map((column) => (
+                  <div key={column.key} className="min-w-0">
+                    <p className={`text-xs mb-0.5 ${isDark ? "text-[#938F99]" : "text-[#5F6368]"}`}>
+                      {column.header}
+                    </p>
+                    <p className={`text-sm font-medium truncate ${isDark ? "text-[#C9C5CA]" : "text-[#1D1B20]"}`}>
+                      {column.render 
+                        ? column.render(row) 
+                        : (row as any)[column.key]}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+        
+        {/* Mobile Pagination */}
+        {pagination && processedData.length > 0 && (
+          <div className={`
+            flex items-center justify-between mt-4 pt-4 border-t
+            ${isDark ? "border-[#49454F]" : "border-[#F1F3F4]"}
+          `}>
+            <button
+              onClick={() => setPage(Math.max(0, page - 1))}
+              disabled={page === 0}
+              className={`
+                p-2 rounded-full transition-colors
+                ${page === 0 
+                  ? "opacity-50 cursor-not-allowed" 
+                  : isDark ? "hover:bg-[#49454F] text-[#E6E1E5]" : "hover:bg-[#F1F3F4] text-[#202124]"
+                }
+              `}
+            >
+              <ChevronLeft size={20} />
+            </button>
+            
+            <span className={`text-sm ${isDark ? "text-[#938F99]" : "text-[#5F6368]"}`}>
+              {page * rowsPerPage + 1} - {Math.min((page + 1) * rowsPerPage, processedData.length)} of {processedData.length}
+            </span>
+            
+            <button
+              onClick={() => setPage(Math.min(Math.ceil(processedData.length / rowsPerPage) - 1, page + 1))}
+              disabled={page >= Math.ceil(processedData.length / rowsPerPage) - 1}
+              className={`
+                p-2 rounded-full transition-colors
+                ${page >= Math.ceil(processedData.length / rowsPerPage) - 1
+                  ? "opacity-50 cursor-not-allowed" 
+                  : isDark ? "hover:bg-[#49454F] text-[#E6E1E5]" : "hover:bg-[#F1F3F4] text-[#202124]"
+                }
+              `}
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+        )}
+      </div>
     );
   }
 

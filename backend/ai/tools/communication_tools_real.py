@@ -15,6 +15,37 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 
 from backend.utils.logger import get_logger
+
+# Tenacity for retry logic
+try:
+    from tenacity import (
+        retry,
+        stop_after_attempt,
+        wait_exponential,
+        retry_if_exception_type,
+        before_sleep_log
+    )
+    TENACITY_AVAILABLE = True
+except ImportError:
+    TENACITY_AVAILABLE = False
+    # Define no-op decorator if tenacity not available
+    def retry(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+# Circuit breaker for external service protection
+try:
+    from backend.utils.circuit_breaker import (
+        CircuitBreaker,
+        SENDGRID_BREAKER,
+        TWILIO_BREAKER,
+        SLACK_BREAKER
+    )
+    CIRCUIT_BREAKER_AVAILABLE = True
+except ImportError:
+    CIRCUIT_BREAKER_AVAILABLE = False
+
 from .registry import register_tool, ToolCategory, ToolPriority
 
 logger = get_logger(__name__)
@@ -188,12 +219,148 @@ def render_template(template_name: str, context: Dict[str, Any]) -> str:
 # REAL API IMPLEMENTATIONS
 # ═══════════════════════════════════════════════════════════════════
 
+# Retry configuration for external APIs
+EMAIL_RETRY = {
+    "stop": stop_after_attempt(3) if TENACITY_AVAILABLE else None,
+    "wait": wait_exponential(multiplier=1, min=2, max=10) if TENACITY_AVAILABLE else None,
+    "retry": (retry_if_exception_type((Exception,)) if TENACITY_AVAILABLE else None),
+    "before_sleep": before_sleep_log(logger, "warning") if TENACITY_AVAILABLE else None,
+}
+
+if TENACITY_AVAILABLE:
+    @retry(**EMAIL_RETRY)
+    async def _send_email_with_retry(*args, **kwargs):
+        """Internal email sending with retry logic."""
+        return await _send_email_impl(*args, **kwargs)
+else:
+    async def _send_email_with_retry(*args, **kwargs):
+        """Internal email sending without retry (tenacity not available)."""
+        return await _send_email_impl(*args, **kwargs)
+
+
 @register_tool(
     name="send_email",
     description="Send an email using SendGrid or SMTP",
     category=ToolCategory.COMMUNICATION,
     priority=ToolPriority.HIGH
 )
+async def _send_email_impl(
+    to: str,
+    subject: str,
+    body: str,
+    cc: Optional[List[str]] = None,
+    bcc: Optional[List[str]] = None,
+    template: Optional[str] = None,
+    template_context: Optional[Dict[str, Any]] = None,
+    from_address: Optional[str] = None,
+    attachments: Optional[List[Dict[str, Any]]] = None
+) -> dict:
+    """
+    Internal implementation of email sending (with retry wrapper).
+    
+    Args:
+        to: Recipient email
+        subject: Email subject
+        body: Email body (HTML)
+        cc: CC recipients
+        bcc: BCC recipients
+        template: Template name to use
+        template_context: Variables for template
+        from_address: Sender email
+        attachments: List of attachments with 'filename', 'content', 'content_type'
+    
+    Returns:
+        Email send result with ID and status
+    """
+    # Use template if specified
+    if template and template in EMAIL_TEMPLATES:
+        body = render_template(template, template_context or {})
+    
+    # Check circuit breaker status
+    if CIRCUIT_BREAKER_AVAILABLE and SENDGRID_BREAKER:
+        if not SENDGRID_BREAKER.can_execute():
+            logger.warning(f"[CircuitBreaker:sendgrid] Circuit is OPEN - rejecting email to {to}")
+            return {
+                "success": False,
+                "error": "SendGrid service temporarily unavailable (circuit breaker open)",
+                "to": to,
+                "subject": subject,
+                "status": "circuit_open",
+                "provider": "sendgrid"
+            }
+    
+    # Check if SendGrid is configured
+    if not APIConfig.is_sendgrid_configured():
+        logger.warning("SendGrid not configured - logging email only")
+        return {
+            "success": True,  # Return success for development
+            "email_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+            "to": to,
+            "subject": subject,
+            "status": "logged",
+            "mode": "development",
+            "message": f"[DEV MODE] Email to {to}: {subject}"
+        }
+    
+    # Send via SendGrid API
+    import sendgrid
+    from sendgrid.helpers.mail import Mail, Email, Content, Attachment, FileContent, FileName, FileType, Disposition
+    
+    sg = sendgrid.SendGridAPIClient(api_key=APIConfig.SENDGRID_API_KEY)
+    
+    from_email = Email(from_address or APIConfig.SENDGRID_FROM_EMAIL)
+    to_email = Email(to)
+    content = Content("text/html", body)
+    
+    mail = Mail(from_email, to_email, subject, content)
+    
+    # Add CC
+    if cc:
+        for cc_email in cc:
+            mail.personalizations[0].add_cc(Email(cc_email))
+    
+    # Add BCC
+    if bcc:
+        for bcc_email in bcc:
+            mail.personalizations[0].add_bcc(Email(bcc_email))
+    
+    # Add attachments
+    if attachments:
+        for att in attachments:
+            content = att['content']
+            if isinstance(content, str):
+                content_bytes = content.encode()
+            elif isinstance(content, bytes):
+                content_bytes = content
+            else:
+                raise TypeError("Attachment content must be bytes or str")
+
+            file_content = base64.b64encode(content_bytes).decode()
+            attachment = Attachment()
+            attachment.file_content = FileContent(file_content)
+            attachment.file_name = FileName(att['filename'])
+            attachment.file_type = FileType(att.get('content_type', 'application/octet-stream'))
+            attachment.disposition = Disposition('attachment')
+            mail.add_attachment(attachment)
+    
+    response = sg.send(mail)
+    
+    email_id = response.headers.get('X-Message-Id', f"sg_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}")
+    
+    logger.info(f"Email sent via SendGrid to {to}: {subject} (ID: {email_id})")
+    
+    return {
+        "success": response.status_code == 202,
+        "email_id": email_id,
+        "to": to,
+        "subject": subject,
+        "sent_at": datetime.utcnow().isoformat(),
+        "status": "sent" if response.status_code == 202 else "failed",
+        "provider": "sendgrid",
+        "status_code": response.status_code
+    }
+
+
 async def send_email(
     to: str,
     subject: str,
@@ -206,7 +373,8 @@ async def send_email(
     attachments: Optional[List[Dict[str, Any]]] = None
 ) -> dict:
     """
-    Send an email using SendGrid API (production) or log (development)
+    Send an email using SendGrid API (production) or log (development).
+    Includes retry logic with exponential backoff and circuit breaker protection.
     
     Args:
         to: Recipient email
@@ -223,89 +391,57 @@ async def send_email(
         Email send result with ID and status
     """
     try:
-        # Use template if specified
-        if template and template in EMAIL_TEMPLATES:
-            body = render_template(template, template_context or {})
+        result = await _send_email_with_retry(
+            to, subject, body, cc, bcc, template, template_context, from_address, attachments
+        )
         
-        # Check if SendGrid is configured
-        if not APIConfig.is_sendgrid_configured():
-            logger.warning("SendGrid not configured - logging email only")
-            return {
-                "success": True,  # Return success for development
-                "email_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
-                "to": to,
-                "subject": subject,
-                "status": "logged",
-                "mode": "development",
-                "message": f"[DEV MODE] Email to {to}: {subject}"
-            }
+        # Record success with circuit breaker
+        if CIRCUIT_BREAKER_AVAILABLE and SENDGRID_BREAKER:
+            if result.get("success"):
+                SENDGRID_BREAKER.record_success()
+            else:
+                SENDGRID_BREAKER.record_failure()
         
-        # Send via SendGrid API
-        import sendgrid
-        from sendgrid.helpers.mail import Mail, Email, Content, Attachment, FileContent, FileName, FileType, Disposition
+        return result
         
-        sg = sendgrid.SendGridAPIClient(api_key=APIConfig.SENDGRID_API_KEY)
-        
-        from_email = Email(from_address or APIConfig.SENDGRID_FROM_EMAIL)
-        to_email = Email(to)
-        content = Content("text/html", body)
-        
-        mail = Mail(from_email, to_email, subject, content)
-        
-        # Add CC
-        if cc:
-            for cc_email in cc:
-                mail.personalizations[0].add_cc(Email(cc_email))
-        
-        # Add BCC
-        if bcc:
-            for bcc_email in bcc:
-                mail.personalizations[0].add_bcc(Email(bcc_email))
-        
-        # Add attachments
-        if attachments:
-            for att in attachments:
-                content = att['content']
-                if isinstance(content, str):
-                    content_bytes = content.encode()
-                elif isinstance(content, bytes):
-                    content_bytes = content
-                else:
-                    raise TypeError("Attachment content must be bytes or str")
-
-                file_content = base64.b64encode(content_bytes).decode()
-                attachment = Attachment()
-                attachment.file_content = FileContent(file_content)
-                attachment.file_name = FileName(att['filename'])
-                attachment.file_type = FileType(att.get('content_type', 'application/octet-stream'))
-                attachment.disposition = Disposition('attachment')
-                mail.add_attachment(attachment)
-        
-        response = sg.send(mail)
-        
-        email_id = response.headers.get('X-Message-Id', f"sg_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}")
-        
-        logger.info(f"Email sent via SendGrid to {to}: {subject} (ID: {email_id})")
-        
-        return {
-            "success": response.status_code == 202,
-            "email_id": email_id,
-            "to": to,
-            "subject": subject,
-            "sent_at": datetime.utcnow().isoformat(),
-            "status": "sent" if response.status_code == 202 else "failed",
-            "provider": "sendgrid",
-            "status_code": response.status_code
-        }
-    
     except Exception as e:
-        logger.error(f"Failed to send email via SendGrid: {e}")
+        logger.error(f"Failed to send email via SendGrid after retries: {e}")
+        
+        # Record failure with circuit breaker
+        if CIRCUIT_BREAKER_AVAILABLE and SENDGRID_BREAKER:
+            SENDGRID_BREAKER.record_failure()
+        
+        # Enqueue to Dead Letter Queue for later retry
+        try:
+            from backend.utils.dead_letter_queue import get_dlq
+            dlq = get_dlq()
+            await dlq.enqueue(
+                action_type="send_email",
+                payload={
+                    "to": to,
+                    "subject": subject,
+                    "body": body,
+                    "cc": cc,
+                    "bcc": bcc,
+                    "template": template,
+                    "template_context": template_context,
+                    "from_address": from_address,
+                    "attachments": attachments
+                },
+                error=str(e),
+                max_retries=3,
+                context={"provider": "sendgrid"}
+            )
+        except Exception as dlq_error:
+            logger.error(f"Failed to enqueue to DLQ: {dlq_error}")
+        
         return {
             "success": False,
             "error": str(e),
             "to": to,
             "subject": subject,
-            "status": "failed"
+            "status": "failed",
+            "provider": "sendgrid"
         }
 
 

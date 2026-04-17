@@ -7,21 +7,24 @@ export function useAutomations() {
   const queryClient = useQueryClient();
 
   const { data: automations = [], isLoading, error } = useQuery<AutomationRule[]>({
-    queryKey: ["automations"],
-    queryFn: () => apiClient.get<AutomationRule[]>("/automations"),
+    queryKey: ["automation-rules"],
+    queryFn: () => apiClient.get<AutomationRule[]>("/automation/rules"),
     initialData: [],
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
-      apiClient.patch(`/automations/${id}`, { active }),
-    onMutate: async (variables: { id: string; active: boolean }) => {
-      await queryClient.cancelQueries({ queryKey: ["automations"] });
-      const previous = queryClient.getQueryData<AutomationRule[]>(["automations"]);
+    mutationFn: ({ id, is_enabled }: { id: string; is_enabled: boolean }) =>
+      apiClient.fetch<AutomationRule>(`/automation/rules/${id}`, {
+        method: "PUT",
+        json: { is_enabled },
+      }),
+    onMutate: async (variables: { id: string; is_enabled: boolean }) => {
+      await queryClient.cancelQueries({ queryKey: ["automation-rules"] });
+      const previous = queryClient.getQueryData<AutomationRule[]>(["automation-rules"]);
 
-      queryClient.setQueryData<AutomationRule[]>(["automations"], (old) =>
+      queryClient.setQueryData<AutomationRule[]>(["automation-rules"], (old) =>
         old?.map((rule) =>
-          rule.id === variables.id ? { ...rule, active: variables.active } : rule
+          rule.id === variables.id ? { ...rule, is_enabled: variables.is_enabled } : rule
         )
       );
 
@@ -35,7 +38,7 @@ export function useAutomations() {
     },
     onSuccess: () => {
       toast.success("Workflow updated");
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automation-rules"] });
     },
   });
 
@@ -43,7 +46,7 @@ export function useAutomations() {
     automations,
     isLoading,
     error,
-    toggleAutomation: (id: string, active: boolean) =>
-      toggleMutation.mutate({ id, active }),
+    toggleAutomation: (id: string, is_enabled: boolean) =>
+      toggleMutation.mutate({ id, is_enabled }),
   };
 }

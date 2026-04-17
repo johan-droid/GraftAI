@@ -63,117 +63,64 @@ class ConversationListSchema(BaseModel):
     message_count: int
 
 
-async def analyze_intent(user_message: str) -> Dict[str, Any]:
+async def analyze_intent_and_extract(user_message: str) -> Dict[str, Any]:
     """
-    Analyze user message to determine intent and required agent.
-    
-    Returns:
-        Dict with intent, confidence, and suggested agent type
+    Uses the LLM to classify intent and extract entities in one JSON response.
     """
-    lower = user_message.lower()
-    
-    # Booking/Scheduling intents
-    if any(word in lower for word in ["schedule", "book", "meeting", "appointment", "reserve"]):
-        return {
-            "intent": "schedule_meeting",
-            "agent_type": AgentType.BOOKING,
-            "confidence": 0.9,
-            "extract_entities": ["date", "time", "attendees", "duration", "title"]
-        }
-    
-    # Optimization intents
-    if any(word in lower for word in ["optimize", "best time", "when should", "suggest", "recommend"]):
-        return {
-            "intent": "optimize_schedule",
-            "agent_type": AgentType.OPTIMIZATION,
-            "confidence": 0.85,
-            "extract_entities": ["preferences", "constraints", "goals"]
-        }
-    
-    # Execution intents
-    if any(word in lower for word in ["send", "create", "update", "delete", "execute"]):
-        return {
-            "intent": "execute_action",
-            "agent_type": AgentType.EXECUTION,
-            "confidence": 0.8,
-            "extract_entities": ["action", "target", "parameters"]
-        }
-    
-    # Monitoring/Analytics intents
-    if any(word in lower for word in ["analytics", "report", "how many", "stats", "summary"]):
-        return {
-            "intent": "get_analytics",
-            "agent_type": AgentType.MONITORING,
-            "confidence": 0.8,
-            "extract_entities": ["metric", "timeframe"]
-        }
-    
-    # General conversation (use LLM directly)
-    return {
-        "intent": "general_chat",
-        "agent_type": None,
-        "confidence": 0.7,
-        "extract_entities": []
-    }
+    llm = await get_llm_core()
 
+    routing_prompt = f"""
+    You are a routing engine for an Executive AI Copilot. 
+    Analyze the user's message and determine the correct agent to handle it, along with any extracted entities.
+    
+    Agent Types:
+    - BOOKING: Creating, moving, or canceling meetings.
+    - OPTIMIZATION: Asking for schedule advice or best times.
+    - EXECUTION: Sending emails, creating tasks.
+    - MONITORING: Asking for analytics or stats.
+    - CHAT: General questions or pleasantries.
+    
+    User Message: "{user_message}"
+    
+    Respond STRICTLY in JSON format:
+    {{
+        "intent": "schedule_meeting", 
+        "agent_type": "booking", 
+        "confidence": 0.95,
+        "entities": {{
+            "date": "tomorrow",
+            "time": "14:00",
+            "attendees": ["john@example.com"],
+            "title": "Project Sync",
+            "duration": 30
+        }}
+    }}
+    """
 
-async def extract_entities(user_message: str, intent: str) -> Dict[str, Any]:
-    """
-    Extract relevant entities from user message based on intent.
-    """
-    import re
-    
-    entities = {}
-    lower = user_message.lower()
-    
-    # Extract date
-    date_patterns = [
-        r'(today|tomorrow|next\s+\w+|this\s+\w+|\d{1,2}/\d{1,2}/\d{2,4})',
-        r'(monday|tuesday|wednesday|thursday|friday|saturday|sunday)',
-        r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}',
-    ]
-    
-    for pattern in date_patterns:
-        match = re.search(pattern, lower)
-        if match:
-            entities["date"] = match.group(1)
-            break
-    
-    # Extract time
-    time_pattern = r'(\d{1,2}):?(\d{2})?\s*(am|pm)?'
-    match = re.search(time_pattern, lower)
-    if match:
-        entities["time"] = match.group(0)
-    
-    # Extract duration
-    duration_pattern = r'(\d{1,3})\s*(minute|hour|min|hr)'
-    match = re.search(duration_pattern, lower)
-    if match:
-        value = int(match.group(1))
-        unit = match.group(2)
-        if 'hour' in unit or 'hr' in unit:
-            entities["duration"] = value * 60
-        else:
-            entities["duration"] = value
-    
-    # Extract attendees (email addresses or names)
-    email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
-    emails = re.findall(email_pattern, user_message)
-    if emails:
-        entities["attendees"] = emails
-    
-    # Extract meeting title (text after "about", "for", "titled")
-    title_patterns = [
-        r'(?:about|for|titled|called)\s+["\']?([^"\']{3,50})["\']?',
-        r'(?:schedule|book)\s+a\s+(\w+)\s+meeting',
-    ]
-    for pattern in title_patterns:
-        match = re.search(pattern, lower)
-        if match:
-            entities["title"] = match.group(1).strip().title()
-            break
-    
-    return entities
+    from backend.ai.llm_core import ConversationMessage
+    messages = [ConversationMessage(role="user", content=routing_prompt)]
+
+    response = await llm._call_llm(messages, require_json=True)
+
+    import json
+    try:
+        parsed_routing = json.loads(response.content)
+
+        agent_type_str = (parsed_routing.get("agent_type") or "").upper()
+        try:
+            parsed_routing["agent_type"] = AgentType[agent_type_str] if agent_type_str and agent_type_str != "CHAT" else None
+        except Exception:
+            parsed_routing["agent_type"] = None
+
+        return parsed_routing
+    except json.JSONDecodeError:
+        logger.error("Failed to parse routing JSON from LLM.")
+        return {
+            "intent": "general_chat",
+            "agent_type": None,
+            "confidence": 0.5,
+            "entities": {}
+        }
 
 
 def _milestone_for_intent(intent: str, success: bool) -> Optional[str]:
@@ -207,15 +154,15 @@ async def generate_ai_response(
         Dict containing response text and optional agent execution results
     """
     try:
-        # Step 1: Analyze intent (Perception phase entry point)
-        intent_analysis = await analyze_intent(user_message)
-        intent = intent_analysis["intent"]
-        agent_type = intent_analysis["agent_type"]
-        
-        logger.info(f"Intent detected: {intent} (confidence: {intent_analysis['confidence']})")
-        
-        # Step 2: Extract entities
-        entities = await extract_entities(user_message, intent)
+        # Step 1: Analyze intent and extract entities (Perception phase entry point)
+        analysis = await analyze_intent_and_extract(user_message)
+        intent = analysis.get("intent", "general_chat")
+        agent_type = analysis.get("agent_type")
+
+        logger.info(f"Intent detected: {intent} (confidence: {analysis.get('confidence')})")
+
+        # Step 2: Use extracted entities from the routing call
+        entities = analysis.get("entities", {})
         
         # Step 3: Route to appropriate handler
         if agent_type:

@@ -26,6 +26,10 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+class AgentTimeoutError(Exception):
+    """Raised when an agent phase exceeds its timeout limit."""
+    pass
+
 class AgentState(Enum):
     """Agent lifecycle states"""
     INITIALIZING = "initializing"
@@ -44,6 +48,15 @@ class AgentPhase(Enum):
     COGNITION = "cognition"
     ACTION = "action"
     REFLECTION = "reflection"
+
+
+# Phase timeout configuration (in seconds)
+PHASE_TIMEOUTS = {
+    AgentPhase.PERCEPTION: 10.0,   # 10 seconds for perception
+    AgentPhase.COGNITION: 30.0,    # 30 seconds for LLM reasoning
+    AgentPhase.ACTION: 60.0,       # 60 seconds for external API calls
+    AgentPhase.REFLECTION: 15.0,    # 15 seconds for reflection
+}
 
 
 @dataclass
@@ -174,7 +187,12 @@ class BaseAgent(ABC):
                 self.state = AgentState.PERCEIVING
                 phase_start = datetime.utcnow()
                 
-                perception = await self._phase_perception(context)
+                perception = await self._execute_phase_with_timeout(
+                    self._phase_perception,
+                    context,
+                    PHASE_TIMEOUTS[AgentPhase.PERCEPTION],
+                    "perception"
+                )
                 context.phase_results["perception"] = perception
                 context.memory.short_term["perception"] = perception
                 
@@ -192,7 +210,12 @@ class BaseAgent(ABC):
                 self.state = AgentState.COGNIZING
                 phase_start = datetime.utcnow()
                 
-                cognition = await self._phase_cognition(context)
+                cognition = await self._execute_phase_with_timeout(
+                    self._phase_cognition,
+                    context,
+                    PHASE_TIMEOUTS[AgentPhase.COGNITION],
+                    "cognition"
+                )
                 context.phase_results["cognition"] = cognition
                 context.memory.short_term["plan"] = cognition.get("plan")
                 context.memory.short_term["decision"] = cognition.get("decision")
@@ -212,7 +235,12 @@ class BaseAgent(ABC):
                 self.state = AgentState.ACTING
                 phase_start = datetime.utcnow()
                 
-                action = await self._phase_action(context)
+                action = await self._execute_phase_with_timeout(
+                    self._phase_action,
+                    context,
+                    PHASE_TIMEOUTS[AgentPhase.ACTION],
+                    "action"
+                )
                 context.phase_results["action"] = action
                 context.memory.short_term["results"] = action.get("results")
                 
@@ -231,7 +259,12 @@ class BaseAgent(ABC):
                 self.state = AgentState.REFLECTING
                 phase_start = datetime.utcnow()
                 
-                reflection = await self._phase_reflection(context, result)
+                reflection = await self._execute_phase_with_timeout(
+                    lambda ctx: self._phase_reflection(ctx, result),
+                    context,
+                    PHASE_TIMEOUTS[AgentPhase.REFLECTION],
+                    "reflection"
+                )
                 context.phase_results["reflection"] = reflection
                 
                 result["phases"]["reflection"] = {
@@ -275,6 +308,62 @@ class BaseAgent(ABC):
                 await self._handle_error_with_reflection(e, context, result)
             
             return result
+    
+    # ╔══════════════════════════════════════════════════════════════════╗
+    # ║                    TIMEOUT PROTECTION                            ║
+    # ╚══════════════════════════════════════════════════════════════════╝
+    
+    async def _execute_phase_with_timeout(
+        self,
+        phase_func,
+        context: AgentContext,
+        timeout: float,
+        phase_name: str
+    ) -> Dict[str, Any]:
+        """
+        Execute a phase with timeout protection.
+        
+        Args:
+            phase_func: The phase function to execute
+            context: AgentContext for the phase
+            timeout: Maximum time allowed for the phase (seconds)
+            phase_name: Name of the phase for error reporting
+            
+        Returns:
+            Phase result dictionary
+            
+        Raises:
+            AgentTimeoutError: If phase exceeds timeout limit
+        """
+        import asyncio
+        
+        try:
+            # Execute phase with timeout
+            result = await asyncio.wait_for(
+                phase_func(context),
+                timeout=timeout
+            )
+            return result
+            
+        except asyncio.TimeoutError:
+            logger.error(
+                f"[{self.name}] Phase '{phase_name}' timed out after {timeout}s "
+                f"(request: {context.request_id})"
+            )
+            
+            # Update metrics
+            self.metrics.errors.append({
+                "timestamp": datetime.utcnow().isoformat(),
+                "error": f"Phase timeout: {phase_name}",
+                "request_id": context.request_id,
+                "phase": phase_name,
+                "timeout_seconds": timeout
+            })
+            
+            # Raise timeout error
+            raise AgentTimeoutError(
+                f"Phase '{phase_name}' exceeded {timeout} second limit"
+            )
     
     # ╔══════════════════════════════════════════════════════════════════╗
     # ║                    PHASE IMPLEMENTATIONS                         ║

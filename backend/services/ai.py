@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,6 +49,17 @@ class AIResponse(BaseModel):
     model_used: Optional[str] = None
     action: Optional[Dict[str, Any]] = None
     milestone: Optional[str] = None
+
+
+def _chunk_text(text: str, chunk_size: int = 96) -> list[str]:
+    if not text:
+        return []
+
+    return [text[index:index + chunk_size] for index in range(0, len(text), chunk_size)]
+
+
+def _sse_event(event_name: str, payload: Dict[str, Any]) -> str:
+    return f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
 
 
 def _milestone_for_intent(intent: str, action: Optional[Dict[str, Any]] = None) -> Optional[str]:
@@ -889,3 +901,74 @@ async def ai_chat(
             logger.warning(f"AI milestone stream publish failed: {exc}", exc_info=True)
 
     return AIResponse(result=result_text, model_used=model_used, action=action, milestone=milestone)
+
+
+@router.post("/stream")
+async def ai_chat_stream(
+    request: AIRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+    _usage_check: bool = Depends(check_usage_limit("ai_messages")),
+    _rate_limit: bool = Depends(get_rate_limiter(max_requests=10, window_seconds=60)),
+):
+    async def event_stream():
+        yield _sse_event("phase", {"phase": "perception", "status": "started"})
+
+        try:
+            base_response = await ai_chat(
+                request=request,
+                user_id=user_id,
+                db=db,
+                _usage_check=_usage_check,
+                _rate_limit=_rate_limit,
+            )
+
+            yield _sse_event("phase", {"phase": "perception", "status": "completed"})
+            yield _sse_event("phase", {"phase": "cognition", "status": "completed"})
+
+            result_text = base_response.result or ""
+            for chunk in _chunk_text(result_text):
+                if chunk:
+                    yield _sse_event("message", {"chunk": chunk})
+
+            action_type = None
+            if isinstance(base_response.action, dict):
+                action_type = base_response.action.get("type")
+
+            yield _sse_event(
+                "phase",
+                {
+                    "phase": "action",
+                    "status": "completed" if action_type and action_type != "none" else "idle",
+                },
+            )
+            yield _sse_event(
+                "phase",
+                {
+                    "phase": "reflection",
+                    "status": "completed" if base_response.milestone else "idle",
+                },
+            )
+
+            yield _sse_event(
+                "done",
+                {
+                    "result": base_response.result,
+                    "model_used": base_response.model_used,
+                    "action": base_response.action,
+                    "milestone": base_response.milestone,
+                },
+            )
+        except Exception as exc:
+            logger.exception("AI stream failed: %s", exc)
+            yield _sse_event("error", {"error": str(exc)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

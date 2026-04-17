@@ -35,6 +35,9 @@ from backend.ai.monitoring import (
     log_phase_execution
 )
 from backend.utils.db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
+from backend.models.tables import BookingTable, AIAutomationTable
 
 logger = get_logger(__name__)
 agent_logger = get_agent_logger()
@@ -717,11 +720,86 @@ class BookingAutomationService:
             "assessment": assessment,
             "all_success": all_success,
             "partial_success": partial_success,
-            "learnings": learnings,
-            "actions_count": len(action_results),
-            "successful_actions": sum(1 for r in action_results if r.get("success"))
-        }
-    
+        self,
+        db: AsyncSession,
+        booking_id: str,
+        user_id: str,
+        decision: AgentDecision,
+        action_results: List[Dict[str, Any]],
+        external_results: Dict[str, Any],
+        reflection_data: Dict[str, Any],
+        execution_time_ms: float,
+        fallback_mode: Optional[str] = None
+    ):
+        """
+        Store automation results to database within a transaction.
+        
+        Args:
+            db: Database session (within transaction)
+            booking_id: Booking ID
+            user_id: User ID
+            decision: Agent decision
+            action_results: Results from action execution
+            external_results: Results from external APIs
+            reflection_data: Reflection phase results
+            execution_time_ms: Total execution time
+            fallback_mode: Fallback mode if used
+        """
+        try:
+            # 1. Fetch and lock booking record
+            result = await db.execute(
+                select(BookingTable)
+                .where(BookingTable.id == booking_id)
+                .with_for_update()  # Pessimistic locking
+            )
+            booking = result.scalar_one_or_none()
+            
+            if booking:
+                # Update booking with automation results
+                booking.automation_status = "completed" if all(
+                    r.get("success") for r in action_results
+                ) else "partial"
+                booking.automation_run_at = datetime.utcnow()
+                booking.decision_score = self._calculate_decision_score(
+                    decision, action_results
+                )
+                booking.risk_level = decision.risk_analysis.level.value
+                db.add(booking)
+            
+            # 2. Create AI automation tracking record
+            automation_record = AIAutomationTable(
+                user_id=user_id,
+                event_id=booking_id,
+                automation_type="booking",
+                status="completed" if all(r.get("success") for r in action_results) else "partial",
+                decision_score=self._calculate_decision_score(decision, action_results),
+                actions_executed=len(action_results),
+                actions_data=str(action_results),
+                external_results=str(external_results),
+                reflection_data=str(reflection_data),
+                execution_time_ms=int(execution_time_ms),
+                fallback_mode=fallback_mode,
+                error_message=None
+            )
+            db.add(automation_record)
+            
+            # 3. Flush changes (will be committed by caller)
+            await db.flush()
+            
+            logger.info(
+                f"[Booking:{booking_id}] Results stored in transaction "
+                f"(status: {automation_record.status})"
+            )
+            
+        except IntegrityError as e:
+            logger.error(f"[Booking:{booking_id}] Integrity error: {e}")
+            await db.rollback()
+            raise
+        
+        except Exception as e:
+            logger.error(f"[Booking:{booking_id}] Failed to store results: {e}")
+            raise
+
     async def _store_results(
         self,
         booking_id: str,
@@ -733,16 +811,15 @@ class BookingAutomationService:
         execution_time_ms: float,
         fallback_mode: Optional[str] = None
     ):
-        """Store automation results in database"""
-        try:
-            async with get_db() as db:
-                from backend.models.tables import AIAutomationTable
-                from datetime import datetime, timezone
-                
-                # Calculate status based on action results
-                all_success = all(r.get("success") for r in action_results)
-                any_success = any(r.get("success") for r in action_results)
-                
+        """
+        Store automation results to database with transaction safety.
+        
+        Legacy method - now wraps _store_results_with_transaction in a transaction.
+        """
+        async with get_db() as db:
+            async with db.begin():  # Start transaction
+                await self._store_results_with_transaction(
+                    db=db,
                 if all_success:
                     status = "completed"
                 elif any_success:

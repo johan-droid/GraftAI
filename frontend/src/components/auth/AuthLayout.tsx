@@ -39,8 +39,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
         flexDirection: "column",
         alignItems: "stretch",
         justifyContent: { xs: "flex-start", sm: "center" },
-        background:
-          "radial-gradient(circle at top left, rgba(26, 115, 232, 0.12), transparent 32%), radial-gradient(circle at bottom right, rgba(52, 168, 83, 0.10), transparent 28%), var(--bg-base, #f0f4f9)",
+        background: "var(--bg-surface)",
         p: { xs: 1.5, sm: 2.5 },
         position: "relative",
         overflow: "hidden",
@@ -55,7 +54,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
           opacity: 0.8,
         }}
       >
-        <Box sx={{ position: "absolute", top: -120, left: -100, width: 240, height: 240, borderRadius: "50%", bgcolor: "rgba(26, 115, 232, 0.08)", filter: "blur(80px)" }} />
+        <Box sx={{ position: "absolute", top: -120, left: -100, width: 240, height: 240, borderRadius: "50%", bgcolor: "var(--primary-glow)", filter: "blur(80px)" }} />
         <Box sx={{ position: "absolute", bottom: -120, right: -80, width: 240, height: 240, borderRadius: "50%", bgcolor: "rgba(52, 168, 83, 0.08)", filter: "blur(80px)" }} />
       </Box>
 
@@ -81,10 +80,9 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               flexDirection: "column",
               justifyContent: "space-between",
               borderRadius: { xs: "24px", sm: "32px" },
-              background: "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(248,249,250,0.94) 100%)",
-              border: "1px solid var(--border-subtle, rgba(0,0,0,0.08))",
-              boxShadow: "0 24px 80px -32px rgba(32, 33, 36, 0.24)",
-              backdropFilter: "blur(24px)",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-subtle)",
+              boxShadow: "var(--shadow-card)",
             }}
           >
             <Stack spacing={3}>
@@ -97,8 +95,8 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
                     px: 1.5,
                     py: 0.8,
                     borderRadius: 99,
-                    background: "rgba(26, 115, 232, 0.08)",
-                    color: "var(--primary, #1a73e8)",
+                    background: "var(--bg-hover)",
+                    color: "var(--primary)",
                     fontSize: 11,
                     fontWeight: 700,
                     letterSpacing: "0.18em",
@@ -118,8 +116,8 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
                     lineHeight: 1.08,
                     fontWeight: 600,
                     letterSpacing: "-0.04em",
-                    color: "var(--text-primary, #1f1f1f)",
-                    fontFamily: "var(--font-outfit, var(--font-sans, 'Google Sans', Roboto, sans-serif))",
+                    color: "var(--text-primary)",
+                    fontFamily: "var(--font-outfit)",
                   }}
                 >
                   One account for scheduling, chat, and follow-up.
@@ -130,8 +128,8 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
                     mt: 1.5,
                     fontSize: { xs: "0.96rem", sm: "1rem" },
                     lineHeight: 1.6,
-                    color: "var(--text-secondary, #444746)",
-                    fontFamily: "var(--font-sans, Roboto, sans-serif)",
+                    color: "var(--text-secondary)",
+                    fontFamily: "var(--font-sans)",
                     maxWidth: 360,
                   }}
                 >
@@ -158,8 +156,8 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
                         alignItems: "flex-start",
                         p: 1.5,
                         borderRadius: 4,
-                        background: "rgba(255,255,255,0.72)",
-                        border: "1px solid rgba(0,0,0,0.06)",
+                        background: "var(--bg-hover)",
+                        border: "1px solid var(--border-subtle)",
                       }}
                     >
                       <Box
@@ -170,18 +168,18 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          background: "rgba(26, 115, 232, 0.1)",
-                          color: "var(--primary, #1a73e8)",
+                          background: "var(--primary-glow)",
+                          color: "var(--primary)",
                           flexShrink: 0,
                         }}
                       >
                         <Icon size={16} />
                       </Box>
                       <Box>
-                        <Typography sx={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary, #1f1f1f)" }}>
+                        <Typography sx={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
                           {item.title}
                         </Typography>
-                        <Typography sx={{ mt: 0.4, fontSize: 11.5, lineHeight: 1.5, color: "var(--text-secondary, #444746)" }}>
+                        <Typography sx={{ mt: 0.4, fontSize: 11.5, lineHeight: 1.5, color: "var(--text-secondary)" }}>
                           {item.text}
                         </Typography>
                       </Box>
@@ -210,9 +208,9 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
                       borderRadius: 99,
                       fontSize: 11,
                       fontWeight: 600,
-                      color: "var(--text-secondary, #444746)",
-                      background: "rgba(255,255,255,0.7)",
-                      border: "1px solid rgba(0,0,0,0.06)",
+                      color: "var(--text-secondary)",
+                      background: "var(--bg-hover)",
+                      border: "1px solid var(--border-subtle)",
                     }}
                   >
                     {tag}
@@ -230,10 +228,9 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               flexDirection: "column",
               alignItems: "center",
               borderRadius: { xs: "24px", sm: "32px" },
-              background: "rgba(255, 255, 255, 0.9)",
-              border: "1px solid var(--border-subtle, rgba(0,0,0,0.08))",
-              boxShadow: "0 24px 80px -32px rgba(32, 33, 36, 0.28)",
-              backdropFilter: "blur(24px)",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-subtle)",
+              boxShadow: "var(--shadow-card)",
             }}
           >
             <Box sx={{ mb: 2, display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
@@ -242,7 +239,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
                 width: 48,
                 height: 48,
                 borderRadius: "12px",
-                background: "var(--primary, #1a73e8)",
+                background: "var(--primary)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -262,8 +259,8 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
                   px: 1.25,
                   py: 0.75,
                   borderRadius: 99,
-                  background: "rgba(52, 168, 83, 0.08)",
-                  color: "#137333",
+                  background: "var(--success-glow)",
+                  color: "var(--success)",
                   fontSize: 11,
                   fontWeight: 700,
                   letterSpacing: "0.14em",
@@ -279,8 +276,8 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               sx={{
                 fontSize: { xs: "1.65rem", sm: "1.85rem" },
                 fontWeight: 600,
-                color: "var(--text-primary, #1f1f1f)",
-                fontFamily: "var(--font-outfit, var(--font-sans, 'Google Sans', Roboto, sans-serif))",
+                color: "var(--text-primary)",
+                fontFamily: "var(--font-outfit)",
                 mb: 1,
                 textAlign: "center",
                 letterSpacing: "-0.03em",
@@ -293,8 +290,8 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               <Typography
                 sx={{
                   fontSize: { xs: "0.95rem", sm: "1rem" },
-                  color: "var(--text-secondary, #444746)",
-                  fontFamily: "var(--font-sans, Roboto, sans-serif)",
+                  color: "var(--text-secondary)",
+                  fontFamily: "var(--font-sans)",
                   mb: 4,
                   textAlign: "center",
                   maxWidth: 320,
@@ -314,9 +311,9 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
               href="/terms"
               style={{
                 fontSize: "12px",
-                color: "var(--text-secondary, #444746)",
+                color: "var(--text-secondary)",
                 textDecoration: "none",
-                fontFamily: "var(--font-sans, Roboto, sans-serif)",
+                fontFamily: "var(--font-sans)",
                 fontWeight: 500,
               }}
             >

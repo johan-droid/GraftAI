@@ -94,56 +94,13 @@ html, body {
 
 /* ── Global Background Effects ──────────────────────────────────── */
 
-/* Terminal Grid (Dark Only) */
-[data-theme="dark"] body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  background: 
-    linear-gradient(var(--border-subtle) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
-  background-size: 50px 50px;
-  opacity: 0.5;
-}
-
-/* Dots Grid (Light Only) */
-[data-theme="light"] body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  background-image: radial-gradient(#dadce0 1px, transparent 1px);
-  background-size: 40px 40px;
-  opacity: 0.4;
-}
-
-/* scanlines (Dark Only) */
-[data-theme="dark"] body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1000;
-  background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%, 
-    rgba(0, 0, 0, 0.1) 50%
-  );
-  background-size: 100% 4px;
-  opacity: 0.2;
-}
-
-/* Global Ambient Glows */
+/* Global Ambient Glows (Simplified) */
 .ambient-glow {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: -1;
-  background:
-    radial-gradient(circle at 10% 10%, rgba(0, 255, 156, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 90% 90%, rgba(0, 224, 255, 0.05) 0%, transparent 50%);
+  background: transparent;
 }
 
 /* ── Typography Scale ───────────────────────────────────────────── */

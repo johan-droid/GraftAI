@@ -24,11 +24,11 @@ function isThemeMode(value: string | null): value is ThemeMode {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") {
-      return "dark";
+      return "light";
     }
 
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    return isThemeMode(stored) ? stored : "dark";
+    return isThemeMode(stored) ? stored : "light";
   });
 
   // Apply theme changes

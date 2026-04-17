@@ -195,14 +195,15 @@ export default function CopilotPage() {
     <Box
       sx={{
         minHeight: "100vh",
-        background: isDark ? "hsl(240, 24%, 7%)" : "hsl(220, 14%, 96%)",
+        background: "var(--bg-surface)",
         display: "flex",
         flexDirection: "column",
+        pb: { xs: "80px", md: 0 }
       }}
     >
       <MobileSidebar />
 
-      <Box sx={{ px: { xs: 2, md: 4 }, pt: { xs: 2, md: 4 } }}>
+      <Box sx={{ px: { xs: 2.5, md: 4 }, pt: { xs: 2.5, md: 4 } }}>
         <Header
           userName={(user as any)?.name}
           userEmail={user?.email}
@@ -217,50 +218,73 @@ export default function CopilotPage() {
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          px: { xs: 2, md: 4 },
-          py: 2,
+          px: { xs: 2.5, md: 4 },
+          py: { xs: 2, md: 4 },
           overflow: "hidden",
         }}
       >
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.4 }}
           style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}
         >
-          <Box sx={{ mb: 3, display: { xs: "none", sm: "block" } }}>
-            <Typography
-              variant="h4"
+          <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Box>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 600,
+                  color: "var(--text-primary)",
+                  fontFamily: "var(--font-outfit)",
+                  letterSpacing: "-0.02em",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                }}
+              >
+                <Sparkles size={28} className="text-[#1a73e8]" />
+                AI Copilot
+              </Typography>
+              <Typography sx={{ color: "var(--text-secondary)", fontSize: "0.95rem", mt: 0.5 }}>
+                Your intelligent scheduling assistant
+              </Typography>
+            </Box>
+
+            <Button
+              startIcon={<Trash2 size={16} />}
+              variant="outlined"
+              onClick={clearChat}
+              disabled={messages.length === 0}
               sx={{
-                fontWeight: 700,
-                color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                mb: 1,
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
+                borderColor: "var(--border-subtle)",
+                color: "var(--text-secondary)",
+                textTransform: "none",
+                borderRadius: 2,
+                display: { xs: "none", sm: "flex" },
+                "&:hover": {
+                  borderColor: "var(--danger)",
+                  color: "var(--danger)",
+                  bgcolor: "transparent"
+                }
               }}
             >
-              <Sparkles size={28} style={{ color: "hsl(239, 84%, 67%)" }} />
-              AI Copilot
-            </Typography>
-            <Typography sx={{ color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)" }}>
-              Your intelligent scheduling assistant
-            </Typography>
+              Clear
+            </Button>
           </Box>
 
           <Paper
             elevation={0}
             sx={{
               flex: 1,
-              background: isDark
-                ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-              border: "1px solid hsla(239, 84%, 67%, 0.15)",
-              borderRadius: "16px",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: 3,
               overflow: "auto",
               mb: 2,
               display: "flex",
               flexDirection: "column",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
             }}
           >
             {messages.length === 0 ? (
@@ -277,24 +301,23 @@ export default function CopilotPage() {
               >
                 <Box
                   sx={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: "20px",
-                    background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
+                    width: 64,
+                    height: 64,
+                    borderRadius: 3,
+                    background: "rgba(26, 115, 232, 0.1)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     mb: 3,
-                    boxShadow: "0 10px 40px -10px hsla(239, 84%, 67%, 0.5)",
                   }}
                 >
-                  <Bot size={40} color="white" />
+                  <Bot size={32} className="text-[#1a73e8]" />
                 </Box>
                 <Typography
                   variant="h5"
                   sx={{
-                    fontWeight: 700,
-                    color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
+                    fontWeight: 600,
+                    color: "var(--text-primary)",
                     mb: 1,
                   }}
                 >
@@ -302,21 +325,22 @@ export default function CopilotPage() {
                 </Typography>
                 <Typography
                   sx={{
-                    color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)",
+                    color: "var(--text-secondary)",
                     mb: 4,
                     maxWidth: 500,
+                    fontSize: "0.9rem"
                   }}
                 >
                   I can help schedule meetings, find free time, analyze your calendar, and optimize your schedule.
                 </Typography>
 
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, justifyContent: "center" }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2, width: "100%", maxWidth: 600 }}>
                   {suggestedPrompts.map((item, index) => (
                     <motion.div
                       key={index}
-                      initial={{ opacity: 0, y: 20 }}
+                      initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
+                      transition={{ delay: index * 0.05 }}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >
@@ -324,49 +348,46 @@ export default function CopilotPage() {
                         onClick={() => handleSuggestedPrompt(item.prompt)}
                         sx={{
                           p: 2,
-                          px: 3,
-                          background: isDark
-                            ? "hsla(239, 84%, 67%, 0.1)"
-                            : "hsla(239, 84%, 67%, 0.05)",
-                          border: "1px solid hsla(239, 84%, 67%, 0.2)",
-                          borderRadius: "12px",
+                          background: "var(--bg-surface)",
+                          border: "1px solid var(--border-subtle)",
+                          borderRadius: 2,
                           cursor: "pointer",
                           display: "flex",
-                          alignItems: "center",
+                          alignItems: "flex-start",
                           gap: 1.5,
                           transition: "all 0.2s ease",
+                          boxShadow: "none",
                           "&:hover": {
-                            background: isDark
-                              ? "hsla(239, 84%, 67%, 0.15)"
-                              : "hsla(239, 84%, 67%, 0.1)",
-                            borderColor: "hsla(239, 84%, 67%, 0.4)",
+                            background: "var(--bg-hover)",
+                            borderColor: "#1a73e8",
                           },
                         }}
                       >
-                        <item.icon size={18} style={{ color: "hsl(239, 84%, 67%)" }} />
-                        <Typography
-                          sx={{
-                            fontWeight: 500,
-                            color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                            fontSize: "0.875rem",
-                          }}
-                        >
-                          {item.label}
-                        </Typography>
+                        <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: "rgba(26, 115, 232, 0.1)", color: "#1a73e8", flexShrink: 0 }}>
+                           <item.icon size={16} />
+                        </Box>
+                        <Box sx={{ textAlign: "left" }}>
+                          <Typography sx={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "0.85rem", mb: 0.5 }}>
+                            {item.label}
+                          </Typography>
+                          <Typography sx={{ color: "var(--text-secondary)", fontSize: "0.8rem", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                            {item.prompt}
+                          </Typography>
+                        </Box>
                       </Paper>
                     </motion.div>
                   ))}
                 </Box>
               </Box>
             ) : (
-              <Box sx={{ p: 3, display: "flex", flexDirection: "column", gap: 3 }}>
+              <Box sx={{ p: { xs: 2.5, md: 4 }, display: "flex", flexDirection: "column", gap: 3 }}>
                 <AnimatePresence>
                   {messages.map((message) => (
                     <motion.div
                       key={message.id}
-                      initial={{ opacity: 0, y: 20 }}
+                      initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
+                      exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.3 }}
                     >
                       <Box
@@ -378,25 +399,13 @@ export default function CopilotPage() {
                       >
                         <Avatar
                           sx={{
-                            width: 36,
-                            height: 36,
-                            background:
-                              message.role === "user"
-                                ? isDark
-                                  ? "hsl(240, 24%, 22%)"
-                                  : "hsl(220, 14%, 90%)"
-                                : "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                            border:
-                              message.role === "user"
-                                ? `1px solid ${isDark ? "hsla(239, 84%, 67%, 0.2)" : "hsla(239, 84%, 67%, 0.1)"}`
-                                : "none",
+                            width: 32,
+                            height: 32,
+                            background: message.role === "user" ? "#1a73e8" : "rgba(26, 115, 232, 0.1)",
+                            color: message.role === "user" ? "#fff" : "#1a73e8"
                           }}
                         >
-                          {message.role === "user" ? (
-                            <User size={18} style={{ color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)" }} />
-                          ) : (
-                            <Sparkles size={18} color="white" />
-                          )}
+                          {message.role === "user" ? <User size={16} /> : <Bot size={16} />}
                         </Avatar>
 
                         <Box sx={{ maxWidth: "80%" }}>
@@ -404,30 +413,13 @@ export default function CopilotPage() {
                             elevation={0}
                             sx={{
                               p: 2,
-                              px: 3,
-                              background:
-                                message.role === "user"
-                                  ? isDark
-                                    ? "hsla(239, 84%, 67%, 0.15)"
-                                    : "hsla(239, 84%, 67%, 0.1)"
-                                  : isDark
-                                  ? "hsl(240, 24%, 14%)"
-                                  : "hsl(0, 0%, 100%)",
-                              border:
-                                message.role === "assistant"
-                                  ? `1px solid ${isDark ? "hsla(239, 84%, 67%, 0.15)" : "hsla(239, 84%, 67%, 0.1)"}`
-                                  : "none",
-                              borderRadius:
-                                message.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                              background: message.role === "user" ? "#1a73e8" : "var(--bg-surface)",
+                              border: message.role === "assistant" ? "1px solid var(--border-subtle)" : "none",
+                              borderRadius: message.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                              color: message.role === "user" ? "#fff" : "var(--text-primary)"
                             }}
                           >
-                            <Typography
-                              sx={{
-                                color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                                lineHeight: 1.6,
-                                whiteSpace: "pre-wrap",
-                              }}
-                            >
+                            <Typography sx={{ lineHeight: 1.6, whiteSpace: "pre-wrap", fontSize: "0.95rem" }}>
                               {message.content}
                             </Typography>
                           </Paper>
@@ -436,21 +428,13 @@ export default function CopilotPage() {
                             sx={{
                               display: "flex",
                               alignItems: "center",
-                              gap: 1,
-                              mt: 0.5,
+                              gap: 1.5,
+                              mt: 1,
                               justifyContent: message.role === "user" ? "flex-end" : "flex-start",
                             }}
                           >
-                            <Typography
-                              sx={{
-                                fontSize: "0.6875rem",
-                                color: isDark ? "hsl(215, 16%, 40%)" : "hsl(215, 16%, 60%)",
-                              }}
-                            >
-                              {message.timestamp.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                            <Typography sx={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                              {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </Typography>
                             
                             {/* Agent executed badge */}
@@ -459,22 +443,16 @@ export default function CopilotPage() {
                                 size="small"
                                 icon={<Activity size={12} />}
                                 label={message.agentType || "Agent"}
-                                onClick={() => setExpandedAgentId(
-                                  expandedAgentId === message.id ? null : message.id
-                                )}
+                                onClick={() => setExpandedAgentId(expandedAgentId === message.id ? null : message.id)}
                                 sx={{
-                                  height: "20px",
-                                  fontSize: "0.65rem",
-                                  fontWeight: 600,
-                                  background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                                  color: "white",
+                                  height: "22px",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 500,
+                                  background: "rgba(26, 115, 232, 0.1)",
+                                  color: "#1a73e8",
                                   cursor: "pointer",
-                                  "& .MuiChip-icon": {
-                                    color: "white",
-                                  },
-                                  "&:hover": {
-                                    opacity: 0.9,
-                                  },
+                                  "& .MuiChip-icon": { color: "#1a73e8" },
+                                  "&:hover": { background: "rgba(26, 115, 232, 0.15)" },
                                 }}
                               />
                             )}
@@ -483,11 +461,7 @@ export default function CopilotPage() {
                               <IconButton
                                 size="small"
                                 onClick={() => copyMessage(message.id, message.content)}
-                                sx={{
-                                  width: 24,
-                                  height: 24,
-                                  color: copiedId === message.id ? "hsl(160, 84%, 39%)" : "hsl(215, 16%, 55%)",
-                                }}
+                                sx={{ width: 24, height: 24, color: copiedId === message.id ? "var(--success)" : "var(--text-secondary)" }}
                               >
                                 {copiedId === message.id ? <Check size={14} /> : <Copy size={14} />}
                               </IconButton>
@@ -497,47 +471,11 @@ export default function CopilotPage() {
                           {/* Agent Execution Timeline */}
                           {message.agentExecuted && (
                             <Collapse in={expandedAgentId === message.id} timeout="auto" unmountOnExit>
-                              <Box
-                                sx={{
-                                  mt: 2,
-                                  p: 2,
-                                  backgroundColor: isDark ? "hsla(239, 84%, 67%, 0.05)" : "hsla(239, 84%, 67%, 0.03)",
-                                  borderRadius: "12px",
-                                  border: `1px solid ${isDark ? "hsla(239, 84%, 67%, 0.1)" : "hsla(239, 84%, 67%, 0.08)"}`,
-                                }}
-                              >
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    mb: 2,
-                                  }}
-                                >
-                                  <Typography
-                                    variant="caption"
-                                    sx={{
-                                      fontWeight: 600,
-                                      color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 0.5,
-                                    }}
-                                  >
-                                    <Zap size={14} />
-                                    Agent Execution Details
+                              <Box sx={{ mt: 2, p: 2, backgroundColor: "var(--bg-surface)", borderRadius: 2, border: "1px solid var(--border-subtle)" }}>
+                                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 0.5 }}>
+                                    <Zap size={14} className="text-[#1a73e8]" /> Agent Execution Details
                                   </Typography>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => setExpandedAgentId(null)}
-                                    sx={{
-                                      width: 24,
-                                      height: 24,
-                                      color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)",
-                                    }}
-                                  >
-                                    <ChevronUp size={16} />
-                                  </IconButton>
                                 </Box>
                                 
                                 <AgentExecutionTimeline
@@ -575,19 +513,21 @@ export default function CopilotPage() {
                     <Box sx={{ display: "flex", gap: 2 }}>
                       <Avatar
                         sx={{
-                          width: 36,
-                          height: 36,
-                          background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
+                          width: 32,
+                          height: 32,
+                          background: "rgba(26, 115, 232, 0.1)",
+                          color: "#1a73e8"
                         }}
                       >
-                        <Sparkles size={18} color="white" />
+                        <Sparkles size={16} />
                       </Avatar>
                       <Paper
+                        elevation={0}
                         sx={{
                           p: 2,
                           px: 3,
-                          background: isDark ? "hsl(240, 24%, 14%)" : "hsl(0, 0%, 100%)",
-                          border: `1px solid ${isDark ? "hsla(239, 84%, 67%, 0.15)" : "hsla(239, 84%, 67%, 0.1)"}`,
+                          background: "var(--bg-surface)",
+                          border: "1px solid var(--border-subtle)",
                           borderRadius: "16px 16px 16px 4px",
                           display: "flex",
                           alignItems: "center",
@@ -599,10 +539,10 @@ export default function CopilotPage() {
                             display: "flex",
                             gap: 0.5,
                             "& span": {
-                              width: 8,
-                              height: 8,
+                              width: 6,
+                              height: 6,
                               borderRadius: "50%",
-                              background: "hsl(239, 84%, 67%)",
+                              background: "rgba(26, 115, 232, 0.6)",
                               animation: "pulse 1.4s ease-in-out infinite",
                               "&:nth-of-type(2)": { animationDelay: "0.2s" },
                               "&:nth-of-type(3)": { animationDelay: "0.4s" },
@@ -631,14 +571,14 @@ export default function CopilotPage() {
             elevation={0}
             sx={{
               p: 2,
-              background: isDark
-                ? "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)"
-                : "linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(220, 14%, 96%) 100%)",
-              border: "1px solid hsla(239, 84%, 67%, 0.15)",
-              borderRadius: "16px",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: 3,
               display: "flex",
               alignItems: "center",
-              gap: 1,
+              gap: 1.5,
+              mb: 1,
+              boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
             }}
           >
             <TextField
@@ -660,12 +600,12 @@ export default function CopilotPage() {
                 "& .MuiOutlinedInput-root": {
                   background: "transparent",
                   borderRadius: "12px",
-                  color: isDark ? "hsl(220, 20%, 98%)" : "hsl(222, 47%, 11%)",
+                  color: "var(--text-primary)",
                   "& fieldset": { border: "none" },
                   "& textarea": {
                     padding: "8px 0",
                     "&::placeholder": {
-                      color: isDark ? "hsl(215, 16%, 40%)" : "hsl(215, 16%, 60%)",
+                      color: "var(--text-muted)",
                     },
                   },
                 },
@@ -677,8 +617,9 @@ export default function CopilotPage() {
                 <IconButton
                   onClick={clearChat}
                   sx={{
-                    color: isDark ? "hsl(215, 16%, 55%)" : "hsl(215, 16%, 47%)",
-                    "&:hover": { color: "hsl(346, 84%, 61%)" },
+                    color: "var(--text-secondary)",
+                    display: { xs: "flex", sm: "none" },
+                    "&:hover": { color: "var(--danger)" },
                   }}
                 >
                   <Trash2 size={20} />
@@ -691,17 +632,13 @@ export default function CopilotPage() {
                 sx={{
                   width: 44,
                   height: 44,
-                  background: inputValue.trim()
-                    ? "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)"
-                    : isDark
-                    ? "hsl(240, 24%, 22%)"
-                    : "hsl(220, 14%, 90%)",
-                  color: inputValue.trim() ? "white" : isDark ? "hsl(215, 16%, 40%)" : "hsl(215, 16%, 60%)",
-                  borderRadius: "12px",
+                  background: inputValue.trim() ? "var(--primary)" : "var(--bg-hover)",
+                  color: inputValue.trim() ? "#fff" : "var(--text-muted)",
+                  borderRadius: 2,
                   transition: "all 0.2s ease",
                   "&:hover": inputValue.trim()
                     ? {
-                        background: "linear-gradient(135deg, hsl(239, 84%, 57%) 0%, hsl(330, 81%, 50%) 100%)",
+                        background: "var(--primary-hover)",
                         transform: "scale(1.05)",
                       }
                     : {},
@@ -710,7 +647,7 @@ export default function CopilotPage() {
                   },
                 }}
               >
-                <Send size={20} />
+                <Send size={18} />
               </IconButton>
             </Box>
           </Paper>

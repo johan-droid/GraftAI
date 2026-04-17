@@ -117,9 +117,9 @@ export default function CalendarPage() {
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--bg-base)", pb: { xs: 12, md: 4 } }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--bg-surface)", pb: { xs: 12, md: 4 } }}>
       <MobileSidebar />
-      <Box className="scanline" sx={{ opacity: 0.05 }} />
+      <Box className="scanline" sx={{ display: "none" }} />
 
       <Container maxWidth="xl" sx={{ px: { xs: 2.5, md: 4 }, py: { xs: 2.5, md: 6 } }}>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -132,13 +132,9 @@ export default function CalendarPage() {
           />
 
           {/* Controller Section */}
-          <Box sx={{ mb: 6, mt: 4 }}>
-             <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-[1px] bg-[var(--primary)]" />
-                <span className="text-[9px] font-black text-[var(--primary)] tracking-[.4em] uppercase font-mono">Kernel_Scheduling_Node</span>
-             </div>
-             <Typography variant="h4" sx={{ fontWeight: 900, color: "white", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "-0.04em" }}>
-                Active_Protocol: <Box component="span" sx={{ color: "var(--primary)" }}>{formatMonthYear(currentDate)}</Box>
+          <Box sx={{ mb: 4, mt: 4 }}>
+             <Typography variant="h4" sx={{ fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-outfit)", letterSpacing: "-0.02em" }}>
+                {formatMonthYear(currentDate)}
              </Typography>
           </Box>
 
@@ -146,31 +142,53 @@ export default function CalendarPage() {
             
             {/* Left Column: Grid Controls */}
             <Box sx={{ flex: 1 }}>
-              <Box sx={{ background: "#050505", border: "1px dashed var(--border-subtle)", p: 0 }}>
+              <Box sx={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: 3, p: 0, overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
                 {/* Grid Header Controls */}
-                <Box sx={{ display: "flex", alignItems: "center", justifyBetween: "between", p: 2.5, borderBottom: "1px dashed var(--border-subtle)", background: "rgba(255,255,255,0.02)" }}>
-                   <Stack direction="row" spacing={1} sx={{ mr: "auto" }}>
-                     <IconButton onClick={() => navigateCalendar("prev")} sx={{ color: "var(--text-primary)", border: "1px solid var(--border-subtle)", borderRadius: 0, p: 1 }}>
-                        <ChevronLeft size={16} />
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", p: 2, borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-hover)" }}>
+                   <Stack direction="row" spacing={1}>
+                     <IconButton onClick={() => navigateCalendar("prev")} sx={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)", p: 1 }}>
+                        <ChevronLeft size={20} />
                      </IconButton>
-                     <IconButton onClick={() => navigateCalendar("next")} sx={{ color: "var(--text-primary)", border: "1px solid var(--border-subtle)", borderRadius: 0, p: 1 }}>
-                        <ChevronRight size={16} />
+                     <IconButton onClick={() => navigateCalendar("next")} sx={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)", p: 1 }}>
+                        <ChevronRight size={20} />
                      </IconButton>
                    </Stack>
 
-                   <Stack direction="row" spacing={2} sx={{ ml: "auto" }}>
+                   <Stack direction="row" spacing={1}>
                      {(["MONTH", "WEEK", "DAY"] as ViewType[]).map((v) => (
-                       <button
+                       <Button
                          key={v}
+                         variant={viewType === v ? "contained" : "text"}
                          onClick={() => setViewType(v)}
-                         className={`text-[9px] font-black font-mono tracking-widest px-4 py-1.5 transition-all ${viewType === v ? "bg-[var(--primary)] text-black" : "text-[var(--text-faint)] hover:text-white"}`}
+                         disableElevation
+                         sx={{
+                           minWidth: 0,
+                           fontSize: "0.8rem",
+                           fontWeight: 600,
+                           px: 2,
+                           color: viewType === v ? "#fff" : "var(--text-secondary)",
+                           bgcolor: viewType === v ? "var(--primary)" : "transparent",
+                           "&:hover": {
+                             bgcolor: viewType === v ? "var(--primary-hover)" : "var(--bg-hover)",
+                           }
+                         }}
                        >
                          {v}
-                       </button>
+                       </Button>
                      ))}
-                     <button onClick={goToToday} className="text-[9px] font-black font-mono tracking-widest px-4 py-1.5 border border-dashed border-[var(--border-subtle)] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-black transition-all">
+                     <Button 
+                       onClick={goToToday}
+                       variant="outlined"
+                       sx={{
+                         fontSize: "0.8rem",
+                         fontWeight: 600,
+                         px: 2,
+                         borderColor: "var(--border-subtle)",
+                         color: "var(--text-primary)",
+                       }}
+                     >
                        TODAY
-                     </button>
+                     </Button>
                    </Stack>
                 </Box>
 
@@ -180,10 +198,10 @@ export default function CalendarPage() {
                 ) : (
                   <Box sx={{ p: 0 }}>
                     {/* Week Header */}
-                    <Grid container sx={{ borderBottom: "1px dashed var(--border-subtle)" }}>
+                    <Grid container sx={{ borderBottom: "1px solid var(--border-subtle)" }}>
                       {weekDays.map((day) => (
-                        <Grid item xs={12 / 7} key={day} sx={{ p: 1.5, textAlign: "center", borderRight: day !== "SAT" ? "1px dashed var(--border-subtle)" : "none" }}>
-                          <span className="text-[9px] font-black text-[var(--text-faint)] font-mono tracking-[0.2em]">{day}</span>
+                        <Grid item xs={12 / 7} key={day} sx={{ p: 1.5, textAlign: "center", borderRight: day !== "SAT" ? "1px solid var(--border-subtle)" : "none" }}>
+                          <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)" }}>{day}</Typography>
                         </Grid>
                       ))}
                     </Grid>
@@ -203,38 +221,61 @@ export default function CalendarPage() {
                             sx={{
                               minHeight: { xs: 100, md: 140 },
                               p: 1.5,
-                              borderRight: (idx + 1) % 7 !== 0 ? "1px dashed var(--border-subtle)" : "none",
-                              borderBottom: idx < 35 ? "1px dashed var(--border-subtle)" : "none",
-                              opacity: isCurrentMonth ? 1 : 0.25,
-                              background: isToday ? "rgba(0, 255, 156, 0.03)" : "transparent",
-                              transition: "all 0.1s",
+                              borderRight: (idx + 1) % 7 !== 0 ? "1px solid var(--border-subtle)" : "none",
+                              borderBottom: idx < 35 ? "1px solid var(--border-subtle)" : "none",
+                              opacity: isCurrentMonth ? 1 : 0.4,
+                              background: isToday ? "rgba(26, 115, 232, 0.04)" : "transparent",
+                              transition: "all 0.2s",
                               cursor: "pointer",
-                              "&:hover": { background: "rgba(255,255,255,0.02)" }
+                              "&:hover": { background: "var(--bg-hover)" }
                             }}
                           >
-                            <div className="flex justify-between items-start mb-2">
-                               <span className={`text-[11px] font-black font-mono ${isToday ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`}>
-                                  {date.getDate().toString().padStart(2, '0')}
-                               </span>
-                               {isToday && <div className="w-1 h-1 bg-[var(--primary)]" />}
-                            </div>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                               <Typography 
+                                 sx={{ 
+                                   fontSize: "0.85rem", 
+                                   fontWeight: isToday ? 700 : 500, 
+                                   color: isToday ? "var(--primary)" : "var(--text-primary)",
+                                   width: 24,
+                                   height: 24,
+                                   display: "flex",
+                                   alignItems: "center",
+                                   justifyContent: "center",
+                                   borderRadius: "50%",
+                                   bgcolor: isToday ? "rgba(26, 115, 232, 0.1)" : "transparent"
+                                 }}
+                               >
+                                  {date.getDate()}
+                               </Typography>
+                            </Box>
 
-                            <div className="space-y-1">
+                            <Stack spacing={0.5}>
                                {dayEvents.slice(0, 3).map((e) => (
-                                 <div
+                                 <Box
                                    key={e.id}
                                    onClick={(ev) => { ev.stopPropagation(); setSelectedEvent(e); }}
-                                   className="text-[9px] font-mono px-2 py-0.5 border-l-2 border-[var(--primary)] bg-black/40 text-[var(--text-secondary)] truncate hover:bg-[var(--primary)] hover:text-black cursor-pointer uppercase font-black"
+                                   sx={{
+                                     fontSize: "0.7rem",
+                                     px: 1,
+                                     py: 0.25,
+                                     borderRadius: 1,
+                                     bgcolor: "var(--primary-glow)",
+                                     color: "var(--primary)",
+                                     overflow: "hidden",
+                                     textOverflow: "ellipsis",
+                                     whiteSpace: "nowrap",
+                                     "&:hover": { bgcolor: "rgba(26, 115, 232, 0.15)" }
+                                   }}
                                  >
                                    {e.title}
-                                 </div>
+                                 </Box>
                                ))}
                                {dayEvents.length > 3 && (
-                                 <div className="text-[8px] font-bold text-[var(--text-faint)] font-mono uppercase mt-1">
-                                   + {dayEvents.length - 3} MORE_NODES
-                                 </div>
+                                 <Typography sx={{ fontSize: "0.65rem", fontWeight: 600, color: "var(--text-muted)", mt: 0.5 }}>
+                                   + {dayEvents.length - 3} more
+                                 </Typography>
                                )}
-                            </div>
+                            </Stack>
                           </Grid>
                         );
                       })}
@@ -244,53 +285,53 @@ export default function CalendarPage() {
               </Box>
             </Box>
 
-            {/* Right Column: Mini Telemetry */}
+            {/* Right Column: Information Panel */}
             <Box sx={{ width: { xs: "100%", lg: 320 } }}>
-               <Box sx={{ background: "#050505", border: "1px dashed var(--border-subtle)", p: 3, mb: 4 }}>
-                  <div className="flex items-center gap-2 mb-6 pb-4 border-b border-dashed border-[var(--border-subtle)]">
-                     <Plus size={14} className="text-[var(--primary)]" />
-                     <h3 className="text-[10px] font-black text-white uppercase tracking-widest font-mono">INIT_EVENT_HOOK</h3>
-                  </div>
-                  <Typography sx={{ color: "var(--text-secondary)", fontSize: "11px", mb: 6, fontHTML: "var(--font-mono)", textTransform: "uppercase", lineHeight: 1.6 }}>
-                     Inject a new scheduling protocol into the kernel. All events are vectorized and verified by the AI Cortex.
+               <Box sx={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: 3, p: 3, mb: 4, boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 3, pb: 2, borderBottom: "1px solid var(--border-subtle)" }}>
+                     <CalendarIcon size={18} className="text-[#1a73e8]" />
+                     <Typography sx={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-primary)" }}>Schedule Meetings</Typography>
+                  </Box>
+                  <Typography sx={{ color: "var(--text-secondary)", fontSize: "0.9rem", mb: 4, lineHeight: 1.6 }}>
+                     Create and manage your upcoming events. Copilot can automatically find the best times for you and your team.
                   </Typography>
                   <Button
                     component={Link}
                     href="/dashboard/book"
+                    variant="contained"
                     fullWidth
+                    disableElevation
                     sx={{
-                      background: "var(--primary)",
-                      color: "black",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "10px",
-                      fontWeight: 900,
-                      p: 2,
-                      borderRadius: 0,
-                      letterSpacing: "0.2em",
-                      "&:hover": { background: "white" }
+                      bgcolor: "var(--primary)",
+                      color: "#fff",
+                      fontWeight: 500,
+                      py: 1.2,
+                      borderRadius: 1.5,
+                      textTransform: "none",
+                      "&:hover": { bgcolor: "var(--primary-hover, rgba(26,115,232,0.9))" }
                     }}
                   >
-                    START_BOOKING_SEQUENCE
+                    Create Event
                   </Button>
                </Box>
 
-               <Box sx={{ background: "#050505", border: "1px dashed var(--border-subtle)", p: 3 }}>
-                  <div className="flex items-center gap-2 mb-6 pb-4 border-b border-dashed border-[var(--border-subtle)]">
-                     <Activity size={14} className="text-[var(--secondary)]" />
-                     <h3 className="text-[10px] font-black text-white uppercase tracking-widest font-mono">NODE_LOGS</h3>
-                  </div>
-                  <div className="space-y-4">
+               <Box sx={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: 3, p: 3, boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 3, pb: 2, borderBottom: "1px solid var(--border-subtle)" }}>
+                     <Activity size={18} className="text-[var(--text-secondary)]" />
+                     <Typography sx={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-primary)" }}>Calendar Sync</Typography>
+                  </Box>
+                  <Stack spacing={2}>
                      {[
-                       { label: "SYNC_STATUS", val: "ESTABLISHED", color: "var(--primary)" },
-                       { label: "VEC_DENSITY", val: "0.88_SCORE", color: "var(--text-faint)" },
-                       { label: "CAL_BOUNDS", val: "CONNECTED", color: "var(--primary)" },
+                       { label: "Status", val: "Connected", color: "var(--success)" },
+                       { label: "Events Synced", val: displayEvents.length.toString(), color: "var(--text-primary)" },
+                       { label: "Last Update", val: "Just now", color: "var(--text-primary)" },
                      ].map((l, i) => (
-                       <div key={i} className="flex justify-between font-mono text-[9px] uppercase">
-                          <span className="text-[var(--text-faint)]">{l.label}</span>
-                          <span className={l.color === "var(--primary)" ? "font-black text-[var(--primary)]" : "font-black text-[var(--text-faint)]"}>{l.val}</span>
-                       </div>
+                       <Box key={i} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <Typography sx={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{l.label}</Typography>
+                          <Typography sx={{ fontSize: "0.85rem", fontWeight: 600, color: l.color }}>{l.val}</Typography>
+                       </Box>
                      ))}
-                  </div>
+                  </Stack>
                </Box>
             </Box>
 
@@ -310,8 +351,8 @@ export default function CalendarPage() {
              sx={{
                position: "fixed",
                inset: 0,
-               background: "rgba(0,0,0,0.9)",
-               backdropFilter: "blur(10px)",
+               background: "rgba(0,0,0,0.4)",
+               backdropFilter: "none",
                zIndex: 2000,
                display: "flex",
                alignItems: "center",
@@ -321,71 +362,85 @@ export default function CalendarPage() {
            >
              <Box
                component={motion.div}
-               initial={{ scale: 0.9, y: 20 }}
+               initial={{ scale: 0.95, y: 20 }}
                animate={{ scale: 1, y: 0 }}
-               exit={{ scale: 0.9, y: 20 }}
+               exit={{ scale: 0.95, y: 20 }}
                onClick={(e) => e.stopPropagation()}
                sx={{
                  width: "100%",
-                 maxWidth: 480,
-                 background: "#050505",
-                 border: "1px dashed var(--border-subtle)",
-                 p: 4,
-                 position: "relative"
+                 maxWidth: 400,
+                 background: "var(--bg-card)",
+                 border: "1px solid var(--border-subtle)",
+                 borderRadius: 3,
+                 p: 3,
+                 position: "relative",
+                 boxShadow: "0 12px 40px rgba(0,0,0,0.12)"
                }}
              >
-                {/* Corner tags */}
-                <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-[var(--primary)]" />
-                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[var(--primary)]" />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3, pb: 2, borderBottom: "1px solid var(--border-subtle)" }}>
+                   <CalendarIcon size={20} className="text-[#1a73e8]" />
+                   <Typography sx={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                      Event Details
+                   </Typography>
+                </Box>
 
-                <div className="flex items-center gap-3 mb-8 pb-4 border-b border-dashed border-[var(--border-subtle)]">
-                   <Terminal size={18} className="text-[var(--primary)]" />
-                   <h2 className="text-[12px] font-black text-white uppercase tracking-tighter font-mono">
-                      EVENT_MANIFEST // <Box component="span" sx={{ color: "var(--primary)" }}>{selectedEvent.id}</Box>
-                   </h2>
-                </div>
+                <Stack spacing={3}>
+                   <Box>
+                      <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", mb: 0.5 }}>Title</Typography>
+                      <Typography sx={{ fontSize: "1.15rem", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.3 }}>{selectedEvent.title}</Typography>
+                   </Box>
 
-                <div className="space-y-6">
-                   <div>
-                      <div className="text-[9px] font-black text-[var(--text-faint)] uppercase mb-2 font-mono">TITLE_PROTO</div>
-                      <div className="text-[18px] font-black text-white uppercase tracking-tight font-mono">{selectedEvent.title}</div>
-                   </div>
-
-                   <Grid container spacing={4}>
+                   <Grid container spacing={2}>
                       <Grid item xs={6}>
-                         <div className="text-[9px] font-black text-[var(--text-faint)] uppercase mb-2 font-mono">TIMESTAMP</div>
-                         <div className="flex items-center gap-2 text-white font-mono text-[11px] font-black">
-                            <Clock size={12} className="text-[var(--primary)]" />
-                            {new Date(selectedEvent.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }).toUpperCase()}
-                         </div>
+                         <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", mb: 0.5 }}>Time</Typography>
+                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "var(--text-primary)" }}>
+                            <Clock size={16} className="text-[#1a73e8]" />
+                            <Typography sx={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                               {new Date(selectedEvent.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Typography>
+                         </Box>
                       </Grid>
                       <Grid item xs={6}>
-                         <div className="text-[9px] font-black text-[var(--text-faint)] uppercase mb-2 font-mono">LOCATION</div>
-                         <div className="flex items-center gap-2 text-white font-mono text-[11px] font-black">
-                            <MapPin size={12} className="text-[var(--primary)]" />
-                            {selectedEvent.location?.toUpperCase() || "N/A"}
-                         </div>
+                         <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", mb: 0.5 }}>Location</Typography>
+                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "var(--text-primary)" }}>
+                            <MapPin size={16} className="text-[#1a73e8]" />
+                            <Typography sx={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                               {selectedEvent.location || "N/A"}
+                            </Typography>
+                         </Box>
                       </Grid>
                    </Grid>
 
                    {selectedEvent.description && (
-                     <div>
-                        <div className="text-[9px] font-black text-[var(--text-faint)] uppercase mb-2 font-mono">CONTEXT_RAW</div>
-                        <div className="p-4 bg-[var(--bg-hover)] border-l-2 border-[var(--primary)] font-mono text-[11px] text-[var(--text-muted)] italic leading-relaxed">
-                           {'>'} {selectedEvent.description}
-                        </div>
-                     </div>
+                     <Box>
+                        <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", mb: 0.5 }}>Description</Typography>
+                        <Box sx={{ p: 2, bgcolor: "var(--bg-hover)", borderRadius: 2, borderLeft: "2px solid #1a73e8" }}>
+                           <Typography sx={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                              {selectedEvent.description}
+                           </Typography>
+                        </Box>
+                     </Box>
                    )}
 
-                   <div className="flex gap-3 pt-6">
-                     <button className="flex-1 py-3 bg-[var(--primary)] text-black text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all font-mono">
-                        JOIN_SESSION_V2
-                     </button>
-                     <button onClick={() => setSelectedEvent(null)} className="px-6 py-3 border border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] text-[10px] font-black uppercase tracking-widest hover:text-white font-mono">
-                        ABORT
-                     </button>
-                   </div>
-                </div>
+                   <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
+                     <Button 
+                        variant="contained" 
+                        fullWidth 
+                        disableElevation
+                        sx={{ bgcolor: "var(--primary)", color: "#fff", textTransform: "none", fontWeight: 500, borderRadius: 2 }}
+                     >
+                        Join Meeting
+                     </Button>
+                     <Button 
+                        onClick={() => setSelectedEvent(null)} 
+                        variant="outlined" 
+                        fullWidth
+                        sx={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)", textTransform: "none", fontWeight: 500, borderRadius: 2 }}
+                     >
+                        Close
+                     </Button>
+                   </Box>
+                </Stack>
              </Box>
            </Box>
          )}

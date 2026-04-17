@@ -25,13 +25,14 @@ export function BottomNav() {
         right: 0,
         zIndex: 1000,
         display: { xs: "flex", md: "none" },
-        background: "hsla(240, 24%, 10%, 0.95)",
-        backdropFilter: "blur(20px)",
-        borderTop: "1px solid hsla(239, 84%, 67%, 0.1)",
+        background: "var(--bg-surface)",
+        backdropFilter: "none",
+        borderTop: "1px solid var(--border-subtle)",
         px: 2,
         py: 1.5,
         justifyContent: "space-around",
         alignItems: "center",
+        boxShadow: "0 -4px 16px rgba(0,0,0,0.04)",
       }}
     >
       {navItems.map((item) => {
@@ -51,32 +52,18 @@ export function BottomNav() {
               padding: "8px 16px",
             }}
           >
-            {/* Active Indicator */}
-            {isActive && (
-              <motion.div
-                layoutId="bottomNavActive"
-                style={{
-                  position: "absolute",
-                  top: -6,
-                  width: 40,
-                  height: 3,
-                  borderRadius: "2px",
-                  background: "linear-gradient(90deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
-                }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              />
-            )}
-
-            {/* Icon */}
+            {/* Active Indicator Container */}
             <Box
               sx={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 24,
-                height: 24,
-                color: isActive ? "hsl(239, 84%, 67%)" : "hsl(215, 16%, 55%)",
-                transition: "color 0.2s ease",
+                width: 64,
+                height: 32,
+                borderRadius: 16,
+                background: isActive ? "var(--primary-glow)" : "transparent",
+                color: isActive ? "var(--primary)" : "var(--text-secondary)",
+                transition: "all 0.2s ease",
               }}
             >
               <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
@@ -86,9 +73,9 @@ export function BottomNav() {
             <Box
               component="span"
               sx={{
-                fontSize: "0.6875rem",
+                fontSize: "0.7rem",
                 fontWeight: isActive ? 600 : 500,
-                color: isActive ? "hsl(239, 84%, 67%)" : "hsl(215, 16%, 55%)",
+                color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
                 transition: "color 0.2s ease",
               }}
             >

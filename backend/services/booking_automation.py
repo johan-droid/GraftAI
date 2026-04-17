@@ -794,7 +794,6 @@ class BookingAutomationService:
 
         except IntegrityError as e:
             logger.error(f"[Booking:{booking_id}] Integrity error: {e}")
-            await db.rollback()
             raise
 
         except Exception as e:

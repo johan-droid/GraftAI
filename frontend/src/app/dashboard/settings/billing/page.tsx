@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { 
   CreditCard, 
   Zap,
@@ -16,6 +17,8 @@ export default function BillingPage() {
   const { user } = useAuth();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const stats = user ? {
     tier: user.tier || 'free',
@@ -42,8 +45,7 @@ export default function BillingPage() {
         }
 
         await apiClient.post("/billing/razorpay/cancel-subscription");
-        setBillingMessage("Your Razorpay subscription was canceled. Your plan has been reverted to Free.");
-        window.location.reload();
+        router.push(`${window.location.pathname}?canceled=true`);
         return;
       }
       // Without a portal, "Manage Billing" for non-Razorpay users just means upgrading.
@@ -60,8 +62,16 @@ export default function BillingPage() {
     window.location.assign("/pricing");
   };
 
-
-
+  useEffect(() => {
+    if (searchParams?.get("canceled") === "true") {
+      setBillingMessage("Your Razorpay subscription was canceled. Your plan has been reverted to Free.");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("canceled");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      }
+    }
+  }, [searchParams]);
 
   return (
     <div className="max-w-4xl space-y-5 sm:space-y-8 px-1 sm:px-0">

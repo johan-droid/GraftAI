@@ -192,6 +192,15 @@ class LLaMACore:
             confidence=response.confidence,
             tokens_used=response.tokens_used
         )
+
+    async def generate_json_response(
+        self,
+        messages: List[ConversationMessage]
+    ) -> LLMResponse:
+        """
+        Public wrapper for JSON-required LLM responses.
+        """
+        return await self._call_llm(messages, require_json=True)
     
     async def generate_streaming_response(
         self,
@@ -231,7 +240,7 @@ class LLaMACore:
             try:
                 formatted_messages = [{"role": m.role, "content": m.content} for m in messages_cm]
                 stream = await self.client.chat.completions.create(
-                    model=self.model,
+                    model=self.model.value,
                     messages=formatted_messages,
                     stream=True,
                     temperature=0.7,
@@ -254,6 +263,7 @@ class LLaMACore:
                         yield text
 
             except Exception as e:
+                full_response = ""
                 logger.warning(f"Groq streaming failed, falling back to local streamer: {e}")
 
         # Fallback
@@ -502,7 +512,7 @@ Extract and respond in JSON format:
         if self.client is not None:
             try:
                 completion = await self.client.chat.completions.create(
-                    model=self.model,
+                    model=self.model.value,
                     messages=formatted_messages,
                     response_format=response_format,
                     temperature=0.2 if require_json else 0.7,
@@ -559,7 +569,7 @@ Extract and respond in JSON format:
             try:
                 formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
                 stream = await self.client.chat.completions.create(
-                    model=self.model,
+                    model=self.model.value,
                     messages=formatted_messages,
                     stream=True,
                     temperature=0.7,

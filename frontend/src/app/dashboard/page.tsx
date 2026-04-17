@@ -5,11 +5,14 @@ import { useSession } from "next-auth/react";
 import { Calendar, Link as LinkIcon, Plus, Inbox, Clock, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { toast } from "@/components/ui/Toast";
+import { getAnalyticsSummary } from "@/lib/api";
+
+type DashboardSummaryResponse = Awaited<ReturnType<typeof getAnalyticsSummary>>;
 
 export default function DashboardPage() {
   const { data: session } = useSession();
   const [isLoading, setIsLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardSummaryResponse | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // 1. Live Clock Timer
@@ -23,15 +26,13 @@ export default function DashboardPage() {
     async function fetchDashboard() {
       try {
         setIsLoading(true);
-        // TODO: Swap with actual backend endpoint
-        // const response = await apiClient.get('/dashboard/summary');
-        // keep a small artificial delay to show loading skeletons
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        setDashboardData({ upcomingEvents: [] });
-        setIsLoading(false);
+        const response = await getAnalyticsSummary("7d");
+        setDashboardData(response);
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
         toast.error("Failed to load dashboard data. Please try again.");
+        setDashboardData(null);
+      } finally {
         setIsLoading(false);
       }
     }
@@ -41,9 +42,7 @@ export default function DashboardPage() {
   const handleCopyBookingLink = async () => {
     const slug =
       (session as any)?.user?.bookingSlug ??
-      (session as any)?.user?.booking_slug ??
-      dashboardData?.bookingSlug ??
-      dashboardData?.user?.bookingSlug;
+      (session as any)?.user?.booking_slug;
 
     if (!slug) {
       toast.error("No booking link configured for your account.");
@@ -70,6 +69,8 @@ export default function DashboardPage() {
 
   // Extract First Name securely
   const userName = session?.user?.name?.split(' ')[0] || "there";
+  const recentEvents = dashboardData?.details?.recent_events ?? [];
+  const nextEvent = dashboardData?.details?.next_event ?? recentEvents[0] ?? null;
 
   if (isLoading) {
     return (
@@ -105,6 +106,15 @@ export default function DashboardPage() {
             <h1 className="text-3xl md:text-5xl font-medium text-white tracking-tight leading-tight">
               {greeting},<br />{userName}.
             </h1>
+            {dashboardData?.summary ? (
+              <p className="mt-4 max-w-2xl text-sm md:text-base leading-relaxed text-[#E8F0FE]">
+                {dashboardData.summary}
+              </p>
+            ) : (
+              <p className="mt-4 max-w-2xl text-sm md:text-base leading-relaxed text-[#E8F0FE]">
+                Your dashboard is now pulling live data from the backend.
+              </p>
+            )}
           </div>
           
           <div className="flex items-center gap-3">
@@ -118,6 +128,27 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {dashboardData?.details ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="rounded-2xl border border-[#DADCE0] bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#5F6368]">Meetings this week</p>
+            <p className="mt-3 text-3xl font-semibold text-[#202124]">{dashboardData.details.meetings}</p>
+          </div>
+          <div className="rounded-2xl border border-[#DADCE0] bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#5F6368]">Scheduled hours</p>
+            <p className="mt-3 text-3xl font-semibold text-[#202124]">{dashboardData.details.hours.toFixed(1)}</p>
+          </div>
+          <div className="rounded-2xl border border-[#DADCE0] bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#5F6368]">Week growth</p>
+            <p className="mt-3 text-3xl font-semibold text-[#202124]">{dashboardData.details.growth}%</p>
+          </div>
+          <div className="rounded-2xl border border-[#DADCE0] bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#5F6368]">Cancellations</p>
+            <p className="mt-3 text-3xl font-semibold text-[#202124]">{dashboardData.details.cancellations ?? 0}</p>
+          </div>
+        </div>
+      ) : null}
 
       {/* QUICK ACTIONS GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -170,9 +201,28 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {dashboardData?.upcomingEvents?.length > 0 ? (
+        {recentEvents.length > 0 || nextEvent ? (
           <div className="space-y-4">
-             {/* Map events here */}
+             {recentEvents.map((event) => (
+               <div key={event.id} className="flex items-center justify-between gap-4 rounded-2xl border border-[#DADCE0] bg-[#F8F9FA] p-4">
+                 <div>
+                   <p className="font-semibold text-[#202124]">{event.title}</p>
+                   <p className="text-sm text-[#5F6368]">{new Date(event.start_time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                 </div>
+                 <span className="text-xs font-semibold uppercase tracking-wider text-[#1A73E8]">
+                   {event.category ?? "event"}
+                 </span>
+               </div>
+             ))}
+
+             {!recentEvents.length && nextEvent ? (
+               <div className="rounded-2xl border border-[#DADCE0] bg-[#F8F9FA] p-4">
+                 <p className="font-semibold text-[#202124]">{nextEvent.title}</p>
+                 <p className="text-sm text-[#5F6368] mt-1">
+                   {new Date(nextEvent.start_time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                 </p>
+               </div>
+             ) : null}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-center">

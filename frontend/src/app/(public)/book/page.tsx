@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Clock, Video, Globe, Calendar as CalendarIcon,
-  ArrowLeft, User, Mail, MessageSquare, CheckCircle2, Loader2
+  ArrowLeft, User, Mail, MessageSquare, CheckCircle2, XCircle, Loader2
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -177,6 +177,21 @@ function BookingForm() {
       return;
     }
 
+    // Validate required checkbox custom questions before submitting
+    for (const question of customQuestions) {
+      const questionId = question.id?.trim() || "";
+      const questionType = (question.type ?? "text").toLowerCase();
+      const isRequired = Boolean(question.required);
+
+      if (questionType === "checkbox" && isRequired) {
+        const answer = customAnswers[questionId];
+        if (!answer) {
+          setLoadError(`Please answer the required question: ${question.question ?? "required question"}`);
+          return;
+        }
+      }
+    }
+
     setIsSubmitting(true);
     setLoadError(null);
 
@@ -229,9 +244,9 @@ function BookingForm() {
     return (
       <div className="w-full min-h-[500px] flex items-center justify-center px-4">
         <div className="max-w-lg w-full rounded-3xl border border-[#DADCE0] bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FCE8E6] text-[#D93025]">
-            <CheckCircle2 className="h-7 w-7" />
-          </div>
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FCE8E6] text-[#D93025]">
+                <XCircle className="h-7 w-7" />
+              </div>
           <h1 className="text-2xl font-semibold text-[#202124]">Booking details unavailable</h1>
           <p className="mt-3 text-sm leading-relaxed text-[#5F6368]">{loadError}</p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">

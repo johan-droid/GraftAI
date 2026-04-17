@@ -4,7 +4,6 @@ Tests the 4-phase agent loop: Perception → Cognition → Action → Reflection
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
 
 from backend.ai.agents.base import BaseAgent, AgentState
 from backend.ai.agents.booking_agent import BookingAgent

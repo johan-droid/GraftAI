@@ -3,11 +3,10 @@ Soft delete mixin for SQLAlchemy models.
 Provides soft delete functionality with query filtering.
 """
 from datetime import datetime, timezone
-from typing import Optional, TypeVar, List, Type
+from typing import Optional, List, Type
 
 from sqlalchemy import Column, DateTime, Boolean, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import declared_attr
 
 
 class SoftDeleteMixin:

@@ -36,12 +36,7 @@ except ImportError:
 
 # Circuit breaker for external service protection
 try:
-    from backend.utils.circuit_breaker import (
-        CircuitBreaker,
-        SENDGRID_BREAKER,
-        TWILIO_BREAKER,
-        SLACK_BREAKER
-    )
+    from backend.utils.circuit_breaker import SENDGRID_BREAKER
     CIRCUIT_BREAKER_AVAILABLE = True
 except ImportError:
     CIRCUIT_BREAKER_AVAILABLE = False

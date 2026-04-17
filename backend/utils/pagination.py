@@ -265,7 +265,6 @@ class PaginationPresets:
 
 # Example usage decorators
 from functools import wraps
-from fastapi import Depends
 
 
 def paginated_endpoint(per_page_default: int = 20, per_page_max: int = 100):

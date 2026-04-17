@@ -23,7 +23,7 @@ const cardVariants = {
   },
 };
 
-interface EventTypeItem extends EventTypeResponse {}
+type EventTypeItem = EventTypeResponse;
 
 export default function EventTypesPage() {
   const [events, setEvents] = useState<EventTypeItem[]>([]);

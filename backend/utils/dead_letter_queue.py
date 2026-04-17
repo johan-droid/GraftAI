@@ -16,14 +16,13 @@ Usage:
     # Process queued items
     await dlq.process_queue()
 """
-import json
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import Enum
 
-from sqlalchemy import select, update, delete, and_
+from sqlalchemy import select, delete, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.utils.db import get_db

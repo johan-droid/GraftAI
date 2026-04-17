@@ -13,15 +13,13 @@ import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
-from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from backend.models.base import Base
-from backend.models.tables import UserTable, EventTable, BookingTable, EventTypeTable
+from backend.models.tables import UserTable, EventTable, BookingTable
 from backend.api.main import create_app
 from backend.utils.db import get_db
 from backend.api.deps import get_current_user

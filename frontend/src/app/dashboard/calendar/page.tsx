@@ -13,7 +13,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -50,6 +50,7 @@ export default function HeavyTileCalendar() {
   const router = useRouter();
   const { mode } = useTheme();
   const isDark = mode === "dark";
+  const [isMobileScreen, setIsMobileScreen] = useState(false);
 
   // M3 Surface colors
   const surfaceColor = isDark ? "bg-[#1C1B1F]" : "bg-white";
@@ -78,6 +79,22 @@ export default function HeavyTileCalendar() {
   const calendarGrid = Array(firstDayOfMonth).fill(null).concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
   while (calendarGrid.length % 7 !== 0) calendarGrid.push(null);
 
+  const activeDate = selectedDate ?? new Date();
+  const activeDayBookings = getDayBookings(activeDate, bookings);
+  const effectiveViewMode = isMobileScreen ? viewMode : "month";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const updateIsMobile = () => {
+      setIsMobileScreen(window.innerWidth < 640);
+    };
+
+    updateIsMobile();
+    window.addEventListener("resize", updateIsMobile);
+    return () => window.removeEventListener("resize", updateIsMobile);
+  }, []);
+
   const prevMonth = () => {
     const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
     setCurrentMonth(newDate);
@@ -86,21 +103,6 @@ export default function HeavyTileCalendar() {
   const nextMonth = () => {
     const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
     setCurrentMonth(newDate);
-  };
-
-  const getTileColor = (status: Booking["status"]) => {
-    switch (status) {
-      case "confirmed":
-        return "bg-[#1A73E8] text-white";
-      case "pending":
-        return "bg-[#E37400] text-white";
-      case "cancelled":
-        return "bg-[#F1F3F4] text-[#5F6368] line-through";
-      case "rescheduled":
-        return "bg-[#9334E6] text-white";
-      default:
-        return "bg-[#1A73E8] text-white";
-    }
   };
 
   const formatTime = (isoString: string) => {
@@ -218,7 +220,7 @@ export default function HeavyTileCalendar() {
           ${isDark ? "bg-[#1C1B1F] border-[#49454F]" : "bg-[#F8F9FA] border-[#DADCE0]"}
           shrink-0
         `}>
-          {(typeof window !== 'undefined' && window.innerWidth < 640 ? DAYS_OF_WEEK_SHORT : DAYS_OF_WEEK_FULL).map((day, i) => (
+          {(typeof window !== 'undefined' && window.innerWidth < 640 ? DAYS_OF_WEEK_SHORT : DAYS_OF_WEEK_FULL).map((day) => (
             <div 
               key={day} 
               className={`
@@ -231,12 +233,12 @@ export default function HeavyTileCalendar() {
           ))}
         </div>
 
-        {/* Calendar Grid - Responsive min heights */}
-        <div className={`
-          flex-1 grid grid-cols-7 gap-[1px] overflow-y-auto
-          ${isDark ? "bg-[#49454F]" : "bg-[#DADCE0]"}
-        `}>
-          {calendarGrid.map((day, index) => {
+        {effectiveViewMode === "month" ? (
+          <div className={`
+            flex-1 grid grid-cols-7 gap-[1px] overflow-y-auto
+            ${isDark ? "bg-[#49454F]" : "bg-[#DADCE0]"}
+          `}>
+            {calendarGrid.map((day, index) => {
             const isToday =
               day === new Date().getDate() &&
               currentMonth.getMonth() === new Date().getMonth() &&
@@ -322,7 +324,44 @@ export default function HeavyTileCalendar() {
               </motion.div>
             );
           })}
-        </div>
+          </div>
+        ) : (
+          <div className={`
+            flex-1 overflow-y-auto p-4
+            ${surfaceColor}
+          `}>
+            <div className={`mb-4 rounded-3xl border px-4 py-3 ${surfaceVariantColor} ${outlineVariantColor}`}>
+              <div className={`text-sm font-semibold ${onSurfaceColor}`}>
+                {activeDate.toLocaleDateString("default", { weekday: "long", month: "short", day: "numeric" })}
+              </div>
+              <div className={`text-xs ${onSurfaceVariantColor}`}>
+                {activeDayBookings.length} event{activeDayBookings.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            {activeDayBookings.length > 0 ? (
+              <div className="space-y-3">
+                {activeDayBookings.map((booking) => (
+                  <div key={booking.id} className={`rounded-3xl border p-4 ${surfaceVariantColor} ${outlineColor}`}>
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div>
+                        <p className={`text-sm font-semibold ${onSurfaceColor}`}>{booking.attendee_name}</p>
+                        <p className={`text-xs ${onSurfaceVariantColor}`}>{formatTime(booking.start_time)} - {formatTime(booking.end_time)}</p>
+                      </div>
+                      <span className={`text-[10px] font-semibold uppercase px-2 py-1 rounded-full ${getTileColor(booking.status, isDark)}`}>{booking.status}</span>
+                    </div>
+                    <p className={`text-xs ${onSurfaceVariantColor}`}>{booking.attendee_email}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={`rounded-3xl border p-6 text-center ${surfaceVariantColor} ${outlineColor}`}>
+                <p className={`text-sm font-medium ${onSurfaceColor}`}>No events scheduled for this date.</p>
+                <p className={`text-xs mt-2 ${onSurfaceVariantColor}`}>Tap any day in month view to preview a day schedule.</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Mobile FAB - Floating Action Button */}
@@ -416,7 +455,7 @@ export default function HeavyTileCalendar() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className={`font-semibold truncate ${onSurfaceColor}`}>
-                          {booking.title || booking.attendee_name}
+                          {booking.attendee_name}
                         </h3>
                         <p className={`text-sm ${onSurfaceVariantColor}`}>
                           {formatTime(booking.start_time)} - {formatTime(booking.end_time)}

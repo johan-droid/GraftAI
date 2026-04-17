@@ -36,7 +36,8 @@ from backend.ai.monitoring import (
 )
 from backend.utils.db import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from backend.models.tables import BookingTable, AIAutomationTable
 
 logger = get_logger(__name__)
@@ -720,6 +721,9 @@ class BookingAutomationService:
             "assessment": assessment,
             "all_success": all_success,
             "partial_success": partial_success,
+        }
+
+    async def _store_results_with_transaction(
         self,
         db: AsyncSession,
         booking_id: str,
@@ -733,7 +737,7 @@ class BookingAutomationService:
     ):
         """
         Store automation results to database within a transaction.
-        
+
         Args:
             db: Database session (within transaction)
             booking_id: Booking ID
@@ -753,9 +757,8 @@ class BookingAutomationService:
                 .with_for_update()  # Pessimistic locking
             )
             booking = result.scalar_one_or_none()
-            
+
             if booking:
-                # Update booking with automation results
                 booking.automation_status = "completed" if all(
                     r.get("success") for r in action_results
                 ) else "partial"
@@ -765,8 +768,7 @@ class BookingAutomationService:
                 )
                 booking.risk_level = decision.risk_analysis.level.value
                 db.add(booking)
-            
-            # 2. Create AI automation tracking record
+
             automation_record = AIAutomationTable(
                 user_id=user_id,
                 event_id=booking_id,
@@ -782,20 +784,19 @@ class BookingAutomationService:
                 error_message=None
             )
             db.add(automation_record)
-            
-            # 3. Flush changes (will be committed by caller)
             await db.flush()
-            
+
             logger.info(
                 f"[Booking:{booking_id}] Results stored in transaction "
                 f"(status: {automation_record.status})"
             )
-            
+            return automation_record.id
+
         except IntegrityError as e:
             logger.error(f"[Booking:{booking_id}] Integrity error: {e}")
             await db.rollback()
             raise
-        
+
         except Exception as e:
             logger.error(f"[Booking:{booking_id}] Failed to store results: {e}")
             raise
@@ -813,64 +814,22 @@ class BookingAutomationService:
     ):
         """
         Store automation results to database with transaction safety.
-        
+
         Legacy method - now wraps _store_results_with_transaction in a transaction.
         """
         async with get_db() as db:
             async with db.begin():  # Start transaction
-                await self._store_results_with_transaction(
+                return await self._store_results_with_transaction(
                     db=db,
-                if all_success:
-                    status = "completed"
-                elif any_success:
-                    status = "partial"
-                else:
-                    status = "failed"
-                
-                # Calculate decision score
-                decision_score = self._calculate_decision_score(decision, action_results)
-                
-                # Build agent decisions dict
-                agent_decisions = {
-                    "actions": [{
-                        "tool_name": a.tool_name,
-                        "priority": a.priority.name if hasattr(a.priority, 'name') else str(a.priority),
-                        "parameters": a.parameters
-                    } for a in decision.actions],
-                    "reasoning": decision.reasoning,
-                    "confidence": decision.confidence.name if hasattr(decision.confidence, 'name') else str(decision.confidence),
-                    "execution_order": decision.execution_order,
-                    "requires_human_review": decision.requires_human_review
-                }
-                
-                # Create automation record
-                automation = AIAutomationTable(
                     booking_id=booking_id,
                     user_id=user_id,
-                    status=status,
-                    decision_score=decision_score,
-                    risk_assessment=decision.risk_analysis.level.value if hasattr(decision.risk_analysis.level, 'value') else str(decision.risk_analysis.level),
-                    agent_decisions=agent_decisions,
-                    actions_executed=action_results,
+                    decision=decision,
+                    action_results=action_results,
                     external_results=external_results,
+                    reflection_data=reflection_data,
                     execution_time_ms=execution_time_ms,
-                    started_at=datetime.now(timezone.utc),
-                    completed_at=datetime.now(timezone.utc),
-                    fallback_mode=fallback_mode,
-                    trigger_source="api"
+                    fallback_mode=fallback_mode
                 )
-                
-                db.add(automation)
-                await db.commit()
-                
-                logger.info(f"[{booking_id}] Automation results stored in database (ID: {automation.id})")
-                
-                return automation.id
-                
-        except Exception as e:
-            logger.error(f"[{booking_id}] Failed to store automation results: {e}")
-            # Don't raise - we don't want to fail the whole workflow if storage fails
-            return None
     
     def _calculate_lead_time(self, start_time: str) -> float:
         """Calculate hours until booking"""

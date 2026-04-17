@@ -8,7 +8,6 @@ from functools import wraps
 from enum import Enum
 
 from fastapi import Request, HTTPException, status
-from fastapi.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import redis.asyncio as redis
 
@@ -319,9 +318,8 @@ def rate_limit(
             
             if request:
                 # Get or create rate limiter
-                from fastapi import Request as FastAPIRequest
                 app = request.app
-                
+
                 if not hasattr(app.state, "rate_limiter"):
                     # Initialize rate limiter
                     import os

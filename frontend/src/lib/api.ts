@@ -1,4 +1,4 @@
-import { apiClient } from "./api-client";
+import { apiClient, API_BASE_URL } from "./api-client";
 
 // Re-exporting API_BASE_URL for backward compatibility if needed
 export { API_BASE_URL } from "./api-client";

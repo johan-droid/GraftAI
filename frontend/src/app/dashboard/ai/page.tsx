@@ -9,18 +9,13 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Bot, Send, Sparkles, User as UserIcon, Loader2, Trash2, Copy, Check, CheckCircle2,
-  Calendar, ChevronDown,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Bot } from "lucide-react";
 import { streamAiChat, getEvents, CalendarEvent } from "@/lib/api";
 import MarkdownRenderer from "@/components/AIChat/MarkdownRenderer";
 import ArtifactCanvas from "@/components/AIChat/ArtifactCanvas";
 import { useLocalStorage } from "@/hooks/useQuery";
 import { useAuth } from "@/app/providers/auth-provider";
-import { NotificationMessage, useWebSocket } from "@/lib/ai-api";
+import { useWebSocket } from "@/lib/ai-api";
 import { toast } from "@/components/ui/Toast";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
@@ -36,13 +31,6 @@ interface Message {
   milestone?: string;
   isStreaming?: boolean;
 }
-
-const QUICK_PROMPTS = [
-  "Find me a free slot tomorrow afternoon",
-  "Summarize my week ahead",
-  "Schedule a 30-min team standup recurring weekly",
-  "What conflicts do I have this week?",
-];
 
 function createGreeting(): Message {
   return {
@@ -76,13 +64,9 @@ export default function AICopilotPage() {
   const [messages, setMessages] = useLocalStorage<Message[]>("copilot-history", [createGreeting()]);
   const [input, setInput]       = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const [liveSignal, setLiveSignal] = useState<NotificationMessage | null>(null);
   const [streamPhase, setStreamPhase] = useState<string | null>(null);
 
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const chatRef    = useRef<HTMLDivElement>(null);
@@ -90,7 +74,7 @@ export default function AICopilotPage() {
   const activeStreamRef = useRef<AbortController | null>(null);
 
   const { backendToken } = useAuth();
-  const { connected, notification } = useWebSocket(undefined, backendToken ?? undefined);
+  useWebSocket(undefined, backendToken ?? undefined);
 
   useEffect(() => {
     return () => {
@@ -99,30 +83,7 @@ export default function AICopilotPage() {
   }, []);
 
   useEffect(() => {
-    if (!notification) {
-      return;
-    }
-
-    const streamKind = typeof notification.metadata?.kind === "string" ? notification.metadata.kind : "";
-    if (notification.type !== "success" || (streamKind !== "ai_milestone" && streamKind !== "chat_milestone")) {
-      return;
-    }
-
-    setLiveSignal(notification);
-  }, [notification]);
-
-  useEffect(() => {
-    if (!liveSignal) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => setLiveSignal(null), 8000);
-    return () => window.clearTimeout(timeout);
-  }, [liveSignal]);
-
-  useEffect(() => {
     const loadUpcoming = async () => {
-      setIsLoadingEvents(true);
       try {
         const now = new Date();
         const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
@@ -131,8 +92,6 @@ export default function AICopilotPage() {
         setUpcomingEvents(events);
       } catch (err) {
         console.warn("Failed to load upcoming events", err);
-      } finally {
-        setIsLoadingEvents(false);
       }
     };
 
@@ -152,16 +111,6 @@ export default function AICopilotPage() {
     scrollToBottom(true);
   }, [messages, isTyping, scrollToBottom]);
 
-  useEffect(() => {
-    const el = chatRef.current;
-    if (!el) return;
-    const handler = () => {
-      const { scrollTop, scrollHeight, clientHeight } = el;
-      setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 200);
-    };
-    el.addEventListener("scroll", handler);
-    return () => el.removeEventListener("scroll", handler);
-  }, []);
 
   useEffect(() => {
     const el = inputRef.current;
@@ -279,7 +228,7 @@ export default function AICopilotPage() {
       });
 
       activeStreamRef.current = controller;
-    } catch (error) {
+    } catch {
       finalized = true;
       setMessages((prev) => prev.map((msg) => (
         msg.id === assistantMessageId
@@ -303,13 +252,6 @@ export default function AICopilotPage() {
       e.preventDefault();
       void handleSubmit();
     }
-  }
-
-  async function copyMessage(id: string, content: string) {
-    await navigator.clipboard.writeText(content);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-    toast.success("Copied to clipboard");
   }
 
   function clearHistory() {
@@ -342,7 +284,6 @@ export default function AICopilotPage() {
           </div>
 
           {streamPhase && <div className="p-3 text-sm">Streaming phase: {streamPhase}</div>}
-          {liveSignal && <div className="p-3 border-t text-sm">{liveSignal.title} — {liveSignal.message}</div>}
 
           <div ref={chatRef} className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
             {messages.map((msg) => (
@@ -362,7 +303,7 @@ export default function AICopilotPage() {
 
           <div className="p-4 border-t bg-[var(--bg-surface)]">
             <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-              <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} placeholder="Message Copilot…" className="flex-1 px-2 py-1" />
+              <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Message Copilot…" className="flex-1 px-2 py-1" />
               <button type="submit" className="btn btn-primary" disabled={!input.trim() || isTyping}>{isTyping ? '...' : 'Send'}</button>
             </form>
           </div>

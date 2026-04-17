@@ -11,7 +11,6 @@ import {
   Button,
   Grid,
   Chip,
-  IconButton,
   Stepper,
   Step,
   StepLabel,
@@ -32,7 +31,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Plus,
-  X,
   Check,
   Sparkles,
 } from "lucide-react";
@@ -57,8 +55,12 @@ const durationOptions = [
 
 export default function BookMeetingPage() {
   const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { user: authUser, isAuthenticated, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
+
+  const userName = authUser?.name ?? "";
+  const userEmail = authUser?.email ?? "";
+  const userAvatar = authUser?.avatar ?? "";
 
   const [activeStep, setActiveStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -264,9 +266,9 @@ export default function BookMeetingPage() {
         >
           {/* Header */}
           <Header
-            userName={(user as any)?.name}
-            userEmail={user?.email}
-            userAvatar={(user as any)?.avatar}
+            userName={userName}
+            userEmail={userEmail}
+            userAvatar={userAvatar}
             notificationCount={0}
           />
 

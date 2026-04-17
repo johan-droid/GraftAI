@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@/hooks/useQuery";
-import { getAnalyticsSummary } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
   TrendingUp, Calendar, Clock, Activity,

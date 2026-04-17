@@ -22,6 +22,12 @@ import { toast } from "@/components/ui/Toast";
 import { getAnalyticsSummary } from "@/lib/api";
 import { useTheme } from "@/contexts/ThemeContext";
 
+type SessionUser = {
+  bookingSlug?: string;
+  booking_slug?: string;
+  name?: string;
+};
+
 type DashboardSummaryResponse = Awaited<ReturnType<typeof getAnalyticsSummary>>;
 
 // M3 Motion tokens
@@ -32,6 +38,7 @@ const m3Motion = {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const user = session?.user as SessionUser | undefined;
   const { mode } = useTheme();
   const isDark = mode === "dark";
   const [isLoading, setIsLoading] = useState(true);
@@ -63,9 +70,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleCopyBookingLink = async () => {
-    const slug =
-      (session as any)?.user?.bookingSlug ??
-      (session as any)?.user?.booking_slug;
+    const slug = user?.bookingSlug ?? user?.booking_slug;
 
     if (!slug) {
       toast.error("No booking link configured for your account.");
@@ -95,12 +100,6 @@ export default function DashboardPage() {
   const recentEvents = dashboardData?.details?.recent_events ?? [];
   const nextEvent = dashboardData?.details?.next_event ?? recentEvents[0] ?? null;
 
-  // M3 Surface colors based on theme
-  const surfaceColor = isDark ? "#1C1B1F" : "#FFFFFF";
-  const surfaceVariantColor = isDark ? "#49454F" : "#F8F9FA";
-  const onSurfaceColor = isDark ? "#E6E1E5" : "#202124";
-  const onSurfaceVariantColor = isDark ? "#C9C5CA" : "#5F6368";
-  const outlineColor = isDark ? "#49454F" : "#DADCE0";
 
   if (isLoading) {
     return (

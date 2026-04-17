@@ -41,7 +41,7 @@ export default function BillingPage() {
           return;
         }
 
-        const res = await apiClient.post("/billing/razorpay/cancel-subscription");
+        await apiClient.post("/billing/razorpay/cancel-subscription");
         setBillingMessage("Your Razorpay subscription was canceled. Your plan has been reverted to Free.");
         window.location.reload();
         return;

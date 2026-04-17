@@ -8,7 +8,6 @@ import json
 from groq import AsyncGroq
 from dataclasses import dataclass
 from enum import Enum
-import json
 import re
 from backend.utils.logger import get_logger
 

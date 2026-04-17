@@ -12,7 +12,7 @@ Usage:
 import time
 import asyncio
 from typing import Optional, Callable, Dict, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
 import threading

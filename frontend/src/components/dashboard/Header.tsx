@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { Box, IconButton, Avatar, Menu, MenuItem, Badge, Divider } from "@mui/material";
 import { motion } from "framer-motion";
-import { Bell, Plus, Settings, LogOut, User, ChevronDown } from "lucide-react";
+import { Bell, Plus, Settings, LogOut, User, ChevronDown, MessageSquare } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { formatUserName } from "@/lib/theme";
 
@@ -18,6 +19,8 @@ interface HeaderProps {
 export function Header({ userName, userEmail, userAvatar, notificationCount = 0 }: HeaderProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const menuOpen = Boolean(anchorEl);
+  const pathname = usePathname();
+  const showCopilotLink = pathname !== "/copilot" && !pathname.startsWith("/dashboard/ai");
 
   const displayName = userName || (userEmail ? formatUserName(userEmail) : "User");
   const initials = displayName
@@ -43,11 +46,44 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
 
       {/* Right side actions */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, ml: "auto" }}>
+        {showCopilotLink && (
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <Box
+              component={Link}
+              href="/copilot"
+              sx={{
+                display: { xs: "none", sm: "flex" },
+                alignItems: "center",
+                gap: 1,
+                px: 2,
+                py: 0.5,
+                background: "rgba(0, 255, 156, 0.06)",
+                color: "var(--primary)",
+                borderRadius: "0",
+                textDecoration: "none",
+                fontWeight: 700,
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                textTransform: "none",
+                letterSpacing: "0.05em",
+                border: "1px solid var(--border-subtle)",
+                "&:hover": {
+                  background: "rgba(0, 255, 156, 0.12)",
+                  color: "var(--primary)",
+                },
+              }}
+            >
+              <MessageSquare size={12} />
+              AI_COPILOT
+            </Box>
+          </motion.div>
+        )}
+
         {/* New Session Button (compact) */}
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Box
             component={Link}
-            href="/book"
+            href="/dashboard/book"
             sx={{
               display: { xs: "none", sm: "flex" },
               alignItems: "center",

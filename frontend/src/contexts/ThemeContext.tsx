@@ -17,68 +17,61 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const STORAGE_KEY = "graftai-theme";
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>("dark");
-  const [mounted, setMounted] = useState(false);
+function isThemeMode(value: string | null): value is ThemeMode {
+  return value === "light" || value === "dark" || value === "auto";
+}
 
-  // Initialize theme from localStorage or system preference
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-    if (stored && ["light", "dark", "auto"].includes(stored)) {
-      setModeState(stored);
-    } else {
-      setModeState("dark"); // Default to dark
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [mode, setModeState] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") {
+      return "dark";
     }
-    setMounted(true);
-  }, []);
+
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    return isThemeMode(stored) ? stored : "dark";
+  });
 
   // Apply theme changes
   useEffect(() => {
-    if (!mounted) return;
+    if (typeof window === "undefined") return;
 
-    // Save to localStorage
-    localStorage.setItem(STORAGE_KEY, mode);
+    const applyTheme = (themeMode: ThemeMode) => {
+      const themeColors = getThemeColors(themeMode);
 
-    // Determine effective theme
-    const isDark = mode === "dark" || 
-      (mode === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      localStorage.setItem(STORAGE_KEY, themeMode);
 
-    // Apply CSS variables
-    const css = generateThemeCSS(mode);
-    
-    // Remove old style tag if exists
-    const oldStyle = document.getElementById("theme-styles");
-    if (oldStyle) oldStyle.remove();
+      const css = generateThemeCSS(themeMode);
 
-    // Add new style tag
-    const style = document.createElement("style");
-    style.id = "theme-styles";
-    style.textContent = css;
-    document.head.appendChild(style);
+      const oldStyle = document.getElementById("theme-styles");
+      if (oldStyle) oldStyle.remove();
 
-    // Apply data attribute for CSS selectors
-    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+      const style = document.createElement("style");
+      style.id = "theme-styles";
+      style.textContent = css;
+      document.head.appendChild(style);
 
-    // Add transition class for smooth theme changes
-    document.body.style.transition = "background-color 0.3s ease, color 0.3s ease";
-    
-    return () => {
-      document.body.style.transition = "";
+      document.documentElement.setAttribute("data-theme", themeColors.isDark ? "dark" : "light");
+      document.body.style.transition = "background-color 0.3s ease, color 0.3s ease";
     };
-  }, [mode, mounted]);
 
-  // Listen for system theme changes in auto mode
-  useEffect(() => {
-    if (mode !== "auto") return;
+    applyTheme(mode);
+
+    if (mode !== "auto") {
+      return () => {
+        document.body.style.transition = "";
+      };
+    }
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
-      // Trigger re-render to apply new theme
-      setModeState("auto");
+      applyTheme("auto");
     };
 
     mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+      document.body.style.transition = "";
+    };
   }, [mode]);
 
   const setMode = (newMode: ThemeMode) => {

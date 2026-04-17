@@ -39,12 +39,12 @@ export default function PrivacyPolicyPage() {
 
       <h3>3. Third-Party Neural Networks</h3>
       <p>
-        This platform acts as an orchestration proxy for third-party LLM providers. Please be advised that data transmitted during "Copilot" sessions is processed by external neural nodes. Do not submit sensitive military-grade or highly confidential intel to the AI beyond standard testing parameters.
+        This platform acts as an orchestration proxy for third-party LLM providers. Please be advised that data transmitted during &quot;Copilot&quot; sessions is processed by external neural nodes. Do not submit sensitive military-grade or highly confidential intel to the AI beyond standard testing parameters.
       </p>
 
       <h3>4. Hibernation & Erasure</h3>
       <p>
-        Operatives retain the right to complete session erasure. As this is a terminal-based academic project, the central database undergoes periodic purge cycles. For immediate data neutralization, please trigger the 'Full Account Wipe' in your profile settings or reach out to the project architects.
+        Operatives retain the right to complete session erasure. As this is a terminal-based academic project, the central database undergoes periodic purge cycles. For immediate data neutralization, please trigger the &apos;Full Account Wipe&apos; in your profile settings or reach out to the project architects.
       </p>
 
       <h3>5. Protocol Evolutions</h3>

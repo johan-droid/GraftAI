@@ -57,14 +57,15 @@ export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in
           variant="outlined"
           startIcon={<provider.icon />}
           sx={{
-            py: 1.5,
-            px: 3,
-            borderRadius: "100px",
+            minHeight: 48,
+            py: { xs: 1.4, sm: 1.5 },
+            px: { xs: 2.5, sm: 3 },
+            borderRadius: "18px",
             textTransform: "none",
             color: "var(--text-primary, #1f1f1f)",
             borderColor: "var(--border-subtle, #747775)",
             fontFamily: "var(--font-sans, 'Google Sans', Roboto, sans-serif)",
-            fontSize: "0.875rem",
+            fontSize: { xs: "0.93rem", sm: "0.875rem" },
             fontWeight: 500,
             justifyContent: "center",
             gap: 1,

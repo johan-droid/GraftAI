@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Video, Globe, ChevronLeft, ChevronRight, Calendar as CalendarIcon, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { getPublicEventDetails, getPublicEventAvailability, getPublicEventAvailabilityByDate, type PublicEventDetailsResponse } from "@/lib/api";
+import { getPublicEventDetails, getPublicEventAvailability, getPublicEventAvailabilityByDate, type PublicEventDetailsResponse, type PublicAvailabilitySlot } from "@/lib/api";
 
 const WEEK_DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
@@ -14,7 +14,7 @@ export default function PublicBookingPage({ params }: { params: { username: stri
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [eventDetails, setEventDetails] = useState<PublicEventDetailsResponse | null>(null);
   const [monthlyAvailability, setMonthlyAvailability] = useState<Record<string, string[]>>({});
-  const [dailySlots, setDailySlots] = useState<string[]>([]);
+  const [dailySlots, setDailySlots] = useState<PublicAvailabilitySlot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -278,40 +278,43 @@ export default function PublicBookingPage({ params }: { params: { username: stri
                     <div className="h-12 rounded-2xl bg-[#E8F0FE] animate-pulse" />
                   </div>
                 ) : dailySlots.length > 0 ? (
-                  dailySlots.map((time) => (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }}
-                      key={time}
-                      className="flex gap-2"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTime(time)}
-                        className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all border ${
-                          selectedTime === time
-                            ? "bg-[#5F6368] border-[#5F6368] text-white"
-                            : "bg-white border-[#1A73E8] text-[#1A73E8] hover:border-[2px]"
-                        }`}
+                  dailySlots.map((slot, index) => {
+                    const timeLabel = slot.invitee_start;
+                    return (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2 }}
+                        key={`${slot.invitee_start}-${slot.invitee_end}-${index}`}
+                        className="flex gap-2"
                       >
-                        {time}
-                      </button>
-
-                      {selectedTime === time && (
-                        <Link
-                          href={`/book?username=${encodeURIComponent(params.username)}&event_type=${encodeURIComponent(params.event_type)}&date=${encodeURIComponent(
-                            `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate).padStart(2, "0")}`
-                          )}&time=${encodeURIComponent(time)}`}
-                          aria-label="Continue to booking"
-                          title="Continue to booking"
-                          className="w-14 rounded-xl bg-[#1A73E8] text-white flex items-center justify-center hover:bg-[#1557B0] transition-colors"
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTime(timeLabel)}
+                          className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all border ${
+                            selectedTime === timeLabel
+                              ? "bg-[#5F6368] border-[#5F6368] text-white"
+                              : "bg-white border-[#1A73E8] text-[#1A73E8] hover:border-[2px]"
+                          }`}
                         >
-                          <ArrowRight size={20} />
-                        </Link>
-                      )}
-                    </motion.div>
-                  ))
+                          {timeLabel}
+                        </button>
+
+                        {selectedTime === timeLabel && (
+                          <Link
+                            href={`/book?username=${encodeURIComponent(params.username)}&event_type=${encodeURIComponent(params.event_type)}&date=${encodeURIComponent(
+                              `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate).padStart(2, "0")}`
+                            )}&time=${encodeURIComponent(timeLabel)}`}
+                            aria-label="Continue to booking"
+                            title="Continue to booking"
+                            className="w-14 rounded-xl bg-[#1A73E8] text-white flex items-center justify-center hover:bg-[#1557B0] transition-colors"
+                          >
+                            <ArrowRight size={20} />
+                          </Link>
+                        )}
+                      </motion.div>
+                    );
+                  })
                 ) : (
                   <div className="rounded-3xl border border-[#DADCE0] bg-[#F8F9FA] p-5 text-sm text-[#5F6368]">
                     No available times for this date yet. Please choose another day.

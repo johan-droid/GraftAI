@@ -31,7 +31,7 @@ export default function TermsAndConditionsPage() {
 
       <h3>4. Accounts and Security Integrations</h3>
       <p>
-        You are responsible for the integrity of your authentication tokens and all actions taken through your terminal. Connection to third-party services (calendar providers) grants GraftAI "Least Privilege" access required for orchestration.
+        You are responsible for the integrity of your authentication tokens and all actions taken through your terminal. Connection to third-party services (calendar providers) grants GraftAI &quot;Least Privilege&quot; access required for orchestration.
       </p>
 
       <h3>5. Intellectual Property Assets</h3>
@@ -41,7 +41,7 @@ export default function TermsAndConditionsPage() {
 
       <h3>6. Liability Buffers</h3>
       <p>
-        The service is provided "as is" and "as available" without warranties of uninterrupted operation or total error-free performance. Project authors are not liable for indirect or consequential losses resulting from session downtime.
+        The service is provided &quot;as is&quot; and &quot;as available&quot; without warranties of uninterrupted operation or total error-free performance. Project authors are not liable for indirect or consequential losses resulting from session downtime.
       </p>
 
       <h3>7. Protocol Evolution</h3>

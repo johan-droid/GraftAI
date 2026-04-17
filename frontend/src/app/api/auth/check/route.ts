@@ -27,6 +27,15 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const data = await backendRes.json();
+  const bodyText = await backendRes.text();
+  let data = {};
+  if (bodyText) {
+    try {
+      data = JSON.parse(bodyText);
+    } catch (error) {
+      console.error("Failed to parse backend auth/check response", error, bodyText);
+      data = {};
+    }
+  }
   return NextResponse.json(data);
 }

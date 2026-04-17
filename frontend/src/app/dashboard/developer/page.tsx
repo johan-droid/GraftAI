@@ -9,7 +9,7 @@ export default function DeveloperCorner() {
         <div>
           <h1 className="text-4xl font-black text-[var(--text-primary)] uppercase tracking-tighter">Developer_Corner</h1>
           <p className="text-xs mt-2 uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            // Awaiting Backend Telemetry Connection
+            {"// Awaiting Backend Telemetry Connection"}
           </p>
         </div>
       </div>

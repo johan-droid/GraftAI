@@ -1,7 +1,8 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { Bell, Menu, Search } from "lucide-react";
+import Link from "next/link";
+import { Bell, Search, MessageSquare } from "lucide-react";
 
 export function Topbar() {
   const { data: session } = useSession();
@@ -12,10 +13,6 @@ export function Topbar() {
     <header className="h-16 bg-white border-b border-[#DADCE0] flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
       
       <div className="flex items-center gap-4 flex-1">
-        <button aria-label="Open menu" title="Open menu" className="p-2 -ml-2 rounded-full hover:bg-[#F1F3F4] text-[#5F6368] md:hidden transition-colors">
-          <Menu size={24} />
-        </button>
-
         <div className="hidden sm:flex items-center bg-[#F1F3F4] px-4 py-2.5 rounded-full w-full max-w-md focus-within:bg-white focus-within:shadow-sm focus-within:ring-1 focus-within:ring-[#1A73E8] transition-all">
           <Search size={18} className="text-[#5F6368]" />
           <input 
@@ -27,6 +24,18 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4 ml-4">
+        <Link
+          href="/copilot"
+          className="inline-flex items-center gap-2 rounded-full border border-[#DADCE0] bg-white px-3 py-2 text-[#5F6368] transition-colors hover:border-[#1A73E8] hover:text-[#1A73E8]"
+          aria-label="Open AI Copilot"
+          title="Open AI Copilot"
+        >
+          <MessageSquare size={16} />
+          <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-[0.18em]">
+            AI Copilot
+          </span>
+        </Link>
+
         <button aria-label="Notifications" title="Notifications" className="p-2 rounded-full hover:bg-[#F1F3F4] text-[#5F6368] transition-colors relative">
           <Bell size={20} />
           <span className="absolute top-2 right-2 w-2 h-2 bg-[#D93025] rounded-full border-2 border-white"></span>

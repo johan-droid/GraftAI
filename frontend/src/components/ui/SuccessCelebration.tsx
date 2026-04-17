@@ -1,10 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Box, Paper, Typography, Button, Fade } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, Calendar, Clock, Video, Mail, Sparkles } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
+
+const confettiColors = ["#6366f1", "#ec4899", "#10b981", "#f59e0b", "#8b5cf6"] as const;
+
+const confettiPieces = Array.from({ length: 30 }, (_, index) => ({
+  id: index,
+  x: `${(index * 13) % 100}%`,
+  y: 800,
+  rotate: (index * 29) % 360,
+  duration: 2 + (index % 5) * 0.35,
+  delay: (index % 6) * 0.08,
+  size: 8 + (index % 8),
+  borderRadius: index % 2 === 0 ? "50%" : "0%",
+  background: confettiColors[index % confettiColors.length],
+}));
 
 interface SuccessCelebrationProps {
   isOpen: boolean;
@@ -27,15 +40,6 @@ export function SuccessCelebration({
   onViewCalendar,
 }: SuccessCelebrationProps) {
   const { isDark } = useTheme();
-  const [showConfetti, setShowConfetti] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      setShowConfetti(true);
-      const timer = setTimeout(() => setShowConfetti(false), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -58,7 +62,7 @@ export function SuccessCelebration({
           }}
         >
           {/* Confetti Effect */}
-          {showConfetti && (
+          {isOpen && (
             <Box
               sx={{
                 position: "absolute",
@@ -70,33 +74,31 @@ export function SuccessCelebration({
                 overflow: "hidden",
               }}
             >
-              {Array.from({ length: 30 }).map((_, i) => (
+              {confettiPieces.map((piece) => (
                 <motion.div
-                  key={i}
+                  key={piece.id}
                   initial={{
                     y: -20,
-                    x: Math.random() * (typeof window !== "undefined" ? window.innerWidth : 1000),
+                    x: piece.x,
                     rotate: 0,
                     opacity: 1,
                   }}
                   animate={{
-                    y: typeof window !== "undefined" ? window.innerHeight : 800,
-                    rotate: Math.random() * 360,
+                    y: piece.y,
+                    rotate: piece.rotate,
                     opacity: 0,
                   }}
                   transition={{
-                    duration: 2 + Math.random() * 2,
+                    duration: piece.duration,
                     ease: "easeOut",
-                    delay: Math.random() * 0.5,
+                    delay: piece.delay,
                   }}
                   style={{
                     position: "absolute",
-                    width: 8 + Math.random() * 8,
-                    height: 8 + Math.random() * 8,
-                    borderRadius: Math.random() > 0.5 ? "50%" : "0%",
-                    background: ["#6366f1", "#ec4899", "#10b981", "#f59e0b", "#8b5cf6"][
-                      Math.floor(Math.random() * 5)
-                    ],
+                    width: piece.size,
+                    height: piece.size,
+                    borderRadius: piece.borderRadius,
+                    background: piece.background,
                   }}
                 />
               ))}

@@ -221,15 +221,20 @@ export const aiAutomationApi = {
   // Health Check
   async healthCheck(): Promise<{
     status: string;
+    service: string;
     timestamp: string;
-    version: string;
-    services: {
-      database: boolean;
-      redis?: boolean;
-      ai_agent: boolean;
+    checks: {
+      server: boolean;
+      environment: string;
     };
   }> {
-    return apiClient.get("/health");
+    const response = await fetch("/api/health", { cache: "no-store" });
+    if (!response.ok) {
+      const bodyText = await response.text().catch(() => "");
+      throw new Error(bodyText || response.statusText || `Request failed with status ${response.status}`);
+    }
+
+    return response.json();
   },
 };
 

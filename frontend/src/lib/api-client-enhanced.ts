@@ -312,7 +312,7 @@ export const enhancedApiClient = {
     
     for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
       try {
-        return await apiClient.fetch(endpoint, {
+        return await apiClient.fetch<T>(endpoint, {
           method: options.method,
           json: options.json,
           signal: options.signal,
@@ -482,10 +482,9 @@ export function useNetworkState() {
 }
 
 export function useOfflineQueue() {
-  const [queue, setQueue] = useState<RequestQueueItem[]>([]);
+  const [queue, setQueue] = useState<RequestQueueItem[]>(() => offlineQueue.getAll());
   
   useEffect(() => {
-    setQueue(offlineQueue.getAll());
     return offlineQueue.subscribe(setQueue);
   }, []);
   
@@ -504,6 +503,9 @@ export function useRetryableRequest<T>(
     onError?: (error: Error) => void;
   } = {}
 ) {
+  const retry = options.retry;
+  const onSuccess = options.onSuccess;
+  const onError = options.onError;
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -516,13 +518,13 @@ export function useRetryableRequest<T>(
     setRetryCount(0);
     
     abortControllerRef.current = new AbortController();
-    const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...options.retry };
+    const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...retry };
     
     for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
       try {
         const result = await requestFn();
         setData(result);
-        options.onSuccess?.(result);
+        onSuccess?.(result);
         setLoading(false);
         return result;
       } catch (err) {
@@ -537,7 +539,7 @@ export function useRetryableRequest<T>(
         if (!isRetryable || isLastAttempt) {
           const error = err instanceof Error ? err : new Error(String(err));
           setError(error);
-          options.onError?.(error);
+          onError?.(error);
           setLoading(false);
           throw error;
         }
@@ -547,7 +549,7 @@ export function useRetryableRequest<T>(
         await sleep(delay);
       }
     }
-  }, [requestFn, options.retry, options.onSuccess, options.onError]);
+  }, [requestFn, retry, onSuccess, onError]);
 
   const cancel = useCallback(() => {
     abortControllerRef.current?.abort();

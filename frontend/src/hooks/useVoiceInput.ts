@@ -33,23 +33,18 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [isSupported, setIsSupported] = useState(true);
+  const isSupported = typeof window === "undefined"
+    ? true
+    : Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
   
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-
-  // Check for browser support
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setIsSupported(false);
-      setError('Speech recognition is not supported in this browser');
-    }
-  }, []);
 
   // Start listening
   const startListening = useCallback(() => {
     if (!isSupported) {
-      onError?.('Speech recognition not supported');
+      const supportError = 'Speech recognition is not supported in this browser';
+      setError(supportError);
+      onError?.(supportError);
       return;
     }
 
@@ -141,6 +136,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     stopListening,
     resetTranscript,
     isSupported,
-    error,
+    error: isSupported ? error : 'Speech recognition is not supported in this browser',
   };
 }

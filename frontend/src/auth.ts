@@ -6,6 +6,7 @@ import NextAuth, {
 } from "next-auth";
 import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "@auth/core/jwt";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { authConfig } from "./auth.config";
 
 // Resolve Environment Variables
@@ -39,6 +40,12 @@ type SocialAuthAccount = Pick<
 >;
 
 type SocialAuthUser = Pick<User, "email" | "name" | "image">;
+
+type CredentialsAuthUser = User & {
+  backendToken: string;
+  refreshToken?: string;
+  backendTokenExpiresAt?: number;
+};
 
 type NextAuthJwt = JWT & {
   backendToken?: string;
@@ -162,6 +169,83 @@ function decodeJwtExpiry(token: string): number | undefined {
   }
 }
 
+async function parseJsonSafe<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    console.error("Failed to parse JSON response:", error, "body:", text);
+    return null;
+  }
+}
+
+function createCredentialsProvider() {
+  return CredentialsProvider({
+    name: "Credentials",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      password: { label: "Password", type: "password" },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email || !credentials?.password) {
+        throw new Error("Missing credentials");
+      }
+
+      const email = String(credentials.email);
+      const password = String(credentials.password);
+      const formData = new URLSearchParams();
+      formData.append("username", email);
+      formData.append("password", password);
+
+      const res = await fetch(`${getBackendApiUrl()}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString(),
+      });
+
+      const data = await parseJsonSafe<{ detail?: string; access_token?: string; refresh_token?: string }>(res);
+      if (!res.ok) {
+        throw new Error((data?.detail && String(data.detail)) || "Authentication failed");
+      }
+
+      const accessToken = data?.access_token;
+      if (!accessToken) {
+        throw new Error("Authentication succeeded but no access token was returned.");
+      }
+
+      const userRes = await fetch(`${getBackendApiUrl()}/users/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!userRes.ok) {
+        const body = await userRes.text().catch(() => "");
+        throw new Error(`Failed fetching user profile: ${userRes.status} ${body}`);
+      }
+
+      const userData = await parseJsonSafe<Record<string, unknown>>(userRes);
+      if (!userData) {
+        throw new Error("User profile response contained no JSON.");
+      }
+
+      const userId = typeof userData.id === "string" ? userData.id.trim() : "";
+      if (!userId) {
+        throw new Error("User profile response is missing a valid id.");
+      }
+
+      return {
+        id: userId,
+        email: String(userData.email ?? email),
+        name: String(userData.name ?? email),
+        role: String(userData.role ?? "user"),
+        backendToken: accessToken,
+        refreshToken: data?.refresh_token,
+        backendTokenExpiresAt: decodeJwtExpiry(accessToken),
+      } as User & { backendToken: string; refreshToken?: string; backendTokenExpiresAt?: number };
+    },
+  });
+}
+
 /**
  * NextAuth v5 (beta) does NOT allow passing arbitrary custom data through the
  * `user` object from signIn → jwt. We keep a short-lived in-memory map keyed by
@@ -225,6 +309,7 @@ const authOptions: NextAuthConfig = {
   ...authConfig,
   secret: nextAuthSecret,
   trustHost: true,
+  providers: [...authConfig.providers, createCredentialsProvider()],
 
   callbacks: {
     ...authConfig.callbacks,
@@ -233,6 +318,11 @@ const authOptions: NextAuthConfig = {
       if (!account || !user?.email) {
         console.error("[NextAuth:signIn] Missing account/email — aborting");
         return false;
+      }
+
+      if (account.provider === "credentials") {
+        console.log(`[NextAuth:signIn] Credentials sign-in accepted for ${user.email}`);
+        return true;
       }
 
       console.log(`[NextAuth:signIn] Handshaking with backend for ${user.email} via ${account.provider}`);
@@ -259,6 +349,21 @@ const authOptions: NextAuthConfig = {
     async jwt({ token, user, account }: { token: NextAuthJwt; user?: User | null; account?: Account | null }) {
       // Internal Auth Handshake: initial sign-in
       if (user && account) {
+        if (account.provider === "credentials") {
+          const credentialUser = user as CredentialsAuthUser;
+          if (typeof credentialUser.backendToken === "string") {
+            token.backendToken = credentialUser.backendToken;
+            token.refreshToken = credentialUser.refreshToken;
+            token.backendTokenExpiresAt = credentialUser.backendTokenExpiresAt ?? decodeJwtExpiry(credentialUser.backendToken);
+            token.provider = "credentials";
+            token.error = undefined;
+          } else {
+            console.error("[NextAuth:jwt] Credentials sign-in did not return a backend token");
+            token.error = "RefreshTokenError";
+          }
+          return token;
+        }
+
         const mapKey = `${account.provider}:${account.providerAccountId}`;
         let pending = _pendingBackendTokens.get(mapKey);
         

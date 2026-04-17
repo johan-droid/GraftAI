@@ -8,8 +8,8 @@ import { OAuthButtons } from "@/components/auth/OAuthButtons";
 export default function LoginPage() {
   return (
     <AuthLayout
-      title="Sign in"
-      subtitle="to continue to GraftAI"
+      title="Welcome back"
+      subtitle="Sign in to pick up your schedule, messages, and automations where you left off."
     >
       <Stack spacing={4}>
         <OAuthButtons callbackURL="/dashboard" actionText="Sign in" />
@@ -23,7 +23,7 @@ export default function LoginPage() {
               fontFamily: "var(--font-sans, Roboto, sans-serif)",
             }}
           >
-            Not your computer? Use private browsing or sign out when finished to keep your account secure.
+            On a shared device? A private window or quick sign-out keeps things tidy.
           </Typography>
           
           <Box sx={{ mt: 5, pt: 4, display: "flex", justifyContent: "center" }}>
@@ -34,7 +34,7 @@ export default function LoginPage() {
                 fontFamily: "var(--font-sans, Roboto, sans-serif)", 
               }}
             >
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link 
                 href="/signup" 
                 style={{ 

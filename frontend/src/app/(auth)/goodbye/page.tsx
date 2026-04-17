@@ -62,7 +62,7 @@ export default function GoodbyePage() {
                   fontFamily: "var(--font-sans)"
                 }}
               >
-                You've been successfully signed out. Have a great day!
+                You&apos;ve been successfully signed out. Have a great day!
               </Typography>
             </Stack>
 

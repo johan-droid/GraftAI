@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { toast } from "@/components/ui/Toast";
 import { 
   User, Mail, Globe, Clock, Calendar, 
@@ -18,7 +18,7 @@ const containerVariants = {
   }
 };
 
-const bentoVariants = {
+const bentoVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
   show: { 
     opacity: 1, 

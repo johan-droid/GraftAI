@@ -1,7 +1,6 @@
 "use client";
 
 import { StaticPageLayout } from "@/components/layout/StaticPageLayout";
-import { Box, Typography } from "@mui/material";
 
 export default function PrivacyPage() {
   return (
@@ -37,7 +36,7 @@ export default function PrivacyPage() {
       <p>GraftAI needs access to your calendar to work its magic. We use this access strictly to:</p>
       <ul>
         <li>Find available times for your meetings.</li>
-        <li>Protect your "Deep Work" focus time.</li>
+        <li>Protect your &quot;Deep Work&quot; focus time.</li>
         <li>Keep your schedule in sync everywhere.</li>
       </ul>
       <p><strong>Important:</strong> We never sell your calendar data to advertisers or third parties.</p>
@@ -45,7 +44,7 @@ export default function PrivacyPage() {
       <h3>5. Security</h3>
       <p>We use industry-standard security to keep your data safe:</p>
       <ul>
-        <li><strong>Encryption:</strong> Your data is encrypted whether it's sitting on our servers or traveling to your device.</li>
+        <li><strong>Encryption:</strong> Your data is encrypted whether it&apos;s sitting on our servers or traveling to your device.</li>
         <li><strong>Safe Access:</strong> We use secure login methods like Google and Outlook.</li>
         <li><strong>Regular Audits:</strong> We constantly check our systems for any security risks.</li>
       </ul>
@@ -56,7 +55,7 @@ export default function PrivacyPage() {
       </p>
 
       <h3>7. Your Rights</h3>
-      <p>You're in control of your data. You have the right to:</p>
+      <p>You&apos;re in control of your data. You have the right to:</p>
       <ul>
         <li>See what data we have about you.</li>
         <li>Fix any mistakes in your information.</li>
@@ -69,14 +68,14 @@ export default function PrivacyPage() {
         If you connect with services like Google or Microsoft, their own privacy policies apply. We only ask for the minimum access we need to help manage your schedule.
       </p>
 
-      <h3>9. Children's Privacy</h3>
-      <p>GraftAI is for professionals and teams. We don't knowingly collect information from anyone under the age of 13.</p>
+      <h3>9. Children&apos;s Privacy</h3>
+      <p>GraftAI is for professionals and teams. We don&apos;t knowingly collect information from anyone under the age of 13.</p>
 
       <h3>10. Changes to This Policy</h3>
-      <p>We might update this policy from time to time. If we make big changes, we'll let you know inside the app or via email.</p>
+      <p>We might update this policy from time to time. If we make big changes, we&apos;ll let you know inside the app or via email.</p>
 
       <h3>11. Contact Us</h3>
-      <p>If you have any questions about your privacy, we're here to help:</p>
+      <p>If you have any questions about your privacy, we&apos;re here to help:</p>
       <p>
         <strong>Email:</strong> hi@graftai.com<br />
         <strong>Address:</strong> 123 Tech Street, San Francisco, CA 94105

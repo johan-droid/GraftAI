@@ -26,7 +26,7 @@ export default function TermsOfServicePage() {
 
       <h3>2. Description of Orchestration</h3>
       <p>
-        GraftAI is a web application designed to demonstrate the integration of Large Language Models with calendar orchestration systems. The service is provided "as-is" and "as-available" without warranties of any kind. There are no guarantees regarding system uptime, data persistence, or algorithmic accuracy.
+        GraftAI is a web application designed to demonstrate the integration of Large Language Models with calendar orchestration systems. The service is provided &quot;as-is&quot; and &quot;as-available&quot; without warranties of any kind. There are no guarantees regarding system uptime, data persistence, or algorithmic accuracy.
       </p>
 
       <h3>3. Intellectual Property Handshake</h3>
@@ -51,7 +51,7 @@ export default function TermsOfServicePage() {
 
       <h3>6. Command Communications</h3>
       <p>
-        For inquiries or feedback regarding this student project, please establish communication via the GitHub repository or the lead architect's portfolio contact system.
+        For inquiries or feedback regarding this student project, please establish communication via the GitHub repository or the lead architect&apos;s portfolio contact system.
       </p>
     </StaticPageLayout>
   );

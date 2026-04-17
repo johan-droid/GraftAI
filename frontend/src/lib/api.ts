@@ -28,7 +28,7 @@ export async function didVerify(did: string) {
 }
 
 export async function syncUserTimezone(timezone: string) {
-  return apiClient.post<{ status: string; timezone: string }>("/auth/sync-timezone", { timezone });
+  return updateUserProfile({ timezone });
 }
 
 export async function syncUserConsent(consents: { 
@@ -743,7 +743,7 @@ export async function createEventType(payload: EventTypePayload) {
   return apiClient.post<EventTypeResponse>("/event-types", payload);
 }
 
-export async function updateEventType(eventTypeId: string, payload: EventTypePayload) {
+export async function updateEventType(eventTypeId: string, payload: Partial<EventTypePayload>) {
   return apiClient.patch<EventTypeResponse>(`/event-types/${encodeURIComponent(eventTypeId)}`, payload);
 }
 

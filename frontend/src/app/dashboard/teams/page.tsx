@@ -4,17 +4,15 @@ import { motion } from "framer-motion";
 import { Users, Plus, Shuffle, Layers, ShieldAlert, Link as LinkIcon, MoreVertical, Copy } from "lucide-react";
 import { useTeams } from "@/hooks/useTeams";
 import { toast } from "react-hot-toast";
-import { Team } from "@/types/api";
+import { Team, TeamMember } from "@/types/api";
 
-type TeamMemberUi = {
-  user_id: string;
-  role: string;
+type TeamMemberUi = TeamMember & {
   name?: string;
   initial?: string;
   color?: string;
 };
 
-type UiTeam = Team & {
+type UiTeam = Omit<Team, "members"> & {
   members: TeamMemberUi[];
 };
 
@@ -25,9 +23,9 @@ const MOCK_TEAMS: UiTeam[] = [
     slug: "sales-eng",
     routing_logic: "round_robin",
     members: [
-      { user_id: "u1", name: "Alice", role: "admin", initial: "A", color: "bg-[#E8F0FE] text-[#1A73E8]" },
-      { user_id: "u2", name: "Bob", role: "member", initial: "B", color: "bg-[#E6F4EA] text-[#137333]" },
-      { user_id: "u3", name: "Charlie", role: "member", initial: "C", color: "bg-[#FEF7E0] text-[#E37400]" },
+      { user_id: "u1", team_id: "t_1", name: "Alice", role: "admin", initial: "A", color: "bg-[#E8F0FE] text-[#1A73E8]" },
+      { user_id: "u2", team_id: "t_1", name: "Bob", role: "member", initial: "B", color: "bg-[#E6F4EA] text-[#137333]" },
+      { user_id: "u3", team_id: "t_1", name: "Charlie", role: "member", initial: "C", color: "bg-[#FEF7E0] text-[#E37400]" },
     ],
   },
   {
@@ -36,8 +34,8 @@ const MOCK_TEAMS: UiTeam[] = [
     slug: "execs",
     routing_logic: "collective",
     members: [
-      { user_id: "u1", name: "Alice", role: "admin", initial: "A", color: "bg-[#E8F0FE] text-[#1A73E8]" },
-      { user_id: "u4", name: "Diana", role: "admin", initial: "D", color: "bg-[#FCE8E6] text-[#D93025]" },
+      { user_id: "u1", team_id: "t_2", name: "Alice", role: "admin", initial: "A", color: "bg-[#E8F0FE] text-[#1A73E8]" },
+      { user_id: "u4", team_id: "t_2", name: "Diana", role: "admin", initial: "D", color: "bg-[#FCE8E6] text-[#D93025]" },
     ],
   },
 ];

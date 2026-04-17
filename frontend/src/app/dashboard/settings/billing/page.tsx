@@ -19,16 +19,16 @@ export default function BillingPage() {
 
   const stats = user ? {
     tier: user.tier || 'free',
-    daily_ai_count: user.daily_ai_count || 0,
-    daily_sync_count: user.daily_sync_count || 0,
-    daily_ai_limit: user.daily_ai_limit ?? (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10)),
-    daily_sync_limit: user.daily_sync_limit ?? (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3)),
-    ai_remaining: user.ai_remaining ?? Math.max(0, (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10)) - (user.daily_ai_count || 0)),
-    sync_remaining: user.sync_remaining ?? Math.max(0, (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3)) - (user.daily_sync_count || 0)),
-    quota_reset_at: user.quota_reset_at,
-    trial_days_left: user.trial_days_left || 0,
-    trial_expires_at: user.trial_expires_at,
-    trial_active: user.trial_active || false,
+    daily_ai_count: Number(user.daily_ai_count ?? 0),
+    daily_sync_count: Number(user.daily_sync_count ?? 0),
+    daily_ai_limit: Number(user.daily_ai_limit ?? (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10))),
+    daily_sync_limit: Number(user.daily_sync_limit ?? (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3))),
+    ai_remaining: Number(user.ai_remaining ?? Math.max(0, (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10)) - Number(user.daily_ai_count ?? 0))),
+    sync_remaining: Number(user.sync_remaining ?? Math.max(0, (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3)) - Number(user.daily_sync_count ?? 0))),
+    quota_reset_at: user.quota_reset_at ? String(user.quota_reset_at) : undefined,
+    trial_days_left: Number(user.trial_days_left ?? 0),
+    trial_expires_at: user.trial_expires_at ? String(user.trial_expires_at) : undefined,
+    trial_active: Boolean(user.trial_active),
     subscription_status: user.subscription_status || 'inactive'
   } : null;
 

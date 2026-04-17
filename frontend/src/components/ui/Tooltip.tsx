@@ -17,7 +17,7 @@ export function Tooltip({
   delay = 200,
 }: TooltipProps) {
   const [open, setOpen] = useState(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
+  const [anchorEl, setAnchorEl] = useState<HTMLDivElement | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleMouseEnter = () => {
@@ -41,7 +41,7 @@ export function Tooltip({
 
   return (
     <Box
-      ref={anchorRef}
+      ref={setAnchorEl}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       sx={{ position: "relative", display: "inline-flex" }}
@@ -50,7 +50,7 @@ export function Tooltip({
       
       <Popper
         open={open}
-        anchorEl={anchorRef.current}
+        anchorEl={anchorEl}
         placement={placement}
         sx={{ zIndex: 9999 }}
         modifiers={[

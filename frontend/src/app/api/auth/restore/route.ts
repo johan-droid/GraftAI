@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     console.error("Restore request parse error", error);
     return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
   }
+
   const access_token = body.access_token?.toString();
   const refresh_token = body.refresh_token?.toString();
   const redirect_to = body.redirect_to?.toString() || "/dashboard";
@@ -28,14 +29,34 @@ export async function POST(request: Request) {
   });
 
   if (!backendRes.ok) {
-    const errorPayload = await backendRes.json().catch(() => ({}));
+    const errorPayload = await backendRes
+      .text()
+      .then((text) => {
+        if (!text) return {};
+        try {
+          return JSON.parse(text);
+        } catch {
+          return {};
+        }
+      })
+      .catch(() => ({}));
+
     return NextResponse.json(
-      { error: errorPayload.detail || "Unable to verify access token" },
+      { error: (errorPayload as any).detail || "Unable to verify access token" },
       { status: 401 }
     );
   }
 
-  const data = await backendRes.json();
+  const bodyText = await backendRes.text();
+  let data: Record<string, unknown> = {};
+  if (bodyText) {
+    try {
+      data = JSON.parse(bodyText) as Record<string, unknown>;
+    } catch (error) {
+      console.error("Restore response parse error", error, bodyText);
+    }
+  }
+
   const response = NextResponse.json({
     ok: true,
     user: data.user || data,

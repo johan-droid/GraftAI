@@ -256,7 +256,7 @@ export default function CalendarPage() {
                   </Typography>
                   <Button
                     component={Link}
-                    href="/book"
+                    href="/dashboard/book"
                     fullWidth
                     sx={{
                       background: "var(--primary)",

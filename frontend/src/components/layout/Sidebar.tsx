@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, Calendar, PlusCircle, 
-  Users, Zap, BarChart3, Settings 
+  Users, Zap, BarChart3, Settings, MessageSquare 
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "My Calendar", href: "/dashboard/calendar", icon: Calendar },
+  { name: "AI Copilot", href: "/copilot", icon: MessageSquare },
   { name: "Event Types", href: "/dashboard/event-types", icon: PlusCircle },
   { name: "Team & Resources", href: "/dashboard/teams", icon: Users },
   { name: "Workflows", href: "/dashboard/workflows", icon: Zap },

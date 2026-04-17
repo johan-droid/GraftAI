@@ -23,25 +23,34 @@ const defaultState: OnboardingState = {
 const OnboardingContext = createContext<OnboardingContextValue | undefined>(undefined);
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
-  const [completedSteps, setCompletedSteps] = useState<string[]>(defaultState.completedSteps);
-  const [currentStep, setCurrentStep] = useState<string>(defaultState.currentStep);
+  const [completedSteps, setCompletedSteps] = useState<string[]>(() => {
+    if (typeof window === "undefined") {
+      return defaultState.completedSteps;
+    }
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const stored = JSON.parse(raw) as OnboardingState;
-      if (Array.isArray(stored.completedSteps)) {
-        setCompletedSteps(stored.completedSteps);
-      }
-      if (typeof stored.currentStep === "string") {
-        setCurrentStep(stored.currentStep);
-      }
+      if (!raw) return defaultState.completedSteps;
+      const stored = JSON.parse(raw) as Partial<OnboardingState>;
+      return Array.isArray(stored.completedSteps) ? stored.completedSteps : defaultState.completedSteps;
     } catch {
-      // ignore malformed local storage data
+      return defaultState.completedSteps;
     }
-  }, []);
+  });
+  const [currentStep, setCurrentStep] = useState<string>(() => {
+    if (typeof window === "undefined") {
+      return defaultState.currentStep;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return defaultState.currentStep;
+      const stored = JSON.parse(raw) as Partial<OnboardingState>;
+      return typeof stored.currentStep === "string" ? stored.currentStep : defaultState.currentStep;
+    } catch {
+      return defaultState.currentStep;
+    }
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;

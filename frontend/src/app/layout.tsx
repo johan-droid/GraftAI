@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { JetBrains_Mono, Outfit, Permanent_Marker, Plus_Jakarta_Sans } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { AuthProvider } from "./providers/auth-provider";
 import { QueryProvider } from "./providers/query-provider";
@@ -7,7 +7,29 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  weight: ["300", "400", "500", "600", "700", "800"],
+});
+
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  weight: ["400", "500", "700", "800"],
+});
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const permanentMarker = Permanent_Marker({
+  subsets: ["latin"],
+  variable: "--font-handwriting",
+  weight: "400",
+});
 
 export const metadata: Metadata = {
   title: "GraftAI | Intelligent Scheduling",
@@ -21,7 +43,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased text-[#202124] bg-[#F8F9FA]`}>
+      <body
+        className={`${plusJakartaSans.variable} ${jetBrainsMono.variable} ${outfit.variable} ${permanentMarker.variable} min-h-dvh overflow-x-hidden font-sans antialiased text-[#202124] bg-[#F8F9FA]`}
+      >
         <SessionProvider>
           <AuthProvider>
             <QueryProvider>

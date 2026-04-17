@@ -15,31 +15,49 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--bg-base, #f0f4f9)",
-        p: 2,
+        alignItems: "stretch",
+        justifyContent: { xs: "flex-start", sm: "center" },
+        background:
+          "radial-gradient(circle at top left, rgba(26, 115, 232, 0.12), transparent 32%), radial-gradient(circle at bottom right, rgba(52, 168, 83, 0.10), transparent 28%), var(--bg-base, #f0f4f9)",
+        p: { xs: 1.5, sm: 2.5 },
+        position: "relative",
+        overflow: "hidden",
       }}
     >
+      <Box
+        aria-hidden
+        sx={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          opacity: 0.8,
+        }}
+      >
+        <Box sx={{ position: "absolute", top: -120, left: -100, width: 240, height: 240, borderRadius: "50%", bgcolor: "rgba(26, 115, 232, 0.08)", filter: "blur(80px)" }} />
+        <Box sx={{ position: "absolute", bottom: -120, right: -80, width: 240, height: 240, borderRadius: "50%", bgcolor: "rgba(52, 168, 83, 0.08)", filter: "blur(80px)" }} />
+      </Box>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        style={{ width: "100%", maxWidth: "450px" }}
+        style={{ width: "100%", maxWidth: "460px", margin: "0 auto", position: "relative", zIndex: 1 }}
       >
         <Paper
           elevation={0}
           sx={{
-            p: { xs: 4, sm: 5 },
+            p: { xs: 3, sm: 5 },
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            borderRadius: "28px",
-            background: "var(--bg-elevated, #ffffff)",
+            borderRadius: { xs: "24px", sm: "32px" },
+            background: "rgba(255, 255, 255, 0.88)",
             border: "1px solid var(--border-subtle, rgba(0,0,0,0.08))",
+            boxShadow: "0 24px 80px -32px rgba(32, 33, 36, 0.28)",
+            backdropFilter: "blur(24px)",
           }}
         >
           <Box sx={{ mb: 2, display: "flex", justifyContent: "center" }}>
@@ -64,12 +82,13 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
           <Typography
             component="h1"
             sx={{
-              fontSize: "1.5rem",
-              fontWeight: 400,
+              fontSize: { xs: "1.65rem", sm: "1.85rem" },
+              fontWeight: 500,
               color: "var(--text-primary, #1f1f1f)",
-              fontFamily: "var(--font-sans, 'Google Sans', Roboto, sans-serif)",
+              fontFamily: "var(--font-outfit, var(--font-sans, 'Google Sans', Roboto, sans-serif))",
               mb: 1,
               textAlign: "center",
+              letterSpacing: "-0.03em",
             }}
           >
             {title}
@@ -78,11 +97,12 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
           {subtitle && (
             <Typography
               sx={{
-                fontSize: "1rem",
+                fontSize: { xs: "0.95rem", sm: "1rem" },
                 color: "var(--text-secondary, #444746)",
                 fontFamily: "var(--font-sans, Roboto, sans-serif)",
                 mb: 4,
                 textAlign: "center",
+                maxWidth: 320,
               }}
             >
               {subtitle}
@@ -92,8 +112,8 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
           <Box sx={{ width: "100%" }}>{children}</Box>
         </Paper>
 
-        <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between", px: 2 }}>
-          <Box sx={{ display: "flex", gap: 3 }}>
+        <Box sx={{ mt: 3, display: "flex", justifyContent: { xs: "center", sm: "space-between" }, px: 2, flexWrap: "wrap", gap: 2 }}>
+          <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
             <Link
               href="/terms"
               style={{

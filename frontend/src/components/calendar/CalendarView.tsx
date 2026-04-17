@@ -309,7 +309,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                       {event.description && (
                          <div className="mt-4 pt-4 border-t border-dashed border-[var(--border-subtle)]">
                           <p className="text-xs text-[var(--text-muted)] leading-relaxed italic line-clamp-2">
-                            // {event.description}
+                            {event.description}
                           </p>
                         </div>
                       )}

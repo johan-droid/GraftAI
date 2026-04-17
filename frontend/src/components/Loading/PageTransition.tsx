@@ -9,30 +9,37 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+
+const backgroundParticles = Array.from({ length: 20 }, (_, index) => ({
+  id: index,
+  left: `${(index * 17) % 100}%`,
+  top: `${(index * 29) % 100}%`,
+  duration: 3 + (index % 5) * 0.4,
+  delay: (index % 6) * 0.25,
+}));
 
 interface PageTransitionProps {
   isLoading: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export default function PageTransition({ isLoading, children }: PageTransitionProps) {
-  const [showLoader, setShowLoader] = useState(isLoading);
-
-  useEffect(() => {
-    if (isLoading) {
-      setShowLoader(true);
-    } else {
-      // Small delay to ensure smooth transition
-      const timer = setTimeout(() => setShowLoader(false), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [isLoading]);
-
   return (
     <div className="relative min-h-screen">
-      <AnimatePresence mode="wait">
-        {showLoader ? (
+      <motion.div
+        initial={false}
+        animate={{
+          filter: isLoading ? 'blur(10px)' : 'blur(0px)',
+          scale: isLoading ? 0.995 : 1,
+        }}
+        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+      >
+        {children}
+      </motion.div>
+
+      <AnimatePresence>
+        {isLoading ? (
           <motion.div
             key="loader"
             initial={{ opacity: 0 }}
@@ -101,39 +108,29 @@ export default function PageTransition({ isLoading, children }: PageTransitionPr
             {/* Background Pattern */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <div className="absolute inset-0 opacity-20">
-                {[...Array(20)].map((_, i) => (
+                {backgroundParticles.map((particle) => (
                   <motion.div
-                    key={i}
+                    key={particle.id}
                     className="absolute w-2 h-2 bg-blue-500/30 rounded-full"
                     style={{
-                      left: `${Math.random() * 100}%`,
-                      top: `${Math.random() * 100}%`,
+                      left: particle.left,
+                      top: particle.top,
                     }}
                     animate={{
                       y: [0, -30, 0],
                       opacity: [0.2, 0.8, 0.2],
                     }}
                     transition={{
-                      duration: 3 + Math.random() * 2,
+                      duration: particle.duration,
                       repeat: Infinity,
-                      delay: Math.random() * 2,
+                      delay: particle.delay,
                     }}
                   />
                 ))}
               </div>
             </div>
           </motion.div>
-        ) : (
-          <motion.div
-            key="content"
-            initial={{ opacity: 0, filter: 'blur(10px)' }}
-            animate={{ opacity: 1, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, filter: 'blur(10px)' }}
-            transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
-          >
-            {children}
-          </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
     </div>
   );

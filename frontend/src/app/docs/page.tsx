@@ -132,7 +132,7 @@ export default function DocsPage() {
                       {section.icon}
                     </Box>
                     <Typography sx={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-faint)" }}>
-                      // {section.code}
+                      {`// ${section.code}`}
                     </Typography>
                   </Stack>
 
@@ -204,7 +204,7 @@ export default function DocsPage() {
                   fontFamily: "var(--font-mono)"
                 }}>
                   <Typography sx={{ fontSize: 10, color: "var(--text-faint)", mb: 2, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                    // EMBED_PROMPT_v1.0
+                    {"// EMBED_PROMPT_v1.0"}
                   </Typography>
                   <Box component="pre" sx={{ fontSize: 12, color: "var(--primary)", overflowX: "auto", m: 0 }}>
 {`<div data-graftai-embed data-user="OPERATIVE_ID"></div>

@@ -205,6 +205,7 @@ export default function BookMeetingPage() {
           description: description,
           location: location,
           is_meeting: true,
+          attendees: invitees,
         }),
       });
 
@@ -753,7 +754,7 @@ export default function BookMeetingPage() {
           setActiveStep(0);
           setTitle("");
           setDescription("");
-          setLocation("");
+          setLocation("virtual");
           setSelectedDate("");
           setSelectedTime("");
           setInvitees([]);

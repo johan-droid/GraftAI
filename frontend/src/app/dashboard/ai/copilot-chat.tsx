@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { sendAiChat } from "@/lib/api";
+import { sendAiChat, getEvents } from "@/lib/api";
 import { useAuth } from "@/app/providers/auth-provider";
 import { useSyncEngine } from "@/hooks/useSyncEngine";
 
@@ -113,7 +113,7 @@ export default function AICopilotChat() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [showContextDropdown, setShowContextDropdown] = useState(false);
-  const [upcomingEvents] = useState<CalendarEvent[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [environmentalContext, setEnvironmentalContext] = useState({
     time: "", greeting: "", weather: "Clear", hour: 12,
   });
@@ -141,7 +141,10 @@ export default function AICopilotChat() {
     let mounted = true;
     (async () => {
       try {
-        const events = await getEvents();
+        const now = new Date();
+        const start = now.toISOString().slice(0, 10);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()).toISOString().slice(0, 10);
+        const events = await getEvents(start, end);
         if (!mounted) return;
         if (Array.isArray(events)) setUpcomingEvents(events as CalendarEvent[]);
       } catch (err) {
@@ -295,7 +298,7 @@ export default function AICopilotChat() {
               {environmentalContext.greeting}, {displayName}
             </h1>
             <p className="mt-2 text-[#5F6368] text-base">
-              {upcomingEvents.length > 0 ? `You have ${upcomingEvents.length} meetings today. How can I help you prepare?` : "Your calendar is clear today."}
+              {upcomingEvents.length > 0 ? `You have ${upcomingEvents.length} upcoming meetings. How can I help you prepare?` : "Your calendar is clear today."}
             </p>
           </motion.div>
 

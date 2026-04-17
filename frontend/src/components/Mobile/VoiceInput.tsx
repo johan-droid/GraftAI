@@ -31,6 +31,33 @@ export default function VoiceInput({ onTranscript, onError, disabled }: VoiceInp
   const animationFrameRef = useRef<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Stop voice recording
+  const stopRecording = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    setIsRecording(false);
+    setVolume(0);
+    setRecordingDuration(0);
+  }, []);
+
   // Start voice recording
   const startRecording = useCallback(async () => {
     try {
@@ -125,37 +152,6 @@ export default function VoiceInput({ onTranscript, onError, disabled }: VoiceInp
       onError?.('Could not access microphone. Please check permissions.');
     }
   }, [onTranscript, onError]);
-
-  // Stop voice recording
-  const stopRecording = useCallback(() => {
-    // Stop speech recognition
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-
-    // Stop audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-
-    // Cancel animation frame
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-
-    // Clear timer
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
-    setIsRecording(false);
-    setVolume(0);
-    setRecordingDuration(0);
-  }, []);
 
   // Toggle recording
   const toggleRecording = () => {

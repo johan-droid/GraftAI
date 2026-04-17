@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/providers/auth-provider";
-import { updateUserProfile, syncUserTimezone } from "@/lib/api";
+import { updateUserProfile } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
   User,
@@ -111,7 +111,6 @@ export default function ProfilePage() {
     setTimezoneSaving(true);
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await syncUserTimezone(tz);
       await updateUserProfile({ timezone: tz });
       await refresh();
     } finally {

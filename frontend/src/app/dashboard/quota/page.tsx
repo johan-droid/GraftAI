@@ -3,6 +3,7 @@
 import { useAuth } from "@/app/providers/auth-provider";
 import { motion } from "framer-motion";
 import { useMemo } from "react";
+import Link from "next/link";
 import { 
   BarChart3, 
   Sparkles, 
@@ -23,11 +24,11 @@ export default function QuotaPage() {
 
   const stats = user ? {
     tier: user.tier || 'free',
-    daily_ai_count: user.daily_ai_count || 0,
-    daily_sync_count: user.daily_sync_count || 0,
-    daily_ai_limit: user.daily_ai_limit ?? (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10)),
-    daily_sync_limit: user.daily_sync_limit ?? (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3)),
-    quota_reset_at: user.quota_reset_at,
+    daily_ai_count: Number(user.daily_ai_count ?? 0),
+    daily_sync_count: Number(user.daily_sync_count ?? 0),
+    daily_ai_limit: Number(user.daily_ai_limit ?? (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10))),
+    daily_sync_limit: Number(user.daily_sync_limit ?? (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3))),
+    quota_reset_at: user.quota_reset_at ? String(user.quota_reset_at) : undefined,
   } : null;
 
   const aiProgress = stats ? (stats.daily_ai_count / Math.max(1, stats.daily_ai_limit)) * 100 : 0;
@@ -188,12 +189,12 @@ export default function QuotaPage() {
           <div className="mt-6 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-sm text-slate-200">
             <p className="font-semibold text-slate-100 mb-2">Need more power?</p>
             <p className="text-slate-400 leading-relaxed mb-4">Upgrade to unlock higher daily limits and keep usage pinpoint accurate as your team scales.</p>
-            <a
+            <Link
               href="/pricing"
               className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-indigo-500 transition-colors"
             >
               View Upgrade Plans
-            </a>
+            </Link>
           </div>
         </div>
       </div>

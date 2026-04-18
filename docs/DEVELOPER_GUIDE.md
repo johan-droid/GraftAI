@@ -117,7 +117,9 @@ open http://localhost:3000
 | Migrations | Alembic | Schema versioning |
 | AI | Groq API | LLM integration |
 | Cache | Redis | Session, rate limiting |
-| Queue | ARQ + Redis | Background jobs |
+| Queue | ARQ + Redis (legacy) + Celery | Background jobs |
+
+> The backend currently supports both ARQ and Celery: ARQ is retained for legacy background workflows in `backend/worker.py` and `backend/services/bg_tasks.py`, while Celery is used for newer scheduled/task queue processing. This dual runtime is intentional during migration and is expected to be consolidated to Celery once the ARQ-specific flows are fully migrated.
 
 ---
 

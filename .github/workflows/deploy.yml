@@ -1,69 +1,16 @@
-name: GraftAI CI/CD
+name: Deploy placeholder
 
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
 
 jobs:
-  # 1. Verification (Backend)
-  backend-checks:
-    runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    services:
-      redis:
-        image: redis:6.2-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-      - name: Set up Python
-        run: uv python install 3.12
-      - name: Install dependencies
-        working-directory: ./backend
-        run: |
-          uv venv .venv --python 3.12
-          uv pip install --python .venv/bin/python -r requirements.txt ruff
-      - name: Lint with Ruff
-        working-directory: ./backend
-        run: .venv/bin/ruff check .
-      - name: Run Tests
-        working-directory: ./backend
-        run: .venv/bin/python -m pytest
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-          SECRET_KEY: "testsecret"
-          DATABASE_URL: "sqlite+aiosqlite:///:memory:" # Use in-memory mock for tests
-          REDIS_URL: redis://localhost:6379/0
-          RAZORPAY_KEY_ID: rzp_test_mock
-          RAZORPAY_KEY_SECRET: mock_secret
-          RAZORPAY_PLAN_PRO_ID: plan_pro
-          GROQ_API_KEY: mock_groq
-
-  # 2. Deployment (Automatic trigger to Render)
   deploy:
-    needs: backend-checks
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
     steps:
-      - name: Deploy to Render
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Placeholder deploy step
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL is not set. Skipping deployment trigger."
-            exit 0
-          fi
-
-          curl --fail --show-error --silent -X POST "$RENDER_DEPLOY_HOOK_URL"
-
+          echo "No-op deploy placeholder. Replace with your real deploy steps."

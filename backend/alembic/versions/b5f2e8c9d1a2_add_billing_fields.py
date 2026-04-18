@@ -17,46 +17,52 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Use conditional SQL to avoid errors if some columns/indexes already exist
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(50) DEFAULT 'free';")
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'inactive';")
+    # Use SQLAlchemy helpers so the migration works across dialects (Postgres/SQLite)
+    bind = op.get_bind()
+    dialect = getattr(bind.dialect, "name", None) if bind is not None else None
 
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_customer_id VARCHAR(255);")
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_subscription_id VARCHAR(255);")
+    # Choose appropriate DateTime type for the dialect
+    if dialect == "sqlite":
+        dt_type = sa.DateTime()
+        bool_server_false = sa.text('0')
+    else:
+        dt_type = sa.DateTime(timezone=True)
+        bool_server_false = sa.text('false')
 
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_ai_count INTEGER DEFAULT 0 NOT NULL;")
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_ai_limit INTEGER;")
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_sync_count INTEGER DEFAULT 0 NOT NULL;")
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_sync_limit INTEGER;")
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS quota_reset_at TIMESTAMP WITH TIME ZONE;")
+    # Add columns (use server_default for non-nullable counters/flags)
+    op.add_column("users", sa.Column("tier", sa.String(50), nullable=False, server_default=sa.text("'free'")))
+    op.add_column("users", sa.Column("subscription_status", sa.String(50), nullable=False, server_default=sa.text("'inactive'")))
 
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_active BOOLEAN DEFAULT FALSE NOT NULL;")
-    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_expires_at TIMESTAMP WITH TIME ZONE;")
+    op.add_column("users", sa.Column("razorpay_customer_id", sa.String(255), nullable=True))
+    op.add_column("users", sa.Column("razorpay_subscription_id", sa.String(255), nullable=True))
 
-    # Ensure indexes exist for Razorpay identifiers
-    op.execute("CREATE INDEX IF NOT EXISTS ix_users_razorpay_customer_id ON users (razorpay_customer_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_users_razorpay_subscription_id ON users (razorpay_subscription_id);")
+    op.add_column("users", sa.Column("daily_ai_count", sa.Integer(), nullable=False, server_default=sa.text("0")))
+    op.add_column("users", sa.Column("daily_ai_limit", sa.Integer(), nullable=True))
+    op.add_column("users", sa.Column("daily_sync_count", sa.Integer(), nullable=False, server_default=sa.text("0")))
+    op.add_column("users", sa.Column("daily_sync_limit", sa.Integer(), nullable=True))
+    op.add_column("users", sa.Column("quota_reset_at", dt_type, nullable=True))
 
-    # Backfill sensible defaults for any existing rows
-    op.execute("UPDATE users SET tier = 'free' WHERE tier IS NULL;")
-    op.execute("UPDATE users SET subscription_status = 'inactive' WHERE subscription_status IS NULL;")
-    op.execute("UPDATE users SET daily_ai_count = 0 WHERE daily_ai_count IS NULL;")
-    op.execute("UPDATE users SET daily_sync_count = 0 WHERE daily_sync_count IS NULL;")
+    op.add_column("users", sa.Column("trial_active", sa.Boolean(), nullable=False, server_default=bool_server_false))
+    op.add_column("users", sa.Column("trial_expires_at", dt_type, nullable=True))
+
+    # Create indexes for lookup performance
+    op.create_index("ix_users_razorpay_customer_id", "users", ["razorpay_customer_id"])
+    op.create_index("ix_users_razorpay_subscription_id", "users", ["razorpay_subscription_id"])
 
 
 def downgrade() -> None:
-    # Drop created indexes and columns if they exist
-    op.execute("DROP INDEX IF EXISTS ix_users_razorpay_subscription_id;")
-    op.execute("DROP INDEX IF EXISTS ix_users_razorpay_customer_id;")
+    # Drop created indexes and columns
+    op.drop_index("ix_users_razorpay_subscription_id", table_name="users")
+    op.drop_index("ix_users_razorpay_customer_id", table_name="users")
 
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS trial_expires_at;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS trial_active;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS quota_reset_at;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS daily_sync_limit;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS daily_sync_count;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS daily_ai_limit;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS daily_ai_count;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS razorpay_subscription_id;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS razorpay_customer_id;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS subscription_status;")
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS tier;")
+    op.drop_column("users", "trial_expires_at")
+    op.drop_column("users", "trial_active")
+    op.drop_column("users", "quota_reset_at")
+    op.drop_column("users", "daily_sync_limit")
+    op.drop_column("users", "daily_sync_count")
+    op.drop_column("users", "daily_ai_limit")
+    op.drop_column("users", "daily_ai_count")
+    op.drop_column("users", "razorpay_subscription_id")
+    op.drop_column("users", "razorpay_customer_id")
+    op.drop_column("users", "subscription_status")
+    op.drop_column("users", "tier")

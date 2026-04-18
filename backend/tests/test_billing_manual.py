@@ -1,9 +1,8 @@
 import os
 import pytest
-import uuid
 from sqlalchemy import select
 
-from backend.models.tables import ManualActivationRequestTable, UserTable
+from backend.models.tables import ManualActivationRequestTable
 import backend.services.storage as storage_module
 
 

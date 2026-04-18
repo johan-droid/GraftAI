@@ -1,6 +1,7 @@
 """
 Redis configuration for caching, sessions, and job queues.
 """
+
 import os
 import json
 from typing import Optional, Any
@@ -18,9 +19,7 @@ async def get_redis() -> redis.Redis:
     global redis_client
     if redis_client is None:
         redis_client = redis.from_url(
-            REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True
+            REDIS_URL, encoding="utf-8", decode_responses=True
         )
     return redis_client
 
@@ -69,27 +68,27 @@ async def cache_exists(key: str) -> bool:
 async def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
     """
     Check if request is within rate limit.
-    
+
     Args:
         key: Rate limit identifier (e.g., "rate_limit:192.168.1.1")
         limit: Max requests allowed
         window: Time window in seconds
-    
+
     Returns:
         True if within limit, False if exceeded
     """
     r = await get_redis()
     current = await r.get(key)
-    
+
     if current is None:
         # First request in window
         await r.setex(key, window, 1)
         return True
-    
+
     count = int(current)
     if count >= limit:
         return False
-    
+
     # Increment counter
     await r.incr(key)
     return True

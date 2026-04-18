@@ -5,6 +5,7 @@ Revises: 451d24f3b91c
 Create Date: 2026-04-15
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -19,7 +20,12 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "event_types",
-        sa.Column("color", sa.String(length=7), nullable=False, server_default=sa.text("'#3b82f6'")),
+        sa.Column(
+            "color",
+            sa.String(length=7),
+            nullable=False,
+            server_default=sa.text("'#3b82f6'"),
+        ),
     )
     op.alter_column("event_types", "color", server_default=None)
 

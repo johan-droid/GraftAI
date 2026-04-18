@@ -40,7 +40,9 @@ async def disable_mfa(db: AsyncSession, user_id: str) -> bool:
     return True
 
 
-async def verify_mfa_token(db: AsyncSession, user_id: str, token: str, temp_secret: str = None) -> bool:
+async def verify_mfa_token(
+    db: AsyncSession, user_id: str, token: str, temp_secret: str = None
+) -> bool:
     """Validates a TOTP token against a stored or temporary secret."""
     if temp_secret:
         secret = temp_secret

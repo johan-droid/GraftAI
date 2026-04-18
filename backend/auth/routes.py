@@ -40,18 +40,27 @@ from backend.auth.config import (
     SECRET_KEY,
 )
 
-FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "http://localhost:3000")).rstrip("/")
+FRONTEND_BASE_URL = os.getenv(
+    "FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "http://localhost:3000")
+).rstrip("/")
 
 # OAuth state expiration (10 minutes)
 OAUTH_STATE_EXPIRY_SECONDS = 600
 # Allowed redirect paths (prevent open redirect)
-ALLOWED_REDIRECT_PATHS = {"/dashboard", "/settings", "/calendar", "/profile", "/auth-callback"}
+ALLOWED_REDIRECT_PATHS = {
+    "/dashboard",
+    "/settings",
+    "/calendar",
+    "/profile",
+    "/auth-callback",
+}
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Authentication"])
 
 from pydantic import BaseModel
+
 
 class SocialExchangeRequest(BaseModel):
     provider: str
@@ -86,8 +95,14 @@ def _get_bearer_token_from_request(request: Request) -> Optional[str]:
         return auth_header.split(" ", 1)[1].strip()
     return None
 
+
 @router.post("/social/exchange")
-async def social_exchange(req: SocialExchangeRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+async def social_exchange(
+    req: SocialExchangeRequest,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["login"])
 
@@ -96,14 +111,18 @@ async def social_exchange(req: SocialExchangeRequest, request: Request, response
         raise HTTPException(status_code=400, detail="Invalid provider")
 
     if not req.access_token:
-        raise HTTPException(status_code=400, detail="Access token required for social exchange")
+        raise HTTPException(
+            status_code=400, detail="Access token required for social exchange"
+        )
 
     # ── Verify the provider token and extract the user profile ───────────────
     try:
         if normalized_provider == "google":
             provider_profile = await google_auth.verify_google_token(req.access_token)
         else:
-            provider_profile = await microsoft_auth.verify_microsoft_token(req.access_token)
+            provider_profile = await microsoft_auth.verify_microsoft_token(
+                req.access_token
+            )
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
 
@@ -137,7 +156,11 @@ async def social_exchange(req: SocialExchangeRequest, request: Request, response
 
     # ── Persist the provider OAuth token for calendar / graph integration ─────
     # Use the canonical backend provider name regardless of what NextAuth sent
-    backend_provider = "microsoft" if normalized_provider == "microsoft-entra-id" else normalized_provider
+    backend_provider = (
+        "microsoft"
+        if normalized_provider == "microsoft-entra-id"
+        else normalized_provider
+    )
     token_payload: dict = {
         "access_token": req.access_token,
         "id_token": req.id_token,
@@ -169,7 +192,9 @@ async def social_exchange(req: SocialExchangeRequest, request: Request, response
     }
 
 
-def _set_auth_cookies(response: Optional[Response], access_token: str, refresh_token: str):
+def _set_auth_cookies(
+    response: Optional[Response], access_token: str, refresh_token: str
+):
     if response is None:
         return
 
@@ -232,7 +257,9 @@ async def check(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    raw_token = _get_bearer_token_from_request(request) or request.cookies.get("graftai_access_token")
+    raw_token = _get_bearer_token_from_request(request) or request.cookies.get(
+        "graftai_access_token"
+    )
     if not raw_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -278,13 +305,21 @@ async def refresh(
     db: AsyncSession = Depends(get_db),
 ):
     token_value = (
-        (refresh_request.refresh_token if refresh_request else None)
-        or request.cookies.get("graftai_refresh_token")
-    )
+        refresh_request.refresh_token if refresh_request else None
+    ) or request.cookies.get("graftai_refresh_token")
     if not token_value:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Check if token is blacklisted (Token Rotation security)
+    is_blacklisted = await cache_exists(f"blacklist:{token_value}")
+    if is_blacklisted:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has already been used (blacklisted)",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -297,6 +332,9 @@ async def refresh(
             detail="Refresh token user not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Add the used refresh token to the blacklist
+    await cache_set(f"blacklist:{token_value}", "used", expire=REFRESH_TOKEN_EXPIRE_DAYS * 86400)
 
     new_access_token = create_access_token(user.id)
     new_refresh_token = create_refresh_token(user.id)
@@ -340,7 +378,9 @@ async def google_login(
                 pass
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
-        state = build_oauth_state(user_id, redirect_to, provider="google", frontend_url=frontend_url)
+        state = build_oauth_state(
+            user_id, redirect_to, provider="google", frontend_url=frontend_url
+        )
         auth_url = await google_auth.get_google_auth_url(
             state,
             prompt="consent" if force_consent else None,
@@ -352,15 +392,24 @@ async def google_login(
 
 
 @router.get("/google/callback")
-async def google_callback(request: Request, code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+async def google_callback(
+    request: Request,
+    code: str,
+    state: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["oauth_callback"])
 
     try:
         if request.query_params.get("error"):
-            error_desc = request.query_params.get("error_description") or request.query_params.get("error")
+            error_desc = request.query_params.get(
+                "error_description"
+            ) or request.query_params.get("error")
             logger.error("Google OAuth returned error: %s", error_desc)
-            raise HTTPException(status_code=400, detail=f"Google OAuth error: {error_desc}")
+            raise HTTPException(
+                status_code=400, detail=f"Google OAuth error: {error_desc}"
+            )
 
         if not state:
             logger.error("Google callback missing state parameter")
@@ -373,7 +422,9 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
 
         if not email:
             logger.error("Google OAuth returned no email")
-            raise HTTPException(status_code=400, detail="Failed to retrieve email from Google")
+            raise HTTPException(
+                status_code=400, detail="Failed to retrieve email from Google"
+            )
 
         email = email.lower().strip()
 
@@ -403,7 +454,9 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         access_token = token_info.get("access_token")
         if not access_token:
             logger.error("Google OAuth returned no access token")
-            raise HTTPException(status_code=400, detail="Failed to retrieve access token")
+            raise HTTPException(
+                status_code=400, detail="Failed to retrieve access token"
+            )
 
         await upsert_user_token(db, user, "google", token_info)
         await db.commit()
@@ -412,7 +465,9 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         backend_access_token = create_access_token(user.id)
         backend_refresh_token = create_refresh_token(user.id)
         return RedirectResponse(
-            url=frontend_redirect_token(backend_access_token, redirect_to, frontend_url, backend_refresh_token),
+            url=frontend_redirect_token(
+                backend_access_token, redirect_to, frontend_url, backend_refresh_token
+            ),
             status_code=303,
         )
 
@@ -425,7 +480,11 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         await db.rollback()
         logger.error(f"Google Callback Error: {e}", exc_info=True)
         error_msg = str(e).lower()
-        if "invalid_grant" in error_msg or "expired" in error_msg or "mismatch" in error_msg:
+        if (
+            "invalid_grant" in error_msg
+            or "expired" in error_msg
+            or "mismatch" in error_msg
+        ):
             return RedirectResponse(
                 url=f"{FRONTEND_BASE_URL}/login?error=Session expired. Please log in again.",
                 status_code=303,
@@ -439,24 +498,24 @@ async def sso_callback(
     code: str,
     state: Optional[str] = None,
     fetch: Optional[bool] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Unified SSO callback endpoint that routes to the correct provider.
-    
+
     When fetch=true, returns JSON with token for frontend to handle.
     Otherwise, redirects to frontend with token in URL.
     """
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["oauth_callback"])
-    
+
     if not state:
         raise HTTPException(status_code=400, detail="Missing OAuth state parameter")
-    
+
     try:
         # Parse state to get redirect info and provider
         user_id, redirect_to, parsed_provider, frontend_url = parse_oauth_state(state)
-        
+
         # Validate provider from state
         if parsed_provider == "google":
             data = await google_auth.fetch_google_tokens(code)
@@ -477,16 +536,18 @@ async def sso_callback(
                     provider = "microsoft"
                 except Exception:
                     raise HTTPException(
-                        status_code=400, 
-                        detail="Unable to determine OAuth provider from state. Please try again."
+                        status_code=400,
+                        detail="Unable to determine OAuth provider from state. Please try again.",
                     )
-        
+
         email = data.get("email")
         if not email:
-            raise HTTPException(status_code=400, detail="Failed to retrieve email from OAuth provider")
-        
+            raise HTTPException(
+                status_code=400, detail="Failed to retrieve email from OAuth provider"
+            )
+
         email = email.lower().strip()
-        
+
         # Get or create user
         if user_id:
             result = await db.execute(select(UserTable).where(UserTable.id == user_id))
@@ -494,7 +555,7 @@ async def sso_callback(
         else:
             result = await db.execute(select(UserTable).where(UserTable.email == email))
             user = result.scalars().first()
-        
+
         if not user:
             user = await create_user_from_oauth(
                 db,
@@ -505,41 +566,46 @@ async def sso_callback(
             logger.info(f"New user created via {provider} OAuth: {email}")
         elif not user.email_verified:
             user.email_verified = True
-        
+
         # Store tokens
         token_info = data.get("token", {})
         access_token = token_info.get("access_token")
         if not access_token:
             logger.error(f"{provider} OAuth returned no access token")
-            raise HTTPException(status_code=400, detail="Failed to retrieve access token from OAuth provider")
-        
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to retrieve access token from OAuth provider",
+            )
+
         await upsert_user_token(db, user, provider, token_info)
         await db.commit()
-        
+
         # Generate JWT tokens
         access_token = create_access_token(user.id)
         refresh_token = create_refresh_token(user.id)
-        
+
         logger.info(f"{provider} OAuth successful for user: {email}")
-        
+
         # Return JSON if fetch=true, otherwise redirect
         if fetch:
             return {
                 "token": {
                     "access_token": access_token,
                     "refresh_token": refresh_token,
-                    "token_type": "bearer"
+                    "token_type": "bearer",
                 },
                 "redirect_to": redirect_to,
                 "user": {
                     "id": user.id,
                     "email": user.email,
-                    "full_name": user.full_name
-                }
+                    "full_name": user.full_name,
+                },
             }
         else:
             return RedirectResponse(
-                url=frontend_redirect_token(access_token, redirect_to, frontend_url, refresh_token),
+                url=frontend_redirect_token(
+                    access_token, redirect_to, frontend_url, refresh_token
+                ),
                 status_code=303,
             )
 
@@ -549,7 +615,11 @@ async def sso_callback(
         await db.rollback()
         logger.error(f"SSO callback error: {e}", exc_info=True)
         error_msg = str(e).lower()
-        if "invalid_grant" in error_msg or "expired" in error_msg or "mismatch" in error_msg:
+        if (
+            "invalid_grant" in error_msg
+            or "expired" in error_msg
+            or "mismatch" in error_msg
+        ):
             return RedirectResponse(
                 url=f"{FRONTEND_BASE_URL}/login?error=Session expired. Please log in again.",
                 status_code=303,
@@ -597,7 +667,9 @@ async def microsoft_login(
                 pass
 
         redirect_to = redirect_to or redirect_uri or "/dashboard"
-        state = build_oauth_state(user_id, redirect_to, provider="microsoft", frontend_url=frontend_url)
+        state = build_oauth_state(
+            user_id, redirect_to, provider="microsoft", frontend_url=frontend_url
+        )
         auth_url = await microsoft_auth.get_microsoft_auth_url(state)
         return RedirectResponse(url=auth_url, status_code=303)
     except ValueError as e:
@@ -606,7 +678,12 @@ async def microsoft_login(
 
 
 @router.get("/microsoft/callback")
-async def microsoft_callback(request: Request, code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+async def microsoft_callback(
+    request: Request,
+    code: str,
+    state: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["oauth_callback"])
 
@@ -622,7 +699,9 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
 
         if not email:
             logger.error("Microsoft OAuth returned no email")
-            raise HTTPException(status_code=400, detail="Failed to retrieve email from Microsoft")
+            raise HTTPException(
+                status_code=400, detail="Failed to retrieve email from Microsoft"
+            )
 
         email = email.lower().strip()
 
@@ -651,7 +730,9 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         token_info = data.get("token", {})
         if not token_info.get("access_token"):
             logger.error("Microsoft OAuth returned no access token")
-            raise HTTPException(status_code=400, detail="Failed to retrieve access token")
+            raise HTTPException(
+                status_code=400, detail="Failed to retrieve access token"
+            )
 
         await upsert_user_token(db, user, "microsoft", token_info)
         await db.commit()
@@ -660,7 +741,9 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         backend_access_token = create_access_token(user.id)
         backend_refresh_token = create_refresh_token(user.id)
         return RedirectResponse(
-            url=frontend_redirect_token(backend_access_token, redirect_to, frontend_url, backend_refresh_token),
+            url=frontend_redirect_token(
+                backend_access_token, redirect_to, frontend_url, backend_refresh_token
+            ),
             status_code=303,
         )
 
@@ -673,13 +756,20 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
         logger.error(f"Microsoft Callback Error: {e}", exc_info=True)
         await db.rollback()
         error_msg = str(e).lower()
-        if "invalid_grant" in error_msg or "expired" in error_msg or "mismatch" in error_msg:
+        if (
+            "invalid_grant" in error_msg
+            or "expired" in error_msg
+            or "mismatch" in error_msg
+        ):
             return RedirectResponse(
                 url=f"{FRONTEND_BASE_URL}/login?error=Session expired. Please log in again.",
                 status_code=303,
             )
         if "aadsts" in error_msg or "unauthorized_client" in error_msg:
-            raise HTTPException(status_code=400, detail="Microsoft OAuth configuration error. Please contact support.")
+            raise HTTPException(
+                status_code=400,
+                detail="Microsoft OAuth configuration error. Please contact support.",
+            )
         raise HTTPException(status_code=500, detail="Authentication failed")
 
 
@@ -687,13 +777,13 @@ async def microsoft_callback(request: Request, code: str, state: Optional[str] =
 async def complete_onboarding(
     req: OnboardingRequest,
     current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Complete user onboarding process."""
     # Update user profile with onboarding data
     if req.name:
         current_user.full_name = req.name
-    
+
     # Store preferences
     prefs = dict(current_user.preferences or {})
     if req.timezone:
@@ -706,22 +796,20 @@ async def complete_onboarding(
         prefs["notifications_enabled"] = req.notifications_enabled
     if req.ai_suggestions_enabled is not None:
         prefs["ai_suggestions_enabled"] = req.ai_suggestions_enabled
-    
+
     current_user.preferences = prefs
     current_user.onboarding_completed = True
     current_user.onboarding_completed_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(current_user)
-    
+
     return {
         "message": "Onboarding completed successfully",
         "user": {
             "id": current_user.id,
             "email": current_user.email,
             "name": current_user.full_name,
-            "onboarding_completed": True
-        }
+            "onboarding_completed": True,
+        },
     }
-
-

@@ -38,8 +38,10 @@ def _is_admin(user: UserTable) -> bool:
 
 # Pydantic Models
 
+
 class EmailTemplateListItem(BaseModel):
     """Email template list item response."""
+
     id: str
     name: str
     slug: str
@@ -54,6 +56,7 @@ class EmailTemplateListItem(BaseModel):
 
 class EmailTemplateDetail(BaseModel):
     """Detailed email template response."""
+
     id: str
     name: str
     slug: str
@@ -72,6 +75,7 @@ class EmailTemplateDetail(BaseModel):
 
 class EmailTemplateCreate(BaseModel):
     """Create email template request."""
+
     name: str = Field(..., min_length=1, max_length=100)
     slug: str = Field(..., min_length=1, max_length=100, pattern="^[a-z0-9_]+$")
     description: Optional[str] = Field(None, max_length=500)
@@ -85,6 +89,7 @@ class EmailTemplateCreate(BaseModel):
 
 class EmailTemplateUpdate(BaseModel):
     """Update email template request."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     subject: Optional[str] = Field(None, min_length=1, max_length=500)
@@ -97,11 +102,13 @@ class EmailTemplateUpdate(BaseModel):
 
 class RenderTemplateRequest(BaseModel):
     """Render template request."""
+
     variables: Dict[str, str] = Field(default_factory=dict)
 
 
 class RenderTemplateResponse(BaseModel):
     """Rendered template response."""
+
     subject: str
     html_body: str
     text_body: str
@@ -109,12 +116,16 @@ class RenderTemplateResponse(BaseModel):
 
 class SendTestEmailRequest(BaseModel):
     """Send test email request."""
-    to_email: str = Field(..., pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
+    to_email: str = Field(
+        ..., pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    )
     variables: Dict[str, str] = Field(default_factory=dict)
 
 
 class EmailStatsResponse(BaseModel):
     """Email statistics response."""
+
     total: int
     sent: int
     delivered: int
@@ -126,39 +137,36 @@ class EmailStatsResponse(BaseModel):
 
 # Routes
 
+
 @router.get("/", response_model=List[EmailTemplateListItem])
 async def list_templates(
     include_system: bool = Query(default=True, description="Include system templates"),
     language: str = Query(default="en", description="Language code"),
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """List all email templates available to the user.
-    
+
     Returns both system templates and user-specific templates.
     User templates override system templates with the same slug.
     """
     service = EmailTemplateService(db)
-    
+
     # Get user templates
     stmt = select(EmailTemplate).where(
         and_(
-            EmailTemplate.user_id == current_user.id,
-            EmailTemplate.language == language
+            EmailTemplate.user_id == current_user.id, EmailTemplate.language == language
         )
     )
     user_templates = (await db.execute(stmt)).scalars().all()
-    
+
     # Get system templates
     if include_system:
         stmt = select(EmailTemplate).where(
-            and_(
-                EmailTemplate.is_system == True,
-                EmailTemplate.language == language
-            )
+            and_(EmailTemplate.is_system == True, EmailTemplate.language == language)
         )
         system_templates = (await db.execute(stmt)).scalars().all()
-        
+
         # Filter out system templates that have user overrides
         user_slugs = {t.slug for t in user_templates}
         templates = list(user_templates) + [
@@ -166,10 +174,10 @@ async def list_templates(
         ]
     else:
         templates = list(user_templates)
-    
+
     # Sort by name
     templates.sort(key=lambda t: t.name)
-    
+
     return [
         EmailTemplateListItem(
             id=t.id,
@@ -181,7 +189,7 @@ async def list_templates(
             is_active=t.is_active,
             language=t.language,
             created_at=t.created_at.isoformat(),
-            updated_at=t.updated_at.isoformat()
+            updated_at=t.updated_at.isoformat(),
         )
         for t in templates
     ]
@@ -191,21 +199,21 @@ async def list_templates(
 async def get_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Get detailed information about a specific template."""
     stmt = select(EmailTemplate).where(
         and_(
             EmailTemplate.id == template_id,
             EmailTemplate.is_system == False,
-            EmailTemplate.user_id == current_user.id
+            EmailTemplate.user_id == current_user.id,
         )
     )
     template = (await db.execute(stmt)).scalars().first()
-    
+
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
-    
+
     return EmailTemplateDetail(
         id=template.id,
         name=template.name,
@@ -220,7 +228,7 @@ async def get_template(
         is_active=template.is_active,
         language=template.language,
         created_at=template.created_at.isoformat(),
-        updated_at=template.updated_at.isoformat()
+        updated_at=template.updated_at.isoformat(),
     )
 
 
@@ -228,31 +236,31 @@ async def get_template(
 async def create_template(
     template: EmailTemplateCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Create a new custom email template.
-    
+
     User templates can override system templates by using the same slug.
     """
     # Check for duplicate slug
     stmt = select(EmailTemplate).where(
         and_(
             EmailTemplate.slug == template.slug,
-            EmailTemplate.user_id == current_user.id
+            EmailTemplate.user_id == current_user.id,
         )
     )
     existing = (await db.execute(stmt)).scalars().first()
-    
+
     if existing:
         raise HTTPException(
             status_code=400,
-            detail=f"Template with slug '{template.slug}' already exists"
+            detail=f"Template with slug '{template.slug}' already exists",
         )
-    
+
     # Generate text body if not provided
     service = EmailTemplateService(db)
     text_body = template.text_body or service._html_to_text(template.html_body)
-    
+
     new_template = EmailTemplate(
         user_id=current_user.id,
         name=template.name,
@@ -264,13 +272,13 @@ async def create_template(
         text_body=text_body,
         available_variables=template.available_variables,
         primary_color=template.primary_color,
-        language=template.language
+        language=template.language,
     )
-    
+
     db.add(new_template)
     await db.commit()
     await db.refresh(new_template)
-    
+
     return EmailTemplateDetail(
         id=new_template.id,
         name=new_template.name,
@@ -285,7 +293,7 @@ async def create_template(
         is_active=new_template.is_active,
         language=new_template.language,
         created_at=new_template.created_at.isoformat(),
-        updated_at=new_template.updated_at.isoformat()
+        updated_at=new_template.updated_at.isoformat(),
     )
 
 
@@ -294,10 +302,10 @@ async def update_template(
     template_id: str,
     update: EmailTemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Update a custom email template.
-    
+
     System templates cannot be modified. Create a custom template
     with the same slug to override system templates.
     """
@@ -305,14 +313,16 @@ async def update_template(
         and_(
             EmailTemplate.id == template_id,
             EmailTemplate.user_id == current_user.id,
-            EmailTemplate.is_system == False
+            EmailTemplate.is_system == False,
         )
     )
     template = (await db.execute(stmt)).scalars().first()
-    
+
     if not template:
-        raise HTTPException(status_code=404, detail="Template not found or cannot be modified")
-    
+        raise HTTPException(
+            status_code=404, detail="Template not found or cannot be modified"
+        )
+
     # Update fields
     if update.name is not None:
         template.name = update.name
@@ -334,10 +344,10 @@ async def update_template(
         template.primary_color = update.primary_color
     if update.is_active is not None:
         template.is_active = update.is_active
-    
+
     await db.commit()
     await db.refresh(template)
-    
+
     return EmailTemplateDetail(
         id=template.id,
         name=template.name,
@@ -352,7 +362,7 @@ async def update_template(
         is_active=template.is_active,
         language=template.language,
         created_at=template.created_at.isoformat(),
-        updated_at=template.updated_at.isoformat()
+        updated_at=template.updated_at.isoformat(),
     )
 
 
@@ -360,27 +370,29 @@ async def update_template(
 async def delete_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Delete a custom email template.
-    
+
     System templates cannot be deleted.
     """
     stmt = select(EmailTemplate).where(
         and_(
             EmailTemplate.id == template_id,
             EmailTemplate.user_id == current_user.id,
-            EmailTemplate.is_system == False
+            EmailTemplate.is_system == False,
         )
     )
     template = (await db.execute(stmt)).scalars().first()
-    
+
     if not template:
-        raise HTTPException(status_code=404, detail="Template not found or cannot be deleted")
-    
+        raise HTTPException(
+            status_code=404, detail="Template not found or cannot be deleted"
+        )
+
     await db.delete(template)
     await db.commit()
-    
+
     return {"status": "success", "message": "Template deleted"}
 
 
@@ -389,46 +401,42 @@ async def render_template(
     template_id: str,
     request: RenderTemplateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Render a template with variables and return the result.
-    
+
     This is useful for previewing templates before sending.
     """
     service = EmailTemplateService(db)
-    
+
     # Get template (user or system)
-    template = await service.get_template(
-        slug=template_id,
-        user_id=current_user.id
-    )
-    
+    template = await service.get_template(slug=template_id, user_id=current_user.id)
+
     if not template:
         # Try by ID for user templates
         stmt = select(EmailTemplate).where(
             and_(
                 EmailTemplate.id == template_id,
-                EmailTemplate.user_id == current_user.id
+                EmailTemplate.user_id == current_user.id,
             )
         )
         template = (await db.execute(stmt)).scalars().first()
-    
+
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
-    
+
     try:
         subject, html_body, text_body = service.render_template(
-            template=template,
-            variables=request.variables
+            template=template, variables=request.variables
         )
-        
+
         return RenderTemplateResponse(
-            subject=subject,
-            html_body=html_body,
-            text_body=text_body
+            subject=subject, html_body=html_body, text_body=text_body
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Template rendering failed: {str(e)}")
+        raise HTTPException(
+            status_code=400, detail=f"Template rendering failed: {str(e)}"
+        )
 
 
 @router.post("/{template_id}/send-test")
@@ -436,47 +444,45 @@ async def send_test_email(
     template_id: str,
     request: SendTestEmailRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Send a test email using a template.
-    
+
     The email will be sent to the specified address with the
     provided variables substituted into the template.
     """
     service = EmailTemplateService(db)
-    
+
     # Get template
-    template = await service.get_template(
-        slug=template_id,
-        user_id=current_user.id
-    )
-    
+    template = await service.get_template(slug=template_id, user_id=current_user.id)
+
     if not template:
         stmt = select(EmailTemplate).where(
             and_(
                 EmailTemplate.id == template_id,
-                EmailTemplate.user_id == current_user.id
+                EmailTemplate.user_id == current_user.id,
             )
         )
         template = (await db.execute(stmt)).scalars().first()
-    
+
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
-    
+
     # Add default variables
     variables = {
         "user_name": current_user.full_name or "Test User",
-        **request.variables
+        **request.variables,
     }
-    
+
     try:
         subject, html_body, text_body = service.render_template(
-            template=template,
-            variables=variables
+            template=template, variables=variables
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Template rendering failed: {str(e)}")
-    
+        raise HTTPException(
+            status_code=400, detail=f"Template rendering failed: {str(e)}"
+        )
+
     # Send email
     log = await service.send_email(
         to_email=request.to_email,
@@ -484,47 +490,46 @@ async def send_test_email(
         html_body=html_body,
         text_body=text_body,
         template_id=template.id,
-        user_id=current_user.id
+        user_id=current_user.id,
     )
-    
+
     return {
         "status": "sent",
         "log_id": log.id,
         "to": request.to_email,
-        "subject": subject
+        "subject": subject,
     }
 
 
 @router.get("/stats/overview", response_model=EmailStatsResponse)
 async def get_email_stats(
-    days: int = Query(default=30, ge=1, le=365, description="Number of days to analyze"),
+    days: int = Query(
+        default=30, ge=1, le=365, description="Number of days to analyze"
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Get email sending statistics for the current user."""
     service = EmailTemplateService(db)
-    stats = await service.get_email_stats(
-        user_id=current_user.id,
-        days=days
-    )
-    
+    stats = await service.get_email_stats(user_id=current_user.id, days=days)
+
     return EmailStatsResponse(**stats)
 
 
 @router.get("/system/initialize")
 async def initialize_system_templates(
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Initialize default system email templates.
-    
+
     This endpoint is primarily for admin use. System templates
     are created automatically when needed.
     """
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     service = EmailTemplateService(db)
     await service.initialize_system_templates()
-    
+
     return {"status": "success", "message": "System templates initialized"}

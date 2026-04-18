@@ -77,7 +77,11 @@ def _validate_production_env() -> None:
             "Missing required production environment variables: " + ", ".join(missing)
         )
 
-    if os.getenv("SECRET_KEY") in {"super-secret-college-project-key-change-in-prod", "your-super-secret-key-change-in-production", ""}:
+    if os.getenv("SECRET_KEY") in {
+        "super-secret-college-project-key-change-in-prod",
+        "your-super-secret-key-change-in-production",
+        "",
+    }:
         raise RuntimeError("CRITICAL: SECRET_KEY must be changed in production.")
 
 
@@ -95,6 +99,7 @@ def _init_sentry() -> None:
 
 _validate_production_env()
 _init_sentry()
+
 
 async def _self_ping_loop(port: str, interval_seconds: int = 240) -> None:
     url = f"http://127.0.0.1:{port}/health"
@@ -115,7 +120,11 @@ async def lifespan(app: FastAPI):
     # to avoid blocking the main event loop during startup.
 
     port = os.getenv("PORT", "8000")
-    ping_enabled = os.getenv("SELF_PING_ENABLED", "true").lower() not in {"0", "false", "no"}
+    ping_enabled = os.getenv("SELF_PING_ENABLED", "true").lower() not in {
+        "0",
+        "false",
+        "no",
+    }
     ping_task = None
     if ping_enabled:
         ping_interval = int(os.getenv("SELF_PING_INTERVAL_SECONDS", "30"))
@@ -135,15 +144,17 @@ async def lifespan(app: FastAPI):
     if hasattr(db_utils, "engine"):
         await db_utils.engine.dispose()
 
+
 # NOTE: _ensure_event_column_migrations removed. Schema should be managed by Alembic
 # and applied before application startup (e.g., as part of container init or CI/CD).
+
 
 def create_app() -> FastAPI:
     app = FastAPI(
         title="GraftAI Monolith",
         description="A bare-minimum, high-performance monolithic backend for GraftAI.",
         version="2.0.0",
-        lifespan=lifespan
+        lifespan=lifespan,
     )
 
     if os.getenv("SENTRY_DSN"):
@@ -151,7 +162,9 @@ def create_app() -> FastAPI:
 
     # Trusted Host and CORS hardening
     env = os.getenv("ENV", "development").lower()
-    frontend_candidates = _parse_comma_separated_env("FRONTEND_URL") or _parse_comma_separated_env("FRONTEND_BASE_URL")
+    frontend_candidates = _parse_comma_separated_env(
+        "FRONTEND_URL"
+    ) or _parse_comma_separated_env("FRONTEND_BASE_URL")
     if not frontend_candidates:
         frontend_candidates = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
@@ -168,12 +181,20 @@ def create_app() -> FastAPI:
 
     if env == "production":
         # Ensure both root and www variants are allowed in production CORS if either is configured.
-        if "https://www.graftai.tech" in allow_origins and "https://graftai.tech" not in allow_origins:
+        if (
+            "https://www.graftai.tech" in allow_origins
+            and "https://graftai.tech" not in allow_origins
+        ):
             allow_origins.append("https://graftai.tech")
-        if "https://graftai.tech" in allow_origins and "https://www.graftai.tech" not in allow_origins:
+        if (
+            "https://graftai.tech" in allow_origins
+            and "https://www.graftai.tech" not in allow_origins
+        ):
             allow_origins.append("https://www.graftai.tech")
 
-        https_allow_origins = [origin for origin in allow_origins if origin.startswith("https://")]
+        https_allow_origins = [
+            origin for origin in allow_origins if origin.startswith("https://")
+        ]
         if https_allow_origins:
             allow_origins = https_allow_origins
 
@@ -187,12 +208,10 @@ def create_app() -> FastAPI:
     ]
     if not trusted_hosts:
         if env == "production":
-            trusted_hosts = [
-                _extract_hostname(host)
-                for host in allow_origins
-                if host
-            ]
-            backend_host = _extract_hostname(os.getenv("BACKEND_URL") or os.getenv("APP_BASE_URL"))
+            trusted_hosts = [_extract_hostname(host) for host in allow_origins if host]
+            backend_host = _extract_hostname(
+                os.getenv("BACKEND_URL") or os.getenv("APP_BASE_URL")
+            )
             if backend_host:
                 trusted_hosts.append(backend_host)
 
@@ -214,7 +233,9 @@ def create_app() -> FastAPI:
     # trusted from configured proxy IPs. TRUSTED_PROXY_IPS should be a
     # comma-separated list (e.g. "127.0.0.1,load_balancer").
     trusted_proxy_env = os.getenv("TRUSTED_PROXY_IPS", "")
-    trusted_proxy_ips = [ip.strip() for ip in trusted_proxy_env.split(",") if ip.strip()]
+    trusted_proxy_ips = [
+        ip.strip() for ip in trusted_proxy_env.split(",") if ip.strip()
+    ]
     if trusted_proxy_ips:
         try:
             import importlib
@@ -236,29 +257,35 @@ def create_app() -> FastAPI:
 
     class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         """Add security headers to all responses."""
-        
+
         async def dispatch(self, request, call_next):
             response = await call_next(request)
-            
+
             # Prevent MIME type sniffing
             response.headers["X-Content-Type-Options"] = "nosniff"
-            
+
             # Prevent clickjacking
             response.headers["X-Frame-Options"] = "DENY"
-            
+
             # XSS protection
             response.headers["X-XSS-Protection"] = "1; mode=block"
-            
+
             # HTTPS enforcement (1 year)
             if request.url.scheme == "https":
-                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-            
+                response.headers["Strict-Transport-Security"] = (
+                    "max-age=31536000; includeSubDomains"
+                )
+
             # Referrer policy
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-            
+
             # Content Security Policy
             request_path = request.url.path
-            is_docs_request = request_path in {"/docs", "/redoc", "/openapi.json"} or request_path.startswith("/docs/")
+            is_docs_request = request_path in {
+                "/docs",
+                "/redoc",
+                "/openapi.json",
+            } or request_path.startswith("/docs/")
 
             if is_docs_request:
                 response.headers["Content-Security-Policy"] = (
@@ -282,7 +309,7 @@ def create_app() -> FastAPI:
                     "font-src 'self'; "
                     "connect-src 'self';"
                 )
-            
+
             # Permissions Policy
             response.headers["Permissions-Policy"] = (
                 "accelerometer=(), "
@@ -294,7 +321,7 @@ def create_app() -> FastAPI:
                 "payment=(), "
                 "usb=()"
             )
-            
+
             return response
 
     app.add_middleware(SecurityHeadersMiddleware)
@@ -304,6 +331,7 @@ def create_app() -> FastAPI:
         InputValidationMiddleware,
         RequestLoggingMiddleware,
     )
+
     app.add_middleware(InputValidationMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
 
@@ -313,16 +341,16 @@ def create_app() -> FastAPI:
 
     class RequestIDMiddleware(BaseHTTPMiddleware):
         """Add X-Request-ID header for request correlation across services."""
-        
+
         async def dispatch(self, request, call_next):
             # Generate or propagate request ID
             request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-            
+
             # Store in request state for access in endpoints
             request.state.request_id = request_id
             # Add to logging context if available (set before calling downstream handlers)
-            if hasattr(request.state, 'logger_extra'):
-                request.state.logger_extra['request_id'] = request_id
+            if hasattr(request.state, "logger_extra"):
+                request.state.logger_extra["request_id"] = request_id
 
             # Call downstream handlers
             response = await call_next(request)
@@ -331,11 +359,12 @@ def create_app() -> FastAPI:
             response.headers["X-Request-ID"] = request_id
 
             return response
-    
+
     app.add_middleware(RequestIDMiddleware)
 
     # Rate Limiting Middleware
     from backend.utils.rate_limiter import RateLimitMiddleware
+
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
     app.add_middleware(
         RateLimitMiddleware,
@@ -343,10 +372,14 @@ def create_app() -> FastAPI:
         default_limit=100,
         default_window=60,
         strategy="sliding_window",
-        skip_paths=["/health", "/", "/docs", "/redoc", "/openapi.json", "/metrics"]
+        skip_paths=["/health", "/", "/docs", "/redoc", "/openapi.json", "/metrics"],
     )
 
-    allow_origin_regex = r"^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$" if env != "production" else None
+    allow_origin_regex = (
+        r"^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
+        if env != "production"
+        else None
+    )
 
     app.add_middleware(
         CORSMiddleware,
@@ -383,17 +416,19 @@ def create_app() -> FastAPI:
     from backend.api.email_template_routes import router as email_template_router
     from backend.api.video_conference_routes import router as video_conference_router
     from backend.api.resource_routes import router as resource_router
-    from backend.api.advanced_analytics_routes import router as advanced_analytics_router
+    from backend.api.advanced_analytics_routes import (
+        router as advanced_analytics_router,
+    )
     from backend.api.automation_routes import router as automation_router
     from backend.api.monitoring import router as monitoring_router
 
     # Registering the new unified Authentication router
     app.include_router(auth_router, prefix="/api/v1/auth")
-    
+
     # Registering session revocation auth router
     from backend.api.auth import router as session_auth_router
-    app.include_router(session_auth_router, prefix="/api/v1/auth")
 
+    app.include_router(session_auth_router, prefix="/api/v1/auth")
 
     # Registering calendar integration router
     app.include_router(calendar_integration_router)
@@ -406,7 +441,6 @@ def create_app() -> FastAPI:
 
     # Registering analytics router
     app.include_router(analytics_router, prefix="/api/v1")
-
 
     # Registering integration router
     app.include_router(integration_router, prefix="/api/v1")
@@ -448,9 +482,12 @@ def create_app() -> FastAPI:
         return {
             "app": "GraftAI",
             "status": "running",
-            "frontend_url": os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")),
+            "frontend_url": os.getenv(
+                "FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+            ),
         }
 
     return app
+
 
 app = create_app()

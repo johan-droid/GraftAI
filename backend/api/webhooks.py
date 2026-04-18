@@ -17,7 +17,11 @@ from backend.services.webhook_subscriptions import (
     delete_webhook_subscription,
     list_webhook_logs,
 )
-from backend.utils.cache import invalidate_user_calendar_cache, invalidate_user_cache_pattern, acquire_lock
+from backend.utils.cache import (
+    invalidate_user_calendar_cache,
+    invalidate_user_cache_pattern,
+    acquire_lock,
+)
 from backend.utils.arq_utils import enqueue_job
 
 logger = logging.getLogger(__name__)
@@ -64,10 +68,7 @@ class WebhookLogResponse(BaseModel):
 
 
 @router.post("/google")
-async def google_calendar_webhook(
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-):
+async def google_calendar_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Handles Google Calendar push notifications.
     """
@@ -76,7 +77,9 @@ async def google_calendar_webhook(
     state = request.headers.get("X-Goog-Resource-State")
     channel_token = request.headers.get("X-Goog-Channel-Token", "")
 
-    logger.info(f"[WEBHOOK] 📩 Google Notification: SubID={subscription_id}, State={state}")
+    logger.info(
+        f"[WEBHOOK] 📩 Google Notification: SubID={subscription_id}, State={state}"
+    )
 
     if state == "sync":
         # Initial verification message, just return 200
@@ -91,7 +94,9 @@ async def google_calendar_webhook(
 
     # SEC-05: Verify the channel token matches the stored client_state
     if not sub or not hmac.compare_digest(sub.client_state or "", channel_token):
-        logger.warning(f"[WEBHOOK] 🚨 Invalid or missing Google channel token for sub {subscription_id}")
+        logger.warning(
+            f"[WEBHOOK] 🚨 Invalid or missing Google channel token for sub {subscription_id}"
+        )
         return Response(status_code=403)
 
     # 1. Invalidate Cache
@@ -104,15 +109,16 @@ async def google_calendar_webhook(
         await enqueue_job("task_sync_calendar", user_id=sub.user_id)
         logger.info(f"[WEBHOOK] 🔄 Triggered background sync for user {sub.user_id}")
     else:
-        logger.info(f"[WEBHOOK] ⏱ Debounced duplicate sync enqueue for user {sub.user_id}")
+        logger.info(
+            f"[WEBHOOK] ⏱ Debounced duplicate sync enqueue for user {sub.user_id}"
+        )
 
     return Response(status_code=200)
 
+
 @router.post("/microsoft")
 async def microsoft_graph_webhook(
-    request: Request,
-    validationToken: str = None,
-    db: AsyncSession = Depends(get_db)
+    request: Request, validationToken: str = None, db: AsyncSession = Depends(get_db)
 ):
     """
     Handles MS Graph push notifications.
@@ -126,28 +132,32 @@ async def microsoft_graph_webhook(
     try:
         body = await request.json()
         notifications = body.get("value", [])
-        
+
         for notif in notifications:
             sub_id = notif.get("subscriptionId")
             client_state = notif.get("clientState")
-            
+
             stmt = select(WebhookSubscriptionTable).where(
                 WebhookSubscriptionTable.external_subscription_id == sub_id
             )
             result = await db.execute(stmt)
             sub = result.scalars().first()
-            
+
             if sub and sub.client_state == client_state:
                 logger.info(f"[WEBHOOK] 🔄 MS Graph Change for user {sub.user_id}")
                 await invalidate_user_calendar_cache(sub.user_id)
                 await invalidate_user_calendar_busy_cache(sub.user_id)
                 await invalidate_user_cache_pattern(sub.user_id, "availability")
                 await invalidate_user_cache_pattern(sub.user_id, "busy_windows")
-                if await acquire_lock(f"webhook_sync_enqueue:{sub.user_id}", ttl_seconds=45):
+                if await acquire_lock(
+                    f"webhook_sync_enqueue:{sub.user_id}", ttl_seconds=45
+                ):
                     await enqueue_job("task_sync_calendar", user_id=sub.user_id)
                 else:
-                    logger.info(f"[WEBHOOK] ⏱ Debounced duplicate sync enqueue for user {sub.user_id}")
-        
+                    logger.info(
+                        f"[WEBHOOK] ⏱ Debounced duplicate sync enqueue for user {sub.user_id}"
+                    )
+
     except Exception as e:
         logger.error(f"[WEBHOOK] ❌ Parse failure: {e}")
 

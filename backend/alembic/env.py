@@ -19,28 +19,32 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+
 def get_url():
     url = DATABASE_URL
     if not url:
         return url
-    
+
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    
-    # asyncpg is extremely picky about query params. 
+
+    # asyncpg is extremely picky about query params.
     # Standard practice for asyncpg is to strip them from the URL and pass them in connect_args.
     parsed = urlparse(url)
     # Return URL WITHOUT any query parameters to avoid 'unexpected keyword argument' errors
     return urlunparse(parsed._replace(query=""))
 
+
 config.set_main_option("sqlalchemy.url", get_url())
 
 target_metadata = Base.metadata
+
 
 def do_run_migrations(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
+
 
 async def run_async_migrations() -> None:
     # Handle SSL for Render/Production if needed
@@ -48,17 +52,17 @@ async def run_async_migrations() -> None:
     connect_args = {}
     if is_render:
         connect_args["ssl"] = "require"
-    
+
     # Add any other required asyncpg params here
     connect_args["command_timeout"] = 60
 
     async_config = config.get_section(config.config_ini_section, {})
-    
+
     connectable = async_engine_from_config(
         async_config,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        connect_args=connect_args
+        connect_args=connect_args,
     )
 
     async with connectable.connect() as connection:
@@ -66,8 +70,10 @@ async def run_async_migrations() -> None:
 
     await connectable.dispose()
 
+
 def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
+
 
 if context.is_offline_mode():
     context.configure(

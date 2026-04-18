@@ -27,7 +27,10 @@ CRITICAL BEHAVIORAL RULES:
 Your goal is to make the user feel supported, understood, and highly efficient.
 """
 
-AGENT_SYSTEM_PROMPT = HUMANIZED_SYSTEM_PROMPT + "\n\n--\n\n" + """
+AGENT_SYSTEM_PROMPT = (
+    HUMANIZED_SYSTEM_PROMPT
+    + "\n\n--\n\n"
+    + """
 You are an intelligent AI agent for GraftAI, a scheduling automation platform.
 
 RESPONSE STYLE:
@@ -86,6 +89,7 @@ DECISION FRAMEWORK:
 
 Always be specific, actionable, and thoughtful in your decisions.
 """
+)
 
 # ═════════════════════════════════════════════════════════════════
 # PHASE-SPECIFIC PROMPTS
@@ -350,19 +354,18 @@ RESPONSE FORMAT:
 # HELPER FUNCTIONS
 # ═════════════════════════════════════════════════════════════════
 
+
 def format_agent_cognition_prompt(
-    phase: str,
-    context: Dict[str, Any],
-    available_tools: List[str] = None
+    phase: str, context: Dict[str, Any], available_tools: List[str] = None
 ) -> str:
     """
     Format the appropriate prompt for the given phase
-    
+
     Args:
         phase: One of "perception", "cognition", "action", "reflection"
         context: Context data for the phase
         available_tools: List of available tool names
-    
+
     Returns:
         Formatted prompt string
     """
@@ -378,9 +381,9 @@ def format_agent_cognition_prompt(
             user_id=context.get("user_id", ""),
             session_id=context.get("session_id", ""),
             conversation_history=context.get("conversation_history", "None"),
-            recent_tool_outputs=context.get("recent_tool_outputs", "None")
+            recent_tool_outputs=context.get("recent_tool_outputs", "None"),
         )
-    
+
     elif phase == "cognition":
         return COGNITION_PROMPT_TEMPLATE.format(
             context_understanding=context.get("context_understanding", ""),
@@ -390,17 +393,17 @@ def format_agent_cognition_prompt(
             vip_level=context.get("vip_level", "standard"),
             urgency=context.get("urgency", "normal"),
             time_constraints=context.get("time_constraints", "None"),
-            business_rules=context.get("business_rules", "None")
+            business_rules=context.get("business_rules", "None"),
         )
-    
+
     elif phase == "action":
         return ACTION_PROMPT_TEMPLATE.format(
             plan=context.get("plan", ""),
             available_tools=", ".join(available_tools or []),
             execution_context=context.get("execution_context", ""),
-            previous_results=context.get("previous_results", "None")
+            previous_results=context.get("previous_results", "None"),
         )
-    
+
     elif phase == "reflection":
         return REFLECTION_PROMPT_TEMPLATE.format(
             action_results=context.get("action_results", ""),
@@ -408,9 +411,9 @@ def format_agent_cognition_prompt(
             original_plan=context.get("original_plan", ""),
             agent_type=context.get("agent_type", ""),
             user_id=context.get("user_id", ""),
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.utcnow().isoformat(),
         )
-    
+
     else:
         raise ValueError(f"Unknown phase: {phase}")
 
@@ -419,17 +422,17 @@ def format_multi_phase_prompt(
     agent_type: str,
     user_request: str,
     memory_data: Dict[str, Any],
-    available_tools: List[str]
+    available_tools: List[str],
 ) -> str:
     """
     Format a complete prompt for the entire 4-phase loop
-    
+
     Args:
         agent_type: Type of agent
         user_request: User's request
         memory_data: Memory data from all layers
         available_tools: List of available tools
-    
+
     Returns:
         Complete formatted prompt
     """
@@ -442,12 +445,12 @@ CURRENT REQUEST:
 AGENT TYPE: {agent_type}
 
 AVAILABLE TOOLS:
-{', '.join(available_tools)}
+{", ".join(available_tools)}
 
 MEMORY STATE:
-Short-term: {memory_data.get('short_term', 'None')}
-Medium-term: {memory_data.get('medium_term', 'None')}
-Long-term: {memory_data.get('long_term', 'None')}
+Short-term: {memory_data.get("short_term", "None")}
+Medium-term: {memory_data.get("medium_term", "None")}
+Long-term: {memory_data.get("long_term", "None")}
 
 Execute the 4-Phase Agent Loop and respond with your decisions.
 """
@@ -465,13 +468,13 @@ if __name__ == "__main__":
         "current_goal": "Schedule meeting with John",
         "risk_level": "low",
         "vip_level": "standard",
-        "urgency": "normal"
+        "urgency": "normal",
     }
-    
+
     tools = ["send_email", "create_calendar_event", "send_calendar_invite"]
-    
+
     prompt = format_agent_cognition_prompt("cognition", context, tools)
-    
+
     print("=" * 80)
     print("AGENT COGNITION PROMPT EXAMPLE")
     print("=" * 80)

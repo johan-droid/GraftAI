@@ -5,6 +5,7 @@ and a `get_redis_client` shim. It delegates to `backend.services.cache` or
 `backend.services.redis_client` when available, and otherwise falls back to
 in-memory implementations suitable for local development.
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -56,7 +57,11 @@ async def set_cache(key: str, value: Any, expire_seconds: int = 300) -> None:
         pass
 
     payload = serializer.pack_for_cache(value)
-    expire_at = time.time() + int(expire_seconds) if expire_seconds and int(expire_seconds) > 0 else None
+    expire_at = (
+        time.time() + int(expire_seconds)
+        if expire_seconds and int(expire_seconds) > 0
+        else None
+    )
     _fallback_cache[key] = (payload, expire_at)
 
 
@@ -100,7 +105,11 @@ async def invalidate_user_calendar_cache(user_id: str) -> None:
         pass
 
     # Best-effort removal of common calendar key patterns
-    patterns = [f"calendar:events:{user_id}", f"calendar:list:{user_id}", f"calendar:summary:{user_id}"]
+    patterns = [
+        f"calendar:events:{user_id}",
+        f"calendar:list:{user_id}",
+        f"calendar:summary:{user_id}",
+    ]
     for k in patterns:
         _fallback_cache.pop(k, None)
 
@@ -150,7 +159,9 @@ async def delete_cache_pattern(pattern: str) -> None:
     except Exception:
         pass
 
-    keys_to_delete = [k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)]
+    keys_to_delete = [
+        k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)
+    ]
     for k in keys_to_delete:
         _fallback_cache.pop(k, None)
 
@@ -167,7 +178,9 @@ async def invalidate_user_cache_pattern(user_id: str, prefix: str) -> None:
     except Exception:
         pass
 
-    keys_to_delete = [k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)]
+    keys_to_delete = [
+        k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)
+    ]
     for k in keys_to_delete:
         _fallback_cache.pop(k, None)
 

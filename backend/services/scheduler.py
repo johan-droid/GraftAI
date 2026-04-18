@@ -7,10 +7,26 @@ from sqlalchemy import select, and_
 import pytz
 
 from backend.models.tables import EventTable, UserTable, UserTokenTable
-from backend.services.notifications import notify_event_created, notify_event_updated, notify_event_deleted
-from backend.services.integrations.google_calendar import create_google_event, update_google_event, delete_google_event
-from backend.services.integrations.ms_graph import create_ms_event, update_ms_event, delete_ms_event
-from backend.services.integrations.zoom import create_zoom_meeting, update_zoom_meeting, delete_zoom_meeting
+from backend.services.notifications import (
+    notify_event_created,
+    notify_event_updated,
+    notify_event_deleted,
+)
+from backend.services.integrations.google_calendar import (
+    create_google_event,
+    update_google_event,
+    delete_google_event,
+)
+from backend.services.integrations.ms_graph import (
+    create_ms_event,
+    update_ms_event,
+    delete_ms_event,
+)
+from backend.services.integrations.zoom import (
+    create_zoom_meeting,
+    update_zoom_meeting,
+    delete_zoom_meeting,
+)
 from backend.services.token_encryption import decrypt_token_value
 
 logger = logging.getLogger(__name__)
@@ -29,7 +45,9 @@ def to_utc(dt: datetime) -> datetime:
     return dt.astimezone(pytz.UTC)
 
 
-async def _get_active_token(db: AsyncSession, user_id: str, provider: str) -> Optional[UserTokenTable]:
+async def _get_active_token(
+    db: AsyncSession, user_id: str, provider: str
+) -> Optional[UserTokenTable]:
     stmt = select(UserTokenTable).where(
         and_(
             UserTokenTable.user_id == user_id,
@@ -56,7 +74,9 @@ def _build_token_data(token: UserTokenTable) -> dict:
     }
 
 
-async def _create_external_event(db: AsyncSession, user_id: str, provider: str, event_details: dict) -> Optional[dict]:
+async def _create_external_event(
+    db: AsyncSession, user_id: str, provider: str, event_details: dict
+) -> Optional[dict]:
     token = await _get_active_token(db, user_id, provider)
     if not token:
         return None
@@ -70,7 +90,9 @@ async def _create_external_event(db: AsyncSession, user_id: str, provider: str, 
                 "external_id": res.get("id"),
                 "meeting_url": (
                     res.get("hangoutLink")
-                    or res.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri")
+                    or res.get("conferenceData", {})
+                    .get("entryPoints", [{}])[0]
+                    .get("uri")
                     or res.get("htmlLink")
                 ),
                 "source": "google",
@@ -98,10 +120,14 @@ async def _create_external_event(db: AsyncSession, user_id: str, provider: str, 
     return None
 
 
-async def _update_external_event(db: AsyncSession, user_id: str, provider: str, external_id: str, event_details: dict) -> None:
+async def _update_external_event(
+    db: AsyncSession, user_id: str, provider: str, external_id: str, event_details: dict
+) -> None:
     token = await _get_active_token(db, user_id, provider)
     if not token:
-        logger.warning(f"No active {provider} token for user {user_id}, skipping external update")
+        logger.warning(
+            f"No active {provider} token for user {user_id}, skipping external update"
+        )
         return
 
     token_data = _build_token_data(token)
@@ -118,10 +144,14 @@ async def _update_external_event(db: AsyncSession, user_id: str, provider: str, 
         logger.error(f"External event update failed for {provider}/{external_id}: {e}")
 
 
-async def _delete_external_event(db: AsyncSession, user_id: str, provider: str, external_id: str) -> None:
+async def _delete_external_event(
+    db: AsyncSession, user_id: str, provider: str, external_id: str
+) -> None:
     token = await _get_active_token(db, user_id, provider)
     if not token:
-        logger.warning(f"No active {provider} token for user {user_id}, skipping external delete")
+        logger.warning(
+            f"No active {provider} token for user {user_id}, skipping external delete"
+        )
         return
 
     token_data = _build_token_data(token)
@@ -164,7 +194,9 @@ async def _safe_notify(db: AsyncSession, action: str, user_id: str, event: Event
         logger.error(f"Notification failed: {e}")
 
 
-async def push_event_to_external_calendar(db: AsyncSession, event_id: str) -> Optional[EventTable]:
+async def push_event_to_external_calendar(
+    db: AsyncSession, event_id: str
+) -> Optional[EventTable]:
     event = await db.get(EventTable, event_id)
     if not event or not event.meeting_provider or event.external_id:
         return event
@@ -178,7 +210,9 @@ async def push_event_to_external_calendar(db: AsyncSession, event_id: str) -> Op
         "is_meeting": event.is_meeting,
     }
 
-    result = await _create_external_event(db, event.user_id, event.meeting_provider, event_details)
+    result = await _create_external_event(
+        db, event.user_id, event.meeting_provider, event_details
+    )
     if not result:
         return event
 
@@ -190,14 +224,20 @@ async def push_event_to_external_calendar(db: AsyncSession, event_id: str) -> Op
     return event
 
 
-async def get_events_for_range(db: AsyncSession, user_id: str, start: datetime, end: datetime) -> List[dict]:
-    stmt = select(EventTable).where(
-        and_(
-            EventTable.user_id == user_id,
-            EventTable.start_time < end,
-            EventTable.end_time > start,
+async def get_events_for_range(
+    db: AsyncSession, user_id: str, start: datetime, end: datetime
+) -> List[dict]:
+    stmt = (
+        select(EventTable)
+        .where(
+            and_(
+                EventTable.user_id == user_id,
+                EventTable.start_time < end,
+                EventTable.end_time > start,
+            )
         )
-    ).order_by(EventTable.start_time.asc())
+        .order_by(EventTable.start_time.asc())
+    )
 
     result = await db.execute(stmt)
     events = result.scalars().all()
@@ -223,18 +263,26 @@ async def create_event(
     start_time = event_data.get("start_time")
     end_time = event_data.get("end_time")
     if not isinstance(start_time, datetime) or not isinstance(end_time, datetime):
-        raise ValueError("start_time and end_time are required and must be datetime values")
+        raise ValueError(
+            "start_time and end_time are required and must be datetime values"
+        )
 
     st = to_utc(start_time)
     et = to_utc(end_time)
 
     conflict_stmt = select(EventTable).where(
-        and_(EventTable.user_id == user_id, EventTable.start_time < et, EventTable.end_time > st)
+        and_(
+            EventTable.user_id == user_id,
+            EventTable.start_time < et,
+            EventTable.end_time > st,
+        )
     )
     if (await db.execute(conflict_stmt)).scalars().first():
         logger.warning(f"Conflict detected for user {user_id}")
 
-    db_event_data = {k: v for k, v in event_data.items() if k in EventTable.__table__.columns.keys()}
+    db_event_data = {
+        k: v for k, v in event_data.items() if k in EventTable.__table__.columns.keys()
+    }
     db_event_data["title"] = _normalize_event_title(db_event_data.get("title"))
     new_event = EventTable(**db_event_data)
     new_event.start_time = st
@@ -242,20 +290,30 @@ async def create_event(
     db.add(new_event)
     await db.flush()
 
-    should_push_external = bool(event_data.get("is_meeting") or event_data.get("meeting_provider"))
+    should_push_external = bool(
+        event_data.get("is_meeting") or event_data.get("meeting_provider")
+    )
     if perform_external and should_push_external:
         external_event_data = dict(event_data)
-        external_event_data["title"] = _normalize_event_title(external_event_data.get("title"))
+        external_event_data["title"] = _normalize_event_title(
+            external_event_data.get("title")
+        )
         provider_preference = ["google", "microsoft", "zoom"]
         event_provider = event_data.get("meeting_provider")
         if event_provider:
             provider_preference = [event_provider]
 
         for provider in provider_preference:
-            result = await _create_external_event(db, user_id, provider, external_event_data)
+            result = await _create_external_event(
+                db, user_id, provider, external_event_data
+            )
             if result:
-                new_event.external_id = result.get("external_id") or new_event.external_id
-                new_event.meeting_url = result.get("meeting_url") or new_event.meeting_url
+                new_event.external_id = (
+                    result.get("external_id") or new_event.external_id
+                )
+                new_event.meeting_url = (
+                    result.get("meeting_url") or new_event.meeting_url
+                )
                 new_event.is_meeting = True
                 new_event.meeting_provider = new_event.meeting_provider or provider
                 source = result.get("source")
@@ -285,7 +343,9 @@ async def update_event(
         start_time = update_data.get("start_time")
         end_time = update_data.get("end_time")
         if start_time is None or end_time is None:
-            raise ValueError("Both start_time and end_time must be provided and non-null when updating event schedule.")
+            raise ValueError(
+                "Both start_time and end_time must be provided and non-null when updating event schedule."
+            )
         if not isinstance(start_time, datetime) or not isinstance(end_time, datetime):
             raise ValueError("start_time and end_time must be datetime values.")
 
@@ -309,9 +369,13 @@ async def update_event(
 
     try:
         if event.external_id and event.source:
-            await _update_external_event(db, user_id, event.source, event.external_id, event_details)
+            await _update_external_event(
+                db, user_id, event.source, event.external_id, event_details
+            )
         elif event.is_meeting and event.meeting_provider:
-            result = await _create_external_event(db, user_id, event.meeting_provider, event_details)
+            result = await _create_external_event(
+                db, user_id, event.meeting_provider, event_details
+            )
             if result:
                 event.external_id = result.get("external_id")
                 event.meeting_url = result.get("meeting_url")

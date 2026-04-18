@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/v1/calendar", tags=["Calendar Integration"])
 
 class AppleCalendarConnectRequest(BaseModel):
     """Request to connect Apple Calendar with app-specific password."""
+
     app_specific_password: str
 
 
@@ -25,7 +26,7 @@ async def connect_apple_calendar(
 ):
     """
     Connect Apple iCloud Calendar using an app-specific password.
-    
+
     Users must generate an app-specific password at https://appleid.apple.com
     after signing in with Apple.
     """
@@ -35,23 +36,23 @@ async def connect_apple_calendar(
         UserTokenTable.provider == "apple",
     )
     token = (await db.execute(stmt)).scalars().first()
-    
+
     if not token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please sign in with Apple first to connect your calendar"
+            detail="Please sign in with Apple first to connect your calendar",
         )
-    
+
     # Get Apple user ID from metadata
     metadata = token.metadata or {}
     apple_user_id = metadata.get("apple_user_id")
-    
+
     if not apple_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Apple user ID not found. Please sign in with Apple again."
+            detail="Apple user ID not found. Please sign in with Apple again.",
         )
-    
+
     # Store app-specific password in metadata
     # Note: In production, this should be encrypted
     token.metadata = {
@@ -61,13 +62,13 @@ async def connect_apple_calendar(
         "calendar_connected": True,
     }
     token.is_active = True
-    
+
     await db.commit()
-    
+
     return {
         "message": "Apple Calendar connected successfully",
         "provider": "apple",
-        "connected": True
+        "connected": True,
     }
 
 
@@ -82,13 +83,12 @@ async def disconnect_apple_calendar(
         UserTokenTable.provider == "apple",
     )
     token = (await db.execute(stmt)).scalars().first()
-    
+
     if not token:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Apple Calendar not connected"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apple Calendar not connected"
         )
-    
+
     # Remove app-specific password but keep OAuth token
     metadata = token.metadata or {}
     token.metadata = {
@@ -96,13 +96,13 @@ async def disconnect_apple_calendar(
         "app_specific_password": None,
         "calendar_connected": False,
     }
-    
+
     await db.commit()
-    
+
     return {
         "message": "Apple Calendar disconnected",
         "provider": "apple",
-        "connected": False
+        "connected": False,
     }
 
 
@@ -117,21 +117,24 @@ async def list_calendar_connections(
         UserTokenTable.is_active == True,
     )
     tokens = (await db.execute(stmt)).scalars().all()
-    
+
     connections = []
     for token in tokens:
         metadata = token.metadata or {}
         is_calendar_connected = metadata.get("calendar_connected", False)
-        
-        connections.append({
-            "provider": token.provider,
-            "connected": is_calendar_connected,
-            "provider_name": {
-                "google": "Google Calendar",
-                "microsoft": "Microsoft Outlook",
-                "apple": "Apple iCloud Calendar",
-            }.get(token.provider, token.provider.title()),
-            "requires_app_password": token.provider == "apple" and not is_calendar_connected,
-        })
-    
+
+        connections.append(
+            {
+                "provider": token.provider,
+                "connected": is_calendar_connected,
+                "provider_name": {
+                    "google": "Google Calendar",
+                    "microsoft": "Microsoft Outlook",
+                    "apple": "Apple iCloud Calendar",
+                }.get(token.provider, token.provider.title()),
+                "requires_app_password": token.provider == "apple"
+                and not is_calendar_connected,
+            }
+        )
+
     return {"connections": connections}

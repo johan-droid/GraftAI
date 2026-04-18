@@ -1,4 +1,5 @@
 """API routes for audit log access."""
+
 from typing import List
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query
@@ -11,6 +12,7 @@ from backend.models.tables import AuditLogTable
 
 router = APIRouter(prefix="/api/v1/audit", tags=["Audit Logs"])
 
+
 class AuditLogResponse(BaseModel):
     id: str
     timestamp: datetime
@@ -20,8 +22,10 @@ class AuditLogResponse(BaseModel):
     action: str
     result: str
     resource_type: str
+
     class Config:
         from_attributes = True
+
 
 @router.get("/logs", response_model=List[AuditLogResponse])
 async def get_my_audit_logs(
@@ -30,10 +34,12 @@ async def get_my_audit_logs(
     db: AsyncSession = Depends(get_db),
 ):
     cutoff = datetime.utcnow() - timedelta(hours=hours)
-    stmt = select(AuditLogTable).where(
-        AuditLogTable.user_id == user_id,
-        AuditLogTable.timestamp >= cutoff
-    ).order_by(AuditLogTable.timestamp.desc()).limit(100)
+    stmt = (
+        select(AuditLogTable)
+        .where(AuditLogTable.user_id == user_id, AuditLogTable.timestamp >= cutoff)
+        .order_by(AuditLogTable.timestamp.desc())
+        .limit(100)
+    )
     result = await db.execute(stmt)
     logs = result.scalars().all()
     return [AuditLogResponse.from_orm(log) for log in logs]

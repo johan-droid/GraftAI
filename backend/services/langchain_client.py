@@ -93,7 +93,9 @@ def _try_init() -> None:
             )
             logger.info(f"Assistant model initialized: {OPENAI_MODEL}")
         except Exception as exc:
-            logger.warning(f"Assistant model initialization failed ({type(exc).__name__}); continuing in local mode")
+            logger.warning(
+                f"Assistant model initialization failed ({type(exc).__name__}); continuing in local mode"
+            )
 
     if OPENAI_API_KEY and PINECONE_API_KEY:
         try:
@@ -110,9 +112,13 @@ def _try_init() -> None:
                 )
                 logger.info(f"✅ Vector store initialized: {PINECONE_INDEX}")
         except ImportError as e:
-            logger.warning(f"⚠️ Vector store dependencies missing or broken: {e}. Falling back to local mode.")
+            logger.warning(
+                f"⚠️ Vector store dependencies missing or broken: {e}. Falling back to local mode."
+            )
         except Exception as exc:
-            logger.warning(f"⚠️ Vector store initialization failed ({type(exc).__name__}): {exc}. Falling back to local mode.")
+            logger.warning(
+                f"⚠️ Vector store initialization failed ({type(exc).__name__}): {exc}. Falling back to local mode."
+            )
 
 
 try:

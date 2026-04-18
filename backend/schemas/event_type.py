@@ -32,7 +32,9 @@ class EventTypeBase(BaseModel):
         if value is None:
             return value
         if not SLUG_PATTERN.match(value):
-            raise ValueError("slug may only contain lowercase letters, numbers, and hyphens")
+            raise ValueError(
+                "slug may only contain lowercase letters, numbers, and hyphens"
+            )
         return value
 
     @field_validator("color")
@@ -73,7 +75,9 @@ class EventTypeUpdate(BaseModel):
         if value is None:
             return value
         if not SLUG_PATTERN.match(value):
-            raise ValueError("slug may only contain lowercase letters, numbers, and hyphens")
+            raise ValueError(
+                "slug may only contain lowercase letters, numbers, and hyphens"
+            )
         return value
 
     @field_validator("color")

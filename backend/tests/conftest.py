@@ -1,6 +1,7 @@
 """
 Pytest configuration and shared fixtures for GraftAI backend tests.
 """
+
 import os
 import sys
 import uuid
@@ -17,10 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import StaticPool
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from backend.models.base import Base
-from backend.models.tables import ChatMessageTable, UserTable, EventTable, BookingTable
+from backend.models.tables import UserTable, EventTable, BookingTable
 from backend.api.main import create_app
 from backend.utils.db import get_db
 from backend.api.deps import get_current_user
@@ -70,6 +71,7 @@ async def setup_test_database():
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Provide a transactional database session for tests."""
     async with AsyncTestingSessionLocal() as session:
+
         async def _commit(*_args, **_kwargs):
             await session.flush()
 
@@ -106,7 +108,9 @@ async def test_user(db_session: AsyncSession, test_user_data) -> UserTable:
 
 
 @pytest_asyncio.fixture
-async def authenticated_user(db_session: AsyncSession, test_user: UserTable) -> UserTable:
+async def authenticated_user(
+    db_session: AsyncSession, test_user: UserTable
+) -> UserTable:
     """Return an authenticated test user."""
     return test_user
 
@@ -114,16 +118,20 @@ async def authenticated_user(db_session: AsyncSession, test_user: UserTable) -> 
 @pytest.fixture
 def override_get_db(db_session: AsyncSession):
     """Override the get_db dependency for testing."""
+
     async def _override():
         yield db_session
+
     return _override
 
 
 @pytest.fixture
 def override_get_current_user(test_user: UserTable):
     """Override the get_current_user dependency for testing."""
+
     async def _override():
         return test_user
+
     return _override
 
 
@@ -134,11 +142,11 @@ def test_app(
 ) -> FastAPI:
     """Create a test FastAPI application with overridden dependencies."""
     app = create_app()
-    
+
     # Override dependencies
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
-    
+
     return app
 
 

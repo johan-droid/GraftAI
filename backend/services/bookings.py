@@ -16,7 +16,9 @@ from backend.models.tables import (
 from backend.services.scheduler import get_events_for_range, create_event
 from backend.services.sync_engine import sync_user_calendar
 from backend.services.jobs import enqueue_calendar_job, enqueue_analytics_job
-from backend.services.webhook_subscriptions import enqueue_webhook_notifications_for_event
+from backend.services.webhook_subscriptions import (
+    enqueue_webhook_notifications_for_event,
+)
 from backend.utils.errors import BookingConflictError, TimezoneError, ValidationError
 from backend.utils.cache import (
     acquire_lock,
@@ -59,7 +61,9 @@ def _localize_datetime(day: date_cls, time_str: str, tz: pytz.BaseTzInfo) -> dat
     return tz.localize(datetime(day.year, day.month, day.day, hour, minute))
 
 
-def _date_is_exception(day: date_cls, exceptions: Optional[List[Union[str, Dict[str, Any]]]]) -> bool:
+def _date_is_exception(
+    day: date_cls, exceptions: Optional[List[Union[str, Dict[str, Any]]]]
+) -> bool:
     if not exceptions:
         return False
     for item in exceptions:
@@ -158,7 +162,9 @@ async def validate_custom_questions(
 
     provided = questions or {}
     if not isinstance(provided, dict):
-        raise ValidationError("questions", "Booking questions payload must be an object.")
+        raise ValidationError(
+            "questions", "Booking questions payload must be an object."
+        )
 
     for item in definitions:
         if not isinstance(item, dict):
@@ -170,36 +176,52 @@ async def validate_custom_questions(
         required = bool(item.get("required", False))
 
         if question_type not in SUPPORTED_QUESTION_TYPES:
-            raise ValidationError("questions", f"Unsupported question type '{question_type}'.")
+            raise ValidationError(
+                "questions", f"Unsupported question type '{question_type}'."
+            )
         if not question_id:
             raise ValidationError("questions", "Each custom question must have an id.")
 
         value = provided.get(question_id)
         if required:
             if value is None:
-                raise ValidationError("questions", f"Missing required answer for '{question_text}'.")
+                raise ValidationError(
+                    "questions", f"Missing required answer for '{question_text}'."
+                )
             if isinstance(value, str) and not value.strip():
-                raise ValidationError("questions", f"Missing required answer for '{question_text}'.")
+                raise ValidationError(
+                    "questions", f"Missing required answer for '{question_text}'."
+                )
             if isinstance(value, list) and not value:
-                raise ValidationError("questions", f"Missing required answer for '{question_text}'.")
+                raise ValidationError(
+                    "questions", f"Missing required answer for '{question_text}'."
+                )
 
         if value is None:
             continue
 
         if question_type in {"text", "textarea"} and not isinstance(value, str):
-            raise ValidationError("questions", f"'{question_text}' expects a text answer.")
+            raise ValidationError(
+                "questions", f"'{question_text}' expects a text answer."
+            )
         if question_type == "checkbox" and not isinstance(value, bool):
-            raise ValidationError("questions", f"'{question_text}' expects a boolean answer.")
+            raise ValidationError(
+                "questions", f"'{question_text}' expects a boolean answer."
+            )
 
         if question_type == "select":
             options = item.get("options") or []
             if options and value not in options:
-                raise ValidationError("questions", f"'{question_text}' has an invalid selected option.")
+                raise ValidationError(
+                    "questions", f"'{question_text}' has an invalid selected option."
+                )
 
     return True
 
 
-def _get_availability_windows(event_type: EventTypeTable, day: datetime, tz: pytz.BaseTzInfo) -> List[tuple[datetime, datetime]]:
+def _get_availability_windows(
+    event_type: EventTypeTable, day: datetime, tz: pytz.BaseTzInfo
+) -> List[tuple[datetime, datetime]]:
     day_name = _weekday_name(day)
     raw_availability = event_type.availability or DEFAULT_AVAILABILITY
     daily_ranges = raw_availability.get(day_name, []) or []
@@ -210,10 +232,14 @@ def _get_availability_windows(event_type: EventTypeTable, day: datetime, tz: pyt
 
     recurrence_rule = (event_type.recurrence_rule or "").strip()
     if recurrence_rule:
-        start_of_day = tz.localize(datetime(day.year, day.month, day.day, 0, 0)).astimezone(pytz.UTC)
+        start_of_day = tz.localize(
+            datetime(day.year, day.month, day.day, 0, 0)
+        ).astimezone(pytz.UTC)
         end_of_day = start_of_day + timedelta(days=1)
         try:
-            occurrences = _expand_recurring_availability(event_type, start_of_day, end_of_day, limit_slots=10)
+            occurrences = _expand_recurring_availability(
+                event_type, start_of_day, end_of_day, limit_slots=10
+            )
         except Exception:
             occurrences = []
         if not occurrences:
@@ -237,7 +263,9 @@ def _slot_to_local_display(slot_dt: datetime, tz: pytz.BaseTzInfo) -> str:
     return slot_dt.astimezone(tz).strftime("%Y-%m-%d %I:%M %p")
 
 
-def _slots_from_windows(windows: List[tuple[datetime, datetime]], duration_minutes: int, step_minutes: int) -> List[tuple[datetime, datetime]]:
+def _slots_from_windows(
+    windows: List[tuple[datetime, datetime]], duration_minutes: int, step_minutes: int
+) -> List[tuple[datetime, datetime]]:
     slots: List[tuple[datetime, datetime]] = []
     for window_start, window_end in windows:
         current = window_start
@@ -253,7 +281,9 @@ def _normalize_datetime_for_overlap(value: datetime) -> datetime:
     return value
 
 
-def _overlaps(start: datetime, end: datetime, busy_start: datetime, busy_end: datetime) -> bool:
+def _overlaps(
+    start: datetime, end: datetime, busy_start: datetime, busy_end: datetime
+) -> bool:
     start = _normalize_datetime_for_overlap(start)
     end = _normalize_datetime_for_overlap(end)
     busy_start = _normalize_datetime_for_overlap(busy_start)
@@ -261,16 +291,25 @@ def _overlaps(start: datetime, end: datetime, busy_start: datetime, busy_end: da
     return start < busy_end and busy_start < end
 
 
-def _apply_busy_windows(slots: List[tuple[datetime, datetime]], busy: List[tuple[datetime, datetime]]) -> List[tuple[datetime, datetime]]:
+def _apply_busy_windows(
+    slots: List[tuple[datetime, datetime]], busy: List[tuple[datetime, datetime]]
+) -> List[tuple[datetime, datetime]]:
     available: List[tuple[datetime, datetime]] = []
     for slot_start, slot_end in slots:
-        if any(_overlaps(slot_start, slot_end, busy_start, busy_end) for busy_start, busy_end in busy):
+        if any(
+            _overlaps(slot_start, slot_end, busy_start, busy_end)
+            for busy_start, busy_end in busy
+        ):
             continue
         available.append((slot_start, slot_end))
     return available
 
 
-def _apply_buffer_to_windows(windows: List[tuple[datetime, datetime]], buffer_before: Optional[int], buffer_after: Optional[int]) -> List[tuple[datetime, datetime]]:
+def _apply_buffer_to_windows(
+    windows: List[tuple[datetime, datetime]],
+    buffer_before: Optional[int],
+    buffer_after: Optional[int],
+) -> List[tuple[datetime, datetime]]:
     busy: List[tuple[datetime, datetime]] = []
     before = timedelta(minutes=buffer_before or 0)
     after = timedelta(minutes=buffer_after or 0)
@@ -279,7 +318,9 @@ def _apply_buffer_to_windows(windows: List[tuple[datetime, datetime]], buffer_be
     return _merge_overlapping_windows(busy)
 
 
-def _merge_overlapping_windows(windows: List[tuple[datetime, datetime]]) -> List[tuple[datetime, datetime]]:
+def _merge_overlapping_windows(
+    windows: List[tuple[datetime, datetime]],
+) -> List[tuple[datetime, datetime]]:
     if not windows:
         return []
 
@@ -358,7 +399,9 @@ async def _build_available_slots(
     organizer_tz = pytz.timezone(user.timezone or "UTC")
 
     if event_type.recurrence_rule:
-        day_start_local = organizer_tz.localize(datetime(day.year, day.month, day.day, 0, 0))
+        day_start_local = organizer_tz.localize(
+            datetime(day.year, day.month, day.day, 0, 0)
+        )
         day_end_local = day_start_local + timedelta(days=1)
         # _expand_recurring_availability is a sync function — no await
         try:
@@ -369,7 +412,9 @@ async def _build_available_slots(
                 limit_slots=512,
             )
         except Exception as exc:
-            logger.warning("Recurrence expansion failed for event_type=%s: %s", event_type.id, exc)
+            logger.warning(
+                "Recurrence expansion failed for event_type=%s: %s", event_type.id, exc
+            )
             recurring_occurrences = []
         if not recurring_occurrences:
             return []
@@ -387,35 +432,49 @@ async def _build_available_slots(
         )
 
     step = 15
-    base_slots = _slots_from_windows(availability_windows, event_type.duration_minutes, step)
+    base_slots = _slots_from_windows(
+        availability_windows, event_type.duration_minutes, step
+    )
 
-    total_before = (event_type.buffer_before_minutes or 0) + (event_type.travel_time_before_minutes or 0)
-    total_after = (event_type.buffer_after_minutes or 0) + (event_type.travel_time_after_minutes or 0)
+    total_before = (event_type.buffer_before_minutes or 0) + (
+        event_type.travel_time_before_minutes or 0
+    )
+    total_after = (event_type.buffer_after_minutes or 0) + (
+        event_type.travel_time_after_minutes or 0
+    )
     busy_windows = _apply_buffer_to_windows(busy_windows, total_before, total_after)
     out_of_office_windows = _get_out_of_office_windows(user)
     if out_of_office_windows:
-        busy_windows = _merge_overlapping_windows([*busy_windows, *out_of_office_windows])
+        busy_windows = _merge_overlapping_windows(
+            [*busy_windows, *out_of_office_windows]
+        )
     available_slots = _apply_busy_windows(base_slots, busy_windows)
 
     minimum_cutoff = _minimum_notice_cutoff(event_type.minimum_notice_minutes)
     available_slots = [
-        (start, end)
-        for start, end in available_slots
-        if start > minimum_cutoff
+        (start, end) for start, end in available_slots if start > minimum_cutoff
     ]
 
     display_tz = pytz.timezone(inviter_tz) if inviter_tz else organizer_tz
     result: List[Dict[str, Any]] = []
     for start, end in available_slots:
-        result.append({
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "organizer_start": start.astimezone(organizer_tz).strftime("%Y-%m-%d %I:%M %p"),
-            "organizer_end": end.astimezone(organizer_tz).strftime("%Y-%m-%d %I:%M %p"),
-            "invitee_start": start.astimezone(display_tz).strftime("%Y-%m-%d %I:%M %p"),
-            "invitee_end": end.astimezone(display_tz).strftime("%Y-%m-%d %I:%M %p"),
-            "invitee_zone": str(display_tz),
-        })
+        result.append(
+            {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "organizer_start": start.astimezone(organizer_tz).strftime(
+                    "%Y-%m-%d %I:%M %p"
+                ),
+                "organizer_end": end.astimezone(organizer_tz).strftime(
+                    "%Y-%m-%d %I:%M %p"
+                ),
+                "invitee_start": start.astimezone(display_tz).strftime(
+                    "%Y-%m-%d %I:%M %p"
+                ),
+                "invitee_end": end.astimezone(display_tz).strftime("%Y-%m-%d %I:%M %p"),
+                "invitee_zone": str(display_tz),
+            }
+        )
 
     return result
 
@@ -432,8 +491,12 @@ async def _build_availability_for_month(
     end_day = (start_day.replace(day=28) + timedelta(days=4)).replace(day=1)
 
     organizer_tz = pytz.timezone(user.timezone or "UTC")
-    range_start = organizer_tz.localize(datetime(year, month, 1, 0, 0)).astimezone(pytz.UTC)
-    range_end = organizer_tz.localize(datetime(end_day.year, end_day.month, end_day.day, 0, 0)).astimezone(pytz.UTC)
+    range_start = organizer_tz.localize(datetime(year, month, 1, 0, 0)).astimezone(
+        pytz.UTC
+    )
+    range_end = organizer_tz.localize(
+        datetime(end_day.year, end_day.month, end_day.day, 0, 0)
+    ).astimezone(pytz.UTC)
 
     busy_windows = await _get_busy_windows_for_range(db, user, range_start, range_end)
 
@@ -441,15 +504,21 @@ async def _build_availability_for_month(
     day = start_day
 
     while day < end_day:
-        slots = await _build_available_slots(db, user, event_type, day, inviter_tz, busy_windows=busy_windows)
-        availability[day.strftime("%Y-%m-%d")] = [slot["invitee_start"] for slot in slots]
+        slots = await _build_available_slots(
+            db, user, event_type, day, inviter_tz, busy_windows=busy_windows
+        )
+        availability[day.strftime("%Y-%m-%d")] = [
+            slot["invitee_start"] for slot in slots
+        ]
         day += timedelta(days=1)
 
     return availability
 
 
 def _slugify(value: str) -> str:
-    return "".join(ch.lower() for ch in value if ch.isalnum() or ch in {"-", "_"}).strip("-_ ")
+    return "".join(
+        ch.lower() for ch in value if ch.isalnum() or ch in {"-", "_"}
+    ).strip("-_ ")
 
 
 async def get_user_by_username(db: AsyncSession, username: str) -> Optional[UserTable]:
@@ -458,7 +527,9 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User
     return result.scalars().first()
 
 
-async def get_event_type(db: AsyncSession, user_id: str, slug: str) -> Optional[EventTypeTable]:
+async def get_event_type(
+    db: AsyncSession, user_id: str, slug: str
+) -> Optional[EventTypeTable]:
     stmt = select(EventTypeTable).where(
         and_(EventTypeTable.user_id == user_id, EventTypeTable.slug == slug)
     )
@@ -466,7 +537,9 @@ async def get_event_type(db: AsyncSession, user_id: str, slug: str) -> Optional[
     return result.scalars().first()
 
 
-async def get_event_type_config(db: AsyncSession, user_id: str, slug: str) -> Optional[Dict[str, Any]]:
+async def get_event_type_config(
+    db: AsyncSession, user_id: str, slug: str
+) -> Optional[Dict[str, Any]]:
     cache_key = f"event_type_config:{user_id}:{slug}"
     cached = await get_cache(cache_key)
     if cached is not None:
@@ -512,7 +585,9 @@ async def list_event_types(db: AsyncSession, user_id: str) -> List[EventTypeTabl
     return event_types
 
 
-async def create_event_type(db: AsyncSession, user_id: str, payload: Dict[str, Any]) -> EventTypeTable:
+async def create_event_type(
+    db: AsyncSession, user_id: str, payload: Dict[str, Any]
+) -> EventTypeTable:
     slug = payload.get("slug") or _slugify(payload["name"])
     slug = slug.lower()
 
@@ -539,7 +614,9 @@ async def create_event_type(db: AsyncSession, user_id: str, payload: Dict[str, A
         exceptions=payload.get("exceptions"),
         recurrence_rule=payload.get("recurrence_rule"),
         custom_questions=payload.get("custom_questions"),
-        requires_attendee_confirmation=payload.get("requires_attendee_confirmation", False),
+        requires_attendee_confirmation=payload.get(
+            "requires_attendee_confirmation", False
+        ),
         travel_time_before_minutes=payload.get("travel_time_before_minutes", 0),
         travel_time_after_minutes=payload.get("travel_time_after_minutes", 0),
         requires_payment=payload.get("requires_payment", False),
@@ -553,7 +630,9 @@ async def create_event_type(db: AsyncSession, user_id: str, payload: Dict[str, A
     return event_type
 
 
-async def update_event_type(db: AsyncSession, user_id: str, event_type_id: str, payload: Dict[str, Any]) -> Optional[EventTypeTable]:
+async def update_event_type(
+    db: AsyncSession, user_id: str, event_type_id: str, payload: Dict[str, Any]
+) -> Optional[EventTypeTable]:
     event_type = await db.get(EventTypeTable, event_type_id)
     if not event_type or event_type.user_id != user_id:
         return None
@@ -585,11 +664,17 @@ async def update_event_type(db: AsyncSession, user_id: str, event_type_id: str, 
     if "custom_questions" in payload:
         event_type.custom_questions = payload.get("custom_questions")
     if "requires_attendee_confirmation" in payload:
-        event_type.requires_attendee_confirmation = bool(payload.get("requires_attendee_confirmation"))
+        event_type.requires_attendee_confirmation = bool(
+            payload.get("requires_attendee_confirmation")
+        )
     if "travel_time_before_minutes" in payload:
-        event_type.travel_time_before_minutes = max(0, int(payload.get("travel_time_before_minutes") or 0))
+        event_type.travel_time_before_minutes = max(
+            0, int(payload.get("travel_time_before_minutes") or 0)
+        )
     if "travel_time_after_minutes" in payload:
-        event_type.travel_time_after_minutes = max(0, int(payload.get("travel_time_after_minutes") or 0))
+        event_type.travel_time_after_minutes = max(
+            0, int(payload.get("travel_time_after_minutes") or 0)
+        )
     if "requires_payment" in payload:
         event_type.requires_payment = bool(payload.get("requires_payment"))
     if "payment_amount" in payload:
@@ -628,7 +713,9 @@ async def delete_event_type(db: AsyncSession, user_id: str, event_type_id: str) 
     return True
 
 
-async def list_event_type_team_members(db: AsyncSession, user_id: str, event_type_id: str) -> List[Dict[str, Any]]:
+async def list_event_type_team_members(
+    db: AsyncSession, user_id: str, event_type_id: str
+) -> List[Dict[str, Any]]:
     return []
 
 
@@ -640,7 +727,9 @@ async def add_event_type_team_member(
     assignment_method: str = "round_robin",
     priority: int = 0,
 ) -> Dict[str, Any]:
-    raise ValueError("Team scheduling is disabled. Only one-to-one host-only booking is supported.")
+    raise ValueError(
+        "Team scheduling is disabled. Only one-to-one host-only booking is supported."
+    )
 
 
 async def update_event_type_team_member(
@@ -651,10 +740,14 @@ async def update_event_type_team_member(
     assignment_method: Optional[str] = None,
     priority: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
-    raise ValueError("Team scheduling is disabled. Only one-to-one host-only booking is supported.")
+    raise ValueError(
+        "Team scheduling is disabled. Only one-to-one host-only booking is supported."
+    )
 
 
-async def delete_event_type_team_member(db: AsyncSession, user_id: str, event_type_id: str, member_id: str) -> bool:
+async def delete_event_type_team_member(
+    db: AsyncSession, user_id: str, event_type_id: str, member_id: str
+) -> bool:
     return False
 
 
@@ -685,7 +778,9 @@ async def list_monthly_availability(
     if cached is not None:
         return cached
 
-    availability = await _build_availability_for_month(db, user, event_type, year, month_number, time_zone)
+    availability = await _build_availability_for_month(
+        db, user, event_type, year, month_number, time_zone
+    )
     await set_cache(cache_key, availability, expire_seconds=300)
     return availability
 
@@ -697,16 +792,16 @@ async def generate_meeting_url(
 ) -> Optional[str]:
     """
     Generate a meeting URL for the booking.
-    
+
     IMPORTANT: This function only returns real meeting URLs when the provider
     OAuth integration is configured and working. Otherwise, it returns None
     to prevent sending non-functional fake URLs to users.
-    
+
     For production use, this should integrate with:
     - Google Calendar API (for Google Meet)
     - Zoom API (for Zoom meetings)
     - Microsoft Graph API (for Teams)
-    
+
     Returns:
         Real meeting URL if OAuth integration is available and succeeds
         None if no integration available (prevents fake URLs)
@@ -714,18 +809,18 @@ async def generate_meeting_url(
     provider = (meeting_provider or "").strip().lower()
     if not provider:
         return None
-    
+
     # Check if we have valid OAuth tokens for the provider
     # If not, return None to prevent sending fake/non-functional URLs
     # TODO: Implement real meeting creation via provider APIs
     # For now, return None to indicate no meeting link available
-    
+
     logger.warning(
         f"Meeting URL requested for provider '{provider}' but OAuth integration not implemented. "
         f"Returning None to prevent sending non-functional fake URLs. "
         f"Booking: {booking_details.get('booking_id', 'unknown')}"
     )
-    
+
     return None
 
 
@@ -736,11 +831,17 @@ async def _is_user_available_for_range(
     booking_end: datetime,
 ) -> bool:
     out_of_office_windows = _get_out_of_office_windows(user)
-    if any(_overlaps(booking_start, booking_end, ooo_start, ooo_end) for ooo_start, ooo_end in out_of_office_windows):
+    if any(
+        _overlaps(booking_start, booking_end, ooo_start, ooo_end)
+        for ooo_start, ooo_end in out_of_office_windows
+    ):
         return False
 
     windows = await _get_busy_windows_for_range(db, user, booking_start, booking_end)
-    return not any(_overlaps(booking_start, booking_end, busy_start, busy_end) for busy_start, busy_end in windows)
+    return not any(
+        _overlaps(booking_start, booking_end, busy_start, busy_end)
+        for busy_start, busy_end in windows
+    )
 
 
 async def assign_booking_to_team_member(
@@ -769,17 +870,25 @@ async def create_public_booking(
     if payload["end_time"] <= payload["start_time"]:
         raise ValidationError("end_time", "End time must be after start time.")
 
-    expected_end = payload["start_time"] + timedelta(minutes=event_type.duration_minutes)
+    expected_end = payload["start_time"] + timedelta(
+        minutes=event_type.duration_minutes
+    )
     if payload["end_time"] != expected_end:
-        raise ValidationError("end_time", "Booking duration does not match event type configuration.")
+        raise ValidationError(
+            "end_time", "Booking duration does not match event type configuration."
+        )
 
     await validate_custom_questions(payload.get("questions"), event_type)
 
     metadata = payload.get("metadata") or {}
     if event_type.requires_payment:
-        is_paid = bool(metadata.get("payment_verified")) or str(metadata.get("payment_status") or "").lower() in {"paid", "captured"}
+        is_paid = bool(metadata.get("payment_verified")) or str(
+            metadata.get("payment_status") or ""
+        ).lower() in {"paid", "captured"}
         if not is_paid:
-            raise ValidationError("payment", "Payment is required before booking this event.")
+            raise ValidationError(
+                "payment", "Payment is required before booking this event."
+            )
 
     try:
         user_tz = pytz.timezone(payload.get("time_zone") or user.timezone or "UTC")
@@ -809,9 +918,13 @@ async def create_public_booking(
         _overlaps(booking_start_utc, booking_end_utc, ooo_start, ooo_end)
         for ooo_start, ooo_end in out_of_office_windows
     ):
-        raise ValidationError("start_time", "Organizer is out of office during this time.")
+        raise ValidationError(
+            "start_time", "Organizer is out of office during this time."
+        )
 
-    assigned_user_id = await assign_booking_to_team_member(db, event_type, booking_start_utc, booking_end_utc)
+    assigned_user_id = await assign_booking_to_team_member(
+        db, event_type, booking_start_utc, booking_end_utc
+    )
     organizer_user = user
     if assigned_user_id and assigned_user_id != user.id:
         assigned_user = await db.get(UserTable, assigned_user_id)
@@ -831,13 +944,22 @@ async def create_public_booking(
         ) from exc
 
     local_start = booking_start_utc.astimezone(organizer_tz)
-    day_slots = await _build_available_slots(db, organizer_user, event_type, local_start, payload.get("time_zone"))
+    day_slots = await _build_available_slots(
+        db, organizer_user, event_type, local_start, payload.get("time_zone")
+    )
     requested_start = booking_start_utc.isoformat()
     requested_end = booking_end_utc.isoformat()
-    if not any(slot["start"] == requested_start and slot["end"] == requested_end for slot in day_slots):
-        raise ValueError("Requested slot is outside the organizer's available booking windows.")
+    if not any(
+        slot["start"] == requested_start and slot["end"] == requested_end
+        for slot in day_slots
+    ):
+        raise ValueError(
+            "Requested slot is outside the organizer's available booking windows."
+        )
 
-    booking_status = "pending" if event_type.requires_attendee_confirmation else "confirmed"
+    booking_status = (
+        "pending" if event_type.requires_attendee_confirmation else "confirmed"
+    )
     new_event: Optional[EventTable] = None
 
     # Use SERIALIZABLE isolation for booking creation to prevent phantom reads,
@@ -849,24 +971,39 @@ async def create_public_booking(
             await db.execute(text("SET LOCAL statement_timeout = 30000"))
             await db.execute(text("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
 
-        user_lock_stmt = select(UserTable).where(UserTable.id == organizer_user.id).with_for_update()
+        user_lock_stmt = (
+            select(UserTable).where(UserTable.id == organizer_user.id).with_for_update()
+        )
         await db.execute(user_lock_stmt)
 
-        lock_key = int(hashlib.sha256(
-            f"booking:{organizer_user.id}:{booking_start_utc.isoformat()}".encode("utf-8")
-        ).hexdigest()[:16], 16)
+        lock_key = int(
+            hashlib.sha256(
+                f"booking:{organizer_user.id}:{booking_start_utc.isoformat()}".encode(
+                    "utf-8"
+                )
+            ).hexdigest()[:16],
+            16,
+        )
 
         if bind is not None and bind.dialect.name == "postgresql":
-            await db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
-
-        booking_conflict_stmt = select(BookingTable).where(
-            and_(
-                BookingTable.user_id == organizer_user.id,
-                BookingTable.status.in_(["pending", "confirmed", "accepted", "rescheduled"]),
-                BookingTable.start_time < booking_end_utc,
-                BookingTable.end_time > booking_start_utc,
+            await db.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key}
             )
-        ).with_for_update()
+
+        booking_conflict_stmt = (
+            select(BookingTable)
+            .where(
+                and_(
+                    BookingTable.user_id == organizer_user.id,
+                    BookingTable.status.in_(
+                        ["pending", "confirmed", "accepted", "rescheduled"]
+                    ),
+                    BookingTable.start_time < booking_end_utc,
+                    BookingTable.end_time > booking_start_utc,
+                )
+            )
+            .with_for_update()
+        )
 
         existing_booking = (await db.execute(booking_conflict_stmt)).scalars().first()
         if existing_booking:
@@ -952,13 +1089,17 @@ async def create_public_booking(
                     "user_id": organizer_user.id,
                     "title": f"Travel time before {event_type.name}",
                     "description": "Auto-created travel block",
-                    "start_time": booking.start_time - timedelta(minutes=before_minutes),
+                    "start_time": booking.start_time
+                    - timedelta(minutes=before_minutes),
                     "end_time": booking.start_time,
                     "source": "travel_block",
                     "fingerprint": f"travel-before-{booking.id}",
                     "is_meeting": False,
                     "event_type_id": event_type.id,
-                    "metadata_payload": {"booking_id": booking.id, "kind": "travel_before"},
+                    "metadata_payload": {
+                        "booking_id": booking.id,
+                        "kind": "travel_before",
+                    },
                 },
                 commit=False,
                 perform_external=False,
@@ -980,7 +1121,10 @@ async def create_public_booking(
                     "fingerprint": f"travel-after-{booking.id}",
                     "is_meeting": False,
                     "event_type_id": event_type.id,
-                    "metadata_payload": {"booking_id": booking.id, "kind": "travel_after"},
+                    "metadata_payload": {
+                        "booking_id": booking.id,
+                        "kind": "travel_after",
+                    },
                 },
                 commit=False,
                 perform_external=False,

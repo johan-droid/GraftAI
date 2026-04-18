@@ -7,6 +7,7 @@ Run this from the repo root with the project's venv active:
 
 This mirrors startup behavior but exits immediately after migrations finish.
 """
+
 import logging
 import sys
 from pathlib import Path

@@ -10,9 +10,17 @@ from typing import Optional
 
 from fastapi import HTTPException, status, Request
 
-FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "http://localhost:3000")).rstrip("/")
+FRONTEND_BASE_URL = os.getenv(
+    "FRONTEND_BASE_URL", os.getenv("FRONTEND_URL", "http://localhost:3000")
+).rstrip("/")
 OAUTH_STATE_EXPIRY_SECONDS = 600
-ALLOWED_REDIRECT_PATHS = {"/dashboard", "/settings", "/calendar", "/profile", "/auth-callback"}
+ALLOWED_REDIRECT_PATHS = {
+    "/dashboard",
+    "/settings",
+    "/calendar",
+    "/profile",
+    "/auth-callback",
+}
 
 from backend.auth.config import SECRET_KEY
 
@@ -56,10 +64,14 @@ def _is_trusted_proxy_host(host: Optional[str]) -> bool:
 
 @lru_cache(maxsize=1)
 def _allowed_frontend_origins() -> tuple[str, ...]:
-    configured = os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", FRONTEND_BASE_URL))
+    configured = os.getenv(
+        "FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", FRONTEND_BASE_URL)
+    )
     origins: list[str] = []
 
-    for candidate in (value.strip() for value in configured.split(",") if value.strip()):
+    for candidate in (
+        value.strip() for value in configured.split(",") if value.strip()
+    ):
         try:
             parsed = urlparse(candidate)
             if parsed.scheme in {"http", "https"} and parsed.netloc:
@@ -135,7 +147,7 @@ def build_oauth_state(
     nonce = secrets.token_urlsafe(16)
     user_id_str = user_id or ""
     provider_str = provider or ""
-    frontend_url_str = quote(sanitize_frontend_url(frontend_url), safe='')
+    frontend_url_str = quote(sanitize_frontend_url(frontend_url), safe="")
     payload = f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{provider_str}:{frontend_url_str}"
     signature = hmac.new(
         SECRET_KEY.encode(),
@@ -145,7 +157,9 @@ def build_oauth_state(
     return f"{timestamp}:{nonce}:{user_id_str}:{safe_redirect}:{provider_str}:{frontend_url_str}:{signature}"
 
 
-def parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str], Optional[str]]:
+def parse_oauth_state(
+    state: str,
+) -> tuple[Optional[str], str, Optional[str], Optional[str]]:
     if not state:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -160,7 +174,15 @@ def parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str], Op
         )
 
     if len(parts) == 7:
-        timestamp_str, nonce, user_id, redirect_to, provider, frontend_url, signature = parts
+        (
+            timestamp_str,
+            nonce,
+            user_id,
+            redirect_to,
+            provider,
+            frontend_url,
+            signature,
+        ) = parts
     elif len(parts) == 6:
         timestamp_str, nonce, user_id, redirect_to, provider, signature = parts
         frontend_url = ""
@@ -169,7 +191,9 @@ def parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str], Op
         provider = ""
         frontend_url = ""
 
-    payload = f"{timestamp_str}:{nonce}:{user_id}:{redirect_to}:{provider}:{frontend_url}"
+    payload = (
+        f"{timestamp_str}:{nonce}:{user_id}:{redirect_to}:{provider}:{frontend_url}"
+    )
     expected_signature = hmac.new(
         SECRET_KEY.encode(),
         payload.encode(),
@@ -198,7 +222,9 @@ def parse_oauth_state(state: str) -> tuple[Optional[str], str, Optional[str], Op
 
     decoded_redirect = unquote_plus(redirect_to)
     safe_redirect = sanitize_redirect(decoded_redirect)
-    decoded_frontend_url = sanitize_frontend_url(unquote(frontend_url) if frontend_url else None)
+    decoded_frontend_url = sanitize_frontend_url(
+        unquote(frontend_url) if frontend_url else None
+    )
     return user_id or None, safe_redirect, provider or None, decoded_frontend_url
 
 

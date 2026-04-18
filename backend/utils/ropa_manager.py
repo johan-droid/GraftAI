@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class RoPAManager:
     """GDPR Article 30 - Records of Processing Activities manager."""
-    
+
     # Default processing activities
     DEFAULT_ACTIVITIES = {
         "ROP-001": {
@@ -212,10 +212,10 @@ class RoPAManager:
             "is_active": True,
         },
     }
-    
+
     def __init__(self):
         self.activities = self.DEFAULT_ACTIVITIES.copy()
-    
+
     async def initialize_default_records(self, db: AsyncSession):
         """Initialize default RoPA records in database."""
         for activity_id, activity_data in self.DEFAULT_ACTIVITIES.items():
@@ -223,22 +223,21 @@ class RoPAManager:
                 DataProcessingRecord.activity_id == activity_id
             )
             existing = (await db.execute(stmt)).scalars().first()
-            
+
             if not existing:
-                record = DataProcessingRecord(
-                    activity_id=activity_id,
-                    **activity_data
-                )
+                record = DataProcessingRecord(activity_id=activity_id, **activity_data)
                 db.add(record)
-        
+
         await db.commit()
         logger.info("Default RoPA records initialized")
-    
+
     async def get_ropa_report(self, db: AsyncSession) -> Dict[str, Any]:
         """Generate RoPA report for GDPR Article 30."""
-        stmt = select(DataProcessingRecord).where(DataProcessingRecord.is_active == True)
+        stmt = select(DataProcessingRecord).where(
+            DataProcessingRecord.is_active == True
+        )
         records = (await db.execute(stmt)).scalars().all()
-        
+
         report = {
             "generated_at": datetime.utcnow().isoformat(),
             "data_controller": "GraftAI Inc.",
@@ -246,33 +245,37 @@ class RoPAManager:
             "total_activities": len(records),
             "activities": [],
         }
-        
+
         for record in records:
-            report["activities"].append({
-                "activity_id": record.activity_id,
-                "activity_name": record.activity_name,
-                "activity_description": record.activity_description,
-                "purposes": record.purposes,
-                "data_categories": record.data_categories,
-                "data_subjects": record.data_subjects,
-                "internal_recipients": record.internal_recipients,
-                "external_recipients": record.external_recipients,
-                "subprocessors": record.subprocessors,
-                "legal_basis": record.legal_basis,
-                "legal_basis_details": record.legal_basis_details,
-                "retention_period_days": record.retention_period_days,
-                "retention_basis": record.retention_basis,
-                "security_measures": record.security_measures,
-                "encryption_applied": record.encryption_applied,
-                "pseudonymization_applied": record.pseudonymization_applied,
-                "involves_transfers": record.involves_transfers,
-                "transfer_mechanism": record.transfer_mechanism,
-                "transfer_countries": record.transfer_countries,
-                "last_reviewed_at": record.last_reviewed_at.isoformat() if record.last_reviewed_at else None,
-            })
-        
+            report["activities"].append(
+                {
+                    "activity_id": record.activity_id,
+                    "activity_name": record.activity_name,
+                    "activity_description": record.activity_description,
+                    "purposes": record.purposes,
+                    "data_categories": record.data_categories,
+                    "data_subjects": record.data_subjects,
+                    "internal_recipients": record.internal_recipients,
+                    "external_recipients": record.external_recipients,
+                    "subprocessors": record.subprocessors,
+                    "legal_basis": record.legal_basis,
+                    "legal_basis_details": record.legal_basis_details,
+                    "retention_period_days": record.retention_period_days,
+                    "retention_basis": record.retention_basis,
+                    "security_measures": record.security_measures,
+                    "encryption_applied": record.encryption_applied,
+                    "pseudonymization_applied": record.pseudonymization_applied,
+                    "involves_transfers": record.involves_transfers,
+                    "transfer_mechanism": record.transfer_mechanism,
+                    "transfer_countries": record.transfer_countries,
+                    "last_reviewed_at": record.last_reviewed_at.isoformat()
+                    if record.last_reviewed_at
+                    else None,
+                }
+            )
+
         return report
-    
+
     async def add_processing_activity(
         self,
         db: AsyncSession,
@@ -281,9 +284,11 @@ class RoPAManager:
         reviewed_by: Optional[str] = None,
     ) -> DataProcessingRecord:
         """Add a new processing activity to RoPA."""
-        stmt = select(DataProcessingRecord).where(DataProcessingRecord.activity_id == activity_id)
+        stmt = select(DataProcessingRecord).where(
+            DataProcessingRecord.activity_id == activity_id
+        )
         existing = (await db.execute(stmt)).scalars().first()
-        
+
         if existing:
             # Update existing
             for key, value in activity_data.items():
@@ -292,19 +297,19 @@ class RoPAManager:
             existing.reviewed_by = reviewed_by
             await db.commit()
             return existing
-        
+
         record = DataProcessingRecord(
             activity_id=activity_id,
             last_reviewed_at=datetime.utcnow(),
             reviewed_by=reviewed_by,
-            **activity_data
+            **activity_data,
         )
         db.add(record)
         await db.commit()
-        
+
         logger.info(f"Added RoPA activity: {activity_id}")
         return record
-    
+
     async def review_activity(
         self,
         db: AsyncSession,
@@ -313,20 +318,24 @@ class RoPAManager:
         review_notes: Optional[str] = None,
     ) -> DataProcessingRecord:
         """Mark a processing activity as reviewed."""
-        stmt = select(DataProcessingRecord).where(DataProcessingRecord.activity_id == activity_id)
+        stmt = select(DataProcessingRecord).where(
+            DataProcessingRecord.activity_id == activity_id
+        )
         record = (await db.execute(stmt)).scalars().first()
-        
+
         if not record:
             raise ValueError(f"Activity not found: {activity_id}")
-        
+
         record.last_reviewed_at = datetime.utcnow()
         record.reviewed_by = reviewed_by
-        
+
         if review_notes:
-            record.activity_description = f"{record.activity_description}\n\nReview notes: {review_notes}"
-        
+            record.activity_description = (
+                f"{record.activity_description}\n\nReview notes: {review_notes}"
+            )
+
         await db.commit()
-        
+
         logger.info(f"Reviewed RoPA activity: {activity_id}")
         return record
 

@@ -7,7 +7,9 @@ import backend.services.storage as storage_module
 
 
 @pytest.mark.asyncio
-async def test_create_manual_request_sends_admin_email(async_client, db_session, test_user, monkeypatch):
+async def test_create_manual_request_sends_admin_email(
+    async_client, db_session, test_user, monkeypatch
+):
     sent = []
 
     async def fake_send_email(to_email, subject, html_body, text_body=None):
@@ -29,7 +31,9 @@ async def test_create_manual_request_sends_admin_email(async_client, db_session,
     assert request_id
 
     # Verify DB entry exists
-    stmt = select(ManualActivationRequestTable).where(ManualActivationRequestTable.id == request_id)
+    stmt = select(ManualActivationRequestTable).where(
+        ManualActivationRequestTable.id == request_id
+    )
     result = await db_session.execute(stmt)
     req = result.scalars().first()
     assert req is not None
@@ -41,7 +45,9 @@ async def test_create_manual_request_sends_admin_email(async_client, db_session,
 
 
 @pytest.mark.asyncio
-async def test_presign_manual_upload_endpoint_returns_payload(async_client, db_session, test_user):
+async def test_presign_manual_upload_endpoint_returns_payload(
+    async_client, db_session, test_user
+):
     # Attempt to generate a presigned upload payload
     payload = {"filename": "proof.png", "content_type": "image/png"}
     resp = await async_client.post("/api/v1/billing/manual/presign", json=payload)
@@ -60,7 +66,9 @@ async def test_presign_manual_upload_endpoint_returns_payload(async_client, db_s
 
 
 @pytest.mark.asyncio
-async def test_presign_manual_upload_missing_filename_returns_422(async_client, db_session, test_user):
+async def test_presign_manual_upload_missing_filename_returns_422(
+    async_client, db_session, test_user
+):
     resp = await async_client.post("/api/v1/billing/manual/presign", json={})
     assert resp.status_code == 422
     data = resp.json()
@@ -71,7 +79,9 @@ async def test_presign_manual_upload_missing_filename_returns_422(async_client, 
 
 
 @pytest.mark.asyncio
-async def test_presign_manual_upload_invalid_content_type_returns_422(async_client, db_session, test_user):
+async def test_presign_manual_upload_invalid_content_type_returns_422(
+    async_client, db_session, test_user
+):
     payload = {"filename": "proof.png", "content_type": 123}
     resp = await async_client.post("/api/v1/billing/manual/presign", json=payload)
     assert resp.status_code == 422
@@ -83,8 +93,14 @@ async def test_presign_manual_upload_invalid_content_type_returns_422(async_clie
 
 
 @pytest.mark.asyncio
-async def test_presign_manual_upload_returns_500_when_storage_fails(async_client, db_session, test_user, monkeypatch):
-    monkeypatch.setattr(storage_module.storage, "get_presigned_upload_url", lambda *_args, **_kwargs: None)
+async def test_presign_manual_upload_returns_500_when_storage_fails(
+    async_client, db_session, test_user, monkeypatch
+):
+    monkeypatch.setattr(
+        storage_module.storage,
+        "get_presigned_upload_url",
+        lambda *_args, **_kwargs: None,
+    )
 
     payload = {"filename": "proof.png", "content_type": "image/png"}
     resp = await async_client.post("/api/v1/billing/manual/presign", json=payload)

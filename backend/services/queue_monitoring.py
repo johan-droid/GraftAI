@@ -26,7 +26,9 @@ async def get_queue_depths() -> dict[str, int]:
     cursor = 0
 
     while True:
-        cursor, keys = await redis.scan(cursor=cursor, match=QUEUE_KEY_PATTERN, count=SCAN_BATCH_SIZE)
+        cursor, keys = await redis.scan(
+            cursor=cursor, match=QUEUE_KEY_PATTERN, count=SCAN_BATCH_SIZE
+        )
         for key in keys:
             key_name = _decode_key(key)
             try:
@@ -51,7 +53,9 @@ async def get_failed_job_count() -> int:
     cursor = 0
 
     while True:
-        cursor, keys = await redis.scan(cursor=cursor, match=FAILED_KEY_PATTERN, count=SCAN_BATCH_SIZE)
+        cursor, keys = await redis.scan(
+            cursor=cursor, match=FAILED_KEY_PATTERN, count=SCAN_BATCH_SIZE
+        )
         count += len(keys)
         if cursor in (0, "0", b"0"):
             break
@@ -59,7 +63,9 @@ async def get_failed_job_count() -> int:
     return count
 
 
-async def _monitor_loop(interval_seconds: int = 60, warning_threshold: int = 250) -> None:
+async def _monitor_loop(
+    interval_seconds: int = 60, warning_threshold: int = 250
+) -> None:
     while True:
         try:
             depths = await get_queue_depths()
@@ -92,7 +98,11 @@ async def _monitor_loop(interval_seconds: int = 60, warning_threshold: int = 250
         await asyncio.sleep(interval_seconds)
 
 
-def start_queue_monitoring(interval_seconds: int = 60, warning_threshold: int = 250) -> asyncio.Task[None]:
+def start_queue_monitoring(
+    interval_seconds: int = 60, warning_threshold: int = 250
+) -> asyncio.Task[None]:
     task = asyncio.create_task(_monitor_loop(interval_seconds, warning_threshold))
-    logger.info("Started queue monitoring task with interval=%s seconds.", interval_seconds)
+    logger.info(
+        "Started queue monitoring task with interval=%s seconds.", interval_seconds
+    )
     return task

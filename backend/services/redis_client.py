@@ -10,6 +10,7 @@ load_dotenv()
 
 _redis_client = None
 
+
 async def get_redis_client():
     """
     Returns a singleton instance of the async Redis client.
@@ -22,9 +23,9 @@ async def get_redis_client():
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     try:
         _redis_client = aioredis.from_url(
-            redis_url, 
-            encoding="utf-8", 
-            decode_responses=False # Keep False for binary compatibility with serializers
+            redis_url,
+            encoding="utf-8",
+            decode_responses=False,  # Keep False for binary compatibility with serializers
         )
         # Test connection
         await _redis_client.ping()
@@ -33,6 +34,7 @@ async def get_redis_client():
     except Exception as e:
         logger.error(f"❌ Failed to connect to Redis at {redis_url}: {e}")
         return None
+
 
 async def get_redis_binary():
     """Alias for binary-compatible redis client usage."""

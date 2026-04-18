@@ -7,7 +7,9 @@ from logging.handlers import RotatingFileHandler
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_DIR = os.getenv("LOG_DIR", "logs")
 SERVICE_NAME = os.getenv("SERVICE_NAME", "graftai-backend")
-IS_PRODUCTION = os.getenv("NODE_ENV") == "production" or os.getenv("PYTHON_ENV") == "production"
+IS_PRODUCTION = (
+    os.getenv("NODE_ENV") == "production" or os.getenv("PYTHON_ENV") == "production"
+)
 
 
 class JsonFormatter(logging.Formatter):
@@ -27,7 +29,14 @@ class JsonFormatter(logging.Formatter):
             record_dict.update(record.extra)
 
         # Include structured fields on the record if present
-        for key in ["event", "user_id", "booking_id", "webhook_id", "service", "status_code"]:
+        for key in [
+            "event",
+            "user_id",
+            "booking_id",
+            "webhook_id",
+            "service",
+            "status_code",
+        ]:
             if hasattr(record, key):
                 record_dict[key] = getattr(record, key)
 

@@ -7,7 +7,9 @@ import hmac
 import os
 import time
 
-_rate_limit_state: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+_rate_limit_state: dict[str, dict[str, list[float]]] = defaultdict(
+    lambda: defaultdict(list)
+)
 
 
 def _current_window_timestamps(key: str, window_seconds: int) -> list[float]:
@@ -36,7 +38,9 @@ def get_rate_limiter(max_requests: int = 10, window_seconds: int = 60) -> Callab
 
 def _booking_action_secret() -> str:
     # Fallback to JWT secret so token verification still works in local/dev
-    return os.getenv("BOOKING_ACTION_SECRET") or os.getenv("JWT_SECRET", "change-me-in-production")
+    return os.getenv("BOOKING_ACTION_SECRET") or os.getenv(
+        "JWT_SECRET", "change-me-in-production"
+    )
 
 
 def create_public_action_token(booking_id: str, email: str) -> str:

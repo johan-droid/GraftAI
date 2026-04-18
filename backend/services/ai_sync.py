@@ -5,6 +5,7 @@ from backend.services.langchain_client import vector_store
 
 logger = logging.getLogger(__name__)
 
+
 async def sync_event_to_vector_store(event: EventTable):
     """
     Core logic to transform an EventTable model into a semantic JSON block
@@ -38,11 +39,15 @@ async def sync_event_to_vector_store(event: EventTable):
         try:
             from langchain_core.documents import Document
         except Exception as exc:
-            logger.warning(f"AI sync skipped because langchain_core is unavailable: {exc}")
+            logger.warning(
+                f"AI sync skipped because langchain_core is unavailable: {exc}"
+            )
             return False
 
         if not hasattr(vector_store, "add_documents"):
-            logger.warning("AI sync skipped because vector_store does not support add_documents")
+            logger.warning(
+                "AI sync skipped because vector_store does not support add_documents"
+            )
             return False
 
         doc = Document(
@@ -62,7 +67,9 @@ async def sync_event_to_vector_store(event: EventTable):
         logger.info(f"AI Context synchronized in background for event {event.id}")
         return True
     except Exception as e:
-        logger.error(f"AI Feedback Loop background sync failed for event {event.id}: {e}")
+        logger.error(
+            f"AI Feedback Loop background sync failed for event {event.id}: {e}"
+        )
         return False
 
 
@@ -74,5 +81,7 @@ async def purge_event_from_vector_store(event_id: str, user_id: str):
         logger.info(f"AI Memory purged in background for event {event_id}")
         return True
     except Exception as e:
-        logger.warning(f"AI Memory purge failed in background for event {event_id}: {e}")
+        logger.warning(
+            f"AI Memory purge failed in background for event {event_id}: {e}"
+        )
         return False

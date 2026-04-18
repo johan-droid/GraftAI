@@ -14,9 +14,10 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL not found in .env")
 
+
 async def migrate():
     print("🚀 Initializing Sync Schema Migration with SSL handling...")
-    
+
     # Replicate the logic from backend/utils/db.py
     _parsed = urlparse(DATABASE_URL)
     _params = parse_qs(_parsed.query)
@@ -40,27 +41,46 @@ async def migrate():
         future=True,
         connect_args=_connect_args,
     )
-    
+
     async with engine.begin() as conn:
         # 1. Update EventTable
         print("--- Updating events table ---")
-        await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS external_id VARCHAR(512)"))
-        await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS fingerprint VARCHAR(256)"))
-        await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'local'"))
-        await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_events_external_id ON events (external_id)"))
-        await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_events_fingerprint ON events (fingerprint)"))
-        
+        await conn.execute(
+            text("ALTER TABLE events ADD COLUMN IF NOT EXISTS external_id VARCHAR(512)")
+        )
+        await conn.execute(
+            text("ALTER TABLE events ADD COLUMN IF NOT EXISTS fingerprint VARCHAR(256)")
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE events ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'local'"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_events_external_id ON events (external_id)"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_events_fingerprint ON events (fingerprint)"
+            )
+        )
+
         # 2. Update UserTable (Cleanup any accidental field placement)
         print("--- Cleaning up accidental fields ---")
         await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS sync_token"))
-        
+
         # 3. Update UserTokenTable
         print("--- Updating user_tokens table ---")
-        await conn.execute(text("ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_token TEXT"))
-        
+        await conn.execute(
+            text("ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_token TEXT")
+        )
+
         print("✅ Migration Completed Successfully!")
-    
+
     await engine.dispose()
+
 
 if __name__ == "__main__":
     asyncio.run(migrate())

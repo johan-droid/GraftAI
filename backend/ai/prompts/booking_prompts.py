@@ -156,17 +156,18 @@ Consider the attendee's reliability, booking value, urgency, and any special cir
 # HELPER FUNCTIONS
 # ═════════════════════════════════════════════════════════════════
 
+
 def format_booking_decision_prompt(
     attendee_name: str,
     attendee_email: str,
     organizer_name: str,
     booking_type: str,
     scheduled_time: str,
-    **context: Dict[str, Any]
+    **context: Dict[str, Any],
 ) -> str:
     """
     Format the booking decision prompt with actual values
-    
+
     Args:
         attendee_name: Attendee's name
         attendee_email: Attendee's email
@@ -174,7 +175,7 @@ def format_booking_decision_prompt(
         booking_type: Type of booking
         scheduled_time: Scheduled time (ISO format)
         **context: Additional context fields
-    
+
     Returns:
         Formatted prompt string
     """
@@ -208,12 +209,12 @@ def format_booking_decision_prompt(
         "last_booking_date": "Never",
         "last_interaction_date": "Never",
         "satisfaction_score": "N/A",
-        "notes": "None"
+        "notes": "None",
     }
-    
+
     # Merge with provided context
     context = {**defaults, **context}
-    
+
     # Format the prompt
     return BOOKING_DECISION_PROMPT_TEMPLATE.format(
         attendee_name=attendee_name,
@@ -249,30 +250,32 @@ def format_booking_decision_prompt(
         last_booking_date=context["last_booking_date"],
         last_interaction_date=context["last_interaction_date"],
         satisfaction_score=context["satisfaction_score"],
-        notes=context["notes"]
+        notes=context["notes"],
     )
 
 
-def format_prompt_from_booking_data(booking: Dict[str, Any], attendee: Dict[str, Any]) -> str:
+def format_prompt_from_booking_data(
+    booking: Dict[str, Any], attendee: Dict[str, Any]
+) -> str:
     """
     Format prompt from booking and attendee data structures
-    
+
     Args:
         booking: Booking data dict
         attendee: Attendee data dict
-    
+
     Returns:
         Formatted prompt string
     """
     # Extract attendee info
     attendee_name = attendee.get("name", "Unknown")
     attendee_email = attendee.get("email", "unknown@example.com")
-    
+
     # Extract booking info
     organizer_name = booking.get("organizer_name", "Unknown")
     booking_type = booking.get("type", "consultation")
     scheduled_time = booking.get("start_time", "")
-    
+
     # Build context from both
     context = {
         "attendee_phone": attendee.get("phone", "Not provided"),
@@ -282,7 +285,9 @@ def format_prompt_from_booking_data(booking: Dict[str, Any], attendee: Dict[str,
         "avg_response_time": attendee.get("avg_response_time", 24),
         "preferred_channel": (
             pref[0]
-            if (pref := attendee.get("preferred_communication")) and isinstance(pref, (list, tuple)) and len(pref) > 0
+            if (pref := attendee.get("preferred_communication"))
+            and isinstance(pref, (list, tuple))
+            and len(pref) > 0
             else "email"
         ),
         "no_show_rate": attendee.get("no_show_rate", 0),
@@ -298,25 +303,35 @@ def format_prompt_from_booking_data(booking: Dict[str, Any], attendee: Dict[str,
         "lead_time": booking.get("lead_time_hours", 24),
         "conflicts": booking.get("conflicts", "None"),
         "attendee_count": len(booking.get("attendees", [])),
-        "day_of_week": datetime.fromisoformat(scheduled_time.replace('Z', '+00:00')).strftime("%A") if scheduled_time else datetime.utcnow().strftime("%A"),
-        "time_of_day": datetime.fromisoformat(scheduled_time.replace('Z', '+00:00')).strftime("%H:%M") if scheduled_time else datetime.utcnow().strftime("%H:%M"),
+        "day_of_week": datetime.fromisoformat(
+            scheduled_time.replace("Z", "+00:00")
+        ).strftime("%A")
+        if scheduled_time
+        else datetime.utcnow().strftime("%A"),
+        "time_of_day": datetime.fromisoformat(
+            scheduled_time.replace("Z", "+00:00")
+        ).strftime("%H:%M")
+        if scheduled_time
+        else datetime.utcnow().strftime("%H:%M"),
         "is_holiday": str(booking.get("is_holiday", False)).lower(),
         "is_weekend": str(booking.get("is_weekend", False)).lower(),
-        "business_hours_aligned": str(booking.get("business_hours_aligned", True)).lower(),
+        "business_hours_aligned": str(
+            booking.get("business_hours_aligned", True)
+        ).lower(),
         "timezone_difference": booking.get("timezone_difference", 0),
         "last_booking_date": attendee.get("last_booking_date", "Never"),
         "last_interaction_date": attendee.get("last_interaction_date", "Never"),
         "satisfaction_score": attendee.get("satisfaction_score", "N/A"),
-        "notes": booking.get("notes", "None")
+        "notes": booking.get("notes", "None"),
     }
-    
+
     return format_booking_decision_prompt(
         attendee_name=attendee_name,
         attendee_email=attendee_email,
         organizer_name=organizer_name,
         booking_type=booking_type,
         scheduled_time=scheduled_time,
-        **context
+        **context,
     )
 
 
@@ -342,9 +357,9 @@ if __name__ == "__main__":
         duration=60,
         lead_time=2,
         conflicts="None",
-        is_holiday="false"
+        is_holiday="false",
     )
-    
+
     print("=" * 80)
     print("BOOKING DECISION PROMPT EXAMPLE")
     print("=" * 80)

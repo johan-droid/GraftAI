@@ -8,7 +8,7 @@ This module provides functionality for:
 
 Example Usage:
     service = EmailTemplateService()
-    
+
     # Render a template
     html, text = service.render_template(
         template_slug="booking_confirmation",
@@ -19,7 +19,7 @@ Example Usage:
             "booking_time": "2024-01-15 10:00 AM"
         }
     )
-    
+
     # Send email
     await service.send_email(
         to_email="john@example.com",
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 class EmailTemplateService:
     """Service for managing and rendering email templates."""
-    
+
     # Default system templates
     DEFAULT_TEMPLATES = {
         "booking_confirmation": {
@@ -116,10 +116,19 @@ class EmailTemplateService:
 </html>
             """,
             "available_variables": [
-                "user_name", "booking_title", "booking_time", "booking_duration",
-                "booking_location", "attendee_name", "attendee_email",
-                "calendar_link", "app_url", "support_url", "primary_color", "secondary_color"
-            ]
+                "user_name",
+                "booking_title",
+                "booking_time",
+                "booking_duration",
+                "booking_location",
+                "attendee_name",
+                "attendee_email",
+                "calendar_link",
+                "app_url",
+                "support_url",
+                "primary_color",
+                "secondary_color",
+            ],
         },
         "booking_reminder": {
             "name": "Booking Reminder",
@@ -151,9 +160,13 @@ class EmailTemplateService:
 </html>
             """,
             "available_variables": [
-                "user_name", "booking_title", "booking_time", "time_until",
-                "meeting_link", "primary_color"
-            ]
+                "user_name",
+                "booking_title",
+                "booking_time",
+                "time_until",
+                "meeting_link",
+                "primary_color",
+            ],
         },
         "booking_cancelled": {
             "name": "Booking Cancelled",
@@ -186,9 +199,14 @@ class EmailTemplateService:
 </html>
             """,
             "available_variables": [
-                "user_name", "booking_title", "booking_time", "cancelled_by",
-                "cancellation_reason", "reschedule_url", "app_url"
-            ]
+                "user_name",
+                "booking_title",
+                "booking_time",
+                "cancelled_by",
+                "cancellation_reason",
+                "reschedule_url",
+                "app_url",
+            ],
         },
         "welcome_email": {
             "name": "Welcome Email",
@@ -237,9 +255,12 @@ class EmailTemplateService:
 </html>
             """,
             "available_variables": [
-                "user_name", "dashboard_url", "getting_started_url",
-                "primary_color", "secondary_color"
-            ]
+                "user_name",
+                "dashboard_url",
+                "getting_started_url",
+                "primary_color",
+                "secondary_color",
+            ],
         },
         "payment_received": {
             "name": "Payment Received",
@@ -272,33 +293,35 @@ class EmailTemplateService:
 </html>
             """,
             "available_variables": [
-                "user_name", "amount", "currency", "payment_date",
-                "plan_name", "transaction_id", "billing_url"
-            ]
-        }
+                "user_name",
+                "amount",
+                "currency",
+                "payment_date",
+                "plan_name",
+                "transaction_id",
+                "billing_url",
+            ],
+        },
     }
-    
+
     def __init__(self, db: AsyncSession):
         """Initialize the email template service.
-        
+
         Args:
             db: SQLAlchemy async session for database operations
         """
         self.db = db
         self.jinja_env = Environment(loader=BaseLoader())
-    
+
     async def initialize_system_templates(self) -> None:
         """Create default system templates if they don't exist."""
         for slug, template_data in self.DEFAULT_TEMPLATES.items():
             # Check if template exists
             stmt = select(EmailTemplate).where(
-                and_(
-                    EmailTemplate.slug == slug,
-                    EmailTemplate.is_system == True
-                )
+                and_(EmailTemplate.slug == slug, EmailTemplate.is_system == True)
             )
             existing = (await self.db.execute(stmt)).scalars().first()
-            
+
             if not existing:
                 template = EmailTemplate(
                     name=template_data["name"],
@@ -310,27 +333,24 @@ class EmailTemplateService:
                     html_body=template_data["html_body"],
                     text_body=self._html_to_text(template_data["html_body"]),
                     available_variables=template_data["available_variables"],
-                    primary_color="#6366f1"
+                    primary_color="#6366f1",
                 )
                 self.db.add(template)
-        
+
         await self.db.commit()
-    
+
     async def get_template(
-        self,
-        slug: str,
-        user_id: Optional[str] = None,
-        language: str = "en"
+        self, slug: str, user_id: Optional[str] = None, language: str = "en"
     ) -> Optional[EmailTemplate]:
         """Get a template by slug.
-        
+
         First tries to find a user-specific template, then falls back to system template.
-        
+
         Args:
             slug: Template identifier (e.g., "booking_confirmation")
             user_id: Optional user ID for user-specific templates
             language: Language code (default: "en")
-        
+
         Returns:
             EmailTemplate instance or None
         """
@@ -341,38 +361,36 @@ class EmailTemplateService:
                     EmailTemplate.slug == slug,
                     EmailTemplate.user_id == user_id,
                     EmailTemplate.language == language,
-                    EmailTemplate.is_active == True
+                    EmailTemplate.is_active == True,
                 )
             )
             template = (await self.db.execute(stmt)).scalars().first()
             if template:
                 return template
-        
+
         # Fall back to system template
         stmt = select(EmailTemplate).where(
             and_(
                 EmailTemplate.slug == slug,
                 EmailTemplate.is_system == True,
                 EmailTemplate.language == language,
-                EmailTemplate.is_active == True
+                EmailTemplate.is_active == True,
             )
         )
         return (await self.db.execute(stmt)).scalars().first()
-    
+
     def render_template(
-        self,
-        template: EmailTemplate,
-        variables: Dict[str, str]
+        self, template: EmailTemplate, variables: Dict[str, str]
     ) -> Tuple[str, str, str]:
         """Render a template with variables.
-        
+
         Args:
             template: EmailTemplate instance
             variables: Dictionary of variables for substitution
-        
+
         Returns:
             Tuple of (subject, html_body, text_body)
-        
+
         Raises:
             TemplateError: If template rendering fails
         """
@@ -382,67 +400,67 @@ class EmailTemplateService:
             "secondary_color": "#ec4899",  # Default secondary
             "app_url": "https://graftai.com",
             "support_url": "https://graftai.com/support",
-            **variables
+            **variables,
         }
-        
+
         try:
             # Render subject
             subject_template = self.jinja_env.from_string(template.subject)
             subject = subject_template.render(**default_vars)
-            
+
             # Render HTML
             html_template = self.jinja_env.from_string(template.html_body)
             html_body = html_template.render(**default_vars)
-            
+
             # Render text (use stored text body as base)
             text_template = self.jinja_env.from_string(template.text_body)
             text_body = text_template.render(**default_vars)
-            
+
             return subject, html_body, text_body
-            
+
         except TemplateError as e:
             raise TemplateError(f"Failed to render template {template.slug}: {e}")
-    
+
     @staticmethod
     def _html_to_text(html_content: str) -> str:
         """Convert HTML to plain text.
-        
+
         Simple conversion that removes tags and converts
         common elements to text equivalents.
-        
+
         Args:
             html_content: HTML string
-        
+
         Returns:
             Plain text version
         """
         # Remove style tags and content
-        text = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL)
-        
+        text = re.sub(r"<style[^>]*>.*?</style>", "", html_content, flags=re.DOTALL)
+
         # Replace common tags with text equivalents
-        text = re.sub(r'<h[1-6][^>]*>', '\n\n', text)
-        text = re.sub(r'</h[1-6]>', '\n', text)
-        text = re.sub(r'<p[^>]*>', '\n', text)
-        text = re.sub(r'</p>', '\n', text)
-        text = re.sub(r'<br[^>]*>', '\n', text)
-        text = re.sub(r'<div[^>]*>', '\n', text)
-        text = re.sub(r'</div>', '\n', text)
-        
+        text = re.sub(r"<h[1-6][^>]*>", "\n\n", text)
+        text = re.sub(r"</h[1-6]>", "\n", text)
+        text = re.sub(r"<p[^>]*>", "\n", text)
+        text = re.sub(r"</p>", "\n", text)
+        text = re.sub(r"<br[^>]*>", "\n", text)
+        text = re.sub(r"<div[^>]*>", "\n", text)
+        text = re.sub(r"</div>", "\n", text)
+
         # Replace links
-        text = re.sub(r'<a[^>]+href="([^"]*)"[^>]*>([^<]*)</a>', r'\2 (\1)', text)
-        
+        text = re.sub(r'<a[^>]+href="([^"]*)"[^>]*>([^<]*)</a>', r"\2 (\1)", text)
+
         # Remove remaining tags
-        text = re.sub(r'<[^>]+>', '', text)
-        
+        text = re.sub(r"<[^>]+>", "", text)
+
         # Decode HTML entities
         text = html.unescape(text)
-        
+
         # Clean up whitespace
-        text = re.sub(r'\n\s*\n', '\n\n', text)
-        text = re.sub(r'^[\s\n]+', '', text)
-        
+        text = re.sub(r"\n\s*\n", "\n\n", text)
+        text = re.sub(r"^[\s\n]+", "", text)
+
         return text.strip()
-    
+
     async def send_email(
         self,
         to_email: str,
@@ -452,13 +470,13 @@ class EmailTemplateService:
         template_id: Optional[str] = None,
         user_id: Optional[str] = None,
         cc_emails: Optional[List[str]] = None,
-        bcc_emails: Optional[List[str]] = None
+        bcc_emails: Optional[List[str]] = None,
     ) -> EmailLog:
         """Send an email and log the delivery.
-        
+
         This is a placeholder implementation. In production, this would
         integrate with an email provider like Resend, SendGrid, or AWS SES.
-        
+
         Args:
             to_email: Recipient email address
             subject: Email subject
@@ -468,7 +486,7 @@ class EmailTemplateService:
             user_id: Optional user ID for tracking
             cc_emails: Optional CC recipients
             bcc_emails: Optional BCC recipients
-        
+
         Returns:
             EmailLog instance
         """
@@ -484,20 +502,21 @@ class EmailTemplateService:
             provider="resend",
             email_metadata={
                 "html_length": len(html_body),
-                "text_length": len(text_body)
-            }
+                "text_length": len(text_body),
+            },
         )
-        
+
         self.db.add(log)
         await self.db.commit()
         await self.db.refresh(log)
-        
+
         # Send email via Resend if configured
         resend_api_key = os.getenv("RESEND_API_KEY")
         resend_error: Optional[str] = None
         if resend_api_key:
             try:
                 import httpx
+
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
                         "https://api.resend.com/emails",
@@ -508,8 +527,8 @@ class EmailTemplateService:
                             "bcc": bcc_emails or [],
                             "subject": subject,
                             "html": html_body,
-                            "text": text_body
-                        }
+                            "text": text_body,
+                        },
                     )
                     if response.status_code in (200, 201):
                         result = response.json()
@@ -546,45 +565,48 @@ class EmailTemplateService:
                     log.error_message = f"SMTP fallback failed: {smtp_exc}"
                     logger.error(f"SMTP fallback failed: {smtp_exc}")
             elif resend_error:
-                logger.warning(f"Email delivery failed without SMTP fallback: {resend_error}")
-        
+                logger.warning(
+                    f"Email delivery failed without SMTP fallback: {resend_error}"
+                )
+
         await self.db.commit()
         await self.db.refresh(log)
         return log
-    
+
     async def get_email_stats(self, user_id: str, days: int = 30) -> Dict:
         """Get email sending statistics for a user.
-        
+
         Args:
             user_id: User ID
             days: Number of days to look back
-        
+
         Returns:
             Dictionary with email statistics
         """
         from datetime import timedelta
-        
+
         since = datetime.now(timezone.utc) - timedelta(days=days)
-        
+
         stmt = select(EmailLog).where(
-            and_(
-                EmailLog.user_id == user_id,
-                EmailLog.sent_at >= since
-            )
+            and_(EmailLog.user_id == user_id, EmailLog.sent_at >= since)
         )
         logs = (await self.db.execute(stmt)).scalars().all()
-        
+
         stats = {
             "total": len(logs),
             "sent": len([log_item for log_item in logs if log_item.status == "sent"]),
-            "delivered": len([log_item for log_item in logs if log_item.status == "delivered"]),
+            "delivered": len(
+                [log_item for log_item in logs if log_item.status == "delivered"]
+            ),
             "opened": len([log_item for log_item in logs if log_item.opened_at]),
-            "failed": len([log_item for log_item in logs if log_item.status == "failed"]),
+            "failed": len(
+                [log_item for log_item in logs if log_item.status == "failed"]
+            ),
             "open_rate": 0,
-            "period_days": days
+            "period_days": days,
         }
-        
+
         if stats["delivered"] > 0:
             stats["open_rate"] = round((stats["opened"] / stats["delivered"]) * 100, 2)
-        
+
         return stats

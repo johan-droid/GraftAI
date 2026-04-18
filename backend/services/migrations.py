@@ -30,9 +30,7 @@ def _canonical_migration_plan() -> list[Path]:
     scripts = [root / "backend" / "scripts" / "users_compat_patch.sql"]
     migration_dir = root / "backend" / "models" / "migrations"
 
-    sql_migrations = sorted(
-        [p for p in migration_dir.glob("*.pgsql") if p.is_file()]
-    )
+    sql_migrations = sorted([p for p in migration_dir.glob("*.pgsql") if p.is_file()])
 
     return [p for p in scripts + sql_migrations if p.exists()]
 
@@ -124,7 +122,9 @@ def _webhook_tables_have_wrong_id_type(engine) -> bool:
         if id_col is None:
             return False
         col_type = str(id_col["type"]).upper()
-        return "INT" in col_type and "VARCHAR" not in col_type and "TEXT" not in col_type
+        return (
+            "INT" in col_type and "VARCHAR" not in col_type and "TEXT" not in col_type
+        )
     except Exception as exc:
         logger.warning("Could not inspect webhook_subscriptions schema: %s", exc)
         return False
@@ -149,7 +149,9 @@ def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] =
                 )
                 with engine.begin() as conn:
                     conn.execute(text("DROP TABLE IF EXISTS webhook_logs CASCADE;"))
-                    conn.execute(text("DROP TABLE IF EXISTS webhook_subscriptions CASCADE;"))
+                    conn.execute(
+                        text("DROP TABLE IF EXISTS webhook_subscriptions CASCADE;")
+                    )
         except Exception as exc:
             logger.warning("Pre-create_all repair check failed (non-fatal): %s", exc)
 

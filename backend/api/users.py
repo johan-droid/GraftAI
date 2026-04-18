@@ -19,6 +19,7 @@ from backend.services.storage import storage
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+
 class UserProfileUpdateRequest(BaseModel):
     display_name: Optional[str] = None
     full_name: Optional[str] = None
@@ -39,7 +40,9 @@ class UserProfileUpdateRequest(BaseModel):
         if value is None:
             return value
         if not re.fullmatch(r"[a-zA-Z0-9_-]{3,30}", value):
-            raise ValueError("Username must be 3-30 characters and contain only letters, numbers, hyphens, or underscores.")
+            raise ValueError(
+                "Username must be 3-30 characters and contain only letters, numbers, hyphens, or underscores."
+            )
         return value.lower()
 
     @validator("display_name")
@@ -50,7 +53,9 @@ class UserProfileUpdateRequest(BaseModel):
         if len(normalized) < 1 or len(normalized) > 100:
             raise ValueError("Display name must be 1-100 characters")
         if not re.fullmatch(r"[A-Za-z0-9 '\-]+", normalized):
-            raise ValueError("Display name may only include letters, numbers, spaces, apostrophes, and hyphens")
+            raise ValueError(
+                "Display name may only include letters, numbers, spaces, apostrophes, and hyphens"
+            )
         return normalized
 
     @validator("bio")
@@ -111,8 +116,6 @@ class UserProfileUpdateRequest(BaseModel):
         return value
 
 
-
-
 class OutOfOfficeBlockCreateRequest(BaseModel):
     start_time: datetime
     end_time: datetime
@@ -158,7 +161,9 @@ def _profile_setup_completed(user: UserTable) -> bool:
 
 def _mark_profile_setup_completed(user: UserTable) -> None:
     prefs = _normalize_preferences(user)
-    completed_steps = list(dict.fromkeys(list(prefs.get("completed_steps", [])) + ["profile"]))
+    completed_steps = list(
+        dict.fromkeys(list(prefs.get("completed_steps", [])) + ["profile"])
+    )
     prefs["completed_steps"] = completed_steps
     prefs["profile_setup_completed"] = True
     _set_preferences(user, prefs)
@@ -167,7 +172,9 @@ def _mark_profile_setup_completed(user: UserTable) -> None:
 def _serialize_profile(user: UserTable) -> Dict[str, Any]:
     prefs = _normalize_preferences(user)
     avatar_key = prefs.get("avatar_key")
-    avatar_url = storage.get_presigned_url(avatar_key) if avatar_key else prefs.get("avatar_url")
+    avatar_url = (
+        storage.get_presigned_url(avatar_key) if avatar_key else prefs.get("avatar_url")
+    )
     return {
         "id": user.id,
         "email": user.email,
@@ -195,9 +202,13 @@ def _serialize_profile(user: UserTable) -> Dict[str, Any]:
         "daily_ai_limit": user.daily_ai_limit,
         "daily_sync_count": user.daily_sync_count,
         "daily_sync_limit": user.daily_sync_limit,
-        "quota_reset_at": user.quota_reset_at.isoformat() if user.quota_reset_at else None,
+        "quota_reset_at": user.quota_reset_at.isoformat()
+        if user.quota_reset_at
+        else None,
         "trial_active": user.trial_active,
-        "trial_expires_at": user.trial_expires_at.isoformat() if user.trial_expires_at else None,
+        "trial_expires_at": user.trial_expires_at.isoformat()
+        if user.trial_expires_at
+        else None,
     }
 
 
@@ -209,14 +220,17 @@ def _build_profile_response(user: UserTable) -> Dict[str, Any]:
     }
 
 
-def _apply_profile_payload(user: UserTable, payload: UserProfileUpdateRequest) -> UserTable:
+def _apply_profile_payload(
+    user: UserTable, payload: UserProfileUpdateRequest
+) -> UserTable:
     prefs = _normalize_preferences(user)
 
     if payload.preferences is not None:
         filtered = {
             k: v
             for k, v in payload.preferences.items()
-            if k not in {
+            if k
+            not in {
                 "display_name",
                 "full_name",
                 "username",
@@ -301,6 +315,7 @@ def _set_out_of_office_blocks(user: UserTable, blocks: List[Dict[str, Any]]) -> 
     prefs["out_of_office"] = blocks
     user.preferences = prefs
 
+
 @router.get("/me")
 async def get_my_profile(current_user: UserTable = Depends(get_current_user)):
     """Fetch current user profile for the monolithic dashboard."""
@@ -323,15 +338,22 @@ async def create_or_update_profile(
     result = await db.execute(select(UserTable).where(UserTable.id == current_user.id))
     user = result.scalars().first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     if payload.username is not None:
         username = payload.username.strip().lower()
         if username and username != user.username:
-            stmt = select(UserTable).where(UserTable.username == username, UserTable.id != current_user.id)
+            stmt = select(UserTable).where(
+                UserTable.username == username, UserTable.id != current_user.id
+            )
             existing = (await db.execute(stmt)).scalars().first()
             if existing:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Username already taken",
+                )
 
     user = _apply_profile_payload(user, payload)
     _mark_profile_setup_completed(user)
@@ -361,8 +383,12 @@ async def get_profile_setup_status(current_user: UserTable = Depends(get_current
 
 
 @router.get("/me/calendars/oauth/google/auth-url")
-async def get_google_calendar_auth_url(current_user: UserTable = Depends(get_current_user)):
-    state = build_oauth_state(current_user.id, redirect_to="/profile/setup/calendar", provider="google")
+async def get_google_calendar_auth_url(
+    current_user: UserTable = Depends(get_current_user),
+):
+    state = build_oauth_state(
+        current_user.id, redirect_to="/profile/setup/calendar", provider="google"
+    )
     auth_url = await get_google_auth_url(state)
     return {
         "success": True,
@@ -402,7 +428,9 @@ async def upload_profile_avatar(
         "image/webp": b"RIFF",
     }
     if file.content_type == "image/webp":
-        if len(header_sample) < 12 or not (header_sample.startswith(b"RIFF") and header_sample[8:12] == b"WEBP"):
+        if len(header_sample) < 12 or not (
+            header_sample.startswith(b"RIFF") and header_sample[8:12] == b"WEBP"
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Avatar content does not match declared file type.",
@@ -420,7 +448,9 @@ async def upload_profile_avatar(
 
     try:
         file.file.seek(0)
-        storage_key = await storage.upload_file(file.file, upload_key, file.content_type)
+        storage_key = await storage.upload_file(
+            file.file, upload_key, file.content_type
+        )
         if not storage_key:
             raise ValueError("Storage upload failed")
     except Exception as exc:
@@ -452,10 +482,14 @@ async def complete_profile_setup_step(
 ):
     valid_steps = ["profile", "calendar", "availability", "event_type"]
     if step_id not in valid_steps:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid onboarding step")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid onboarding step"
+        )
 
     prefs = _normalize_preferences(current_user)
-    completed_steps = list(dict.fromkeys(list(prefs.get("completed_steps", [])) + [step_id]))
+    completed_steps = list(
+        dict.fromkeys(list(prefs.get("completed_steps", [])) + [step_id])
+    )
     prefs["completed_steps"] = completed_steps
     if step_id == "profile":
         prefs["profile_setup_completed"] = True
@@ -499,43 +533,55 @@ async def complete_onboarding_flow(
         "data": {"redirect_url": "/dashboard"},
     }
 
+
 @router.get("/me/integrations")
 async def get_my_integrations(
     current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Returns a list of connected services (e.g., ['google', 'microsoft'])."""
     active_stmt = select(UserTokenTable.provider).where(
-        and_(UserTokenTable.user_id == current_user.id, UserTokenTable.is_active == True)
+        and_(
+            UserTokenTable.user_id == current_user.id, UserTokenTable.is_active == True
+        )
     )
     inactive_stmt = select(UserTokenTable.provider).where(
-        and_(UserTokenTable.user_id == current_user.id, UserTokenTable.is_active == False)
+        and_(
+            UserTokenTable.user_id == current_user.id, UserTokenTable.is_active == False
+        )
     )
     active_providers = (await db.execute(active_stmt)).scalars().all()
     inactive_providers = (await db.execute(inactive_stmt)).scalars().all()
     return {
         "active_providers": list(active_providers),
-        "inactive_providers": list(sorted(set(inactive_providers) - set(active_providers)))
+        "inactive_providers": list(
+            sorted(set(inactive_providers) - set(active_providers))
+        ),
     }
+
 
 @router.delete("/me/integrations/{provider}")
 async def disconnect_integration(
     provider: str,
     current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Deletes or deactivates the OAuth token for a specific provider."""
     stmt = select(UserTokenTable).where(
-        and_(UserTokenTable.user_id == current_user.id, UserTokenTable.provider == provider)
+        and_(
+            UserTokenTable.user_id == current_user.id,
+            UserTokenTable.provider == provider,
+        )
     )
     token = (await db.execute(stmt)).scalars().first()
-    
+
     if not token:
         raise HTTPException(status_code=404, detail="Integration not found")
-        
+
     await db.delete(token)
     await db.commit()
     return {"message": f"{provider} disconnected successfully"}
+
 
 @router.patch("/me")
 async def update_current_user_profile(
@@ -552,7 +598,9 @@ async def update_current_user_profile(
     if payload.username is not None:
         username = payload.username.strip().lower()
         if username and username != user.username:
-            stmt = select(UserTable).where(UserTable.username == username, UserTable.id != current_user.id)
+            stmt = select(UserTable).where(
+                UserTable.username == username, UserTable.id != current_user.id
+            )
             existing = (await db.execute(stmt)).scalars().first()
             if existing:
                 raise HTTPException(status_code=409, detail="Username already taken")
@@ -569,10 +617,10 @@ async def update_current_user_profile(
     }
 
 
-
-
 @router.get("/me/out-of-office")
-async def list_current_user_out_of_office(current_user: UserTable = Depends(get_current_user)):
+async def list_current_user_out_of_office(
+    current_user: UserTable = Depends(get_current_user),
+):
     return {"items": _extract_out_of_office_blocks(current_user)}
 
 
@@ -617,26 +665,28 @@ async def delete_current_user_out_of_office(
 @router.delete("/me")
 async def delete_current_user_account(
     current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Delete user account (anonymize for data integrity)."""
     import uuid
-    
+
     # Anonymize user instead of hard delete for data integrity
-    current_user.email = f"deleted_{current_user.id}_{uuid.uuid4().hex[:8]}@anonymized.com"
+    current_user.email = (
+        f"deleted_{current_user.id}_{uuid.uuid4().hex[:8]}@anonymized.com"
+    )
     current_user.full_name = "Deleted User"
     current_user.is_active = False
     current_user.deleted_at = datetime.now(timezone.utc)
-    
+
     # Clear sensitive data
-    current_user.hashed_password = None # Pure OAuth 2.0
+    current_user.hashed_password = None  # Pure OAuth 2.0
     current_user.email_verification_code = None
     current_user.password_reset_token = None
     current_user.preferences = {}
-    
+
     await db.commit()
-    
+
     return {
         "status": "account_anonymized",
-        "message": "Your account has been anonymized and deactivated. Access has been removed."
+        "message": "Your account has been anonymized and deactivated. Access has been removed.",
     }

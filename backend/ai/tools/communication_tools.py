@@ -11,6 +11,7 @@ from .registry import register_tool, ToolCategory, ToolPriority
 
 logger = get_logger(__name__)
 
+
 def _mask_email(email: str) -> str:
     if not isinstance(email, str) or "@" not in email:
         return "unknown"
@@ -28,9 +29,9 @@ def _mask_email(email: str) -> str:
         {
             "to": "user@example.com",
             "subject": "Meeting Confirmation",
-            "body": "Your meeting has been scheduled for tomorrow at 2pm."
+            "body": "Your meeting has been scheduled for tomorrow at 2pm.",
         }
-    ]
+    ],
 )
 async def send_email(
     to: str,
@@ -39,11 +40,11 @@ async def send_email(
     cc: Optional[List[str]] = None,
     bcc: Optional[List[str]] = None,
     template: Optional[str] = None,
-    from_address: Optional[str] = None
+    from_address: Optional[str] = None,
 ) -> dict:
     """
     Send an email to a recipient.
-    
+
     Args:
         to: Recipient email address
         subject: Email subject line
@@ -52,24 +53,26 @@ async def send_email(
         bcc: Optional list of BCC recipients
         template: Optional template name to use
         from_address: Optional sender address (uses default if not specified)
-    
+
     Returns:
         Dict with email_id, status, and timestamp
     """
     try:
         # In production, integrate with email service (SendGrid, SES, etc.)
         # For now, simulate successful sending
-        
+
         email_id = f"email_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        
-        logger.info("Sending email", extra={"recipient": _mask_email(to), "subject": subject})
-        
+
+        logger.info(
+            "Sending email", extra={"recipient": _mask_email(to), "subject": subject}
+        )
+
         # TODO: Integrate with actual email service
         # Example integration:
         # if template:
         #     body = render_template(template, **context)
         # sendgrid_client.send(to=to, subject=subject, html=body)
-        
+
         return {
             "success": True,
             "email_id": email_id,
@@ -77,17 +80,12 @@ async def send_email(
             "subject": subject,
             "sent_at": datetime.utcnow().isoformat(),
             "status": "sent",
-            "message": f"Email sent to {to}"
+            "message": f"Email sent to {to}",
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "to": to,
-            "subject": subject
-        }
+        return {"success": False, "error": str(e), "to": to, "subject": subject}
 
 
 @register_tool(
@@ -95,46 +93,37 @@ async def send_email(
     description="Send an SMS text message to a phone number",
     category=ToolCategory.COMMUNICATION,
     priority=ToolPriority.HIGH,
-    examples=[
-        {
-            "to": "+1234567890",
-            "message": "Your meeting starts in 15 minutes."
-        }
-    ]
+    examples=[{"to": "+1234567890", "message": "Your meeting starts in 15 minutes."}],
 )
-async def send_sms(
-    to: str,
-    message: str,
-    from_number: Optional[str] = None
-) -> dict:
+async def send_sms(to: str, message: str, from_number: Optional[str] = None) -> dict:
     """
     Send an SMS to a phone number.
-    
+
     Args:
         to: Recipient phone number with country code (e.g., +1234567890)
         message: SMS message content (max 1600 characters)
         from_number: Optional sender number
-    
+
     Returns:
         Dict with sms_id, status, and details
     """
     try:
         # In production, integrate with SMS service (Twilio, etc.)
-        
+
         if len(message) > 1600:
             raise ValueError("Message exceeds 1600 character limit")
-        
+
         sms_id = f"sms_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        
+
         logger.info(f"Sending SMS to {to}")
-        
+
         # TODO: Integrate with Twilio or similar
         # twilio_client.messages.create(
         #     body=message,
         #     from_=from_number or TWILIO_PHONE,
         #     to=to
         # )
-        
+
         return {
             "success": True,
             "sms_id": sms_id,
@@ -142,16 +131,12 @@ async def send_sms(
             "message": message,
             "sent_at": datetime.utcnow().isoformat(),
             "status": "sent",
-            "segments": (len(message) // 160) + 1
+            "segments": (len(message) // 160) + 1,
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to send SMS: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "to": to
-        }
+        return {"success": False, "error": str(e), "to": to}
 
 
 @register_tool(
@@ -163,37 +148,37 @@ async def send_sms(
         {
             "channel": "#bookings",
             "message": "New high-value booking received!",
-            "blocks": []
+            "blocks": [],
         }
-    ]
+    ],
 )
 async def post_to_slack(
     channel: str,
     message: str,
     blocks: Optional[List[dict]] = None,
     thread_ts: Optional[str] = None,
-    username: Optional[str] = "GraftAI Bot"
+    username: Optional[str] = "GraftAI Bot",
 ) -> dict:
     """
     Post a message to Slack.
-    
+
     Args:
         channel: Channel name (e.g., #general) or channel ID
         message: Message text
         blocks: Optional Slack Block Kit blocks for rich formatting
         thread_ts: Optional thread timestamp to reply in thread
         username: Bot username to display
-    
+
     Returns:
         Dict with message_id and status
     """
     try:
         # In production, integrate with Slack API
-        
+
         message_id = f"slack_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        
+
         logger.info(f"Posting to Slack channel {channel}")
-        
+
         # TODO: Integrate with Slack API
         # slack_client.chat_postMessage(
         #     channel=channel,
@@ -202,23 +187,19 @@ async def post_to_slack(
         #     thread_ts=thread_ts,
         #     username=username
         # )
-        
+
         return {
             "success": True,
             "message_id": message_id,
             "channel": channel,
             "posted_at": datetime.utcnow().isoformat(),
             "status": "posted",
-            "message": f"Posted to {channel}"
+            "message": f"Posted to {channel}",
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to post to Slack: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "channel": channel
-        }
+        return {"success": False, "error": str(e), "channel": channel}
 
 
 @register_tool(
@@ -229,58 +210,57 @@ async def post_to_slack(
     examples=[
         {
             "user": "user@company.com",
-            "message": "Your meeting is confirmed for tomorrow at 2pm."
+            "message": "Your meeting is confirmed for tomorrow at 2pm.",
         }
-    ]
+    ],
 )
 async def send_teams_message(
     user: Optional[str] = None,
     channel: Optional[str] = None,
     message: str = "",
-    card: Optional[dict] = None
+    card: Optional[dict] = None,
 ) -> dict:
     """
     Send a message to Microsoft Teams.
-    
+
     Args:
         user: User email for direct message (provide user OR channel, not both)
         channel: Channel ID or name (provide user OR channel, not both)
         message: Message text
         card: Optional adaptive card for rich formatting
-    
+
     Returns:
         Dict with message_id and status
     """
     try:
         if not user and not channel:
             raise ValueError("Must provide either user or channel")
-        
+
         if user and channel:
             raise ValueError("Provide only user or channel, not both")
-        
+
         message_id = f"teams_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        
+
         recipient = user or channel
-        logger.info("Sending Teams message", extra={"recipient": _mask_email(recipient) if user else recipient})
-        
+        logger.info(
+            "Sending Teams message",
+            extra={"recipient": _mask_email(recipient) if user else recipient},
+        )
+
         # TODO: Integrate with Microsoft Graph API
         # graph_client.teams_messages.create(...)
-        
+
         return {
             "success": True,
             "message_id": message_id,
             "recipient": recipient,
             "sent_at": datetime.utcnow().isoformat(),
-            "status": "sent"
+            "status": "sent",
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to send Teams message: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "recipient": user or channel
-        }
+        return {"success": False, "error": str(e), "recipient": user or channel}
 
 
 @register_tool(
@@ -294,9 +274,9 @@ async def send_teams_message(
             "title": "Team Sync",
             "start_time": "2024-04-15T14:00:00",
             "duration_minutes": 30,
-            "location": "Conference Room A"
+            "location": "Conference Room A",
         }
-    ]
+    ],
 )
 async def send_calendar_invite(
     attendee: str,
@@ -306,11 +286,11 @@ async def send_calendar_invite(
     location: Optional[str] = None,
     description: Optional[str] = None,
     organizer: Optional[str] = None,
-    timezone: str = "UTC"
+    timezone: str = "UTC",
 ) -> dict:
     """
     Send a calendar invite to an attendee.
-    
+
     Args:
         attendee: Attendee email address
         title: Meeting title
@@ -320,20 +300,20 @@ async def send_calendar_invite(
         description: Optional meeting description
         organizer: Optional organizer email
         timezone: Timezone (default UTC)
-    
+
     Returns:
         Dict with invite_id and status
     """
     try:
         from datetime import datetime, timedelta
-        
-        start = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+
+        start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
         end = start + timedelta(minutes=duration_minutes)
-        
+
         invite_id = f"invite_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        
+
         logger.info(f"Sending calendar invite to {attendee} for {title}")
-        
+
         # TODO: Generate and send ICS file or integrate with calendar API
         # calendar_client.create_event(
         #     title=title,
@@ -343,7 +323,7 @@ async def send_calendar_invite(
         #     location=location,
         #     description=description
         # )
-        
+
         return {
             "success": True,
             "invite_id": invite_id,
@@ -354,14 +334,9 @@ async def send_calendar_invite(
             "duration_minutes": duration_minutes,
             "location": location,
             "sent_at": datetime.utcnow().isoformat(),
-            "status": "sent"
+            "status": "sent",
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to send calendar invite: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "attendee": attendee,
-            "title": title
-        }
+        return {"success": False, "error": str(e), "attendee": attendee, "title": title}

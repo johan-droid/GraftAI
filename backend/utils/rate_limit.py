@@ -18,7 +18,7 @@ _LOCAL_FALLBACK_CACHE_TTL_SECONDS = 3600
 _LOCAL_FALLBACK_CACHE_MAX_ENTRIES = 1000
 _local_fallback_cache: dict[str, dict[str, Any]] = {}
 
-RATE_LIMIT_LUA = r'''
+RATE_LIMIT_LUA = r"""
 local key = KEYS[1]
 local now = tonumber(ARGV[1])
 local window = tonumber(ARGV[2])
@@ -39,7 +39,7 @@ end
 redis.call('ZADD', key, now, member)
 redis.call('EXPIRE', key, window + 5)
 return {1, count + 1, window}
-'''
+"""
 
 
 async def get_redis_client() -> Redis:
@@ -63,7 +63,9 @@ def _prune_local_fallback_cache(now: float) -> None:
             _local_fallback_cache.items(),
             key=lambda item: item[1].get("last_access", 0),
         )
-        for key, _ in oldest[: len(_local_fallback_cache) - _LOCAL_FALLBACK_CACHE_MAX_ENTRIES]:
+        for key, _ in oldest[
+            : len(_local_fallback_cache) - _LOCAL_FALLBACK_CACHE_MAX_ENTRIES
+        ]:
             _local_fallback_cache.pop(key, None)
 
 
@@ -176,9 +178,15 @@ api_limits = {
     "availability": RateLimit("availability", max_requests=10, window_seconds=60),
     "create_event": RateLimit("create_event", max_requests=100, window_seconds=3600),
     "webhooks": RateLimit("webhooks", max_requests=100, window_seconds=60),
-    "login": RateLimit("login", max_requests=5, window_seconds=300),  # 5 attempts per 5 minutes
-    "register": RateLimit("register", max_requests=3, window_seconds=3600),  # 3 registrations per hour
-    "oauth_callback": RateLimit("oauth_callback", max_requests=10, window_seconds=300),  # 10 per 5 minutes
+    "login": RateLimit(
+        "login", max_requests=5, window_seconds=300
+    ),  # 5 attempts per 5 minutes
+    "register": RateLimit(
+        "register", max_requests=3, window_seconds=3600
+    ),  # 3 registrations per hour
+    "oauth_callback": RateLimit(
+        "oauth_callback", max_requests=10, window_seconds=300
+    ),  # 10 per 5 minutes
 }
 
 

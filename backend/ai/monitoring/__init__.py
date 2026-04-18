@@ -16,7 +16,7 @@ from .metrics import (
     agent_duration,
     memory_operations,
     llm_tokens_used,
-    llm_api_calls
+    llm_api_calls,
 )
 
 from .logging_config import (

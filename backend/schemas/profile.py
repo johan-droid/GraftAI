@@ -40,7 +40,9 @@ class ProfileBase(BaseModel):
         if value is None:
             return value
         if not value or value not in pytz.all_timezones:
-            raise ValueError("timezone must be a valid IANA timezone like America/New_York or UTC")
+            raise ValueError(
+                "timezone must be a valid IANA timezone like America/New_York or UTC"
+            )
         return value
 
 

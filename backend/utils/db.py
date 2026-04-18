@@ -7,7 +7,10 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 if not os.environ.get("TESTING"):
-    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=False)
+    load_dotenv(
+        dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"),
+        override=False,
+    )
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 AsyncSessionLocal = None
@@ -48,12 +51,16 @@ if DATABASE_URL:
 
             is_render = os.getenv("RENDER") == "true" or "render.com" in DATABASE_URL
 
-            _needs_ssl = _params.pop("sslmode", [None])[0] in (
-                "require",
-                "verify-ca",
-                "verify-full",
-                "prefer",
-            ) or is_render
+            _needs_ssl = (
+                _params.pop("sslmode", [None])[0]
+                in (
+                    "require",
+                    "verify-ca",
+                    "verify-full",
+                    "prefer",
+                )
+                or is_render
+            )
 
             _params.pop("channel_binding", None)
             _clean_query = urlencode({k: v[0] for k, v in _params.items()}, doseq=False)

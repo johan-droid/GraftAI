@@ -55,14 +55,18 @@ def _chunk_text(text: str, chunk_size: int = 96) -> list[str]:
     if not text:
         return []
 
-    return [text[index:index + chunk_size] for index in range(0, len(text), chunk_size)]
+    return [
+        text[index : index + chunk_size] for index in range(0, len(text), chunk_size)
+    ]
 
 
 def _sse_event(event_name: str, payload: Dict[str, Any]) -> str:
     return f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
 
 
-def _milestone_for_intent(intent: str, action: Optional[Dict[str, Any]] = None) -> Optional[str]:
+def _milestone_for_intent(
+    intent: str, action: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
     if not intent:
         return None
 
@@ -197,7 +201,17 @@ def _extract_event_id(prompt: str) -> Optional[int]:
 
 def _looks_like_meeting_request(prompt: str) -> bool:
     lower = prompt.lower()
-    if any(provider in lower for provider in ["zoom", "teams", "microsoft", "google meet", "gmeet", "meet link"]):
+    if any(
+        provider in lower
+        for provider in [
+            "zoom",
+            "teams",
+            "microsoft",
+            "google meet",
+            "gmeet",
+            "meet link",
+        ]
+    ):
         return True
 
     meeting_keywords = [
@@ -216,8 +230,12 @@ def _looks_like_meeting_request(prompt: str) -> bool:
     return any(keyword in lower for keyword in meeting_keywords)
 
 
-def _parse_update_action_payload(action_text: str, user_timezone: str) -> tuple[Optional[int], Optional[datetime]]:
-    match = re.search(r"ACTION:UPDATE_MEETING:(\{.*\})", action_text, flags=re.IGNORECASE)
+def _parse_update_action_payload(
+    action_text: str, user_timezone: str
+) -> tuple[Optional[int], Optional[datetime]]:
+    match = re.search(
+        r"ACTION:UPDATE_MEETING:(\{.*\})", action_text, flags=re.IGNORECASE
+    )
     if not match:
         return None, None
 
@@ -227,7 +245,9 @@ def _parse_update_action_payload(action_text: str, user_timezone: str) -> tuple[
         return None, None
 
     event_id = payload.get("event_id")
-    event_id_value = int(event_id) if isinstance(event_id, int) or str(event_id).isdigit() else None
+    event_id_value = (
+        int(event_id) if isinstance(event_id, int) or str(event_id).isdigit() else None
+    )
 
     new_start_raw = payload.get("new_start_time")
     if not isinstance(new_start_raw, str) or not new_start_raw.strip():
@@ -252,7 +272,9 @@ def _extract_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
     if not text:
         return None
 
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    fenced = re.search(
+        r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.IGNORECASE | re.DOTALL
+    )
     if fenced:
         text = fenced.group(1).strip()
 
@@ -260,7 +282,7 @@ def _extract_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
         start = text.find("{")
         end = text.rfind("}")
         if start != -1 and end != -1 and end > start:
-            text = text[start: end + 1]
+            text = text[start : end + 1]
 
     try:
         parsed = json.loads(text)
@@ -277,15 +299,21 @@ def _extract_title(prompt: str) -> str:
     if quoted:
         return quoted.group(1).strip()
 
-    for_match = re.search(r"\b(?:for|about|regarding)\s+([^\n\r\.,!\?]+)", prompt, flags=re.IGNORECASE)
+    for_match = re.search(
+        r"\b(?:for|about|regarding)\s+([^\n\r\.,!\?]+)", prompt, flags=re.IGNORECASE
+    )
     if for_match:
         candidate = for_match.group(1).strip(" -:")
-        candidate = re.sub(r"^(?:a|an|the)\s+", "", candidate, flags=re.IGNORECASE).strip()
+        candidate = re.sub(
+            r"^(?:a|an|the)\s+", "", candidate, flags=re.IGNORECASE
+        ).strip()
         if candidate:
             return candidate[:120].title()
 
     cleaned = re.sub(r"\s+", " ", prompt).strip()
-    cleaned = re.sub(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b", "", cleaned, flags=re.IGNORECASE
+    )
     cleaned = re.sub(
         r"\b(schedule|book|add|create|event|appointment|task|reminder|meeting|call|for|at|on|today|tomorrow|next|week|month|day|morning|afternoon|evening)\b",
         "",
@@ -365,9 +393,24 @@ def _extract_datetime(prompt: str, user_timezone: str) -> datetime:
 def _detect_intent(prompt: str) -> str:
     lower = prompt.lower()
 
-    if any(k in lower for k in ["what do i have", "my schedule", "agenda", "upcoming", "this week", "today's plan", "what is on my calendar", "look like"]):
+    if any(
+        k in lower
+        for k in [
+            "what do i have",
+            "my schedule",
+            "agenda",
+            "upcoming",
+            "this week",
+            "today's plan",
+            "what is on my calendar",
+            "look like",
+        ]
+    ):
         return "list"
-    if any(k in lower for k in ["schedule", "book", "create", "add", "block", "make a meeting"]):
+    if any(
+        k in lower
+        for k in ["schedule", "book", "create", "add", "block", "make a meeting"]
+    ):
         return "schedule"
     if any(k in lower for k in ["delete", "remove", "cancel", "drop"]):
         return "delete"
@@ -380,14 +423,18 @@ def _detect_intent(prompt: str) -> str:
     return "none"
 
 
-async def _resolve_event_id(db: AsyncSession, user_id: str, prompt: str) -> Optional[int]:
+async def _resolve_event_id(
+    db: AsyncSession, user_id: str, prompt: str
+) -> Optional[int]:
     explicit = _extract_event_id(prompt)
     if explicit:
         return explicit
 
     try:
         now = datetime.now(timezone.utc)
-        events = await scheduler.get_events_for_range(db, user_id, now, now + timedelta(days=30))
+        events = await scheduler.get_events_for_range(
+            db, user_id, now, now + timedelta(days=30)
+        )
     except Exception:
         return None
 
@@ -395,6 +442,7 @@ async def _resolve_event_id(db: AsyncSession, user_id: str, prompt: str) -> Opti
         return None
 
     try:
+
         def _event_start_key(event: Any) -> datetime:
             value = _get_event_attr(event, "start_time", now)
             if isinstance(value, datetime):
@@ -471,7 +519,9 @@ def _format_events_compact(events: list[Any], user_timezone: str) -> str:
             end = end.replace(tzinfo=timezone.utc)
         end_tz = end.astimezone(tz)
 
-        rows.append(f"{eid}|{title}|{start_tz.strftime('%a %d')}|{start_tz.strftime('%H:%M')}-{end_tz.strftime('%H:%M')}")
+        rows.append(
+            f"{eid}|{title}|{start_tz.strftime('%a %d')}|{start_tz.strftime('%H:%M')}-{end_tz.strftime('%H:%M')}"
+        )
 
     return "\n".join(rows)
 
@@ -502,7 +552,10 @@ async def _offline_assistant_response(
             meeting_platform = "zoom"
         elif any(k in lower_prompt for k in ["teams", "microsoft", "ms teams"]):
             meeting_platform = "microsoft"
-        elif any(k in lower_prompt for k in ["google meet", "gmeet", "google-meet", "meet link"]) or re.search(
+        elif any(
+            k in lower_prompt
+            for k in ["google meet", "gmeet", "google-meet", "meet link"]
+        ) or re.search(
             r"\b(?:on|via|using)\s+meet\b",
             lower_prompt,
         ):
@@ -518,7 +571,9 @@ async def _offline_assistant_response(
         duration = _extract_duration_minutes(prompt)
 
         agenda = None
-        agenda_match = re.search(r"agenda[:\s]+(.*?)(?:\.|$)", prompt, flags=re.IGNORECASE)
+        agenda_match = re.search(
+            r"agenda[:\s]+(.*?)(?:\.|$)", prompt, flags=re.IGNORECASE
+        )
         if agenda_match:
             agenda = agenda_match.group(1).strip()
 
@@ -536,7 +591,9 @@ async def _offline_assistant_response(
         event_data = {
             "user_id": user_id,
             "title": title,
-            "description": f"Agenda: {agenda}" if agenda else "Created by GraftAI Sovereign Assistant",
+            "description": f"Agenda: {agenda}"
+            if agenda
+            else "Created by GraftAI Sovereign Assistant",
             "start_time": start_time,
             "end_time": start_time + timedelta(minutes=duration),
             "source": "local",
@@ -555,10 +612,9 @@ async def _offline_assistant_response(
 
         conflict_msg = ""
         if conflicts:
-            conflict_names = ", ".join([
-                f"'{_get_event_attr(c, 'title', 'event')}'"
-                for c in conflicts[:2]
-            ])
+            conflict_names = ", ".join(
+                [f"'{_get_event_attr(c, 'title', 'event')}'" for c in conflicts[:2]]
+            )
             conflict_msg = f" It overlaps with {conflict_names}."
 
         created = await scheduler.create_event(db, event_data)
@@ -590,10 +646,14 @@ async def _offline_assistant_response(
                     "If a value is missing, return null for that key. "
                     "Return ONLY the JSON object."
                 )
-                action_hint = await _generate_with_groq(system_instruction, prompt, json_mode=True)
+                action_hint = await _generate_with_groq(
+                    system_instruction, prompt, json_mode=True
+                )
                 payload = _extract_json_payload(action_hint)
             except Exception as e:
-                logger.warning(f"Provider extraction unavailable for update action: {e}")
+                logger.warning(
+                    f"Provider extraction unavailable for update action: {e}"
+                )
 
             if payload:
                 try:
@@ -601,15 +661,21 @@ async def _offline_assistant_response(
                         event_id = int(payload["event_id"])
 
                     if payload.get("new_start_time"):
-                        parsed = datetime.fromisoformat(payload["new_start_time"].strip().replace("Z", "+00:00"))
+                        parsed = datetime.fromisoformat(
+                            payload["new_start_time"].strip().replace("Z", "+00:00")
+                        )
                         if parsed.tzinfo is None:
-                            parsed = parsed.replace(tzinfo=_safe_zoneinfo(user_timezone))
+                            parsed = parsed.replace(
+                                tzinfo=_safe_zoneinfo(user_timezone)
+                            )
                         new_start_override = parsed.astimezone(timezone.utc)
                 except (ValueError, TypeError) as e:
                     logger.warning(f"Structured update payload parse failed: {e}")
 
             if action_hint and (event_id is None or new_start_override is None):
-                parsed_event_id, parsed_start = _parse_update_action_payload(action_hint, user_timezone)
+                parsed_event_id, parsed_start = _parse_update_action_payload(
+                    action_hint, user_timezone
+                )
                 if parsed_event_id is not None:
                     event_id = parsed_event_id
                 if parsed_start is not None:
@@ -640,7 +706,9 @@ async def _offline_assistant_response(
         if isinstance(updated_start, datetime):
             if updated_start.tzinfo is None:
                 updated_start = updated_start.replace(tzinfo=timezone.utc)
-            updated_time_label = updated_start.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            updated_time_label = updated_start.astimezone(timezone.utc).strftime(
+                "%Y-%m-%d %H:%M UTC"
+            )
         else:
             updated_time_label = new_start.strftime("%Y-%m-%d %H:%M UTC")
 
@@ -720,12 +788,18 @@ async def _generate_with_groq_response(
                     type(exc).__name__,
                 )
 
-    error_detail = f"{type(last_error).__name__}: {last_error}" if last_error else "unknown"
+    error_detail = (
+        f"{type(last_error).__name__}: {last_error}" if last_error else "unknown"
+    )
     raise RuntimeError(f"All configured Groq model attempts failed ({error_detail})")
 
 
-async def _generate_with_groq(system_prompt: str, user_input: str, json_mode: bool = False) -> str:
-    content, _ = await _generate_with_groq_response(system_prompt, user_input, json_mode=json_mode)
+async def _generate_with_groq(
+    system_prompt: str, user_input: str, json_mode: bool = False
+) -> str:
+    content, _ = await _generate_with_groq_response(
+        system_prompt, user_input, json_mode=json_mode
+    )
     return content
 
 
@@ -739,13 +813,17 @@ async def ai_chat(
 ):
     prompt = (request.prompt or "").strip()
     if not prompt:
-        return AIResponse(result="Please provide a message.", model_used="graftai-assistant")
+        return AIResponse(
+            result="Please provide a message.", model_used="graftai-assistant"
+        )
 
     intent = _detect_intent(prompt)
     match intent:
         case "list" | "schedule" | "update" | "delete":
             try:
-                result_text, action = await _offline_assistant_response(prompt, request.timezone, db, user_id)
+                result_text, action = await _offline_assistant_response(
+                    prompt, request.timezone, db, user_id
+                )
             except ValueError as ve:
                 logger.warning(f"Offline action logic failure: {ve}")
                 result_text = f"⚠️ {str(ve)}"
@@ -758,7 +836,9 @@ async def ai_chat(
             try:
                 await increment_usage(db, user_id, "ai_messages")
             except Exception as exc:
-                logger.warning(f"AI usage bookkeeping failed (offline): {exc}", exc_info=True)
+                logger.warning(
+                    f"AI usage bookkeeping failed (offline): {exc}", exc_info=True
+                )
 
             return AIResponse(
                 result=result_text,
@@ -775,12 +855,21 @@ async def ai_chat(
         try:
             await increment_usage(db, user_id, "ai_messages")
         except Exception as exc:
-            logger.warning(f"AI usage bookkeeping failed (cache hit): {exc}", exc_info=True)
-        return AIResponse(result=cached, model_used="graftai-assistant-cache", action={"type": "none"}, milestone=None)
+            logger.warning(
+                f"AI usage bookkeeping failed (cache hit): {exc}", exc_info=True
+            )
+        return AIResponse(
+            result=cached,
+            model_used="graftai-assistant-cache",
+            action={"type": "none"},
+            milestone=None,
+        )
 
     now = datetime.now(timezone.utc)
 
-    events_task = scheduler.get_events_for_range(db, user_id, now, now + timedelta(days=3))
+    events_task = scheduler.get_events_for_range(
+        db, user_id, now, now + timedelta(days=3)
+    )
     emails_task = get_recent_emails(db, user_id, limit=3)
 
     try:
@@ -789,9 +878,10 @@ async def ai_chat(
         logger.warning(f"Partial context failure: {exc}")
         events, email_items = [], []
 
-    email_context = "\n".join(
-        [f"- {item.get('subject', 'No subject')}" for item in email_items]
-    ) or "No recent email context."
+    email_context = (
+        "\n".join([f"- {item.get('subject', 'No subject')}" for item in email_items])
+        or "No recent email context."
+    )
 
     compact_context = _format_events_compact(events, request.timezone)
     implementation_context = build_implementation_context()
@@ -839,7 +929,9 @@ async def ai_chat(
         try:
             now_local = datetime.now(_safe_zoneinfo(request.timezone))
             window_end = now_local + timedelta(hours=48)
-            fallback_events = await scheduler.get_events_for_range(db, user_id, now_local, window_end)
+            fallback_events = await scheduler.get_events_for_range(
+                db, user_id, now_local, window_end
+            )
             agenda = _format_events(fallback_events, request.timezone)
 
             result_text = (
@@ -900,7 +992,9 @@ async def ai_chat(
         except Exception as exc:
             logger.warning(f"AI milestone stream publish failed: {exc}", exc_info=True)
 
-    return AIResponse(result=result_text, model_used=model_used, action=action, milestone=milestone)
+    return AIResponse(
+        result=result_text, model_used=model_used, action=action, milestone=milestone
+    )
 
 
 @router.post("/stream")
@@ -939,7 +1033,9 @@ async def ai_chat_stream(
                 "phase",
                 {
                     "phase": "action",
-                    "status": "completed" if action_type and action_type != "none" else "idle",
+                    "status": "completed"
+                    if action_type and action_type != "none"
+                    else "idle",
                 },
             )
             yield _sse_event(

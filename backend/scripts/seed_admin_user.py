@@ -11,7 +11,9 @@ from backend.utils.db import get_async_session_maker
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Seed an admin user into the database.")
+    parser = argparse.ArgumentParser(
+        description="Seed an admin user into the database."
+    )
     parser.add_argument("--email", required=False, help="Admin user email")
     parser.add_argument("--password", required=False, help="Admin user password")
     parser.add_argument("--username", required=False, help="Admin username")

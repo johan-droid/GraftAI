@@ -98,7 +98,7 @@ class EventTypeResponse(BaseModel):
 @router.get("/event-types", response_model=List[EventTypeResponse])
 async def get_event_types(
     current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     types = await list_event_types(db, current_user.id)
     return types
@@ -108,7 +108,7 @@ async def get_event_types(
 async def create_event_type_route(
     payload: EventTypePayload,
     current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     payload_dict = payload.model_dump()
     payload_dict["team_assignment_method"] = SINGLE_ASSIGNMENT_METHOD
@@ -124,12 +124,14 @@ async def update_event_type_route(
     event_type_id: str,
     payload: EventTypePayload,
     current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     payload_dict = payload.model_dump()
     payload_dict["team_assignment_method"] = SINGLE_ASSIGNMENT_METHOD
     try:
-        event_type = await update_event_type(db, current_user.id, event_type_id, payload_dict)
+        event_type = await update_event_type(
+            db, current_user.id, event_type_id, payload_dict
+        )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     if not event_type:
@@ -141,7 +143,7 @@ async def update_event_type_route(
 async def delete_event_type_route(
     event_type_id: str,
     current_user: UserTable = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     deleted = await delete_event_type(db, current_user.id, event_type_id)
     if not deleted:
@@ -149,7 +151,9 @@ async def delete_event_type_route(
     return {"status": "deleted"}
 
 
-@router.get("/event-types/{event_type_id}/team-members", response_model=List[TeamMemberResponse])
+@router.get(
+    "/event-types/{event_type_id}/team-members", response_model=List[TeamMemberResponse]
+)
 async def get_event_type_team_members(
     event_type_id: str,
     current_user: UserTable = Depends(get_current_user),
@@ -158,7 +162,9 @@ async def get_event_type_team_members(
     return []
 
 
-@router.post("/event-types/{event_type_id}/team-members", response_model=TeamMemberResponse)
+@router.post(
+    "/event-types/{event_type_id}/team-members", response_model=TeamMemberResponse
+)
 async def add_event_type_team_member_route(
     event_type_id: str,
     payload: TeamMemberPayload,
@@ -171,7 +177,10 @@ async def add_event_type_team_member_route(
     )
 
 
-@router.patch("/event-types/{event_type_id}/team-members/{member_id}", response_model=TeamMemberResponse)
+@router.patch(
+    "/event-types/{event_type_id}/team-members/{member_id}",
+    response_model=TeamMemberResponse,
+)
 async def update_event_type_team_member_route(
     event_type_id: str,
     member_id: str,

@@ -4,7 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.tables import UserTokenTable
-from backend.services.integrations.calendar_provider import get_calendar_provider_for_token
+from backend.services.integrations.calendar_provider import (
+    get_calendar_provider_for_token,
+)
 from backend.utils.cache import delete_cache_pattern, get_cache, set_cache
 
 logger = logging.getLogger(__name__)
@@ -46,7 +48,9 @@ async def sync_calendar_for_user(db: AsyncSession, user_id: str) -> None:
     for token in tokens:
         provider = get_calendar_provider_for_token(token)
         if not provider:
-            logger.warning(f"Skipping unsupported calendar provider for token {token.id}: {token.provider}")
+            logger.warning(
+                f"Skipping unsupported calendar provider for token {token.id}: {token.provider}"
+            )
             continue
 
         for chunk_index in range(0, DEFAULT_LOOKAHEAD_DAYS, CHUNK_DAYS):
@@ -58,8 +62,12 @@ async def sync_calendar_for_user(db: AsyncSession, user_id: str) -> None:
                 continue
 
             try:
-                busy_windows = await provider.get_busy_windows(db, range_start, range_end)
-                await set_cache(cache_key, busy_windows, expire_seconds=_ttl_seconds(range_start))
+                busy_windows = await provider.get_busy_windows(
+                    db, range_start, range_end
+                )
+                await set_cache(
+                    cache_key, busy_windows, expire_seconds=_ttl_seconds(range_start)
+                )
             except Exception as exc:
                 logger.error(
                     f"Calendar busy-time sync failed for user={user_id} token={token.id} provider={token.provider}"

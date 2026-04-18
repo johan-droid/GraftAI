@@ -38,7 +38,9 @@ async def list_notifications(
     if unread_only:
         stmt = (
             select(NotificationTable)
-            .where(NotificationTable.user_id == user_id, NotificationTable.is_read == False)
+            .where(
+                NotificationTable.user_id == user_id, NotificationTable.is_read == False
+            )
             .order_by(NotificationTable.created_at.desc())
             .limit(limit)
         )

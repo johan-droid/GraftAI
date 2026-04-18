@@ -22,12 +22,18 @@ class CalendarSyncProvider(ABC):
         self.token_record = token_record
 
     async def sync(self, db: AsyncSession) -> int:
-        access_token = await ensure_valid_token(db, self.token_record.user_id, self.provider)
+        access_token = await ensure_valid_token(
+            db, self.token_record.user_id, self.provider
+        )
         if not access_token:
-            logger.warning(f"{self.name} sync skipped: invalid or expired token for user {self.token_record.user_id}")
+            logger.warning(
+                f"{self.name} sync skipped: invalid or expired token for user {self.token_record.user_id}"
+            )
             return 0
 
-        events, next_sync_token = await self.fetch_events(access_token, self.token_record.sync_token)
+        events, next_sync_token = await self.fetch_events(
+            access_token, self.token_record.sync_token
+        )
         processed = 0
 
         for item in events:
@@ -47,7 +53,9 @@ class CalendarSyncProvider(ABC):
                 continue
 
             normalized["user_id"] = self.token_record.user_id
-            await simple_upsert_event(db, self.token_record.user_id, self.provider, normalized)
+            await simple_upsert_event(
+                db, self.token_record.user_id, self.provider, normalized
+            )
             processed += 1
 
         if next_sync_token and next_sync_token != self.token_record.sync_token:
@@ -60,16 +68,15 @@ class CalendarSyncProvider(ABC):
         self,
         access_token: str,
         sync_token: Optional[str],
-    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        ...
+    ) -> Tuple[List[Dict[str, Any]], Optional[str]]: ...
 
     @abstractmethod
-    async def get_busy_windows(self, db: AsyncSession, start: datetime, end: datetime) -> List[Dict[str, Any]]:
-        ...
+    async def get_busy_windows(
+        self, db: AsyncSession, start: datetime, end: datetime
+    ) -> List[Dict[str, Any]]: ...
 
     @abstractmethod
-    def normalize_event(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        ...
+    def normalize_event(self, item: Dict[str, Any]) -> Dict[str, Any]: ...
 
 
 class GoogleCalendarSyncProvider(CalendarSyncProvider):
@@ -83,24 +90,38 @@ class GoogleCalendarSyncProvider(CalendarSyncProvider):
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         refresh_token, _ = decrypt_token_value(self.token_record.refresh_token)
         if refresh_token is None:
-            logger.error(f"Cannot fetch Google events. Token decryption failed for token ID {self.token_record.id}")
-            raise ValueError(f"Token decryption failed for token ID {self.token_record.id}")
-            
+            logger.error(
+                f"Cannot fetch Google events. Token decryption failed for token ID {self.token_record.id}"
+            )
+            raise ValueError(
+                f"Token decryption failed for token ID {self.token_record.id}"
+            )
+
         token_data = {
             "access_token": access_token,
             "refresh_token": refresh_token,
         }
-        result = await google_calendar.list_google_events(token_data, sync_token=sync_token)
+        result = await google_calendar.list_google_events(
+            token_data, sync_token=sync_token
+        )
         return result.get("items", []), result.get("nextSyncToken")
 
-    async def get_busy_windows(self, db: AsyncSession, start: datetime, end: datetime) -> List[Dict[str, Any]]:
-        refresh_token, _ = decrypt_token_value(self.token_record.refresh_token) 
+    async def get_busy_windows(
+        self, db: AsyncSession, start: datetime, end: datetime
+    ) -> List[Dict[str, Any]]:
+        refresh_token, _ = decrypt_token_value(self.token_record.refresh_token)
         if refresh_token is None:
-            logger.error(f"Cannot get Google busy windows. Token decryption failed for token ID {self.token_record.id}")
-            raise ValueError(f"Token decryption failed for token ID {self.token_record.id}")
+            logger.error(
+                f"Cannot get Google busy windows. Token decryption failed for token ID {self.token_record.id}"
+            )
+            raise ValueError(
+                f"Token decryption failed for token ID {self.token_record.id}"
+            )
 
         token_data = {
-            "access_token": await ensure_valid_token(db, self.token_record.user_id, "google"),
+            "access_token": await ensure_valid_token(
+                db, self.token_record.user_id, "google"
+            ),
             "refresh_token": refresh_token,
         }
         if not token_data["access_token"]:
@@ -111,7 +132,9 @@ class GoogleCalendarSyncProvider(CalendarSyncProvider):
         if item.get("status") == "cancelled":
             return {"removed": True, "external_id": item.get("id")}
 
-        start_str = item.get("start", {}).get("dateTime") or item.get("start", {}).get("date")
+        start_str = item.get("start", {}).get("dateTime") or item.get("start", {}).get(
+            "date"
+        )
         end_str = item.get("end", {}).get("dateTime") or item.get("end", {}).get("date")
 
         return {
@@ -123,7 +146,11 @@ class GoogleCalendarSyncProvider(CalendarSyncProvider):
             "end_time": self._parse_datetime(end_str),
             "source": "google",
             "meeting_url": item.get("hangoutLink") or item.get("htmlLink"),
-            "attendees": [attendee.get("email") for attendee in item.get("attendees", []) if attendee.get("email")],
+            "attendees": [
+                attendee.get("email")
+                for attendee in item.get("attendees", [])
+                if attendee.get("email")
+            ],
         }
 
     def _parse_datetime(self, value: Optional[str]) -> Optional[datetime]:
@@ -144,8 +171,12 @@ class MicrosoftGraphSyncProvider(CalendarSyncProvider):
         result = await ms_graph.list_ms_events(access_token, delta_link=sync_token)
         return result.get("value", []), result.get("@odata.deltaLink")
 
-    async def get_busy_windows(self, db: AsyncSession, start: datetime, end: datetime) -> List[Dict[str, Any]]:
-        access_token = await ensure_valid_token(db, self.token_record.user_id, "microsoft")
+    async def get_busy_windows(
+        self, db: AsyncSession, start: datetime, end: datetime
+    ) -> List[Dict[str, Any]]:
+        access_token = await ensure_valid_token(
+            db, self.token_record.user_id, "microsoft"
+        )
         if not access_token:
             return []
 
@@ -155,7 +186,9 @@ class MicrosoftGraphSyncProvider(CalendarSyncProvider):
         if not user_principal_name:
             return []
 
-        return await ms_graph.get_ms_busy_times(access_token, user_principal_name, start, end)
+        return await ms_graph.get_ms_busy_times(
+            access_token, user_principal_name, start, end
+        )
 
     def normalize_event(self, item: Dict[str, Any]) -> Dict[str, Any]:
         if item.get("@removed"):
@@ -172,8 +205,13 @@ class MicrosoftGraphSyncProvider(CalendarSyncProvider):
             "start_time": start_time,
             "end_time": end_time,
             "source": "microsoft",
-            "meeting_url": item.get("onlineMeeting", {}).get("joinUrl") or item.get("webLink"),
-            "attendees": [recipient.get("emailAddress", {}).get("address") for recipient in item.get("attendees", []) if recipient.get("emailAddress")],
+            "meeting_url": item.get("onlineMeeting", {}).get("joinUrl")
+            or item.get("webLink"),
+            "attendees": [
+                recipient.get("emailAddress", {}).get("address")
+                for recipient in item.get("attendees", [])
+                if recipient.get("emailAddress")
+            ],
         }
 
     def _parse_datetime(self, value: Optional[str]) -> Optional[datetime]:
@@ -191,10 +229,14 @@ class CalDavCalendarSyncProvider(CalendarSyncProvider):
         access_token: str,
         sync_token: Optional[str],
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        logger.warning("CalDAV sync is not yet implemented in this provider abstraction.")
+        logger.warning(
+            "CalDAV sync is not yet implemented in this provider abstraction."
+        )
         return [], sync_token
 
-    async def get_busy_windows(self, db: AsyncSession, start: datetime, end: datetime) -> List[Dict[str, Any]]:
+    async def get_busy_windows(
+        self, db: AsyncSession, start: datetime, end: datetime
+    ) -> List[Dict[str, Any]]:
         logger.warning("CalDAV busy time fetching is not implemented.")
         return []
 
@@ -202,7 +244,9 @@ class CalDavCalendarSyncProvider(CalendarSyncProvider):
         return {"removed": False, "external_id": None}
 
 
-def get_calendar_provider_for_token(token_record: UserTokenTable) -> Optional[CalendarSyncProvider]:
+def get_calendar_provider_for_token(
+    token_record: UserTokenTable,
+) -> Optional[CalendarSyncProvider]:
     if token_record.provider == "google":
         return GoogleCalendarSyncProvider(token_record)
     if token_record.provider == "microsoft":
@@ -210,7 +254,9 @@ def get_calendar_provider_for_token(token_record: UserTokenTable) -> Optional[Ca
     if token_record.provider == "caldav":
         return CalDavCalendarSyncProvider(token_record)
     if token_record.provider == "apple":
-        from backend.services.integrations.apple_calendar_provider import AppleCalendarSyncProvider
+        from backend.services.integrations.apple_calendar_provider import (
+            AppleCalendarSyncProvider,
+        )
 
         return AppleCalendarSyncProvider(token_record)
     logger.warning(f"Unsupported calendar provider: {token_record.provider}")

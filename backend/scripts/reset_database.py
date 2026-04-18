@@ -31,13 +31,17 @@ async def drop_all_tables(url: str) -> None:
         engine = create_async_engine(url_clean, connect_args=connect_args)
         async with engine.begin() as conn:
             print("🔥 Dropping all tables in PostgreSQL database...")
-            result = await conn.execute(text(
-                "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'"
-            ))
+            result = await conn.execute(
+                text(
+                    "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'"
+                )
+            )
             tables = [row[0] for row in result.fetchall()]
             if tables:
                 quoted_tables = ", ".join(quote_identifier(t) for t in tables)
-                await conn.execute(text(f"DROP TABLE IF EXISTS {quoted_tables} CASCADE"))
+                await conn.execute(
+                    text(f"DROP TABLE IF EXISTS {quoted_tables} CASCADE")
+                )
                 print(f"✅ Dropped {len(tables)} tables: {', '.join(tables)}")
             else:
                 print("✅ No tables found to drop.")
@@ -47,13 +51,17 @@ async def drop_all_tables(url: str) -> None:
         engine = create_async_engine(url)
         async with engine.begin() as conn:
             print("🔥 Dropping all tables in SQLite database...")
-            result = await conn.execute(text(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            ))
+            result = await conn.execute(
+                text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                )
+            )
             tables = [row[0] for row in result.fetchall()]
             if tables:
                 for table in tables:
-                    await conn.execute(text(f"DROP TABLE IF EXISTS {quote_identifier(table)}"))
+                    await conn.execute(
+                        text(f"DROP TABLE IF EXISTS {quote_identifier(table)}")
+                    )
                 print(f"✅ Dropped {len(tables)} tables: {', '.join(tables)}")
             else:
                 print("✅ No tables found to drop.")
@@ -65,16 +73,27 @@ async def drop_all_tables(url: str) -> None:
 
 def run_alembic_upgrade_head() -> None:
     print("🚀 Running Alembic migrations...")
-    result = subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=os.path.join(os.path.dirname(__file__), ".."))
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=os.path.join(os.path.dirname(__file__), ".."),
+    )
     if result.returncode != 0:
         raise RuntimeError("Alembic migration failed")
     print("✅ Alembic migrations applied successfully.")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Reset the database by dropping all tables and optionally running Alembic migrations.")
-    parser.add_argument("--yes", action="store_true", help="Confirm database reset without prompting.")
-    parser.add_argument("--migrate", action="store_true", help="Run Alembic migrations after dropping tables.")
+    parser = argparse.ArgumentParser(
+        description="Reset the database by dropping all tables and optionally running Alembic migrations."
+    )
+    parser.add_argument(
+        "--yes", action="store_true", help="Confirm database reset without prompting."
+    )
+    parser.add_argument(
+        "--migrate",
+        action="store_true",
+        help="Run Alembic migrations after dropping tables.",
+    )
     return parser.parse_args()
 
 

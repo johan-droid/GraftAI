@@ -13,6 +13,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=F
 
 from backend.auth.config import ALGORITHM, SECRET_KEY
 
+
 async def decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -23,6 +24,7 @@ async def decode_token(token: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
+
 async def get_current_user_id(
     request: Request,
     token: str = Depends(oauth2_scheme),
@@ -30,6 +32,7 @@ async def get_current_user_id(
 ) -> str:
     user = await get_current_user(request=request, token=token, db=db)
     return user.id
+
 
 async def get_current_user(
     request: Request,

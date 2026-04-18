@@ -4,6 +4,7 @@ This is intentionally minimal: it provides `get_breaker(name, threshold, recover
 which returns an async callable that will run the decorated function and trip
 open the circuit after `threshold` consecutive failures for `recovery_timeout` seconds.
 """
+
 from __future__ import annotations
 
 import time
@@ -25,7 +26,9 @@ def get_breaker(name: str, threshold: int = 5, recovery_timeout: int = 60) -> Ca
     async def _breaker(fn: Callable, *args: Any, **kwargs: Any) -> Any:
         now = time.time()
         if state["opened_until"] > now:
-            raise RuntimeError(f"Circuit '{name}' is open until {state['opened_until']}")
+            raise RuntimeError(
+                f"Circuit '{name}' is open until {state['opened_until']}"
+            )
 
         try:
             if inspect.iscoroutinefunction(fn):
@@ -43,7 +46,9 @@ def get_breaker(name: str, threshold: int = 5, recovery_timeout: int = 60) -> Ca
                 state["fails"] += 1
                 if state["fails"] >= int(threshold):
                     state["opened_until"] = time.time() + float(recovery_timeout)
-                    logger.warning(f"Circuit '{name}' opened for {recovery_timeout}s after {state['fails']} failures")
+                    logger.warning(
+                        f"Circuit '{name}' opened for {recovery_timeout}s after {state['fails']} failures"
+                    )
             raise
 
     return _breaker

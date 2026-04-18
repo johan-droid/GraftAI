@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 router = APIRouter(tags=["Plugins"])
 
+
 class PluginItem(BaseModel):
     id: str
     name: str
@@ -15,7 +16,9 @@ class PluginItem(BaseModel):
     installed: bool
     author: Optional[str] = None
 
+
 SUPPORTED_PLUGIN_IDS = {"google", "microsoft", "zoom"}
+
 
 @router.get("/plugins/list")
 async def list_plugins() -> dict:
@@ -53,6 +56,7 @@ async def list_plugins() -> dict:
     ]
 
     return {"plugins": [plugin.dict() for plugin in plugins]}
+
 
 @router.post("/plugins/{plugin_id}/enable")
 async def enable_plugin(plugin_id: str) -> dict:

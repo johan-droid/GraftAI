@@ -23,6 +23,7 @@ PROVIDERS = {
     },
 }
 
+
 def get_provider_config(provider: str):
     """
     Returns the OAuth2 configuration for the specified provider.

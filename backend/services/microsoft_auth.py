@@ -7,11 +7,14 @@ MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
 
 # Use the backend base URL provided through environment variables.
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
-MICROSOFT_REDIRECT_URI = os.getenv("MICROSOFT_REDIRECT_URI", f"{BACKEND_URL}/api/v1/auth/microsoft/callback")
+MICROSOFT_REDIRECT_URI = os.getenv(
+    "MICROSOFT_REDIRECT_URI", f"{BACKEND_URL}/api/v1/auth/microsoft/callback"
+)
 
 # Validate Microsoft OAuth configuration
 if not MICROSOFT_CLIENT_ID or not MICROSOFT_CLIENT_SECRET:
     import logging
+
     logging.warning(
         "⚠️  Microsoft OAuth not fully configured. Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET to enable Microsoft login. "
         "Visit https://portal.azure.com to create app registrations."
@@ -25,13 +28,14 @@ TOKEN_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/token"
 # Scopes for Graph Calendar access
 SCOPES = "openid profile email offline_access Calendars.ReadWrite"
 
+
 async def get_microsoft_auth_url(state: str):
     if not MICROSOFT_CLIENT_ID or not MICROSOFT_CLIENT_SECRET:
         raise ValueError(
             "Microsoft OAuth is not configured. Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in your .env file. "
             "Get credentials from: https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
         )
-    
+
     client = AsyncOAuth2Client(
         client_id=MICROSOFT_CLIENT_ID,
         client_secret=MICROSOFT_CLIENT_SECRET,
@@ -39,11 +43,10 @@ async def get_microsoft_auth_url(state: str):
         redirect_uri=MICROSOFT_REDIRECT_URI,
     )
     authorization_url, _ = client.create_authorization_url(
-        AUTH_ENDPOINT,
-        state=state,
-        response_mode="query"
+        AUTH_ENDPOINT, state=state, response_mode="query"
     )
     return authorization_url
+
 
 async def fetch_microsoft_tokens(code: str):
     if not MICROSOFT_CLIENT_ID or not MICROSOFT_CLIENT_SECRET:
@@ -51,7 +54,7 @@ async def fetch_microsoft_tokens(code: str):
             "Microsoft OAuth is not configured. Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in your .env file. "
             "Get credentials from: https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
         )
-    
+
     async with AsyncOAuth2Client(
         client_id=MICROSOFT_CLIENT_ID,
         client_secret=MICROSOFT_CLIENT_SECRET,
@@ -68,8 +71,9 @@ async def fetch_microsoft_tokens(code: str):
     return {
         "email": profile.get("mail") or profile.get("userPrincipalName"),
         "full_name": profile.get("displayName"),
-        "token": token
+        "token": token,
     }
+
 
 async def verify_microsoft_token(access_token: str) -> dict:
     if not access_token:
@@ -77,7 +81,10 @@ async def verify_microsoft_token(access_token: str) -> dict:
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             "https://graph.microsoft.com/v1.0/me",
-            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+            },
         )
         if resp.status_code != 200:
             raise ValueError("Invalid Microsoft access token")

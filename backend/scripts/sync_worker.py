@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 
 # Setup logging
 from backend.utils.logger import configure_logging
+
 configure_logging()
 logger = logging.getLogger("sync-worker")
 
@@ -34,6 +35,7 @@ from backend.utils.db import AsyncSessionLocal
 
 SYNC_INTERVAL_SECONDS = 300  # 5 minutes
 
+
 async def perform_sync_cycle():
     """
     One full pass over all active user tokens to sync their calendars.
@@ -41,16 +43,18 @@ async def perform_sync_cycle():
     """
     logger.info("🕒 Starting synchronization cycle...")
     start_time = time.time()
-    
+
     # 1. Fetch active targets first (minimal overhead)
     active_tokens = []
     async with AsyncSessionLocal() as db:
-        stmt = select(UserTokenTable.id, UserTokenTable.provider).where(UserTokenTable.is_active == True)
+        stmt = select(UserTokenTable.id, UserTokenTable.provider).where(
+            UserTokenTable.is_active == True
+        )
         result = await db.execute(stmt)
-        active_tokens = result.all() # Returns list of (id, provider)
-    
+        active_tokens = result.all()  # Returns list of (id, provider)
+
     logger.info(f"🔍 Found {len(active_tokens)} active service connections to sync.")
-    
+
     for token_id, provider in active_tokens:
         try:
             # Create a FRESH session for each provider sync to avoid greenlet/transaction crosstalk
@@ -59,30 +63,35 @@ async def perform_sync_cycle():
                 token = await user_db.get(UserTokenTable, token_id)
                 if not token or not token.is_active:
                     continue
-                    
+
                 logger.info(f"🔄 Syncing {provider} (ID: {token_id})...")
                 sync_start = time.time()
-                
+
                 if provider == "google":
                     await sync_google_events(user_db, token)
                 elif provider == "microsoft":
                     await sync_ms_graph_events(user_db, token)
-                
+
                 # We do NOT commit here if sync_ engine handles its own commits/rollbacks
                 # but it does help to ensure the session is finished.
                 await user_db.commit()
-                
-                sync_duration = time.time() - sync_start
-                logger.info(f"✨ {provider} (ID: {token_id}) synced in {sync_duration:.2f}s")
 
-        except (Exception) as e:
+                sync_duration = time.time() - sync_start
+                logger.info(
+                    f"✨ {provider} (ID: {token_id}) synced in {sync_duration:.2f}s"
+                )
+
+        except Exception as e:
             error_msg = str(e).lower()
             logger.error(f"❌ Failed to sync {provider} (ID: {token_id}): {e}")
-            
+
             # If it's a connection-level error, we might want to dispose the engine pool
             if "connection was closed" in error_msg or "interfaceerror" in error_msg:
-                logger.warning("🚨 Database connection lost. Disposing engine pool for recovery.")
+                logger.warning(
+                    "🚨 Database connection lost. Disposing engine pool for recovery."
+                )
                 from backend.utils.db import engine
+
                 await engine.dispose()
 
     duration = time.time() - start_time
@@ -90,6 +99,7 @@ async def perform_sync_cycle():
 
     duration = time.time() - start_time
     logger.info(f"✅ Sync cycle completed in {duration:.2f} seconds.")
+
 
 async def worker_loop():
     """
@@ -108,9 +118,15 @@ async def worker_loop():
                     rows = result.fetchall()
                     columns = [r[1] for r in rows]
                     if "description" not in columns:
-                        await conn.execute(text("ALTER TABLE events ADD COLUMN description TEXT;"))
+                        await conn.execute(
+                            text("ALTER TABLE events ADD COLUMN description TEXT;")
+                        )
                 else:
-                    await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS description TEXT;"))
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE events ADD COLUMN IF NOT EXISTS description TEXT;"
+                        )
+                    )
     except Exception:
         # Best-effort only: continue even if this check fails
         pass
@@ -123,14 +139,14 @@ async def worker_loop():
 
     # Note: signal handlers are only for main thread/UNIX-like, but we can wrap the loop
     # For Windows/WatchFiles, we primarily rely on KeyboardInterrupt catching.
-    
+
     try:
         while not stop_event.is_set():
             try:
                 await perform_sync_cycle()
             except Exception as e:
                 logger.critical(f"💥 Critical error in worker cycle: {e}")
-                
+
             logger.info(f"💤 Sleeping for {SYNC_INTERVAL_SECONDS} seconds...")
             # Wait for sleep OR stop event
             try:
@@ -141,16 +157,17 @@ async def worker_loop():
         logger.info("🧹 Performing final cleanup...")
         from backend.utils.db import engine
         from backend.utils.cache import get_redis_client
-        
+
         # Dispose engine pool
         await engine.dispose()
-        
+
         # Close Redis
         redis = await get_redis_client()
         if redis:
             await redis.aclose()
-            
+
         logger.info("✨ Cleanup complete. Goodbye!")
+
 
 if __name__ == "__main__":
     try:

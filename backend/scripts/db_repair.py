@@ -4,6 +4,7 @@ from backend.utils.db import engine
 
 logger = logging.getLogger(__name__)
 
+
 async def repair_database():
     """
     Checks for database schema inconsistencies and applies manual patches.
@@ -26,14 +27,22 @@ async def repair_database():
                 FROM information_schema.columns 
                 WHERE table_name = 'notifications' AND column_name = 'title';
             """)
-            
+
             result = await conn.execute(check_column_sql)
             has_title = result.fetchone() is not None
-            
+
             if not has_title:
-                logger.info("🔧 [REPAIR] Column 'title' missing in 'notifications' table. Patching...")
-                await conn.execute(text("ALTER TABLE notifications ADD COLUMN title VARCHAR(255) DEFAULT 'Notification' NOT NULL;"))
-                logger.info("✅ [REPAIR] 'notifications' table successfully updated with 'title' column.")
+                logger.info(
+                    "🔧 [REPAIR] Column 'title' missing in 'notifications' table. Patching..."
+                )
+                await conn.execute(
+                    text(
+                        "ALTER TABLE notifications ADD COLUMN title VARCHAR(255) DEFAULT 'Notification' NOT NULL;"
+                    )
+                )
+                logger.info(
+                    "✅ [REPAIR] 'notifications' table successfully updated with 'title' column."
+                )
             # 1b. Check for 'data' column in 'notifications' table
             check_data_sql = text("""
                 SELECT column_name 
@@ -42,12 +51,22 @@ async def repair_database():
             """)
             result = await conn.execute(check_data_sql)
             if result.fetchone() is None:
-                logger.info("🔧 [REPAIR] Column 'data' missing in 'notifications' table. Patching...")
+                logger.info(
+                    "🔧 [REPAIR] Column 'data' missing in 'notifications' table. Patching..."
+                )
                 # Note: JSONB is PostgreSQL specific, use JSON for others if needed but we are on Postgres on Render
-                await conn.execute(text("ALTER TABLE notifications ADD COLUMN data JSONB DEFAULT '{}' NOT NULL;"))
-                logger.info("✅ [REPAIR] 'notifications' table successfully updated with 'data' column.")
+                await conn.execute(
+                    text(
+                        "ALTER TABLE notifications ADD COLUMN data JSONB DEFAULT '{}' NOT NULL;"
+                    )
+                )
+                logger.info(
+                    "✅ [REPAIR] 'notifications' table successfully updated with 'data' column."
+                )
             else:
-                logger.info("✅ [REPAIR] 'notifications' table schema verified (data column exists).")
+                logger.info(
+                    "✅ [REPAIR] 'notifications' table schema verified (data column exists)."
+                )
 
             # 1c. Check for 'is_read' column in 'notifications' table
             check_is_read_sql = text("""
@@ -57,12 +76,26 @@ async def repair_database():
             """)
             result = await conn.execute(check_is_read_sql)
             if result.fetchone() is None:
-                logger.info("🔧 [REPAIR] Column 'is_read' missing in 'notifications' table. Patching...")
-                await conn.execute(text("ALTER TABLE notifications ADD COLUMN is_read BOOLEAN DEFAULT FALSE NOT NULL;"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);"))
-                logger.info("✅ [REPAIR] 'notifications' table successfully updated with 'is_read' column.")
+                logger.info(
+                    "🔧 [REPAIR] Column 'is_read' missing in 'notifications' table. Patching..."
+                )
+                await conn.execute(
+                    text(
+                        "ALTER TABLE notifications ADD COLUMN is_read BOOLEAN DEFAULT FALSE NOT NULL;"
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);"
+                    )
+                )
+                logger.info(
+                    "✅ [REPAIR] 'notifications' table successfully updated with 'is_read' column."
+                )
             else:
-                logger.info("✅ [REPAIR] 'notifications' table schema verified (is_read column exists).")
+                logger.info(
+                    "✅ [REPAIR] 'notifications' table schema verified (is_read column exists)."
+                )
 
             # 1d. Check for 'recipient' column in 'notifications' table
             check_recipient_sql = text("""
@@ -72,27 +105,53 @@ async def repair_database():
             """)
             result = await conn.execute(check_recipient_sql)
             if result.fetchone() is None:
-                logger.info("🔧 [REPAIR] Column 'recipient' missing in 'notifications' table. Patching...")
-                await conn.execute(text("ALTER TABLE notifications ADD COLUMN recipient VARCHAR(255) DEFAULT '' NOT NULL;"))
-                await conn.execute(text("""
+                logger.info(
+                    "🔧 [REPAIR] Column 'recipient' missing in 'notifications' table. Patching..."
+                )
+                await conn.execute(
+                    text(
+                        "ALTER TABLE notifications ADD COLUMN recipient VARCHAR(255) DEFAULT '' NOT NULL;"
+                    )
+                )
+                await conn.execute(
+                    text("""
                     UPDATE notifications n
                     SET recipient = u.email
                     FROM users u
                     WHERE n.user_id = u.id AND (n.recipient = '' OR n.recipient IS NULL);
-                """))
-                logger.info("✅ [REPAIR] 'notifications' table successfully updated with 'recipient' column.")
+                """)
+                )
+                logger.info(
+                    "✅ [REPAIR] 'notifications' table successfully updated with 'recipient' column."
+                )
             else:
                 # Hardening for legacy schemas where recipient exists but lacks default/not-null consistency.
-                await conn.execute(text("""
+                await conn.execute(
+                    text("""
                     UPDATE notifications n
                     SET recipient = u.email
                     FROM users u
                     WHERE n.user_id = u.id AND (n.recipient = '' OR n.recipient IS NULL);
-                """))
-                await conn.execute(text("UPDATE notifications SET recipient = '' WHERE recipient IS NULL;"))
-                await conn.execute(text("ALTER TABLE notifications ALTER COLUMN recipient SET DEFAULT '';"))
-                await conn.execute(text("ALTER TABLE notifications ALTER COLUMN recipient SET NOT NULL;"))
-                logger.info("✅ [REPAIR] 'notifications' table schema verified (recipient column exists).")
+                """)
+                )
+                await conn.execute(
+                    text(
+                        "UPDATE notifications SET recipient = '' WHERE recipient IS NULL;"
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "ALTER TABLE notifications ALTER COLUMN recipient SET DEFAULT '';"
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "ALTER TABLE notifications ALTER COLUMN recipient SET NOT NULL;"
+                    )
+                )
+                logger.info(
+                    "✅ [REPAIR] 'notifications' table schema verified (recipient column exists)."
+                )
 
             # 2. Check for user profile detailing columns in the 'users' table
             user_columns = ["bio", "job_title", "location"]
@@ -105,9 +164,15 @@ async def repair_database():
                 res = await conn.execute(check_col_sql)
                 if res.fetchone() is None:
                     col_type = "TEXT" if col == "bio" else "VARCHAR(255)"
-                    logger.info(f"🔧 [REPAIR] Column '{col}' missing in 'users' table. Patching...")
-                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_type};"))
-                    logger.info(f"✅ [REPAIR] 'users' table successfully updated with '{col}' column.")
+                    logger.info(
+                        f"🔧 [REPAIR] Column '{col}' missing in 'users' table. Patching..."
+                    )
+                    await conn.execute(
+                        text(f"ALTER TABLE users ADD COLUMN {col} {col_type};")
+                    )
+                    logger.info(
+                        f"✅ [REPAIR] 'users' table successfully updated with '{col}' column."
+                    )
 
             check_preferences_sql = text("""
                 SELECT column_name
@@ -116,24 +181,48 @@ async def repair_database():
             """)
             result = await conn.execute(check_preferences_sql)
             if result.fetchone() is None:
-                logger.info("🔧 [REPAIR] Column 'preferences' missing in 'users' table. Patching...")
-                await conn.execute(text("ALTER TABLE users ADD COLUMN preferences JSON;"))
-                logger.info("✅ [REPAIR] 'users' table successfully updated with 'preferences' column.")
-            await conn.execute(text("UPDATE users SET preferences = '{}'::json WHERE preferences IS NULL;"))
-            await conn.execute(text("ALTER TABLE users ALTER COLUMN preferences SET DEFAULT '{}'::json;"))
+                logger.info(
+                    "🔧 [REPAIR] Column 'preferences' missing in 'users' table. Patching..."
+                )
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN preferences JSON;")
+                )
+                logger.info(
+                    "✅ [REPAIR] 'users' table successfully updated with 'preferences' column."
+                )
+            await conn.execute(
+                text(
+                    "UPDATE users SET preferences = '{}'::json WHERE preferences IS NULL;"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE users ALTER COLUMN preferences SET DEFAULT '{}'::json;"
+                )
+            )
 
             # 3. Phase 1: Security & RBAC Columns
             security_cols = {
                 "role": "VARCHAR(20) DEFAULT 'member' NOT NULL",
                 "mfa_enabled": "BOOLEAN DEFAULT FALSE NOT NULL",
-                "mfa_secret": "VARCHAR(128)"
+                "mfa_secret": "VARCHAR(128)",
             }
             for col, col_data in security_cols.items():
-                res = await conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"))
+                res = await conn.execute(
+                    text(
+                        f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"
+                    )
+                )
                 if res.fetchone() is None:
-                    logger.info(f"🔧 [REPAIR] Security Column '{col}' missing in 'users' table. Patching...")
-                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_data};"))
-                    logger.info(f"✅ [REPAIR] 'users' table successfully updated with security column '{col}'.")
+                    logger.info(
+                        f"🔧 [REPAIR] Security Column '{col}' missing in 'users' table. Patching..."
+                    )
+                    await conn.execute(
+                        text(f"ALTER TABLE users ADD COLUMN {col} {col_data};")
+                    )
+                    logger.info(
+                        f"✅ [REPAIR] 'users' table successfully updated with security column '{col}'."
+                    )
 
             # 4. Audit Timestamps (soft-delete + updated timestamp)
             audit_cols = {
@@ -141,11 +230,21 @@ async def repair_database():
                 "updated_at": "TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL",
             }
             for col, col_def in audit_cols.items():
-                res = await conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"))
+                res = await conn.execute(
+                    text(
+                        f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"
+                    )
+                )
                 if res.fetchone() is None:
-                    logger.info(f"🔧 [REPAIR] Column '{col}' missing in 'users' table. Patching...")
-                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_def};"))
-                    logger.info(f"✅ [REPAIR] 'users' table successfully updated with '{col}' column.")
+                    logger.info(
+                        f"🔧 [REPAIR] Column '{col}' missing in 'users' table. Patching..."
+                    )
+                    await conn.execute(
+                        text(f"ALTER TABLE users ADD COLUMN {col} {col_def};")
+                    )
+                    logger.info(
+                        f"✅ [REPAIR] 'users' table successfully updated with '{col}' column."
+                    )
 
             # 5. Comprehensive users table compatibility patch
             # Keeps legacy databases aligned with current ORM expectations.
@@ -175,16 +274,28 @@ async def repair_database():
                 "updated_at": "TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL",
             }
             for col, col_def in users_compat_cols.items():
-                res = await conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"))
+                res = await conn.execute(
+                    text(
+                        f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"
+                    )
+                )
                 if res.fetchone() is None:
-                    logger.info(f"🔧 [REPAIR] Compatibility column '{col}' missing in 'users' table. Patching...")
-                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_def};"))
-                    logger.info(f"✅ [REPAIR] 'users' compatibility column '{col}' added.")
+                    logger.info(
+                        f"🔧 [REPAIR] Compatibility column '{col}' missing in 'users' table. Patching..."
+                    )
+                    await conn.execute(
+                        text(f"ALTER TABLE users ADD COLUMN {col} {col_def};")
+                    )
+                    logger.info(
+                        f"✅ [REPAIR] 'users' compatibility column '{col}' added."
+                    )
 
     except Exception as e:
         logger.error(f"❌ [REPAIR] Database repair failed: {e}", exc_info=True)
 
+
 if __name__ == "__main__":
     # Manual execution if needed
     import asyncio
+
     asyncio.run(repair_database())

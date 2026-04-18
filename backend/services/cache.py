@@ -26,7 +26,9 @@ async def _get_redis():
         _redis = client
         return _redis
     except Exception as exc:
-        logger.warning(f"⚠ Binary Redis unavailable — using in-memory cache fallback: {exc}")
+        logger.warning(
+            f"⚠ Binary Redis unavailable — using in-memory cache fallback: {exc}"
+        )
         return None
 
 
@@ -98,6 +100,8 @@ async def delete_cache_pattern(pattern: str):
         except Exception:
             pass
 
-    keys_to_delete = [k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)]
+    keys_to_delete = [
+        k for k in list(_fallback_cache.keys()) if fnmatch.fnmatch(k, pattern)
+    ]
     for k in keys_to_delete:
         _fallback_cache.pop(k, None)

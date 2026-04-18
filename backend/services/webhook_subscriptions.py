@@ -36,17 +36,25 @@ def _validate_events(events: List[str]) -> List[str]:
         normalized.append(event_value)
 
     if not normalized:
-        raise ValueError("Webhook subscription must include at least one supported event.")
+        raise ValueError(
+            "Webhook subscription must include at least one supported event."
+        )
     return normalized
 
 
-async def list_webhook_subscriptions(db: AsyncSession, user_id: str) -> List[WebhookSubscriptionTable]:
-    stmt = select(WebhookSubscriptionTable).where(WebhookSubscriptionTable.user_id == user_id)
+async def list_webhook_subscriptions(
+    db: AsyncSession, user_id: str
+) -> List[WebhookSubscriptionTable]:
+    stmt = select(WebhookSubscriptionTable).where(
+        WebhookSubscriptionTable.user_id == user_id
+    )
     result = await db.execute(stmt)
     return result.scalars().all()
 
 
-async def get_webhook_subscription(db: AsyncSession, user_id: str, webhook_id: str) -> Optional[WebhookSubscriptionTable]:
+async def get_webhook_subscription(
+    db: AsyncSession, user_id: str, webhook_id: str
+) -> Optional[WebhookSubscriptionTable]:
     stmt = select(WebhookSubscriptionTable).where(
         and_(
             WebhookSubscriptionTable.id == webhook_id,
@@ -118,7 +126,9 @@ async def update_webhook_subscription(
     return webhook
 
 
-async def delete_webhook_subscription(db: AsyncSession, user_id: str, webhook_id: str) -> bool:
+async def delete_webhook_subscription(
+    db: AsyncSession, user_id: str, webhook_id: str
+) -> bool:
     webhook = await get_webhook_subscription(db, user_id, webhook_id)
     if not webhook:
         return False
@@ -127,12 +137,18 @@ async def delete_webhook_subscription(db: AsyncSession, user_id: str, webhook_id
     return True
 
 
-async def list_webhook_logs(db: AsyncSession, user_id: str, webhook_id: str) -> List[WebhookLogTable]:
+async def list_webhook_logs(
+    db: AsyncSession, user_id: str, webhook_id: str
+) -> List[WebhookLogTable]:
     webhook = await get_webhook_subscription(db, user_id, webhook_id)
     if not webhook:
         return []
 
-    stmt = select(WebhookLogTable).where(WebhookLogTable.webhook_id == webhook.id).order_by(WebhookLogTable.created_at.desc())
+    stmt = (
+        select(WebhookLogTable)
+        .where(WebhookLogTable.webhook_id == webhook.id)
+        .order_by(WebhookLogTable.created_at.desc())
+    )
     result = await db.execute(stmt)
     return result.scalars().all()
 

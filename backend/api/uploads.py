@@ -30,12 +30,13 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 # SEC-08 Magic Byte signatures for strict MIME validation
 MAGIC_BYTES: dict[str, bytes] = {
-    "image/jpeg":      b"\xff\xd8\xff",
-    "image/png":       b"\x89PNG",
-    "image/gif":       b"GIF8",
-    "image/webp":      b"RIFF",
+    "image/jpeg": b"\xff\xd8\xff",
+    "image/png": b"\x89PNG",
+    "image/gif": b"GIF8",
+    "image/webp": b"RIFF",
     "application/pdf": b"%PDF",
 }
+
 
 def _verify_magic_bytes(header_bytes: bytes, declared_content_type: str) -> bool:
     """Checks the start of the file against known magic bytes for the declared type."""
@@ -68,7 +69,7 @@ async def upload_file(
     # - Check size by seeking
     file.file.seek(0, os.SEEK_END)
     file_size = file.file.tell()
-    
+
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -78,17 +79,18 @@ async def upload_file(
     # - Verify Magic Bytes
     file.file.seek(0)
     header_sample = file.file.read(16)
-    file.file.seek(0) # IMPORTANT: reset pointer for the storage service later
-    
+    file.file.seek(0)  # IMPORTANT: reset pointer for the storage service later
+
     if not _verify_magic_bytes(header_sample, file.content_type):
         logger.warning(f"SEC-08: File magic byte mismatch for {file.content_type}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File content does not match the declared extension/type."
+            detail="File content does not match the declared extension/type.",
         )
 
     # 3. Generate Secure Filename (UUID)
     from backend.services.storage import storage
+
     extension = Path(file.filename).suffix or ".dat"
     secure_filename = f"{uuid.uuid4()}{extension}"
     remote_path = f"{user_id}/{secure_filename}"
@@ -98,9 +100,7 @@ async def upload_file(
         # We need to seek back to 0 just in case it was moved
         file.file.seek(0)
         upload_key = await storage.upload_file(
-            file.file, 
-            remote_path, 
-            file.content_type
+            file.file, remote_path, file.content_type
         )
         if not upload_key:
             raise Exception("Storage service rejected upload")
@@ -119,5 +119,5 @@ async def upload_file(
         "content_type": file.content_type,
         "size": file_size,
         "key": upload_key,
-        "url": access_url
+        "url": access_url,
     }

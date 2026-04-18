@@ -34,7 +34,8 @@ async def simple_upsert_event(
     stmt = select(EventTable).where(
         and_(
             EventTable.user_id == user_id,
-            (EventTable.external_id == external_id) | (EventTable.fingerprint == fingerprint),
+            (EventTable.external_id == external_id)
+            | (EventTable.fingerprint == fingerprint),
         )
     )
     existing_event = (await db.execute(stmt)).scalars().first()
@@ -49,7 +50,9 @@ async def simple_upsert_event(
         return existing_event
 
     db_event_data = {
-        k: v for k, v in event_data.items() if hasattr(EventTable, k) and k not in ["fingerprint", "source"]
+        k: v
+        for k, v in event_data.items()
+        if hasattr(EventTable, k) and k not in ["fingerprint", "source"]
     }
     db_event_data["title"] = _normalize_event_title(db_event_data.get("title"))
     new_event = EventTable(

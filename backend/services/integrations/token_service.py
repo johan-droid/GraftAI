@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from backend.models.tables import UserTokenTable
+
 # Removed: NotificationTable deleted
 from backend.services.sso import get_provider_config
 from backend.services.token_encryption import decrypt_token_value, encrypt_token_value
@@ -20,7 +21,9 @@ _PROVIDER_LABELS = {
 }
 
 
-async def _deactivate_token(db: AsyncSession, token_record: UserTokenTable, user_id: str, provider: str) -> None:
+async def _deactivate_token(
+    db: AsyncSession, token_record: UserTokenTable, user_id: str, provider: str
+) -> None:
     """Marks the token inactive."""
     token_record.is_active = False
     logger.warning(f"[TOKEN] 🚫 Terminally deactivated {provider} for user {user_id}")
@@ -30,7 +33,9 @@ async def _deactivate_token(db: AsyncSession, token_record: UserTokenTable, user
         await db.rollback()
 
 
-async def ensure_valid_token(db: AsyncSession, user_id: str, provider: str) -> Optional[str]:
+async def ensure_valid_token(
+    db: AsyncSession, user_id: str, provider: str
+) -> Optional[str]:
     """
     Ensures the user's OAuth access token is valid (not expired).
     If expiring within 5 minutes, triggers automatic JIT rotation.
@@ -53,7 +58,9 @@ async def ensure_valid_token(db: AsyncSession, user_id: str, provider: str) -> O
         return None
 
     access_token, access_needs_upgrade = decrypt_token_value(token_record.access_token)
-    refresh_token, refresh_needs_upgrade = decrypt_token_value(token_record.refresh_token)
+    refresh_token, refresh_needs_upgrade = decrypt_token_value(
+        token_record.refresh_token
+    )
 
     migrated_plaintext = False
     if access_needs_upgrade and access_token:
@@ -70,17 +77,23 @@ async def ensure_valid_token(db: AsyncSession, user_id: str, provider: str) -> O
             await db.rollback()
 
     if not access_token:
-        logger.error(f"[TOKEN] Missing or unreadable access token for {provider} (User: {user_id})")
+        logger.error(
+            f"[TOKEN] Missing or unreadable access token for {provider} (User: {user_id})"
+        )
         return None
 
     # ── Fast path: token still healthy ──────────────────────────────────────
     now = datetime.now(timezone.utc)
-    if token_record.expires_at and token_record.expires_at > (now + timedelta(minutes=5)):
+    if token_record.expires_at and token_record.expires_at > (
+        now + timedelta(minutes=5)
+    ):
         return access_token
 
     # ── Token expired / expiring – need refresh ──────────────────────────────
     if not refresh_token:
-        logger.error(f"[TOKEN] ⚠️ No refresh_token for {provider} (User: {user_id}). Deactivating.")
+        logger.error(
+            f"[TOKEN] ⚠️ No refresh_token for {provider} (User: {user_id}). Deactivating."
+        )
         await _deactivate_token(db, token_record, user_id, provider)
         return None
 
@@ -108,9 +121,16 @@ async def ensure_valid_token(db: AsyncSession, user_id: str, provider: str) -> O
             logger.error(f"[TOKEN] ❌ Refresh failed for {provider}: {error_data}")
 
             # Terminal errors: refresh token is permanently invalid
-            TERMINAL_ERRORS = {"invalid_grant", "invalid_token", "access_denied", "unauthorized_client"}
+            TERMINAL_ERRORS = {
+                "invalid_grant",
+                "invalid_token",
+                "access_denied",
+                "unauthorized_client",
+            }
             if error_code in TERMINAL_ERRORS:
-                logger.warning(f"[TOKEN] 🚫 Terminal refresh error '{error_code}' for {provider}. Deactivating & notifying.")
+                logger.warning(
+                    f"[TOKEN] 🚫 Terminal refresh error '{error_code}' for {provider}. Deactivating & notifying."
+                )
                 await _deactivate_token(db, token_record, user_id, provider)
 
             return None

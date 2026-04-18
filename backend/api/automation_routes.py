@@ -9,18 +9,27 @@ from sqlalchemy import select, and_, desc
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable
-from backend.models.automation import AutomationRule, AutomationExecution, AutomationTemplate
+from backend.models.automation import (
+    AutomationRule,
+    AutomationExecution,
+    AutomationTemplate,
+)
 
 router = APIRouter(prefix="/automation", tags=["automation"])
 
 
 # Pydantic Models
 
+
 class AutomationRuleCreate(BaseModel):
     """Create automation rule request."""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
-    rule_type: str = Field(..., pattern="^(auto_accept|auto_decline|auto_reschedule|smart_scheduling|conflict_resolution|team_coordination|reminder_scheduling|resource_allocation)$")
+    rule_type: str = Field(
+        ...,
+        pattern="^(auto_accept|auto_decline|auto_reschedule|smart_scheduling|conflict_resolution|team_coordination|reminder_scheduling|resource_allocation)$",
+    )
     conditions: dict = Field(default=dict)
     actions: dict = Field(default=dict)
     confidence_threshold: float = Field(default=70.0, ge=0, le=100)
@@ -32,6 +41,7 @@ class AutomationRuleCreate(BaseModel):
 
 class AutomationRuleUpdate(BaseModel):
     """Update automation rule request."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     is_enabled: Optional[bool] = None
@@ -45,6 +55,7 @@ class AutomationRuleUpdate(BaseModel):
 
 class AutomationRuleResponse(BaseModel):
     """Automation rule response."""
+
     id: str
     name: str
     description: Optional[str]
@@ -62,6 +73,7 @@ class AutomationRuleResponse(BaseModel):
 
 class AutomationExecutionResponse(BaseModel):
     """Automation execution response."""
+
     id: str
     rule_id: str
     rule_name: str
@@ -76,6 +88,7 @@ class AutomationExecutionResponse(BaseModel):
 
 class AutomationTemplateResponse(BaseModel):
     """Automation template response."""
+
     id: str
     name: str
     description: str
@@ -89,27 +102,32 @@ class AutomationTemplateResponse(BaseModel):
 
 # Routes
 
+
 @router.post("/rules", response_model=AutomationRuleResponse)
 async def create_automation_rule(
     rule: AutomationRuleCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Create a new automation rule."""
     # If team_id provided, verify membership
     if rule.team_id:
         from backend.models.team import TeamMember, TeamRole
+
         stmt = select(TeamMember).where(
             and_(
                 TeamMember.team_id == rule.team_id,
                 TeamMember.user_id == current_user.id,
-                TeamMember.role.in_([TeamRole.OWNER, TeamRole.ADMIN])
+                TeamMember.role.in_([TeamRole.OWNER, TeamRole.ADMIN]),
             )
         )
         team_member = (await db.execute(stmt)).scalars().first()
         if not team_member:
-            raise HTTPException(status_code=403, detail="Not authorized to add automation rules to this team")
-    
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to add automation rules to this team",
+            )
+
     new_rule = AutomationRule(
         name=rule.name,
         description=rule.description,
@@ -123,11 +141,11 @@ async def create_automation_rule(
         max_executions_per_day=rule.max_executions_per_day,
         priority=rule.priority,
     )
-    
+
     db.add(new_rule)
     await db.commit()
     await db.refresh(new_rule)
-    
+
     return AutomationRuleResponse(
         id=new_rule.id,
         name=new_rule.name,
@@ -152,24 +170,27 @@ async def list_automation_rules(
     is_enabled: Optional[bool] = None,
     limit: int = Query(default=50, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """List automation rules."""
-    stmt = select(AutomationRule).where(
-        AutomationRule.user_id == current_user.id
-    ).order_by(desc(AutomationRule.priority), desc(AutomationRule.created_at)).limit(limit)
-    
+    stmt = (
+        select(AutomationRule)
+        .where(AutomationRule.user_id == current_user.id)
+        .order_by(desc(AutomationRule.priority), desc(AutomationRule.created_at))
+        .limit(limit)
+    )
+
     if rule_type:
         stmt = stmt.where(AutomationRule.rule_type == rule_type)
-    
+
     if team_id:
         stmt = stmt.where(AutomationRule.team_id == team_id)
-    
+
     if is_enabled is not None:
         stmt = stmt.where(AutomationRule.is_enabled == is_enabled)
-    
+
     rules = (await db.execute(stmt)).scalars().all()
-    
+
     return [
         AutomationRuleResponse(
             id=r.id,
@@ -194,20 +215,17 @@ async def list_automation_rules(
 async def get_automation_rule(
     rule_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Get automation rule details."""
     stmt = select(AutomationRule).where(
-        and_(
-            AutomationRule.id == rule_id,
-            AutomationRule.user_id == current_user.id
-        )
+        and_(AutomationRule.id == rule_id, AutomationRule.user_id == current_user.id)
     )
     rule = (await db.execute(stmt)).scalars().first()
-    
+
     if not rule:
         raise HTTPException(status_code=404, detail="Automation rule not found")
-    
+
     return AutomationRuleResponse(
         id=rule.id,
         name=rule.name,
@@ -230,20 +248,17 @@ async def update_automation_rule(
     rule_id: str,
     update: AutomationRuleUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Update an automation rule."""
     stmt = select(AutomationRule).where(
-        and_(
-            AutomationRule.id == rule_id,
-            AutomationRule.user_id == current_user.id
-        )
+        and_(AutomationRule.id == rule_id, AutomationRule.user_id == current_user.id)
     )
     rule = (await db.execute(stmt)).scalars().first()
-    
+
     if not rule:
         raise HTTPException(status_code=404, detail="Automation rule not found")
-    
+
     # Update fields
     if update.name is not None:
         rule.name = update.name
@@ -263,10 +278,10 @@ async def update_automation_rule(
         rule.max_executions_per_day = update.max_executions_per_day
     if update.priority is not None:
         rule.priority = update.priority
-    
+
     await db.commit()
     await db.refresh(rule)
-    
+
     return AutomationRuleResponse(
         id=rule.id,
         name=rule.name,
@@ -288,23 +303,20 @@ async def update_automation_rule(
 async def delete_automation_rule(
     rule_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Delete an automation rule."""
     stmt = select(AutomationRule).where(
-        and_(
-            AutomationRule.id == rule_id,
-            AutomationRule.user_id == current_user.id
-        )
+        and_(AutomationRule.id == rule_id, AutomationRule.user_id == current_user.id)
     )
     rule = (await db.execute(stmt)).scalars().first()
-    
+
     if not rule:
         raise HTTPException(status_code=404, detail="Automation rule not found")
-    
+
     await db.delete(rule)
     await db.commit()
-    
+
     return {"status": "success", "message": "Automation rule deleted"}
 
 
@@ -314,23 +326,25 @@ async def list_automation_executions(
     status: Optional[str] = None,
     limit: int = Query(default=50, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """List automation executions."""
-    stmt = select(AutomationExecution, AutomationRule).join(
-        AutomationRule, AutomationExecution.rule_id == AutomationRule.id
-    ).where(
-        AutomationRule.user_id == current_user.id
-    ).order_by(desc(AutomationExecution.started_at)).limit(limit)
-    
+    stmt = (
+        select(AutomationExecution, AutomationRule)
+        .join(AutomationRule, AutomationExecution.rule_id == AutomationRule.id)
+        .where(AutomationRule.user_id == current_user.id)
+        .order_by(desc(AutomationExecution.started_at))
+        .limit(limit)
+    )
+
     if rule_id:
         stmt = stmt.where(AutomationExecution.rule_id == rule_id)
-    
+
     if status:
         stmt = stmt.where(AutomationExecution.status == status)
-    
+
     results = (await db.execute(stmt)).all()
-    
+
     return [
         AutomationExecutionResponse(
             id=execution.id,
@@ -352,18 +366,20 @@ async def list_automation_executions(
 async def list_automation_templates(
     category: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """List available automation templates."""
-    stmt = select(AutomationTemplate).where(
-        AutomationTemplate.is_active == True
-    ).order_by(desc(AutomationTemplate.is_featured), AutomationTemplate.name)
-    
+    stmt = (
+        select(AutomationTemplate)
+        .where(AutomationTemplate.is_active == True)
+        .order_by(desc(AutomationTemplate.is_featured), AutomationTemplate.name)
+    )
+
     if category:
         stmt = stmt.where(AutomationTemplate.category == category)
-    
+
     templates = (await db.execute(stmt)).scalars().all()
-    
+
     return [
         AutomationTemplateResponse(
             id=t.id,
@@ -384,20 +400,17 @@ async def list_automation_templates(
 async def use_automation_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user)
+    current_user: UserTable = Depends(get_current_user),
 ):
     """Create a rule from a template."""
     stmt = select(AutomationTemplate).where(
-        and_(
-            AutomationTemplate.id == template_id,
-            AutomationTemplate.is_active == True
-        )
+        and_(AutomationTemplate.id == template_id, AutomationTemplate.is_active == True)
     )
     template = (await db.execute(stmt)).scalars().first()
-    
+
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
-    
+
     # Create rule from template
     new_rule = AutomationRule(
         name=template.name,
@@ -409,15 +422,15 @@ async def use_automation_template(
         confidence_threshold=template.default_confidence_threshold,
         require_confirmation=template.default_require_confirmation,
     )
-    
+
     db.add(new_rule)
-    
+
     # Increment template usage count
     template.usage_count += 1
-    
+
     await db.commit()
     await db.refresh(new_rule)
-    
+
     return AutomationRuleResponse(
         id=new_rule.id,
         name=new_rule.name,

@@ -8,12 +8,12 @@ about booking automation based on context, attendee history, and preferences.
 from .booking_prompts import (
     BOOKING_DECISION_SYSTEM_PROMPT,
     BOOKING_DECISION_PROMPT_TEMPLATE,
-    format_booking_decision_prompt
+    format_booking_decision_prompt,
 )
 from .agent_prompts import (
     AGENT_SYSTEM_PROMPT,
     COGNITION_PROMPT_TEMPLATE as AGENT_COGNITION_PROMPT_TEMPLATE,
-    format_agent_cognition_prompt
+    format_agent_cognition_prompt,
 )
 
 from .agent_prompts import HUMANIZED_SYSTEM_PROMPT
@@ -26,6 +26,6 @@ __all__ = [
     # Agent prompts
     "AGENT_SYSTEM_PROMPT",
     "AGENT_COGNITION_PROMPT_TEMPLATE",
-    "format_agent_cognition_prompt"
-    ,"HUMANIZED_SYSTEM_PROMPT"
+    "format_agent_cognition_prompt",
+    "HUMANIZED_SYSTEM_PROMPT",
 ]

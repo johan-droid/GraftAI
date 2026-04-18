@@ -20,6 +20,7 @@ from backend.services.token_encryption import decrypt_token_value, encrypt_token
 
 logger = logging.getLogger(__name__)
 
+
 def _create_jwt_token_impl(user_id: str, token_type: str) -> str:
     now = datetime.now(timezone.utc)
     if token_type == REFRESH_TOKEN_TYPE:
@@ -88,8 +89,6 @@ async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[UserTable]:
     return (await db.execute(stmt)).scalars().first()
 
 
-
-
 async def create_user_from_oauth(
     db: AsyncSession,
     email: str,
@@ -133,7 +132,9 @@ async def upsert_user_token(
     if incoming_access_token:
         user_token.access_token = encrypt_token_value(incoming_access_token)
     else:
-        existing_access_token, access_needs_upgrade = decrypt_token_value(user_token.access_token)
+        existing_access_token, access_needs_upgrade = decrypt_token_value(
+            user_token.access_token
+        )
         if access_needs_upgrade and existing_access_token:
             user_token.access_token = encrypt_token_value(existing_access_token)
 
@@ -141,7 +142,9 @@ async def upsert_user_token(
     if incoming_refresh_token:
         user_token.refresh_token = encrypt_token_value(incoming_refresh_token)
     elif user_token.refresh_token:
-        existing_refresh_token, refresh_needs_upgrade = decrypt_token_value(user_token.refresh_token)
+        existing_refresh_token, refresh_needs_upgrade = decrypt_token_value(
+            user_token.refresh_token
+        )
         if refresh_needs_upgrade and existing_refresh_token:
             user_token.refresh_token = encrypt_token_value(existing_refresh_token)
 
@@ -158,7 +161,7 @@ async def upsert_user_token(
                 raise ValueError("expires_at must be an int, float, or numeric string")
         except (TypeError, ValueError, OverflowError) as exc:
             logger.warning(
-                "Invalid expires_at value for user_token update: %r; provider=%s; user_id=%s", 
+                "Invalid expires_at value for user_token update: %r; provider=%s; user_id=%s",
                 expires_at_raw,
                 provider,
                 user.id,

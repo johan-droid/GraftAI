@@ -9,14 +9,17 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 load_dotenv()
 
+
 def _get_smtp_config():
     return {
         "host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
         "port": int(os.getenv("SMTP_PORT", "587")),
         "user": os.getenv("SMTP_USER", ""),
         "pass": os.getenv("SMTP_PASSWORD", ""),
-        "from": os.getenv("SMTP_FROM_EMAIL") or os.getenv("SMTP_USER", "no-reply@graftai.tech")
+        "from": os.getenv("SMTP_FROM_EMAIL")
+        or os.getenv("SMTP_USER", "no-reply@graftai.tech"),
     }
+
 
 def _send_sync(to_email: str, subject: str, html_content: str):
     cfg = _get_smtp_config()
@@ -40,9 +43,13 @@ def _send_sync(to_email: str, subject: str, html_content: str):
     except Exception as e:
         logger.error(f"Failed to send email to {to_email}: {e}")
 
-async def send_email(to_email: str, subject: str, html_body: str, text_body: str = None):
+
+async def send_email(
+    to_email: str, subject: str, html_body: str, text_body: str = None
+):
     """Async wrapper for the blocking SMTP call."""
     await asyncio.to_thread(_send_sync, to_email, subject, html_body)
+
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
@@ -55,10 +62,13 @@ jinja_env = Environment(
     autoescape=select_autoescape(["html", "xml"]),
 )
 
+
 def render_template(template_name: str, context: dict) -> str:
     """Render a Jinja2 HTML email template from backend/templates/email/."""
     if "frontend_url" not in context:
-        context["frontend_url"] = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+        context["frontend_url"] = os.getenv(
+            "FRONTEND_BASE_URL", "http://localhost:3000"
+        )
     try:
         template = jinja_env.get_template(template_name)
         return template.render(**context)

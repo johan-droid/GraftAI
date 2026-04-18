@@ -12,7 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db
 from backend.auth.logic import create_public_action_token, verify_public_action_token
-from backend.models.tables import BookingTable, EventTable, EventTypeTable, UserTable, AuditLogTable
+from backend.models.tables import (
+    BookingTable,
+    EventTable,
+    EventTypeTable,
+    UserTable,
+    AuditLogTable,
+)
 from backend.services.bookings import (
     get_user_by_username,
     get_event_type,
@@ -36,10 +42,12 @@ router = APIRouter(tags=["Public"])
 # In-memory tracking for live visitors (clean up sessions older than 5 mins)
 _LIVE_SESSIONS: Dict[str, datetime] = {}
 
+
 class StatsResponse(BaseModel):
     registered_users: int
     live_visitors: int
     deleted_accounts: int
+
 
 class HeartbeatRequest(BaseModel):
     session_id: str
@@ -192,15 +200,25 @@ async def _resolve_public_event_or_404(
     return user, event_type_obj
 
 
-def _format_booking_times(booking: BookingTable, organizer_timezone: str) -> dict[str, str]:
+def _format_booking_times(
+    booking: BookingTable, organizer_timezone: str
+) -> dict[str, str]:
     organizer_tz = pytz.timezone(organizer_timezone or "UTC")
     invitee_zone = booking.time_zone or organizer_timezone or "UTC"
     invitee_tz = pytz.timezone(invitee_zone)
     return {
-        "organizer_start_time": booking.start_time.astimezone(organizer_tz).strftime("%Y-%m-%d %I:%M %p"),
-        "organizer_end_time": booking.end_time.astimezone(organizer_tz).strftime("%Y-%m-%d %I:%M %p"),
-        "invitee_start_time": booking.start_time.astimezone(invitee_tz).strftime("%Y-%m-%d %I:%M %p"),
-        "invitee_end_time": booking.end_time.astimezone(invitee_tz).strftime("%Y-%m-%d %I:%M %p"),
+        "organizer_start_time": booking.start_time.astimezone(organizer_tz).strftime(
+            "%Y-%m-%d %I:%M %p"
+        ),
+        "organizer_end_time": booking.end_time.astimezone(organizer_tz).strftime(
+            "%Y-%m-%d %I:%M %p"
+        ),
+        "invitee_start_time": booking.start_time.astimezone(invitee_tz).strftime(
+            "%Y-%m-%d %I:%M %p"
+        ),
+        "invitee_end_time": booking.end_time.astimezone(invitee_tz).strftime(
+            "%Y-%m-%d %I:%M %p"
+        ),
         "invitee_zone": str(invitee_tz),
     }
 
@@ -209,7 +227,9 @@ def _frontend_base_url() -> str:
     return os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
 
 
-def _build_public_action_links(booking_id: str, attendee_email: str, token: Optional[str] = None) -> dict[str, str]:
+def _build_public_action_links(
+    booking_id: str, attendee_email: str, token: Optional[str] = None
+) -> dict[str, str]:
     action_token = token or create_public_action_token(booking_id, attendee_email)
     base = _frontend_base_url()
     return {
@@ -229,29 +249,32 @@ async def get_public_stats(db: AsyncSession = Depends(get_db)):
 
     # 2. Live visitors (cleanup stale first)
     now = datetime.now(timezone.utc)
-    stale_keys = [k for k, v in _LIVE_SESSIONS.items() if (now - v).total_seconds() > 300]
+    stale_keys = [
+        k for k, v in _LIVE_SESSIONS.items() if (now - v).total_seconds() > 300
+    ]
     for k in stale_keys:
         _LIVE_SESSIONS.pop(k, None)
-    
+
     live_visitors = len(_LIVE_SESSIONS)
 
     # 3. Deleted accounts (from audit logs)
     deleted_count_stmt = select(func.count(AuditLogTable.id)).where(
         and_(
-            AuditLogTable.event_type == "user_delete",
-            AuditLogTable.result == "success"
+            AuditLogTable.event_type == "user_delete", AuditLogTable.result == "success"
         )
     )
     deleted_accounts = (await db.execute(deleted_count_stmt)).scalar() or 0
 
     # Fallback/Mock for demo if stats are too low (the user asked for "real", but let's ensure it's not 0 everywhere if it's a fresh DB)
-    # But user said "dont pfake", so I will return real numbers. 
+    # But user said "dont pfake", so I will return real numbers.
     # If it's a fresh setup, they might see 0.
-    
+
     return {
         "registered_users": registered_users,
-        "live_visitors": max(1, live_visitors), # Always show at least 1 (the current user)
-        "deleted_accounts": deleted_accounts
+        "live_visitors": max(
+            1, live_visitors
+        ),  # Always show at least 1 (the current user)
+        "deleted_accounts": deleted_accounts,
     }
 
 
@@ -262,7 +285,9 @@ async def public_heartbeat(payload: HeartbeatRequest):
     return {"status": "ok"}
 
 
-@router.get("/public/events/{username}/{event_type}", response_model=PublicEventResponse)
+@router.get(
+    "/public/events/{username}/{event_type}", response_model=PublicEventResponse
+)
 async def get_public_event_details(
     username: str,
     event_type: str,
@@ -312,10 +337,15 @@ async def get_public_user_event_details(
     db: AsyncSession = Depends(get_db),
 ):
     # Alias for cal.com-style pathing while preserving existing route compatibility
-    return await get_public_event_details(username=username, event_type=event_type, db=db)
+    return await get_public_event_details(
+        username=username, event_type=event_type, db=db
+    )
 
 
-@router.get("/public/events/{username}/{event_type}/availability", response_model=PublicAvailabilityResponse)
+@router.get(
+    "/public/events/{username}/{event_type}/availability",
+    response_model=PublicAvailabilityResponse,
+)
 async def get_public_event_availability(
     request: Request,
     username: str,
@@ -329,14 +359,19 @@ async def get_public_event_availability(
     user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)
 
     try:
-        availability = await list_monthly_availability(db, user, event_type_obj, month, time_zone)
+        availability = await list_monthly_availability(
+            db, user, event_type_obj, month, time_zone
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
     return {"availability": availability}
 
 
-@router.get("/public/users/{username}/{event_type}/availability", response_model=PublicDailyAvailabilityResponse)
+@router.get(
+    "/public/users/{username}/{event_type}/availability",
+    response_model=PublicDailyAvailabilityResponse,
+)
 async def get_public_user_event_availability_for_day(
     request: Request,
     username: str,
@@ -352,10 +387,14 @@ async def get_public_user_event_availability_for_day(
     try:
         target_day = datetime.strptime(date, "%Y-%m-%d")
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+        raise HTTPException(
+            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
+        )
 
     try:
-        slots = await list_available_slots(db, user, event_type_obj, target_day, time_zone)
+        slots = await list_available_slots(
+            db, user, event_type_obj, target_day, time_zone
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -363,7 +402,10 @@ async def get_public_user_event_availability_for_day(
 
 
 # CSRF protection settings
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000"
+).split(",")
+
 
 def validate_csrf_origin(request: Request) -> bool:
     """Validate that the request comes from an allowed origin."""
@@ -382,14 +424,22 @@ def validate_csrf_origin(request: Request) -> bool:
 
     # Construct normalized origin (include port only if explicitly present and non-default)
     origin = f"{parsed.scheme}://{parsed.hostname}"
-    if parsed.port and not (parsed.scheme == "http" and parsed.port == 80) and not (parsed.scheme == "https" and parsed.port == 443):
+    if (
+        parsed.port
+        and not (parsed.scheme == "http" and parsed.port == 80)
+        and not (parsed.scheme == "https" and parsed.port == 443)
+    ):
         origin = f"{origin}:{parsed.port}"
 
     # Exact match against configured allowed origins
     normalized_allowed = [o.strip() for o in ALLOWED_ORIGINS if o and o.strip()]
     return origin in normalized_allowed
 
-@router.post("/public/events/{username}/{event_type}/book", response_model=PublicBookingConfirmation)
+
+@router.post(
+    "/public/events/{username}/{event_type}/book",
+    response_model=PublicBookingConfirmation,
+)
 async def book_public_event(
     request: Request,
     username: str,
@@ -399,18 +449,22 @@ async def book_public_event(
 ):
     # CSRF Protection: Validate origin/referer
     if not validate_csrf_origin(request):
-        logger.warning(f"🚫 CSRF rejected: Invalid origin from {request.client.host if request.client else 'unknown'}")
+        logger.warning(
+            f"🚫 CSRF rejected: Invalid origin from {request.client.host if request.client else 'unknown'}"
+        )
         raise HTTPException(
             status_code=403,
-            detail="Invalid request origin. Please use the official booking page."
+            detail="Invalid request origin. Please use the official booking page.",
         )
-    
+
     client_id = request.client.host if request.client else "anonymous"
     await rate_limit(client_id, api_limits["public_booking"])
     user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)
 
     try:
-        booking = await create_public_booking(db, user, event_type_obj, payload.model_dump())
+        booking = await create_public_booking(
+            db, user, event_type_obj, payload.model_dump()
+        )
     except BookingConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except (ValidationError, TimezoneError) as exc:
@@ -471,7 +525,10 @@ async def book_public_event(
     }
 
 
-@router.post("/public/events/{username}/{event_type}/payment-intent", response_model=PublicPaymentIntentResponse)
+@router.post(
+    "/public/events/{username}/{event_type}/payment-intent",
+    response_model=PublicPaymentIntentResponse,
+)
 async def create_public_payment_intent(
     username: str,
     event_type: str,
@@ -479,7 +536,9 @@ async def create_public_payment_intent(
 ):
     user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)
     if not event_type_obj.requires_payment:
-        raise HTTPException(status_code=400, detail="This event type does not require payment.")
+        raise HTTPException(
+            status_code=400, detail="This event type does not require payment."
+        )
 
     amount = event_type_obj.payment_amount or 0.0
     currency = event_type_obj.payment_currency or "USD"
@@ -495,7 +554,10 @@ async def create_public_payment_intent(
     }
 
 
-@router.post("/public/events/{username}/{event_type}/payment-intent/confirm", response_model=PublicPaymentConfirmationResponse)
+@router.post(
+    "/public/events/{username}/{event_type}/payment-intent/confirm",
+    response_model=PublicPaymentConfirmationResponse,
+)
 async def confirm_public_payment_intent(
     username: str,
     event_type: str,
@@ -504,7 +566,9 @@ async def confirm_public_payment_intent(
 ):
     user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)
     if not event_type_obj.requires_payment:
-        raise HTTPException(status_code=400, detail="This event type does not require payment.")
+        raise HTTPException(
+            status_code=400, detail="This event type does not require payment."
+        )
 
     if not payload.payment_intent_id:
         raise HTTPException(status_code=400, detail="Missing payment_intent_id.")
@@ -517,7 +581,10 @@ async def confirm_public_payment_intent(
     }
 
 
-@router.post("/public/users/{username}/{event_type}/book", response_model=PublicBookingConfirmation)
+@router.post(
+    "/public/users/{username}/{event_type}/book",
+    response_model=PublicBookingConfirmation,
+)
 async def book_public_user_event(
     request: Request,
     username: str,
@@ -535,7 +602,9 @@ async def book_public_user_event(
     )
 
 
-@router.get("/public/bookings/{booking_id}", response_model=PublicBookingDetailsResponse)
+@router.get(
+    "/public/bookings/{booking_id}", response_model=PublicBookingDetailsResponse
+)
 async def get_public_booking_details(
     booking_id: str,
     token: str = Query(..., description="Signed action token from booking email"),
@@ -552,8 +621,14 @@ async def get_public_booking_details(
     if not organizer:
         raise HTTPException(status_code=404, detail="Organizer not found")
 
-    booking_event = await db.get(EventTable, booking.event_id) if booking.event_id else None
-    event_type_obj = await db.get(EventTypeTable, booking.event_type_id) if booking.event_type_id else None
+    booking_event = (
+        await db.get(EventTable, booking.event_id) if booking.event_id else None
+    )
+    event_type_obj = (
+        await db.get(EventTypeTable, booking.event_type_id)
+        if booking.event_type_id
+        else None
+    )
 
     event_title = "Booked Meeting"
     if booking_event and booking_event.title:
@@ -567,7 +642,9 @@ async def get_public_booking_details(
         if event_type_obj and event_type_obj.duration_minutes
         else max(1, int((booking.end_time - booking.start_time).total_seconds() / 60))
     )
-    event_type_slug = event_type_obj.slug if event_type_obj and event_type_obj.slug else None
+    event_type_slug = (
+        event_type_obj.slug if event_type_obj and event_type_obj.slug else None
+    )
 
     formatted_times = _format_booking_times(booking, organizer.timezone or "UTC")
     links = _build_public_action_links(booking.id, booking.email, token=token)
@@ -595,7 +672,10 @@ async def get_public_booking_details(
     }
 
 
-@router.patch("/public/bookings/{booking_id}/reschedule", response_model=PublicBookingActionResponse)
+@router.patch(
+    "/public/bookings/{booking_id}/reschedule",
+    response_model=PublicBookingActionResponse,
+)
 async def reschedule_public_booking(
     request: Request,
     booking_id: str,
@@ -614,16 +694,24 @@ async def reschedule_public_booking(
         raise HTTPException(status_code=403, detail="Invalid booking action token")
 
     if booking.status == "cancelled":
-        raise HTTPException(status_code=409, detail="Cancelled bookings cannot be rescheduled")
+        raise HTTPException(
+            status_code=409, detail="Cancelled bookings cannot be rescheduled"
+        )
 
     organizer = await db.get(UserTable, booking.user_id)
     if not organizer:
         raise HTTPException(status_code=404, detail="Organizer not found")
 
     old_times = _format_booking_times(booking, organizer.timezone or "UTC")
-    old_time_label = f"{old_times['organizer_start_time']} - {old_times['organizer_end_time']}"
+    old_time_label = (
+        f"{old_times['organizer_start_time']} - {old_times['organizer_end_time']}"
+    )
 
-    event_type_obj = await db.get(EventTypeTable, booking.event_type_id) if booking.event_type_id else None
+    event_type_obj = (
+        await db.get(EventTypeTable, booking.event_type_id)
+        if booking.event_type_id
+        else None
+    )
     duration_minutes = (
         event_type_obj.duration_minutes
         if event_type_obj
@@ -643,29 +731,42 @@ async def reschedule_public_booking(
     new_end_utc = new_start_utc + timedelta(minutes=duration_minutes)
 
     if new_start_utc <= datetime.now(pytz.UTC):
-        raise HTTPException(status_code=400, detail="New booking time must be in the future")
+        raise HTTPException(
+            status_code=400, detail="New booking time must be in the future"
+        )
 
     if event_type_obj:
         organizer_tz = pytz.timezone(organizer.timezone or "UTC")
         local_day = new_start_utc.astimezone(organizer_tz)
-        day_slots = await list_available_slots(db, organizer, event_type_obj, local_day, tz_name)
+        day_slots = await list_available_slots(
+            db, organizer, event_type_obj, local_day, tz_name
+        )
         selected_start = new_start_utc.isoformat()
         selected_end = new_end_utc.isoformat()
-        is_slot_available = any(slot["start"] == selected_start and slot["end"] == selected_end for slot in day_slots)
+        is_slot_available = any(
+            slot["start"] == selected_start and slot["end"] == selected_end
+            for slot in day_slots
+        )
         if not is_slot_available:
-            raise HTTPException(status_code=409, detail="Requested slot is no longer available")
+            raise HTTPException(
+                status_code=409, detail="Requested slot is no longer available"
+            )
 
     booking_conflict_stmt = select(BookingTable).where(
         and_(
             BookingTable.user_id == booking.user_id,
             BookingTable.id != booking.id,
-            BookingTable.status.in_(["pending", "confirmed", "accepted", "rescheduled"]),
+            BookingTable.status.in_(
+                ["pending", "confirmed", "accepted", "rescheduled"]
+            ),
             BookingTable.start_time < new_end_utc,
             BookingTable.end_time > new_start_utc,
         )
     )
     if (await db.execute(booking_conflict_stmt)).scalars().first():
-        raise HTTPException(status_code=409, detail="Requested slot conflicts with an existing booking")
+        raise HTTPException(
+            status_code=409, detail="Requested slot conflicts with an existing booking"
+        )
 
     event_conflict_stmt = select(EventTable).where(
         and_(
@@ -676,7 +777,9 @@ async def reschedule_public_booking(
         )
     )
     if (await db.execute(event_conflict_stmt)).scalars().first():
-        raise HTTPException(status_code=409, detail="Requested slot conflicts with an existing event")
+        raise HTTPException(
+            status_code=409, detail="Requested slot conflicts with an existing event"
+        )
 
     booking.start_time = new_start_utc
     booking.end_time = new_end_utc
@@ -737,7 +840,9 @@ async def reschedule_public_booking(
     }
 
 
-@router.delete("/public/bookings/{booking_id}", response_model=PublicBookingActionResponse)
+@router.delete(
+    "/public/bookings/{booking_id}", response_model=PublicBookingActionResponse
+)
 async def cancel_public_booking(
     request: Request,
     booking_id: str,
@@ -779,8 +884,14 @@ async def cancel_public_booking(
     booking.metadata_payload = metadata
 
     organizer = await db.get(UserTable, booking.user_id)
-    organizer_name = organizer.full_name if organizer and organizer.full_name else (organizer.username if organizer else "Organizer")
-    original_times = _format_booking_times(booking, organizer.timezone if organizer else "UTC")
+    organizer_name = (
+        organizer.full_name
+        if organizer and organizer.full_name
+        else (organizer.username if organizer else "Organizer")
+    )
+    original_times = _format_booking_times(
+        booking, organizer.timezone if organizer else "UTC"
+    )
     original_time_label = f"{original_times['organizer_start_time']} - {original_times['organizer_end_time']}"
     event_title = "Booked Meeting"
     if booking.event_id:
@@ -813,7 +924,9 @@ async def cancel_public_booking(
                 booking_id=booking.id,
             )
         except Exception as exc:
-            logger.warning("Cancellation emails failed for booking=%s: %s", booking.id, exc)
+            logger.warning(
+                "Cancellation emails failed for booking=%s: %s", booking.id, exc
+            )
 
     return {
         "success": True,

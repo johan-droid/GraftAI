@@ -8,11 +8,14 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 # Use the backend base URL provided through environment variables.
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_URL}/api/v1/auth/google/callback")
+GOOGLE_REDIRECT_URI = os.getenv(
+    "GOOGLE_REDIRECT_URI", f"{BACKEND_URL}/api/v1/auth/google/callback"
+)
 
 # Validate Google OAuth configuration
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
     import logging
+
     logging.warning(
         "⚠️  Google OAuth not fully configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable Google login. "
         "Visit https://console.cloud.google.com to create OAuth 2.0 credentials."
@@ -20,13 +23,14 @@ if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
 
 SCOPES = "openid profile email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events"
 
+
 async def get_google_auth_url(state: str, prompt: Optional[str] = None):
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise ValueError(
             "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file. "
             "Get credentials from: https://console.cloud.google.com/apis/credentials"
         )
-    
+
     client = AsyncOAuth2Client(
         client_id=GOOGLE_CLIENT_ID,
         client_secret=GOOGLE_CLIENT_SECRET,
@@ -41,10 +45,10 @@ async def get_google_auth_url(state: str, prompt: Optional[str] = None):
         auth_params["prompt"] = prompt
 
     authorization_url, _ = client.create_authorization_url(
-        "https://accounts.google.com/o/oauth2/v2/auth",
-        **auth_params
+        "https://accounts.google.com/o/oauth2/v2/auth", **auth_params
     )
     return authorization_url
+
 
 async def fetch_google_tokens(code: str):
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
@@ -52,7 +56,7 @@ async def fetch_google_tokens(code: str):
             "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file. "
             "Get credentials from: https://console.cloud.google.com/apis/credentials"
         )
-    
+
     async with AsyncOAuth2Client(
         client_id=GOOGLE_CLIENT_ID,
         client_secret=GOOGLE_CLIENT_SECRET,
@@ -73,8 +77,9 @@ async def fetch_google_tokens(code: str):
     return {
         "email": profile.get("email"),
         "full_name": profile.get("name"),
-        "token": token
+        "token": token,
     }
+
 
 async def verify_google_token(access_token: str) -> dict:
     if not access_token:
@@ -82,7 +87,10 @@ async def verify_google_token(access_token: str) -> dict:
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+            },
         )
         if resp.status_code != 200:
             raise ValueError("Invalid Google access token")

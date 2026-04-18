@@ -26,7 +26,9 @@ from backend.utils.db import get_async_session_maker
 
 async def migrate_oauth_token_encryption() -> None:
     if not token_encryption_enabled():
-        print("Token encryption is not configured. Set OAUTH_TOKEN_ENCRYPTION_KEY or SECRET_KEY.")
+        print(
+            "Token encryption is not configured. Set OAUTH_TOKEN_ENCRYPTION_KEY or SECRET_KEY."
+        )
         return
 
     session_maker = get_async_session_maker()
@@ -44,23 +46,31 @@ async def migrate_oauth_token_encryption() -> None:
             scanned += 1
             changed = False
 
-            access_plain, access_needs_upgrade = decrypt_token_value(record.access_token)
+            access_plain, access_needs_upgrade = decrypt_token_value(
+                record.access_token
+            )
             if record.access_token and access_plain is None:
                 unreadable += 1
             elif access_needs_upgrade and access_plain:
                 encrypted_access_token = encrypt_token_value(access_plain)
                 if encrypted_access_token is None:
-                    raise RuntimeError(f"Failed to encrypt access_token for token ID {record.id}")
+                    raise RuntimeError(
+                        f"Failed to encrypt access_token for token ID {record.id}"
+                    )
                 record.access_token = encrypted_access_token
                 changed = True
 
-            refresh_plain, refresh_needs_upgrade = decrypt_token_value(record.refresh_token)
+            refresh_plain, refresh_needs_upgrade = decrypt_token_value(
+                record.refresh_token
+            )
             if record.refresh_token and refresh_plain is None:
                 unreadable += 1
             elif refresh_needs_upgrade and refresh_plain:
                 encrypted_refresh_token = encrypt_token_value(refresh_plain)
                 if encrypted_refresh_token is None:
-                    raise RuntimeError(f"Failed to encrypt refresh_token for token ID {record.id}")
+                    raise RuntimeError(
+                        f"Failed to encrypt refresh_token for token ID {record.id}"
+                    )
                 record.refresh_token = encrypted_refresh_token
                 changed = True
                 changed = True

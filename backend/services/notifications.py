@@ -7,30 +7,40 @@ from backend.services.mail_service import send_email, render_template
 
 logger = logging.getLogger(__name__)
 
+
 # OneSignal integration removed: keep a no-op fallback to preserve call sites.
-async def send_push_notification(user_player_ids: list[str], heading: str, content: str, data: Optional[dict] = None):
+async def send_push_notification(
+    user_player_ids: list[str], heading: str, content: str, data: Optional[dict] = None
+):
     logger.debug("Push notification skipped: OneSignal integration removed.")
     return None
 
 
-def _build_event_templates(notification_type: str, event_data: dict) -> tuple[str, str, str]:
-    user_name = event_data.get("user_name") or event_data.get("full_name") or "GraftAI user"
+def _build_event_templates(
+    notification_type: str, event_data: dict
+) -> tuple[str, str, str]:
+    user_name = (
+        event_data.get("user_name") or event_data.get("full_name") or "GraftAI user"
+    )
     title = event_data.get("title") or "Untitled Event"
     start_time = event_data.get("start_time") or "as scheduled"
     end_time = event_data.get("end_time") or ""
-    
+
     # Meeting details
     is_meeting = event_data.get("is_meeting", False)
     meeting_link = event_data.get("meeting_link")
-    
+
     # Auto-detect platform from link
     meeting_platform = event_data.get("meeting_platform", "")
     if meeting_link and not meeting_platform:
         link_low = meeting_link.lower()
-        if "zoom.us" in link_low: meeting_platform = "Zoom"
-        elif "meet.google.com" in link_low: meeting_platform = "Google Meet"
-        elif "teams.microsoft.com" in link_low: meeting_platform = "Microsoft Teams"
-    
+        if "zoom.us" in link_low:
+            meeting_platform = "Zoom"
+        elif "meet.google.com" in link_low:
+            meeting_platform = "Google Meet"
+        elif "teams.microsoft.com" in link_low:
+            meeting_platform = "Microsoft Teams"
+
     platform_label = (meeting_platform or "Digital Hub").replace("_", " ").title()
 
     template_context = {
@@ -41,7 +51,9 @@ def _build_event_templates(notification_type: str, event_data: dict) -> tuple[st
         "is_meeting": is_meeting or bool(meeting_link),
         "meeting_platform": platform_label,
         "meeting_link": meeting_link,
-        "frontend_url": os.getenv("FRONTEND_BASE_URL", "https://graftai.tech").rstrip("/")
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "https://graftai.tech").rstrip(
+            "/"
+        ),
     }
 
     if notification_type == "created":
@@ -72,7 +84,12 @@ def _build_event_templates(notification_type: str, event_data: dict) -> tuple[st
     return subject, html_body, text_body
 
 
-async def _send_notification(recipient_emails: list[str], user_player_ids: list[str], content_type: str, event_data: dict):
+async def _send_notification(
+    recipient_emails: list[str],
+    user_player_ids: list[str],
+    content_type: str,
+    event_data: dict,
+):
     # We only treat this as event notification if event id is present and not placeholder.
     event_id = event_data.get("id")
     if event_id is None or (isinstance(event_id, int) and event_id < 0):
@@ -101,7 +118,7 @@ async def _send_notification(recipient_emails: list[str], user_player_ids: list[
                 user_player_ids,
                 heading=headings.get(content_type, "Notification"),
                 content=f"{event_data.get('title')} {content_type}",
-                data={"event_id": str(event_data.get('id'))},
+                data={"event_id": str(event_data.get("id"))},
             )
             logger.info("Push notification triggered")
         except Exception as e:
@@ -115,19 +132,27 @@ async def _send_notification(recipient_emails: list[str], user_player_ids: list[
     return
 
 
-async def notify_event_created(recipient_emails: list[str], user_player_ids: list[str], event_data: dict):
+async def notify_event_created(
+    recipient_emails: list[str], user_player_ids: list[str], event_data: dict
+):
     await _send_notification(recipient_emails, user_player_ids, "created", event_data)
 
 
-async def notify_event_updated(recipient_emails: list[str], user_player_ids: list[str], event_data: dict):
+async def notify_event_updated(
+    recipient_emails: list[str], user_player_ids: list[str], event_data: dict
+):
     await _send_notification(recipient_emails, user_player_ids, "updated", event_data)
 
 
-async def notify_event_deleted(recipient_emails: list[str], user_player_ids: list[str], event_data: dict):
+async def notify_event_deleted(
+    recipient_emails: list[str], user_player_ids: list[str], event_data: dict
+):
     await _send_notification(recipient_emails, user_player_ids, "deleted", event_data)
 
 
-async def notify_event_reminder(recipient_emails: list[str], user_player_ids: list[str], event_data: dict):
+async def notify_event_reminder(
+    recipient_emails: list[str], user_player_ids: list[str], event_data: dict
+):
     await _send_notification(recipient_emails, user_player_ids, "reminder", event_data)
 
 
@@ -214,7 +239,7 @@ class NotificationService:
                 escaped_link = html.escape(invite_link, quote=True)
                 link_html = f'<p><a href="{escaped_link}">Accept invite</a></p>'
             else:
-                link_html = '<p>Invite link is invalid or expired</p>'
+                link_html = "<p>Invite link is invalid or expired</p>"
 
         await send_custom_notification(
             user_email=to_email,
@@ -249,7 +274,9 @@ async def send_email_verification_code(user_email: str, full_name: str, code: st
     template_context = {
         "full_name": full_name,
         "code": code,
-        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip(
+            "/"
+        ),
     }
     html_body = render_template("verification.html", template_context)
     text_body = (
@@ -284,11 +311,15 @@ async def send_booking_confirmation_to_attendee(
     meeting_url: Optional[str] = None,
     booking_id: Optional[str] = None,
 ):
-    links = _public_booking_links(booking_id, attendee_email) if booking_id else {
-        "manage_url": "",
-        "reschedule_url": "",
-        "cancel_url": "",
-    }
+    links = (
+        _public_booking_links(booking_id, attendee_email)
+        if booking_id
+        else {
+            "manage_url": "",
+            "reschedule_url": "",
+            "cancel_url": "",
+        }
+    )
     subject = f"Booking confirmed: {event_title}"
     template_context = {
         "full_name": attendee_name,
@@ -301,7 +332,9 @@ async def send_booking_confirmation_to_attendee(
         "manage_url": links.get("manage_url"),
         "reschedule_url": links.get("reschedule_url"),
         "cancel_url": links.get("cancel_url"),
-        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip(
+            "/"
+        ),
     }
     html_body = render_template("booking_confirmation_attendee.html", template_context)
     text_body = (
@@ -313,7 +346,9 @@ async def send_booking_confirmation_to_attendee(
         f"Reschedule: {links.get('reschedule_url', '')}\n"
         f"Cancel: {links.get('cancel_url', '')}\n"
     )
-    await send_custom_notification(attendee_email, subject, text_body, html_body, text_body)
+    await send_custom_notification(
+        attendee_email, subject, text_body, html_body, text_body
+    )
 
 
 async def send_booking_confirmation_to_organizer(
@@ -327,9 +362,13 @@ async def send_booking_confirmation_to_organizer(
     meeting_url: Optional[str] = None,
     booking_id: Optional[str] = None,
 ):
-    links = _public_booking_links(booking_id, attendee_email) if booking_id else {
-        "manage_url": "",
-    }
+    links = (
+        _public_booking_links(booking_id, attendee_email)
+        if booking_id
+        else {
+            "manage_url": "",
+        }
+    )
     subject = f"New booking: {event_title}"
     template_context = {
         "full_name": organizer_name,
@@ -340,7 +379,9 @@ async def send_booking_confirmation_to_organizer(
         "end_time": organizer_end_time,
         "meeting_url": meeting_url,
         "manage_url": links.get("manage_url"),
-        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip(
+            "/"
+        ),
     }
     html_body = render_template("booking_confirmation_organizer.html", template_context)
     text_body = (
@@ -351,7 +392,9 @@ async def send_booking_confirmation_to_organizer(
         f"Time: {organizer_start_time} - {organizer_end_time}\n"
         f"Manage booking: {links.get('manage_url', '')}\n"
     )
-    await send_custom_notification(organizer_email, subject, text_body, html_body, text_body)
+    await send_custom_notification(
+        organizer_email, subject, text_body, html_body, text_body
+    )
 
 
 async def send_booking_rescheduled_to_both(
@@ -365,11 +408,15 @@ async def send_booking_rescheduled_to_both(
     meeting_url: Optional[str] = None,
     booking_id: Optional[str] = None,
 ):
-    links = _public_booking_links(booking_id, attendee_email) if booking_id else {
-        "manage_url": "",
-        "reschedule_url": "",
-        "cancel_url": "",
-    }
+    links = (
+        _public_booking_links(booking_id, attendee_email)
+        if booking_id
+        else {
+            "manage_url": "",
+            "reschedule_url": "",
+            "cancel_url": "",
+        }
+    )
     subject = f"Booking rescheduled: {event_title}"
 
     organizer_context = {
@@ -381,7 +428,9 @@ async def send_booking_rescheduled_to_both(
         "manage_url": links.get("manage_url"),
         "reschedule_url": links.get("reschedule_url"),
         "cancel_url": links.get("cancel_url"),
-        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip(
+            "/"
+        ),
     }
     attendee_context = {
         **organizer_context,
@@ -406,8 +455,12 @@ async def send_booking_rescheduled_to_both(
         f"Manage booking: {links.get('manage_url', '')}\n"
     )
 
-    await send_custom_notification(organizer_email, subject, organizer_text, organizer_html, organizer_text)
-    await send_custom_notification(attendee_email, subject, attendee_text, attendee_html, attendee_text)
+    await send_custom_notification(
+        organizer_email, subject, organizer_text, organizer_html, organizer_text
+    )
+    await send_custom_notification(
+        attendee_email, subject, attendee_text, attendee_html, attendee_text
+    )
 
 
 async def send_booking_cancelled_to_both(
@@ -421,9 +474,13 @@ async def send_booking_cancelled_to_both(
     cancellation_reason: Optional[str] = None,
     booking_id: Optional[str] = None,
 ):
-    links = _public_booking_links(booking_id, attendee_email) if booking_id else {
-        "reschedule_url": "",
-    }
+    links = (
+        _public_booking_links(booking_id, attendee_email)
+        if booking_id
+        else {
+            "reschedule_url": "",
+        }
+    )
     subject = f"Booking cancelled: {event_title}"
 
     organizer_context = {
@@ -433,7 +490,9 @@ async def send_booking_cancelled_to_both(
         "cancelled_by": cancelled_by,
         "cancellation_reason": cancellation_reason,
         "reschedule_url": links.get("reschedule_url"),
-        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip(
+            "/"
+        ),
     }
     attendee_context = {
         **organizer_context,
@@ -454,8 +513,12 @@ async def send_booking_cancelled_to_both(
         + (f"Reason: {cancellation_reason}.\n" if cancellation_reason else "")
     )
 
-    await send_custom_notification(organizer_email, subject, organizer_text, organizer_html, organizer_text)
-    await send_custom_notification(attendee_email, subject, attendee_text, attendee_html, attendee_text)
+    await send_custom_notification(
+        organizer_email, subject, organizer_text, organizer_html, organizer_text
+    )
+    await send_custom_notification(
+        attendee_email, subject, attendee_text, attendee_html, attendee_text
+    )
 
 
 async def send_booking_reminder_to_organizer(
@@ -494,7 +557,9 @@ async def send_booking_reminder_to_organizer(
         f"Manage in dashboard: {manage_url}\n"
     )
 
-    await send_custom_notification(organizer_email, subject, text_body, html_body, text_body)
+    await send_custom_notification(
+        organizer_email, subject, text_body, html_body, text_body
+    )
 
 
 async def notify_quota_warning(
@@ -519,9 +584,17 @@ async def notify_quota_warning(
         "current_count": current_count,
         "limit": limit,
         "usage_percent": usage_percent,
-        "upgrade_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/") + "/pricing",
-        "billing_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/") + "/dashboard/settings/billing",
-        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/"),
+        "upgrade_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip(
+            "/"
+        )
+        + "/pricing",
+        "billing_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip(
+            "/"
+        )
+        + "/dashboard/settings/billing",
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip(
+            "/"
+        ),
     }
 
     html_body = render_template("quota_warning.html", template_context)
@@ -543,18 +616,21 @@ async def notify_welcome_email(user_email: str, full_name: str):
     subject = "🚀 Welcome to GraftAI - Your AI Copilot is Ready!"
     template_context = {
         "full_name": full_name,
-        "frontend_url": os.getenv('FRONTEND_BASE_URL', 'http://localhost:3000')
+        "frontend_url": os.getenv("FRONTEND_BASE_URL", "http://localhost:3000"),
     }
-    
+
     html_body = render_template("welcome.html", template_context)
     text_body = f"Welcome to GraftAI, {full_name}! Your AI Copilot is ready to help you reclaim your time."
-    
-    await send_custom_notification(user_email, subject, "Welcome to GraftAI", html_body, text_body)
+
+    await send_custom_notification(
+        user_email, subject, "Welcome to GraftAI", html_body, text_body
+    )
 
 
 async def notify_account_deleted_email(user_email: str, full_name: str):
     subject = "Account successfully deleted - GraftAI"
     html_body = f"<h1>Farewell, {full_name}</h1><p>Your GraftAI account has been permanently deleted.</p>"
     text_body = f"Farewell {full_name},\n\nThis email confirms that your GraftAI account has been permanently deleted. We wish you the best!"
-    await send_custom_notification(user_email, subject, "Account deleted", html_body, text_body)
-
+    await send_custom_notification(
+        user_email, subject, "Account deleted", html_body, text_body
+    )

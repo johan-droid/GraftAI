@@ -12,7 +12,9 @@ from backend.services.token_encryption import decrypt_token_value
 logger = logging.getLogger(__name__)
 
 
-async def get_recent_emails(db: AsyncSession, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+async def get_recent_emails(
+    db: AsyncSession, user_id: str, limit: int = 5
+) -> List[Dict[str, Any]]:
     emails = []
 
     stmt = select(UserTokenTable).where(
@@ -33,19 +35,25 @@ async def get_recent_emails(db: AsyncSession, user_id: str, limit: int = 5) -> L
                 ms_emails = await _fetch_outlook_recent(token, limit)
                 emails.extend(ms_emails)
         except Exception as e:
-            logger.error(f"Failed to fetch emails from {token.provider} for {user_id}: {e}")
+            logger.error(
+                f"Failed to fetch emails from {token.provider} for {user_id}: {e}"
+            )
 
     return emails
 
 
-async def _fetch_gmail_recent(token: UserTokenTable, limit: int) -> List[Dict[str, Any]]:
+async def _fetch_gmail_recent(
+    token: UserTokenTable, limit: int
+) -> List[Dict[str, Any]]:
     from googleapiclient.discovery import build
 
     access_token, _ = decrypt_token_value(token.access_token)
     refresh_token, _ = decrypt_token_value(token.refresh_token)
 
     if access_token is None or refresh_token is None:
-        logger.error(f"Cannot sync Gmail. Token decryption failed for token ID {token.id}")
+        logger.error(
+            f"Cannot sync Gmail. Token decryption failed for token ID {token.id}"
+        )
         return []
 
     token_data = {
@@ -58,35 +66,52 @@ async def _fetch_gmail_recent(token: UserTokenTable, limit: int) -> List[Dict[st
     def sync_fetch() -> List[Dict[str, Any]]:
         service = build("gmail", "v1", credentials=creds)
 
-        results = service.users().messages().list(userId="me", maxResults=limit).execute()
+        results = (
+            service.users().messages().list(userId="me", maxResults=limit).execute()
+        )
         messages = results.get("messages", [])
 
         fetched_emails: List[Dict[str, Any]] = []
         for msg in messages:
-            m = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
+            m = (
+                service.users()
+                .messages()
+                .get(userId="me", id=msg["id"], format="full")
+                .execute()
+            )
             headers = m.get("payload", {}).get("headers", [])
-            subject = next((h["value"] for h in headers if h["name"] == "Subject"), "No Subject")
-            sender = next((h["value"] for h in headers if h["name"] == "From"), "Unknown Sender")
+            subject = next(
+                (h["value"] for h in headers if h["name"] == "Subject"), "No Subject"
+            )
+            sender = next(
+                (h["value"] for h in headers if h["name"] == "From"), "Unknown Sender"
+            )
             snippet = m.get("snippet", "")
 
-            fetched_emails.append({
-                "source": "gmail",
-                "subject": subject,
-                "from": sender,
-                "snippet": snippet,
-                "id": msg["id"],
-            })
+            fetched_emails.append(
+                {
+                    "source": "gmail",
+                    "subject": subject,
+                    "from": sender,
+                    "snippet": snippet,
+                    "id": msg["id"],
+                }
+            )
         return fetched_emails
 
     return await to_thread.run_sync(sync_fetch)
 
 
-async def _fetch_outlook_recent(token: UserTokenTable, limit: int) -> List[Dict[str, Any]]:
+async def _fetch_outlook_recent(
+    token: UserTokenTable, limit: int
+) -> List[Dict[str, Any]]:
     access_token, _ = decrypt_token_value(token.access_token)
     refresh_token, _ = decrypt_token_value(token.refresh_token)
 
     if access_token is None or refresh_token is None:
-        logger.error(f"Cannot sync Outlook. Token decryption failed for token ID {token.id}")
+        logger.error(
+            f"Cannot sync Outlook. Token decryption failed for token ID {token.id}"
+        )
         return []
 
     token_data = {
@@ -119,12 +144,14 @@ async def _fetch_outlook_recent(token: UserTokenTable, limit: int) -> List[Dict[
 
     fetched_emails = []
     for msg in messages:
-        fetched_emails.append({
-            "source": "outlook",
-            "subject": msg.get("subject"),
-            "from": msg.get("from", {}).get("emailAddress", {}).get("address"),
-            "snippet": msg.get("bodyPreview"),
-            "id": msg.get("id"),
-        })
+        fetched_emails.append(
+            {
+                "source": "outlook",
+                "subject": msg.get("subject"),
+                "from": msg.get("from", {}).get("emailAddress", {}).get("address"),
+                "snippet": msg.get("bodyPreview"),
+                "id": msg.get("id"),
+            }
+        )
 
     return fetched_emails

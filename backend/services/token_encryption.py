@@ -77,7 +77,7 @@ def decrypt_token_value(value: Optional[str]) -> Tuple[Optional[str], bool]:
         return None, False
 
     try:
-        ciphertext = value[len(_TOKEN_PREFIX):]
+        ciphertext = value[len(_TOKEN_PREFIX) :]
         plaintext = fernet.decrypt(ciphertext.encode("utf-8")).decode("utf-8")
         return plaintext, False
     except InvalidToken:

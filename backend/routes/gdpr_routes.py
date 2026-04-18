@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/v1/gdpr", tags=["GDPR Compliance"])
 # Request models
 class DSRSubmitRequest(BaseModel):
     """Submit a Data Subject Request."""
+
     request_type: DSRType
     details: Optional[Dict[str, Any]] = {}
     requester_email: Optional[EmailStr] = None
@@ -25,11 +26,13 @@ class DSRSubmitRequest(BaseModel):
 
 class DSRVerifyRequest(BaseModel):
     """Verify identity for DSR."""
+
     verification_code: str
 
 
 class ConsentUpdateRequest(BaseModel):
     """Update consent preferences."""
+
     analytics: bool = False
     marketing: bool = False
     ai_training: bool = False
@@ -38,6 +41,7 @@ class ConsentUpdateRequest(BaseModel):
 
 class ConsentWithdrawRequest(BaseModel):
     """Withdraw consent for specific category."""
+
     category: str  # analytics, marketing, ai_training, third_party_sharing
     reason: Optional[str] = None
 
@@ -45,6 +49,7 @@ class ConsentWithdrawRequest(BaseModel):
 # Response models
 class DSRResponse(BaseModel):
     """DSR response model."""
+
     request_id: str
     status: str
     deadline: Optional[str] = None
@@ -53,6 +58,7 @@ class DSRResponse(BaseModel):
 
 class DSRStatusResponse(BaseModel):
     """DSR status response."""
+
     request_id: str
     request_type: str
     status: str
@@ -66,6 +72,7 @@ class DSRStatusResponse(BaseModel):
 
 class ConsentStatusResponse(BaseModel):
     """Consent status response."""
+
     essential: bool
     analytics: bool
     marketing: bool
@@ -104,8 +111,10 @@ async def submit_anonymous_dsr(
 ):
     """Submit a DSR without authentication (requires email verification)."""
     if not request.requester_email:
-        raise HTTPException(status_code=400, detail="requester_email required for anonymous requests")
-    
+        raise HTTPException(
+            status_code=400, detail="requester_email required for anonymous requests"
+        )
+
     try:
         result = await dsr_workflow.submit_request(
             db=db,
@@ -129,7 +138,9 @@ async def verify_dsr_identity(
 ):
     """Verify identity for anonymous DSR."""
     try:
-        result = await dsr_workflow.verify_identity(db, request_id, request.verification_code)
+        result = await dsr_workflow.verify_identity(
+            db, request_id, request.verification_code
+        )
         return DSRResponse(**result)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -142,12 +153,14 @@ async def get_dsr_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Get status of a DSR."""
-    stmt = select(DSRRecord).where(DSRRecord.id == request_id, DSRRecord.user_id == user_id)
+    stmt = select(DSRRecord).where(
+        DSRRecord.id == request_id, DSRRecord.user_id == user_id
+    )
     dsr = (await db.execute(stmt)).scalars().first()
-    
+
     if not dsr:
         raise HTTPException(status_code=404, detail="Request not found")
-    
+
     return DSRStatusResponse(
         request_id=dsr.id,
         request_type=dsr.request_type.value,
@@ -167,9 +180,13 @@ async def list_my_dsrs(
     db: AsyncSession = Depends(get_db),
 ):
     """List all DSRs for the current user."""
-    stmt = select(DSRRecord).where(DSRRecord.user_id == user_id).order_by(DSRRecord.submitted_at.desc())
+    stmt = (
+        select(DSRRecord)
+        .where(DSRRecord.user_id == user_id)
+        .order_by(DSRRecord.submitted_at.desc())
+    )
     dsrs = (await db.execute(stmt)).scalars().all()
-    
+
     return [
         DSRStatusResponse(
             request_id=dsr.id,
@@ -194,13 +211,13 @@ async def get_consent_status(
     """Get current consent status."""
     stmt = select(ConsentRecord).where(ConsentRecord.user_id == user_id)
     consent = (await db.execute(stmt)).scalars().first()
-    
+
     if not consent:
         # Create default consent record
         consent = ConsentRecord(user_id=user_id, essential=True)
         db.add(consent)
         await db.commit()
-    
+
     return ConsentStatusResponse(
         essential=consent.essential,
         analytics=consent.analytics,
@@ -221,21 +238,21 @@ async def update_consent(
     """Update consent preferences (GDPR Article 6/7)."""
     stmt = select(ConsentRecord).where(ConsentRecord.user_id == user_id)
     consent = (await db.execute(stmt)).scalars().first()
-    
+
     if not consent:
         consent = ConsentRecord(user_id=user_id)
         db.add(consent)
-    
+
     # Update consent fields
     consent.analytics = request.analytics
     consent.marketing = request.marketing
     consent.ai_training = request.ai_training
     consent.third_party_sharing = request.third_party_sharing
-    
+
     # If first time consenting, set consented_at
     if not consent.consented_at:
         consent.consented_at = datetime.utcnow()
-    
+
     # Reset withdrawal dates for newly consented categories
     if request.analytics:
         consent.analytics_withdrawn_at = None
@@ -245,9 +262,9 @@ async def update_consent(
         consent.ai_training_withdrawn_at = None
     if request.third_party_sharing:
         consent.third_party_sharing_withdrawn_at = None
-    
+
     await db.commit()
-    
+
     return ConsentStatusResponse(
         essential=consent.essential,
         analytics=consent.analytics,
@@ -268,32 +285,36 @@ async def withdraw_consent(
     """Withdraw consent for a specific category (GDPR Article 7.3)."""
     stmt = select(ConsentRecord).where(ConsentRecord.user_id == user_id)
     consent = (await db.execute(stmt)).scalars().first()
-    
+
     if not consent:
         raise HTTPException(status_code=404, detail="No consent record found")
-    
+
     category = request.category.lower()
     valid_categories = ["analytics", "marketing", "ai_training", "third_party_sharing"]
-    
+
     if category not in valid_categories:
-        raise HTTPException(status_code=400, detail=f"Invalid category. Valid: {valid_categories}")
-    
+        raise HTTPException(
+            status_code=400, detail=f"Invalid category. Valid: {valid_categories}"
+        )
+
     # Set withdrawal timestamp
     withdrawal_attr = f"{category}_withdrawn_at"
     setattr(consent, withdrawal_attr, datetime.utcnow())
-    
+
     # If all categories withdrawn, mark full withdrawal
-    if all([
-        consent.analytics_withdrawn_at,
-        consent.marketing_withdrawn_at,
-        consent.ai_training_withdrawn_at,
-        consent.third_party_sharing_withdrawn_at,
-    ]):
+    if all(
+        [
+            consent.analytics_withdrawn_at,
+            consent.marketing_withdrawn_at,
+            consent.ai_training_withdrawn_at,
+            consent.third_party_sharing_withdrawn_at,
+        ]
+    ):
         consent.withdrawn_at = datetime.utcnow()
         consent.withdrawal_reason = request.reason
-    
+
     await db.commit()
-    
+
     return {"status": "withdrawn", "category": category}
 
 
@@ -306,13 +327,13 @@ async def list_all_dsrs(
 ):
     """List all DSRs (admin only)."""
     stmt = select(DSRRecord)
-    
+
     if status:
         stmt = stmt.where(DSRRecord.status == status)
-    
+
     stmt = stmt.order_by(DSRRecord.submitted_at.desc())
     dsrs = (await db.execute(stmt)).scalars().all()
-    
+
     return [
         {
             "request_id": dsr.id,

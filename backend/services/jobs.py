@@ -29,7 +29,11 @@ async def enqueue_calendar_job(
     extra: Optional[Mapping[str, Any]] = None,
 ):
     return await _enqueue_job(
-        "task_create_calendar_event" if action == "create" else "task_update_calendar_event" if action == "update" else "task_delete_calendar_event",
+        "task_create_calendar_event"
+        if action == "create"
+        else "task_update_calendar_event"
+        if action == "update"
+        else "task_delete_calendar_event",
         booking_id=booking_id,
         action=action,
         extra=extra or {},

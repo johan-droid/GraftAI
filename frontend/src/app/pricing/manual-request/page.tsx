@@ -2,6 +2,17 @@
 
 import React, { useState } from "react";
 import { apiClient, API_BASE_URL } from "../../../lib/api-client";
+import styles from "./page.module.css";
+
+interface PresignResponse {
+  key: string;
+  method: "put" | "backend";
+  upload_url: string;
+}
+
+interface ManualRequestResponse {
+  status: string;
+}
 
 export default function ManualRequestPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -10,7 +21,7 @@ export default function ManualRequestPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (loading) {
       return;
@@ -25,7 +36,7 @@ export default function ManualRequestPage() {
     setStatus("Generating upload URL...");
 
     try {
-      const presign = await apiClient.post<any>("/billing/manual/presign", {
+      const presign = await apiClient.post<PresignResponse>("/billing/manual/presign", {
         filename: file.name,
         content_type: file.type || "application/octet-stream",
       });
@@ -57,47 +68,69 @@ export default function ManualRequestPage() {
 
       setStatus("Submitting manual activation request...");
 
-      const req = await apiClient.post<any>("/billing/manual/request", {
+      const req = await apiClient.post<ManualRequestResponse>("/billing/manual/request", {
         requested_tier: tier,
         proof_key: key,
         notes,
       });
 
       setStatus(req?.status === "success" ? "Request submitted successfully" : "Request failed");
-    } catch (err: any) {
-      setStatus("Error: " + (err?.message || String(err)));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStatus("Error: " + message);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{maxWidth: 720, margin: '0 auto', padding: 20}}>
+    <div className={styles.container}>
       <h2>Request Manual Activation</h2>
       <p>If payments are unavailable, upload proof and request approval.</p>
-      <form onSubmit={handleSubmit}>
-        <div style={{marginBottom: 12}}>
-          <label>Proof file</label><br />
-          <input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      <form className={styles.form} onSubmit={handleSubmit}>
+        <div className={styles.field}>
+          <label htmlFor="proofFile">Proof file</label>
+          <input
+            id="proofFile"
+            className={styles.input}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
         </div>
-        <div style={{marginBottom: 12}}>
-          <label>Requested Tier</label><br />
-          <select value={tier} onChange={(e) => setTier(e.target.value)}>
+
+        <div className={styles.field}>
+          <label htmlFor="requestedTier">Requested Tier</label>
+          <select
+            id="requestedTier"
+            className={styles.input}
+            value={tier}
+            onChange={(e) => setTier(e.target.value)}
+          >
             <option value="pro">Pro</option>
             <option value="elite">Elite</option>
           </select>
         </div>
-        <div style={{marginBottom: 12}}>
-          <label>Notes</label><br />
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} style={{width: '100%'}} />
+
+        <div className={styles.field}>
+          <label htmlFor="notes">Notes</label>
+          <textarea
+            id="notes"
+            className={styles.textarea}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+          />
         </div>
-        <div>
-          <button type="submit" disabled={loading || !file}>
+
+        <div className={styles.actionRow}>
+          <button className={styles.button} type="submit" disabled={loading || !file}>
             {loading ? "Submitting..." : "Submit Request"}
           </button>
         </div>
       </form>
-      <div style={{marginTop: 12}}>
+
+      <div className={styles.status}>
         <strong>Status:</strong> {status}
       </div>
     </div>

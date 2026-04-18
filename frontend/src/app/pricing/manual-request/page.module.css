@@ -1,0 +1,54 @@
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #c1c7d0;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.actionRow {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.button {
+  padding: 0.9em 1.4em;
+  border: none;
+  border-radius: 8px;
+  background-color: #0f62fe;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status {
+  margin-top: 12px;
+}

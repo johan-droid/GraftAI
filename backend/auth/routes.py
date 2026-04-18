@@ -24,6 +24,7 @@ from backend.services.oauth_service import (
     parse_oauth_state,
     frontend_redirect_token,
 )
+from backend.core.redis import cache_exists, cache_set
 from backend.utils.db import get_db
 from backend.models.tables import UserTable, UserTokenTable
 from backend.auth.schemes import get_current_user, get_current_user_id

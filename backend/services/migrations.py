@@ -158,8 +158,8 @@ def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] =
         Base.metadata.create_all(bind=engine)
     except OperationalError as exc:
         msg = str(exc).lower()
-        # Ignore benign "already exists" errors (e.g., index existence on repeated startups)
-        if "already exists" in msg or "index" in msg:
+        # Ignore only benign "already exists" errors from repeated create_all on existing schema.
+        if "already exists" in msg:
             logger.warning("Non-fatal DB schema create_all error ignored: %s", exc)
         else:
             raise

@@ -3,8 +3,60 @@ Celery configuration for background job processing.
 Handles: email sending, calendar sync, webhook delivery, reminders
 """
 import os
-from celery import Celery
-from celery.signals import task_prerun, task_postrun
+
+try:
+    from celery import Celery
+    from celery.signals import task_prerun, task_postrun
+    _CELERY_AVAILABLE = True
+except ImportError:
+    _CELERY_AVAILABLE = False
+
+    class DummyTask:
+        def __init__(self, fn):
+            self.fn = fn
+
+        def __call__(self, *args, **kwargs):
+            return self.fn(*args, **kwargs)
+
+        def delay(self, *args, **kwargs):
+            try:
+                return self.fn(*args, **kwargs)
+            except TypeError:
+                return self.fn(None, *args, **kwargs)
+
+        def apply_async(self, *args, **kwargs):
+            return self.delay(*args, **kwargs)
+
+    class DummyConfig(dict):
+        def update(self, *args, **kwargs):
+            super().update(*args, **kwargs)
+
+        def __getattr__(self, name):
+            try:
+                return self[name]
+            except KeyError:
+                raise AttributeError(name)
+
+        def __setattr__(self, name, value):
+            self[name] = value
+
+    class DummyCelery:
+        def __init__(self, *args, **kwargs):
+            self.conf = DummyConfig()
+
+        def task(self, *task_args, **task_kwargs):
+            def decorator(fn):
+                return DummyTask(fn)
+            return decorator
+
+    class DummySignal:
+        def connect(self, *args, **kwargs):
+            return None
+
+    Celery = DummyCelery
+    task_prerun = DummySignal()
+    task_postrun = DummySignal()
+
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)

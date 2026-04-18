@@ -8,6 +8,10 @@ import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "@auth/core/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { authConfig } from "./auth.config";
+import { getGoogleOAuthCredentials, getMicrosoftOAuthCredentials } from "@/lib/oauth-env";
+
+const googleOAuth = getGoogleOAuthCredentials();
+const microsoftOAuth = getMicrosoftOAuthCredentials();
 
 // Resolve Environment Variables
 if (!process.env.NEXTAUTH_URL) {
@@ -21,8 +25,10 @@ console.debug("[NextAuth Debug] runtime env", {
   NEXTAUTH_URL: process.env.NEXTAUTH_URL,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   BACKEND_URL: process.env.BACKEND_URL,
-  GOOGLE_ID_PRESENT: !!(process.env.GOOGLE_CLIENT_ID || process.env.AUTH_GOOGLE_ID),
-  MICROSOFT_ID_PRESENT: !!(process.env.MICROSOFT_CLIENT_ID || process.env.AUTH_MICROSOFT_ENTRA_ID_ID),
+  GOOGLE_ID_PRESENT: !!googleOAuth.clientId,
+  GOOGLE_SECRET_PRESENT: !!googleOAuth.clientSecret,
+  MICROSOFT_ID_PRESENT: !!microsoftOAuth.clientId,
+  MICROSOFT_SECRET_PRESENT: !!microsoftOAuth.clientSecret,
   NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
   AUTH_SECRET: !!process.env.AUTH_SECRET,
 });

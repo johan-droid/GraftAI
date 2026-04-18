@@ -1,31 +1,42 @@
 import type { NextAuthConfig } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
+import { getGoogleOAuthCredentials, getMicrosoftOAuthCredentials } from "@/lib/oauth-env";
 
 // ─── Environment Bridging ──────────────────────────────────────────────────
-// Auth.js v5 prefers AUTH_* prefixes. We bridge established names for 
-// compatibility without requiring dashboard changes.
-if (process.env.GOOGLE_CLIENT_ID && !process.env.AUTH_GOOGLE_ID) {
-  process.env.AUTH_GOOGLE_ID = process.env.GOOGLE_CLIENT_ID;
+// Resolve legacy and Auth.js v5 env names so either deployment convention works.
+const googleOAuth = getGoogleOAuthCredentials();
+const microsoftOAuth = getMicrosoftOAuthCredentials();
+
+if (!googleOAuth.clientId || !googleOAuth.clientSecret) {
+  console.warn(
+    "[NextAuth] Google OAuth credentials are missing. Set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET or AUTH_GOOGLE_ID/AUTH_GOOGLE_SECRET."
+  );
 }
-if (process.env.GOOGLE_CLIENT_SECRET && !process.env.AUTH_GOOGLE_SECRET) {
-  process.env.AUTH_GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+if (googleOAuth.clientId && !process.env.AUTH_GOOGLE_ID) {
+  process.env.AUTH_GOOGLE_ID = googleOAuth.clientId;
 }
-if (process.env.MICROSOFT_CLIENT_ID && !process.env.AUTH_MICROSOFT_ENTRA_ID_ID) {
-  process.env.AUTH_MICROSOFT_ENTRA_ID_ID = process.env.MICROSOFT_CLIENT_ID;
+if (googleOAuth.clientSecret && !process.env.AUTH_GOOGLE_SECRET) {
+  process.env.AUTH_GOOGLE_SECRET = googleOAuth.clientSecret;
 }
-if (process.env.MICROSOFT_CLIENT_SECRET && !process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET) {
-  process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET = process.env.MICROSOFT_CLIENT_SECRET;
+if (microsoftOAuth.clientId && !process.env.AUTH_MICROSOFT_ENTRA_ID_ID) {
+  process.env.AUTH_MICROSOFT_ENTRA_ID_ID = microsoftOAuth.clientId;
+}
+if (microsoftOAuth.clientSecret && !process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET) {
+  process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET = microsoftOAuth.clientSecret;
 }
 
 // ─── NextAuth Configuration (Edge Compatible) ────────────────────────────────
 // This file contains providers and settings that must be available in the 
 // Edge runtime (Middleware). Avoid Node-only dependencies here.
-export const authConfig = {
-  providers: [
+const providers = [] as any[];
+
+if (googleOAuth.clientId && googleOAuth.clientSecret) {
+  providers.push(
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: googleOAuth.clientId,
+      clientSecret: googleOAuth.clientSecret,
       authorization: {
         params: {
           scope: [
@@ -39,10 +50,17 @@ export const authConfig = {
           prompt: "consent",
         },
       },
-    }),
+    })
+  );
+} else {
+  console.warn("[NextAuth] Google provider not registered due to missing credentials.");
+}
+
+if (microsoftOAuth.clientId && microsoftOAuth.clientSecret) {
+  providers.push(
     MicrosoftEntraId({
-      clientId: process.env.MICROSOFT_CLIENT_ID,
-      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+      clientId: microsoftOAuth.clientId,
+      clientSecret: microsoftOAuth.clientSecret,
       issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID || "common"}/v2.0`,
       authorization: {
         params: {
@@ -56,8 +74,14 @@ export const authConfig = {
           ].join(" "),
         },
       },
-    }),
-  ],
+    })
+  );
+} else {
+  console.warn("[NextAuth] Microsoft Entra provider not registered due to missing credentials.");
+}
+
+export const authConfig = {
+  providers,
   trustHost: true,
   pages: {
     signIn: "/login",

@@ -8,7 +8,6 @@ The 4-Phase Agent Loop:
 3. ACTION - Call tools, execute functions, update systems, record results
 4. REFLECTION - Check outcomes, learn from results, update memory, improve next time
 """
-from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -33,11 +32,13 @@ class AgentTimeoutError(Exception):
 class AgentState(Enum):
     """Agent lifecycle states"""
     INITIALIZING = "initializing"
+    IDLE = "idle"
     READY = "ready"
     PERCEIVING = "perceiving"
     COGNIZING = "cognizing"
     ACTING = "acting"
     REFLECTING = "reflecting"
+    COMPLETED = "completed"
     ERROR = "error"
     SHUTDOWN = "shutdown"
 
@@ -105,7 +106,7 @@ class AgentContext:
     phase_results: Dict[str, Any] = field(default_factory=dict)
 
 
-class BaseAgent(ABC):
+class BaseAgent:
     """
     Base class for all AI agents in GraftAI
     
@@ -120,12 +121,13 @@ class BaseAgent(ABC):
     - MonitoringAgent: Tracks outcomes and alerts
     """
     
-    def __init__(self, name: str, description: str):
+    def __init__(self, name: str, description: str = ""):
         self.name = name
         self.description = description
-        self.state = AgentState.INITIALIZING
+        self.state = AgentState.IDLE
         self.metrics = AgentMetrics()
         self.controller: Optional[Any] = None
+        self.memory: Dict[str, Any] = {}
         self._lock = asyncio.Lock()
         
         # Tool registry
@@ -137,6 +139,25 @@ class BaseAgent(ABC):
         """Initialize the agent - override in subclass"""
         self.state = AgentState.READY
         logger.info(f"Agent {self.name} ready")
+
+    def transition_to(self, new_state: AgentState):
+        """Transition the agent to a new lifecycle state."""
+        if not isinstance(new_state, AgentState):
+            raise TypeError("new_state must be an AgentState")
+
+        self.state = new_state
+
+    async def perception_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        raise NotImplementedError
+
+    async def cognition_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        raise NotImplementedError
+
+    async def action_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        raise NotImplementedError
+
+    async def reflection_phase(self, context: Dict[str, Any], results: Dict[str, Any]) -> Dict[str, Any]:
+        raise NotImplementedError
     
     # ╔══════════════════════════════════════════════════════════════════╗
     # ║                    THE 4-PHASE AGENT LOOP                        ║
@@ -679,12 +700,10 @@ class BaseAgent(ABC):
         """Legacy memory retrieval for backward compatibility"""
         return {}
     
-    @abstractmethod
     async def _enrich_context(self, context: AgentContext) -> Dict[str, Any]:
         """Enrich context with additional data from systems"""
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
     async def _understand_state(
         self,
         trigger: Dict[str, Any],
@@ -692,27 +711,24 @@ class BaseAgent(ABC):
         memories: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Understand current state using LLM"""
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
     async def _determine_goal(
         self,
         understanding: Dict[str, Any],
         context: AgentContext
     ) -> str:
         """Determine what we want to achieve"""
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
     async def _generate_options(
         self,
         goal: str,
         context: AgentContext
     ) -> List[Dict[str, Any]]:
         """Generate possible approaches"""
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
     async def _create_plan(
         self,
         goal: str,
@@ -720,9 +736,8 @@ class BaseAgent(ABC):
         context: AgentContext
     ) -> Dict[str, Any]:
         """Create step-by-step plan"""
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
     async def _make_decision(
         self,
         goal: str,
@@ -731,25 +746,23 @@ class BaseAgent(ABC):
         context: AgentContext
     ) -> Dict[str, Any]:
         """Decide on best approach"""
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
     async def _execute_step(
         self,
         step: Dict[str, Any],
         context: AgentContext
     ) -> Dict[str, Any]:
         """Execute a single step"""
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
     async def _aggregate_results(
         self,
         results: List[Dict[str, Any]],
         context: AgentContext
     ) -> Any:
         """Aggregate step results into final output"""
-        pass
+        raise NotImplementedError
     
     # ╔══════════════════════════════════════════════════════════════════╗
     # ║                    UTILITY METHODS                               ║

@@ -1,7 +1,6 @@
 """
 Pytest configuration and shared fixtures for GraftAI backend tests.
 """
-import asyncio
 import os
 import sys
 import uuid
@@ -12,15 +11,16 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from backend.models.base import Base
-from backend.models.tables import UserTable, EventTable, BookingTable
+from backend.models.tables import ChatMessageTable, UserTable, EventTable, BookingTable
 from backend.api.main import create_app
 from backend.utils.db import get_db
 from backend.api.deps import get_current_user
@@ -33,6 +33,8 @@ test_engine = create_async_engine(
     TEST_DATABASE_URL,
     echo=False,
     future=True,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
 
 # Session factory
@@ -45,15 +47,7 @@ AsyncTestingSessionLocal = async_sessionmaker(
 )
 
 
-@pytest_asyncio.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
 async def setup_test_database():
     """Create test database tables."""
     async with test_engine.begin() as conn:
@@ -76,6 +70,10 @@ async def setup_test_database():
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Provide a transactional database session for tests."""
     async with AsyncTestingSessionLocal() as session:
+        async def _commit(*_args, **_kwargs):
+            await session.flush()
+
+        session.commit = _commit  # type: ignore[assignment]
         yield session
         await session.rollback()
 
@@ -102,7 +100,7 @@ async def test_user(db_session: AsyncSession, test_user_data) -> UserTable:
     """Create and return a test user in the database."""
     user = UserTable(**test_user_data)
     db_session.add(user)
-    await db_session.commit()
+    await db_session.flush()
     await db_session.refresh(user)
     return user
 
@@ -147,14 +145,15 @@ def test_app(
 @pytest_asyncio.fixture
 async def async_client(test_app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
     """Provide an async HTTP client for API testing."""
-    async with AsyncClient(app=test_app, base_url="http://test") as client:
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://localhost") as client:
         yield client
 
 
 @pytest.fixture
 def sync_client(test_app: FastAPI) -> Generator[TestClient, None, None]:
     """Provide a sync HTTP client for API testing."""
-    with TestClient(test_app) as client:
+    with TestClient(test_app, base_url="http://localhost") as client:
         yield client
 
 
@@ -179,7 +178,7 @@ async def test_event(db_session: AsyncSession, test_event_data) -> EventTable:
     """Create and return a test event."""
     event = EventTable(**test_event_data)
     db_session.add(event)
-    await db_session.commit()
+    await db_session.flush()
     await db_session.refresh(event)
     return event
 
@@ -207,7 +206,7 @@ async def test_booking(db_session: AsyncSession, test_booking_data) -> BookingTa
     """Create and return a test booking."""
     booking = BookingTable(**test_booking_data)
     db_session.add(booking)
-    await db_session.commit()
+    await db_session.flush()
     await db_session.refresh(booking)
     return booking
 

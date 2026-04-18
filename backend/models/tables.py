@@ -398,7 +398,7 @@ class ManualActivationRequestTable(Base):
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
-    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     requested_tier: Mapped[str] = mapped_column(String(50), nullable=False, default="pro")
     proof_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -434,8 +434,8 @@ def create_app() -> FastAPI:
     app.include_router(plugins_router, prefix="/api/v1")
     app.include_router(webhooks_router, prefix="/api/v1")
     app.include_router(public_router, prefix="/api")
-    app.include_router(ai_router, prefix="/api/v1")
     app.include_router(ai_chat_router, prefix="/api/v1")
+    app.include_router(ai_router, prefix="/api/v1")
     app.include_router(billing_router, prefix="/api/v1")
     app.include_router(monitoring_router, prefix="/api/v1")
 

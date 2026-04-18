@@ -71,6 +71,7 @@ async def http_exception_handler(request: Request, exc: Exception):
     content = {
         "error": user_message,
         "code": "http",
+        "detail": exc.detail,
     }
     
     # Include request ID for debugging (safe to expose)
@@ -112,7 +113,17 @@ async def validation_exception_handler(request: Request, exc: Exception):
     # Only include detailed field errors in non-production
     # (to prevent schema information leakage)
     if not _is_production():
-        content["details"] = [err.get("msg") for err in exc.errors()]
+        normalized_errors = []
+        for err in exc.errors():
+            normalized_errors.append(
+                {
+                    "loc": list(err.get("loc", [])),
+                    "msg": err.get("msg"),
+                    "type": err.get("type"),
+                }
+            )
+        content["detail"] = normalized_errors
+        content["details"] = [err.get("msg") for err in normalized_errors]
     
     return JSONResponse(status_code=422, content=content)
 

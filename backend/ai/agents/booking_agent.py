@@ -4,12 +4,22 @@ Handles conflict detection, availability checking, and workflow routing
 """
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
-from backend.ai.agents.base import BaseAgent, AgentContext
+from backend.ai.agents.base import AgentState, BaseAgent, AgentContext
 from backend.utils.logger import get_logger
 from backend.tasks.email_tasks import send_booking_confirmation
 from backend.tasks.reminder_tasks import schedule_booking_reminders
 
 logger = get_logger(__name__)
+
+
+async def check_availability(*_args, **_kwargs) -> bool:
+    """Check whether the requested booking slot is available."""
+    raise NotImplementedError("check_availability is not implemented for BookingAgent; integrate backend scheduling tools or implement a connector to real calendar APIs")
+
+
+async def create_booking(*_args, **_kwargs) -> Dict[str, Any]:
+    """Create a booking record for the requested meeting."""
+    raise NotImplementedError("create_booking is not implemented for BookingAgent; integrate backend booking persistence or call the real bookings API")
 
 
 class BookingAgent(BaseAgent):
@@ -26,9 +36,152 @@ class BookingAgent(BaseAgent):
     
     def __init__(self):
         super().__init__(
-            name="BookingAgent",
+            name="booking",
             description="Validates bookings, checks availability, and routes workflows"
         )
+
+    async def execute(self, request: Any) -> Dict[str, Any]:
+        """Execute a booking request using the agent loop and booking workflow."""
+        request_context = getattr(request, "context", None)
+        if request_context is None:
+            request_context = request if isinstance(request, dict) else {}
+        if not isinstance(request_context, dict):
+            request_context = dict(request_context)
+
+        user_id = getattr(request, "user_id", None) or request_context.get("user_id", "")
+        request_id = getattr(request, "id", None) or request_context.get("request_id", "booking-request")
+
+        agent_context = AgentContext(
+            user_id=user_id,
+            request_id=request_id,
+            data=request_context,
+            tools_available=self._get_available_tools(),
+        )
+
+        # Run the defined phases in order and assemble a final result from their outputs.
+        perception = await self.perception_phase(request_context)
+        cognition_input = {
+            **request_context,
+            **perception.get("perception", {}),
+        }
+        cognition = await self.cognition_phase(cognition_input)
+        action_input = {
+            **request_context,
+            "decision": cognition.get("cognition", {}).get("decision", {}),
+        }
+        action = await self.action_phase(action_input)
+
+        # reflection expects the phase results structure, keep compatibility
+        reflection = await self.reflection_phase(request_context, {"action": action.get("action", action)})
+
+        # Build final_result from action and reflection outputs (avoid re-running full workflow)
+        action_data = action.get("action", action)
+        reflection_data = reflection.get("reflection", reflection)
+
+        booking_id = action_data.get("booking_id") or (action_data.get("booking", {}) or {}).get("id")
+        success = bool(action_data.get("success", False))
+        error = None if success else (reflection_data.get("error") or action_data.get("error"))
+
+        final_result = {
+            "success": success,
+            "booking_id": booking_id,
+            "booking": action_data.get("booking"),
+            "error": error,
+            "phases": {
+                "perception": perception.get("perception", perception),
+                "cognition": cognition.get("cognition", cognition),
+                "action": action_data,
+                "reflection": reflection_data,
+            },
+        }
+
+        # Transition agent to READY
+        self.transition_to(AgentState.READY)
+
+        return {
+            "agent": self.name,
+            "request_id": request_id,
+            "phases": final_result["phases"],
+            "success": final_result["success"],
+            "booking_id": final_result.get("booking_id"),
+            "final_output": final_result,
+            "error": final_result.get("error"),
+        }
+
+    async def perception_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "perception": {
+                "raw_input": context.get("user_message", ""),
+                "extracted_entities": context.get("entities", {}),
+                "intent": context.get("intent", "general_chat"),
+                "state": context.get("state", "unknown"),
+            }
+        }
+
+    async def cognition_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        entities = context.get("entities", {})
+        available = await check_availability(
+            user_id=context.get("user_id"),
+            entities=entities,
+            context=context,
+        )
+
+        decision = {
+            "action": "create_meeting" if available else "suggest_alternatives",
+            "title": context.get("title") or entities.get("title", "Untitled Meeting"),
+            "start_time": entities.get("start_time") or context.get("start_time"),
+            "duration": entities.get("duration") or context.get("duration", 30),
+            "available": available,
+            "reasoning": "Slot available" if available else "Slot unavailable",
+        }
+
+        return {
+            "cognition": {
+                "decision": decision,
+                "confidence": 0.9 if available else 0.35,
+                "constraints_evaluated": {
+                    "availability_checked": True,
+                    "available": available,
+                },
+            }
+        }
+
+    async def action_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        decision = context.get("decision", {})
+        booking = await create_booking(
+            user_id=context.get("user_id"),
+            decision=decision,
+            context=context,
+        )
+
+        booking_id = booking.get("booking_id") or booking.get("id")
+        success = bool(booking.get("success", booking.get("status") in {"confirmed", "success"}))
+
+        return {
+            "action": {
+                "success": success,
+                "booking_id": booking_id,
+                "booking": booking,
+            }
+        }
+
+    async def reflection_phase(self, context: Dict[str, Any], results: Dict[str, Any]) -> Dict[str, Any]:
+        action_result = results.get("action", {})
+        success = bool(action_result.get("success", False))
+
+        return {
+            "reflection": {
+                "success": success,
+                "quality_score": 95 if success else 40,
+                "lessons": [
+                    {
+                        "type": "booking_success" if success else "booking_failure",
+                        "confidence": 0.9 if success else 0.7,
+                    }
+                ],
+                "improvements": [] if success else ["Review booking constraints before confirming"],
+            }
+        }
     
     def _get_available_tools(self) -> list:
         return [

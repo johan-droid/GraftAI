@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { getGoogleOAuthCredentials, getMicrosoftOAuthCredentials } from "@/lib/oauth-env";
 
 // This route is development-only and intentionally verbose
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const googleOAuth = getGoogleOAuthCredentials();
+  const microsoftOAuth = getMicrosoftOAuthCredentials();
+
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
@@ -107,12 +111,12 @@ export async function GET(req: NextRequest) {
   // ── 6. Provider credentials ───────────────────────────────────────────────
   const providers = {
     google: {
-      clientId:     !!process.env.GOOGLE_CLIENT_ID,
-      clientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+      clientId:     !!googleOAuth.clientId,
+      clientSecret: !!googleOAuth.clientSecret,
     },
     microsoft: {
-      clientId:     !!process.env.MICROSOFT_CLIENT_ID,
-      clientSecret: !!process.env.MICROSOFT_CLIENT_SECRET,
+      clientId:     !!microsoftOAuth.clientId,
+      clientSecret: !!microsoftOAuth.clientSecret,
       tenantId:     process.env.MICROSOFT_TENANT_ID ?? "(not set — defaults to common)",
     },
   };

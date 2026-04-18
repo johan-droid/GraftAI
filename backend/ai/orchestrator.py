@@ -82,6 +82,8 @@ class AgentController:
         """Register an agent with the controller"""
         self.agents[agent_type] = agent
         agent.controller = self
+        if not isinstance(getattr(agent, "state", None), AgentState):
+            agent.state = AgentState.READY
         logger.info(f"Registered {agent_type.value} agent")
     
     async def start(self):
@@ -132,6 +134,48 @@ class AgentController:
             context=context,
             priority=priority
         )
+
+        agent = self.agents.get(agent_type)
+        if not agent:
+            return AgentResponse(
+                request_id=request_id,
+                agent_type=agent_type,
+                success=False,
+                result={},
+                error=f"No agent registered for type: {agent_type.value}",
+            )
+
+        if not self.is_running:
+            try:
+                result = await agent.execute(request)
+                if isinstance(result, AgentResponse):
+                    return result
+
+                if isinstance(result, dict):
+                    success = bool(result.get("success", False))
+                    error = result.get("error")
+                else:
+                    success = True
+                    error = None
+
+                return AgentResponse(
+                    request_id=request_id,
+                    agent_type=agent_type,
+                    success=success,
+                    result=result if isinstance(result, dict) else {"result": result},
+                    error=error,
+                    processing_time_ms=0.0,
+                )
+            except Exception as exc:
+                logger.error(f"Request {request_id} failed: {exc}")
+                return AgentResponse(
+                    request_id=request_id,
+                    agent_type=agent_type,
+                    success=False,
+                    result={},
+                    error=str(exc),
+                    processing_time_ms=0.0,
+                )
         
         # Create future for response
         loop = asyncio.get_running_loop()
@@ -202,8 +246,9 @@ class AgentController:
             response = AgentResponse(
                 request_id=request.id,
                 agent_type=request.type,
-                success=True,
-                result=result,
+                success=bool(result.get("success", False)) if isinstance(result, dict) else False,
+                result=result if isinstance(result, dict) else {"result": result},
+                error=None if not isinstance(result, dict) else result.get("error"),
                 processing_time_ms=processing_time
             )
             

@@ -6,7 +6,7 @@ Agent = LLM + Memory + Tools + Loop
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,8 +35,17 @@ class ChatMessageSchema(BaseModel):
 
 class ChatRequest(BaseModel):
     """Request schema for sending a message."""
-    message: str
+    message: Optional[str] = None
+    prompt: Optional[str] = None
+    context: Optional[List[str]] = None
+    timezone: str = "UTC"
     conversation_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _require_message_or_prompt(self):
+        if not ((self.message and self.message.strip()) or (self.prompt and self.prompt.strip())):
+            raise ValueError("message or prompt is required")
+        return self
 
 
 class ChatResponse(BaseModel):
@@ -46,6 +55,9 @@ class ChatResponse(BaseModel):
     content: str
     timestamp: datetime
     conversation_id: str
+    result: Optional[str] = None
+    model_used: Optional[str] = None
+    action: Optional[Dict[str, Any]] = None
     agent_executed: bool = False
     agent_type: Optional[str] = None
     intent: Optional[str] = None
@@ -347,24 +359,26 @@ async def send_chat_message(
     Persists both user message and AI response to conversation history.
     """
     import uuid
+
+    user_message_text = (request.message or request.prompt or "").strip()
     
     # Generate conversation ID if not provided
     conversation_id = request.conversation_id or str(uuid.uuid4())
     
     # Create user message
-    user_message = ChatMessageTable(
+    user_message_record = ChatMessageTable(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
         conversation_id=conversation_id,
         role="user",
-        content=request.message,
+        content=user_message_text,
         timestamp=datetime.utcnow()
     )
-    db.add(user_message)
+    db.add(user_message_record)
     
     # Generate AI response (returns dict with content + metadata)
     ai_result = await generate_ai_response(
-        request.message, 
+        user_message_text,
         str(current_user.id), 
         db
     )
@@ -412,6 +426,9 @@ async def send_chat_message(
         content=ai_content,
         timestamp=ai_message.timestamp,
         conversation_id=conversation_id,
+        result=ai_content,
+        model_used=ai_result.get("model_used"),
+        action=ai_result.get("action"),
         agent_executed=agent_executed,
         agent_type=agent_type,
         intent=intent,

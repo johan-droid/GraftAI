@@ -6,19 +6,19 @@
     <h1>Your booking is confirmed</h1>
     <p>Hello {{ full_name }}, your appointment with {{ organizer_name }} is scheduled.</p>
 
-    <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
-        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700;">{{ event_title }}</p>
-        <p style="margin-bottom: 0; font-size: 13px; color: #94a3b8;">{{ start_time }} - {{ end_time }} ({{ attendee_zone }})</p>
+    <div class="booking-summary">
+        <p class="booking-summary-title">{{ event_title }}</p>
+        <p class="booking-summary-meta">{{ start_time }} - {{ end_time }} ({{ attendee_zone }})</p>
         {% if meeting_url %}
-        <p style="margin: 8px 0 0; font-size: 13px;">Join: <a href="{{ meeting_url }}" style="color: #818cf8;">{{ meeting_url }}</a></p>
+        <p class="booking-summary-link">Join: <a href="{{ meeting_url }}">{{ meeting_url }}</a></p>
         {% endif %}
     </div>
 
     <p class="muted-small">Need to change plans?</p>
-    <p style="margin-top: -8px;">
-        <a href="{{ manage_url }}" style="color: #818cf8; text-decoration: none;">Manage Booking</a><br>
-        <a href="{{ reschedule_url }}" style="color: #818cf8; text-decoration: none;">Reschedule</a><br>
-        <a href="{{ cancel_url }}" style="color: #fca5a5; text-decoration: none;">Cancel</a>
-    </p>
+    <div class="booking-actions">
+        <a href="{{ manage_url }}" class="booking-action-link">Manage Booking</a>
+        <a href="{{ reschedule_url }}" class="booking-action-link">Reschedule</a>
+        <a href="{{ cancel_url }}" class="booking-action-link is-cancel">Cancel</a>
+    </div>
 </div>
 {% endblock %}

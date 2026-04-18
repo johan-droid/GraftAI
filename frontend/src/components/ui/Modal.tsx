@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { alpha } from "@mui/material/styles";
 
 interface ModalProps {
   open: boolean;
@@ -40,17 +41,17 @@ export function Modal({
       fullWidth={fullWidth}
       PaperProps={{
         sx: {
-          background: "linear-gradient(135deg, hsl(240, 24%, 14%) 0%, hsl(240, 24%, 10%) 100%)",
-          border: "1px solid hsla(239, 84%, 67%, 0.2)",
-          borderRadius: "16px",
-          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
+          backgroundColor: "#FFFFFF",
+          border: "1px solid #DADCE0",
+          borderRadius: "28px",
+          boxShadow: "0 24px 60px -36px rgba(32,33,36,0.35)",
           overflow: "hidden",
         },
       }}
       sx={{
         "& .MuiBackdrop-root": {
-          background: "hsla(240, 24%, 7%, 0.8)",
-          backdropFilter: "blur(4px)",
+          backgroundColor: alpha("#3C4043", 0.32),
+          backdropFilter: "blur(3px)",
         },
       }}
     >
@@ -68,15 +69,16 @@ export function Modal({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  p: 3,
-                  borderBottom: "1px solid hsla(239, 84%, 67%, 0.1)",
+                  px: 3,
+                  py: 2.5,
+                  borderBottom: "1px solid #DADCE0",
                 }}
               >
                 <Typography
                   variant="h6"
                   sx={{
                     fontWeight: 700,
-                    color: "hsl(220, 20%, 98%)",
+                    color: "#202124",
                     letterSpacing: "-0.01em",
                   }}
                 >
@@ -85,10 +87,12 @@ export function Modal({
                 <IconButton
                   onClick={onClose}
                   sx={{
-                    color: "hsl(215, 16%, 55%)",
+                    color: "#5F6368",
+                    border: "1px solid #DADCE0",
+                    borderRadius: "12px",
                     "&:hover": {
-                      color: "hsl(220, 20%, 98%)",
-                      background: "hsla(239, 84%, 67%, 0.1)",
+                      color: "#202124",
+                      background: "#F1F3F4",
                     },
                   }}
                 >
@@ -97,13 +101,14 @@ export function Modal({
               </DialogTitle>
             )}
 
-            <DialogContent sx={{ p: 3 }}>{children}</DialogContent>
+            <DialogContent sx={{ px: 3, py: 2.5 }}>{children}</DialogContent>
 
             {actions && (
               <DialogActions
                 sx={{
-                  p: 3,
-                  borderTop: "1px solid hsla(239, 84%, 67%, 0.1)",
+                  px: 3,
+                  py: 2.5,
+                  borderTop: "1px solid #DADCE0",
                   gap: 2,
                 }}
               >
@@ -159,16 +164,16 @@ export function ConfirmModal({
               px: 3,
               py: 1.5,
               borderRadius: "12px",
-              border: "1px solid hsla(239, 84%, 67%, 0.3)",
-              background: "transparent",
-              color: "hsl(220, 20%, 98%)",
+              border: "1px solid #DADCE0",
+              background: "#FFFFFF",
+              color: "#202124",
               fontWeight: 600,
               fontSize: "0.9375rem",
               cursor: "pointer",
               transition: "all 0.2s",
               "&:hover": {
-                background: "hsla(239, 84%, 67%, 0.1)",
-                borderColor: "hsla(239, 84%, 67%, 0.5)",
+                background: "#F1F3F4",
+                borderColor: "#BDC1C6",
               },
               "&:disabled": {
                 opacity: 0.5,
@@ -187,18 +192,14 @@ export function ConfirmModal({
               py: 1.5,
               borderRadius: "12px",
               border: "none",
-              background: isDanger
-                ? "hsl(346, 84%, 61%)"
-                : "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
+              background: isDanger ? "#D93025" : "#1A73E8",
               color: "white",
               fontWeight: 600,
               fontSize: "0.9375rem",
               cursor: "pointer",
               transition: "all 0.2s",
               "&:hover": {
-                background: isDanger
-                  ? "hsl(346, 84%, 51%)"
-                  : "linear-gradient(135deg, hsl(239, 84%, 57%) 0%, hsl(330, 81%, 50%) 100%)",
+                background: isDanger ? "#B3261E" : "#1558B0",
                 transform: "translateY(-1px)",
               },
               "&:disabled": {
@@ -212,7 +213,7 @@ export function ConfirmModal({
         </>
       }
     >
-      <Typography sx={{ color: "hsl(215, 16%, 70%)", lineHeight: 1.6 }}>
+      <Typography sx={{ color: "#5F6368", lineHeight: 1.6 }}>
         {message}
       </Typography>
     </Modal>

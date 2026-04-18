@@ -72,6 +72,7 @@ export default function PricingPage() {
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [region, setRegion] = useState<"US" | "IN">("US");
   const { user } = useAuth();
+  const [billingMode, setBillingMode] = useState<null | { payment_mode?: string; can_simulate?: boolean; gateways?: any }>(null);
 
   useEffect(() => {
     const detectRegion = async () => {
@@ -83,6 +84,19 @@ export default function PricingPage() {
       }
     };
     detectRegion();
+    // Fetch server-side billing mode (test/disabled/production)
+    const fetchBillingMode = async () => {
+      try {
+        const res = await fetch('/billing/mode');
+        if (res.ok) {
+          const data = await res.json();
+          setBillingMode(data);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    fetchBillingMode();
   }, []);
 
   const getPrice = (tierId: string) => {
@@ -107,12 +121,83 @@ export default function PricingPage() {
 
     setLoadingTier(tierId);
     try {
-      await apiClient.post("/billing/razorpay/checkout");
-      await apiClient.post("/billing/razorpay/verify-simulation", { 
-        razorpay_payment_id: "pay_sim_" + Date.now() 
-      });
-      setBillingMessage("Account upgraded. Taking you to your dashboard...");
-      setTimeout(() => window.location.href = "/dashboard", 1500);
+      // Use Razorpay for India region
+      if (region === "IN") {
+        const payload = { tier: tierId };
+        const response = await apiClient.post<any>("/billing/razorpay/checkout", payload);
+
+        if (response?.mode === "disabled" || response?.mode === "manual") {
+          setBillingMessage(response?.message || "Payments are not available for this deployment.");
+          return;
+        }
+
+        // Development / simulation mode
+        if (response?.mode === "simulation") {
+          // Optionally call verify simulation endpoint to flip user tier in dev
+          try {
+            await apiClient.post("/billing/razorpay/verify", {
+              razorpay_payment_id: response.order_id + "_sim_pay",
+              razorpay_order_id: response.order_id,
+              razorpay_signature: "sim_signature",
+            });
+            window.location.assign("/dashboard/settings/billing?success=true");
+            return;
+          } catch (e) {
+            setBillingMessage("Simulation verification failed. Please refresh and try again.");
+            return;
+          }
+        }
+
+        // Load Razorpay checkout script
+        const loadRzp = () => new Promise<boolean>((resolve, reject) => {
+          if (typeof window === 'undefined') return reject(false);
+          if ((window as any).Razorpay) return resolve(true);
+          const existing = document.getElementById('razorpay-sdk');
+          if (existing) return resolve(true);
+          const script = document.createElement('script');
+          script.id = 'razorpay-sdk';
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          script.onload = () => resolve(true);
+          script.onerror = () => reject(false);
+          document.body.appendChild(script);
+        });
+
+        await loadRzp();
+
+        const options = {
+          key: response.key,
+          amount: response.amount,
+          currency: response.currency || 'INR',
+          name: 'GraftAI',
+          description: tierId === 'pro' ? 'Professional Subscription' : 'Enterprise Subscription',
+          order_id: response.order_id,
+          handler: async function (res: any) {
+            try {
+              // Verify payment on server
+              await apiClient.post('/billing/razorpay/verify', res);
+              window.location.assign('/dashboard/settings/billing?success=true');
+            } catch (err) {
+              setBillingMessage('Payment verification failed. Contact support.');
+            }
+          },
+          prefill: { name: user?.full_name || user?.email, email: user?.email },
+          theme: { color: 'var(--primary)' },
+        } as any;
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', function (resp: any) {
+          setBillingMessage('Payment failed or cancelled.');
+        });
+        rzp.open();
+        return;
+      }
+
+      // Fallback: Stripe for other regions
+      const response = await apiClient.post<{ checkout_url: string; session_id: string }>("/billing/stripe/create-checkout-session");
+      if (!response.checkout_url) {
+        throw new Error("Stripe checkout is not available right now.");
+      }
+      window.location.assign(response.checkout_url);
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error("Connection issue during checkout. Please try again.");
       setBillingMessage(err.message);
@@ -187,6 +272,16 @@ export default function PricingPage() {
           >
             Choose the plan that fits your workflow. From personal use to scaling teams, we&apos;ve got you covered.
           </Typography>
+          {billingMode && billingMode.payment_mode === 'test' && (
+            <Box sx={{ mt: 2, px: 3, py: 1.5, borderRadius: 1, border: '1px solid rgba(255,255,255,0.06)', bgcolor: 'rgba(255,255,255,0.02)', color: 'var(--text-muted)', fontSize: 13 }}>
+              Sandbox / Demo mode enabled — no real charges will be processed. Use this mode to test checkout and webhooks.
+            </Box>
+          )}
+          {billingMode && billingMode.payment_mode === 'disabled' && (
+            <Box sx={{ mt: 2, px: 3, py: 1.5, borderRadius: 1, border: '1px solid rgba(255,0,96,0.06)', bgcolor: 'rgba(255,0,96,0.02)', color: 'var(--text-muted)', fontSize: 13 }}>
+              Payments are disabled for this deployment. You can request a manual upgrade from the account owner.
+            </Box>
+          )}
           {billingMessage && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -316,6 +411,37 @@ export default function PricingPage() {
             <Typography sx={{ color: "var(--text-muted)", fontSize: 13, fontFamily: "var(--font-sans)" }}>Seamless synchronization across all continents with 99.9% uptime reliability.</Typography>
           </Stack>
         </Stack>
+      </Container>
+
+      <Container maxWidth="lg" sx={{ pb: 20 }}>
+        <Box sx={{ mt: 4, p: 4, borderRadius: 2, border: '1px solid var(--border-subtle)', bgcolor: 'var(--bg-card)' }}>
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>Market comparison</Typography>
+          <Typography sx={{ color: 'var(--text-muted)', mb: 3 }}>Competitive pricing vs typical market offerings (illustrative).</Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 3, border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
+                <Typography sx={{ fontWeight: 800 }}>GraftAI Pro</Typography>
+                <Typography sx={{ color: 'var(--text-muted)' }}>$19 / month</Typography>
+                <Typography sx={{ mt: 1, fontSize: 13 }}>200 AI messages / day, priority processing, analytics, integrations.</Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 3, border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
+                <Typography sx={{ fontWeight: 800 }}>Competitor A</Typography>
+                <Typography sx={{ color: 'var(--text-muted)' }}>$29 / month</Typography>
+                <Typography sx={{ mt: 1, fontSize: 13 }}>Similar AI features, higher price for comparable usage.</Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 3, border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
+                <Typography sx={{ fontWeight: 800 }}>Competitor B</Typography>
+                <Typography sx={{ color: 'var(--text-muted)' }}>$24 / month</Typography>
+                <Typography sx={{ mt: 1, fontSize: 13 }}>Mid-range offering, lower AI quota for the price.</Typography>
+              </Box>
+            </Grid>
+          </Grid>
+          <Typography sx={{ mt: 3, color: 'var(--text-muted)' }}>Links: Real checkout links are used above to start subscriptions. For India customers, Razorpay checkout is used; other regions use Stripe.</Typography>
+        </Box>
       </Container>
     </Box>
   );

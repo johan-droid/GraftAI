@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
@@ -27,6 +28,9 @@ const timezones = [
   "Asia/Tokyo",
   "Asia/Singapore",
 ];
+const fieldClass = "w-full rounded-xl border border-[#DADCE0] bg-white px-3 py-2 text-sm text-[#202124] outline-none transition-colors placeholder:text-[#80868B] focus:border-[#1A73E8] focus:ring-2 focus:ring-[#D2E3FC]";
+const labelClass = "block text-sm font-semibold text-[#202124]";
+const radioClass = "inline-flex items-center gap-2 rounded-xl border border-[#DADCE0] bg-[#F8F9FA] px-3 py-2 text-sm text-[#202124]";
 
 interface ProfileFormProps {
   onCompleted: () => void;
@@ -37,6 +41,7 @@ export function ProfileForm({ onCompleted }: ProfileFormProps) {
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<ProfileFormValues>({
     defaultValues: {
@@ -120,7 +125,7 @@ export function ProfileForm({ onCompleted }: ProfileFormProps) {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <label htmlFor="display_name" className="block text-sm font-semibold text-slate-100">Display Name</label>
+          <label htmlFor="display_name" className={labelClass}>Display Name</label>
           <Input
             id="display_name"
             {...register("display_name", {
@@ -133,26 +138,26 @@ export function ProfileForm({ onCompleted }: ProfileFormProps) {
               },
             })}
           />
-          {errors.display_name && <p className="text-sm text-red-400">{errors.display_name.message}</p>}
+          {errors.display_name && <p className="text-sm text-red-500">{errors.display_name.message}</p>}
         </div>
 
         <div className="space-y-2 sm:col-span-2">
-          <label htmlFor="bio" className="block text-sm font-semibold text-slate-100">Bio</label>
+          <label htmlFor="bio" className={labelClass}>Bio</label>
           <textarea
             id="bio"
             {...register("bio", {
               maxLength: { value: 500, message: "Bio must be under 500 characters" },
             })}
             rows={4}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500"
+            className={`${fieldClass} min-h-[112px]`}
           />
-          {errors.bio && <p className="text-sm text-red-400">{errors.bio.message}</p>}
+          {errors.bio && <p className="text-sm text-red-500">{errors.bio.message}</p>}
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <label htmlFor="phone" className="block text-sm font-semibold text-slate-100">Phone</label>
+          <label htmlFor="phone" className={labelClass}>Phone</label>
           <Input
             id="phone"
             {...register("phone", {
@@ -163,31 +168,37 @@ export function ProfileForm({ onCompleted }: ProfileFormProps) {
             })}
             placeholder="+1234567890"
           />
-          {errors.phone && <p className="text-sm text-red-400">{errors.phone.message}</p>}
+          {errors.phone && <p className="text-sm text-red-500">{errors.phone.message}</p>}
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="timezone" className="block text-sm font-semibold text-slate-100">Timezone</label>
-          <select
-            id="timezone"
-            {...register("timezone", { required: "Timezone is required" })}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            {timezones.map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
-          {errors.timezone && <p className="text-sm text-red-400">{errors.timezone.message}</p>}
+          <label htmlFor="timezone" className={labelClass}>Timezone</label>
+          <Controller
+            name="timezone"
+            control={control}
+            rules={{ required: "Timezone is required" }}
+            render={({ field }) => (
+              <FormControl fullWidth>
+                <InputLabel id="timezone-label">Timezone</InputLabel>
+                <Select labelId="timezone-label" id="timezone" label="Timezone" {...field}>
+                  {timezones.map((tz) => (
+                    <MenuItem key={tz} value={tz}>
+                      {tz}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          />
+          {errors.timezone && <p className="text-sm text-red-500">{errors.timezone.message}</p>}
         </div>
 
         <div className="space-y-2">
-          <label className="block text-sm font-semibold text-slate-100">Time Format</label>
+          <label className={labelClass}>Time Format</label>
           <div className="grid grid-cols-2 gap-2">
             {(["12h", "24h"] as const).map((option) => (
-              <label key={option} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
-                <input type="radio" value={option} {...register("time_format")} className="accent-indigo-500" />
+              <label key={option} className={radioClass}>
+                <input type="radio" value={option} {...register("time_format")} className="accent-[#1A73E8]" />
                 <span>{option}</span>
               </label>
             ))}
@@ -197,36 +208,41 @@ export function ProfileForm({ onCompleted }: ProfileFormProps) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <label htmlFor="theme" className="block text-sm font-semibold text-slate-100">Theme</label>
-          <select
-            id="theme"
-            {...register("theme")}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
+          <label htmlFor="theme" className={labelClass}>Theme</label>
+          <Controller
+            name="theme"
+            control={control}
+            render={({ field }) => (
+              <FormControl fullWidth>
+                <InputLabel id="theme-label">Theme</InputLabel>
+                <Select labelId="theme-label" id="theme" label="Theme" {...field}>
+                  <MenuItem value="system">System</MenuItem>
+                  <MenuItem value="light">Light</MenuItem>
+                  <MenuItem value="dark">Dark</MenuItem>
+                </Select>
+              </FormControl>
+            )}
+          />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="avatar" className="block text-sm font-semibold text-slate-100">Avatar</label>
+          <label htmlFor="avatar" className={labelClass}>Avatar</label>
           <input
             id="avatar"
             type="file"
             accept="image/png,image/jpeg,image/webp"
             onChange={(event) => handleAvatarChange(event.target.files?.[0])}
-            className="block w-full text-sm text-slate-200 file:rounded-full file:border-0 file:bg-indigo-500 file:px-3 file:py-2 file:text-sm file:text-white"
+            className="block w-full text-sm text-[#5F6368] file:rounded-full file:border-0 file:bg-[#1A73E8] file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-[#1558B0]"
           />
         </div>
 
         <div className="space-y-2">
-          <p className="text-sm font-semibold text-slate-100">Preview</p>
-          <div className="h-24 w-24 rounded-full bg-white/5 overflow-hidden border border-white/10">
+          <p className={labelClass}>Preview</p>
+          <div className="h-24 w-24 overflow-hidden rounded-full border border-[#DADCE0] bg-[#F8F9FA]">
             {previewUrl ? (
               <img src={previewUrl} alt="Avatar preview" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full items-center justify-center text-xs uppercase text-slate-500">No image</div>
+              <div className="flex h-full items-center justify-center text-xs uppercase text-[#80868B]">No image</div>
             )}
           </div>
         </div>

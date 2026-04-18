@@ -24,11 +24,13 @@ import {
   Loader2,
   X,
   Clock,
-  User
+  User,
+  CheckCircle2
 } from "lucide-react";
 import { useCalendar } from "@/hooks/useCalendar";
 import { Booking } from "@/types/api";
 import { useTheme } from "@/contexts/ThemeContext";
+import BookingStatusPill from "@/components/ui/BookingStatusPill";
 
 // M3 Motion tokens
 const m3Motion = {
@@ -307,7 +309,10 @@ export default function HeavyTileCalendar() {
                           `}
                         >
                           <span className="hidden sm:inline opacity-80 mr-1">{formatTime(booking.start_time)}</span>
-                          <span className="truncate">{booking.attendee_name}</span>
+                          <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                            {booking.status === "confirmed" ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : null}
+                            <span className="truncate">{booking.attendee_name}</span>
+                          </span>
                         </div>
                       ))}
                       {dayBookings.length > 2 && (
@@ -451,7 +456,7 @@ export default function HeavyTileCalendar() {
                         w-12 h-12 rounded-xl flex items-center justify-center shrink-0
                         ${getTileColor(booking.status, isDark)}
                       `}>
-                        <Clock size={20} />
+                        {booking.status === "confirmed" ? <CheckCircle2 size={20} /> : <Clock size={20} />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className={`font-semibold truncate ${onSurfaceColor}`}>
@@ -465,12 +470,7 @@ export default function HeavyTileCalendar() {
                           {booking.attendee_name}
                         </p>
                       </div>
-                      <span className={`
-                        px-2 py-1 rounded-full text-xs font-medium shrink-0
-                        ${getTileColor(booking.status, isDark)}
-                      `}>
-                        {booking.status}
-                      </span>
+                      <BookingStatusPill status={booking.status} isDark={isDark} className="shrink-0" />
                     </div>
                   ))
                 ) : (

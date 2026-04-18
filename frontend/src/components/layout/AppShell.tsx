@@ -17,7 +17,7 @@ import BottomNav from "@/components/Mobile/BottomNav";
 import NavRail from "@/components/navigation/NavRail";
 import NavDrawer from "@/components/navigation/NavDrawer";
 import { Topbar } from "./Topbar";
-import { useBreakpoint, isCompact, isMobile, isTablet } from "@/theme/breakpoints";
+import { useBreakpoint, isCompact } from "@/theme/breakpoints";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -34,16 +34,15 @@ export function AppShell({ children }: AppShellProps) {
   const showNavRail = breakpoint === "medium"; // Tablet: 600-839px
   const showNavDrawer = !showBottomNav && !showNavRail; // Desktop: 840px+
 
-  // Navigation width offsets for content
-  const navOffset = showNavRail ? 80 : showNavDrawer ? 360 : 0;
-  const bottomOffset = showBottomNav ? 80 : 0;
+  const navOffsetClass = showNavRail ? "ml-[80px]" : showNavDrawer ? "ml-[360px]" : "";
+  const bottomOffsetClass = showBottomNav ? "mb-[80px]" : "";
 
   return (
-    <div 
+    <div
       className={`
         flex min-h-dvh overflow-hidden
-        ${isDark 
-          ? "bg-[#141415] selection:bg-[#1967D2]/30 selection:text-[#AAC7FF]" 
+        ${isDark
+          ? "bg-[#141415] selection:bg-[#1967D2]/30 selection:text-[#AAC7FF]"
           : "bg-[#F8F9FA] selection:bg-[#D2E3FC] selection:text-[#1967D2]"
         }
       `}
@@ -53,14 +52,14 @@ export function AppShell({ children }: AppShellProps) {
 
       {/* Tablet: Navigation Rail */}
       {showNavRail && (
-        <NavRail 
+        <NavRail
           onMenuClick={() => setIsDrawerOpen(true)}
         />
       )}
 
       {/* Desktop: Navigation Drawer */}
       {showNavDrawer && (
-        <NavDrawer 
+        <NavDrawer
           isOpen={true}
           variant="standard"
           showHeader={true}
@@ -78,29 +77,26 @@ export function AppShell({ children }: AppShellProps) {
       )}
 
       {/* Main Content Area */}
-      <div 
+      <div
         className={`
           flex flex-col flex-1 min-w-0
           ${isDark ? "bg-[#141415]" : "bg-[#F2F2F4]"}
+          ${navOffsetClass}
+          ${bottomOffsetClass}
         `}
-        style={{
-          // Offset content based on navigation type
-          marginLeft: `${navOffset}px`,
-          marginBottom: `${bottomOffset}px`,
-        }}
       >
-        <Topbar 
-          showMenuButton={showBottomNav}
+        <Topbar
+          showMenuButton={showNavRail}
           onMenuClick={() => setIsDrawerOpen(true)}
         />
-        
+
         {/* 
           Main content with M3 spacing
           - Mobile: 16px margin
-          - Tablet: 24px margin  
+          - Tablet: 24px margin
           - Desktop: 32px margin
         */}
-        <main 
+        <main
           className={`
             flex-1 overflow-y-auto
             ${isDark ? "bg-[#141415]" : "bg-[#F2F2F4]"}

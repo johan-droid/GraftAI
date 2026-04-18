@@ -1,24 +1,24 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="card" style="border-top-color: #f59e0b;">
-    <div class="badge" style="background-color: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40;">Rescheduled</div>
+<div class="card card-warning">
+    <div class="badge badge-warning">Rescheduled</div>
     <h1>Booking updated</h1>
     <p>Hello {{ full_name }}, a booking has been moved to a new time.</p>
 
-    <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
-        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700;">{{ event_title }}</p>
-        <p style="margin-bottom: 4px; font-size: 13px; color: #fca5a5; text-decoration: line-through;">Previous: {{ old_time }}</p>
-        <p style="margin-bottom: 0; font-size: 13px; color: #86efac;">New: {{ new_time }}</p>
+    <div class="booking-summary">
+        <p class="booking-summary-title">{{ event_title }}</p>
+        <p class="booking-summary-meta strike booking-summary-meta--cancelled">Previous: {{ old_time }}</p>
+        <p class="booking-summary-meta booking-summary-meta--success">New: {{ new_time }}</p>
         {% if meeting_url %}
-        <p style="margin: 8px 0 0; font-size: 13px;">Join: <a href="{{ meeting_url }}" style="color: #818cf8;">{{ meeting_url }}</a></p>
+        <p class="booking-summary-link">Join: <a href="{{ meeting_url }}">{{ meeting_url }}</a></p>
         {% endif %}
     </div>
 
-    <p style="margin-bottom: 0;">
-        <a href="{{ manage_url }}" style="color: #818cf8; text-decoration: none;">Manage Booking</a><br>
-        <a href="{{ reschedule_url }}" style="color: #818cf8; text-decoration: none;">Reschedule again</a><br>
-        <a href="{{ cancel_url }}" style="color: #fca5a5; text-decoration: none;">Cancel booking</a>
+    <p class="mb-0">
+        <a href="{{ manage_url }}" class="footer-link-primary">Manage Booking</a><br>
+        <a href="{{ reschedule_url }}" class="footer-link-primary">Reschedule again</a><br>
+        <a href="{{ cancel_url }}" class="booking-summary-meta booking-summary-meta--cancelled">Cancel booking</a>
     </p>
 </div>
 {% endblock %}

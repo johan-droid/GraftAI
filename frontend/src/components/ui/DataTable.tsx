@@ -12,30 +12,7 @@
 
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  TablePagination,
-  TableSortLabel,
-  Chip as MuiChip,
-  IconButton,
-  Tooltip,
-  Box,
-  Typography,
-  TextField,
-  InputAdornment,
-  Skeleton,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-} from "@mui/material";
+import React, { useState, useCallback } from "react";
 import {
   Search,
   Filter,
@@ -48,6 +25,29 @@ import {
   Edit,
   Trash2,
 } from "lucide-react";
+
+// Material UI components (import defaults)
+import Paper from "@mui/material/Paper";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import TablePagination from "@mui/material/TablePagination";
+import TableSortLabel from "@mui/material/TableSortLabel";
+import MuiChip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
+import Skeleton from "@mui/material/Skeleton";
+import MenuItem from "@mui/material/MenuItem";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useBreakpoint, isCompact } from "@/theme/breakpoints";
@@ -209,6 +209,12 @@ export function DataTable<T>({
   // Use card view on mobile
   const useCardView = isMobile;
 
+  // Helper to access row properties without using `any`
+  function getVal(row: T, key?: string): unknown {
+    if (!key) return undefined;
+    return (row as unknown as Record<string, unknown>)[key];
+  }
+
   // Handle search
   const handleSearch = useCallback(
     (value: string) => {
@@ -255,8 +261,8 @@ export function DataTable<T>({
     if (Object.keys(activeFilters).length > 0) {
       result = result.filter((row) => {
         return Object.entries(activeFilters).every(([key, value]) => {
-          const rowValue = (row as any)[key];
-          return String(rowValue).toLowerCase() === value.toLowerCase();
+          const rowValue = getVal(row, key);
+          return String(rowValue ?? "").toLowerCase() === value.toLowerCase();
         });
       });
     }
@@ -265,8 +271,8 @@ export function DataTable<T>({
     if (searchQuery && !onSearch) {
       result = result.filter((row) =>
         columns.some((col) => {
-          const value = (row as any)[col.key];
-          return String(value).toLowerCase().includes(searchQuery.toLowerCase());
+          const value = getVal(row, col.key);
+          return String(value ?? "").toLowerCase().includes(searchQuery.toLowerCase());
         })
       );
     }
@@ -274,9 +280,12 @@ export function DataTable<T>({
     // Apply sort
     if (sortConfig) {
       result.sort((a, b) => {
-        const aValue = (a as any)[sortConfig.key];
-        const bValue = (b as any)[sortConfig.key];
-        
+        const aValueRaw = getVal(a, sortConfig.key);
+        const bValueRaw = getVal(b, sortConfig.key);
+
+        const aValue = String(aValueRaw ?? "");
+        const bValue = String(bValueRaw ?? "");
+
         if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
         if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
@@ -410,7 +419,7 @@ export function DataTable<T>({
                   <h3 className={`font-semibold truncate ${isDark ? "text-[#E6E1E5]" : "text-[#202124]"}`}>
                     {columns[0]?.render 
                       ? columns[0].render(row) 
-                      : (row as any)[columns[0]?.key]}
+                      : String(getVal(row, columns[0]?.key) ?? "")}
                   </h3>
                 </div>
                 {actions && (
@@ -430,7 +439,7 @@ export function DataTable<T>({
                     <p className={`text-sm font-medium truncate ${isDark ? "text-[#C9C5CA]" : "text-[#1D1B20]"}`}>
                       {column.render 
                         ? column.render(row) 
-                        : (row as any)[column.key]}
+                        : String(getVal(row, column.key) ?? "")}
                     </p>
                   </div>
                 ))}
@@ -448,6 +457,8 @@ export function DataTable<T>({
             <button
               onClick={() => setPage(Math.max(0, page - 1))}
               disabled={page === 0}
+              title="Previous page"
+              aria-label="Previous page"
               className={`
                 p-2 rounded-full transition-colors
                 ${page === 0 
@@ -466,6 +477,8 @@ export function DataTable<T>({
             <button
               onClick={() => setPage(Math.min(Math.ceil(processedData.length / rowsPerPage) - 1, page + 1))}
               disabled={page >= Math.ceil(processedData.length / rowsPerPage) - 1}
+              title="Next page"
+              aria-label="Next page"
               className={`
                 p-2 rounded-full transition-colors
                 ${page >= Math.ceil(processedData.length / rowsPerPage) - 1
@@ -666,7 +679,7 @@ export function DataTable<T>({
                     >
                       {column.render
                         ? column.render(row)
-                        : (row as any)[column.key]}
+                        : String(getVal(row, column.key) ?? "")}
                     </TableCell>
                   ))}
                   {actions && (

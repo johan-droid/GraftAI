@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
+import { googleOverlayStyles } from "@/components/ui/googleOverlayStyles";
 
 interface CancellationModalProps {
   isOpen: boolean;
@@ -76,7 +78,7 @@ export default function CancellationModal({ isOpen, isSubmitting, onClose, onCon
       <button
         type="button"
         aria-label="Close cancellation modal"
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className={googleOverlayStyles.backdrop}
         onClick={() => {
           if (!isSubmitting) {
             onClose();
@@ -88,35 +90,39 @@ export default function CancellationModal({ isOpen, isSubmitting, onClose, onCon
         onSubmit={handleConfirm}
         role="dialog"
         aria-modal="true"
-        className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+        className="relative z-10 w-full max-w-md rounded-[28px] border border-[#DADCE0] bg-white p-6 shadow-[0_24px_60px_-36px_rgba(32,33,36,0.35)]"
       >
-        <h2 className="text-lg font-semibold text-slate-900">Cancel this booking?</h2>
-        <p className="mt-2 text-sm text-slate-600">
+        <h2 className="text-lg font-semibold text-[#202124]">Cancel this booking?</h2>
+        <p className="mt-2 text-sm text-[#5F6368]">
           This will free the slot and notify both attendee and organizer.
         </p>
 
         <div className="mt-4 space-y-2">
-          <label htmlFor="cancel-reason" className="block text-sm font-medium text-slate-700">
+          <label htmlFor="cancel-reason" className="block text-sm font-medium text-[#202124]">
             Reason (optional)
           </label>
-          <select
-            id="cancel-reason"
-            value={reason}
-            onChange={(event) => setReason(event.target.value as ReasonValue)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
-            disabled={isSubmitting}
-          >
-            {REASON_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <FormControl fullWidth>
+            <InputLabel id="cancel-reason-label">Reason</InputLabel>
+            <Select
+              labelId="cancel-reason-label"
+              id="cancel-reason"
+              value={reason}
+              label="Reason"
+              onChange={(event) => setReason(event.target.value as ReasonValue)}
+              disabled={isSubmitting}
+            >
+              {REASON_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </div>
 
         {reason === "other" ? (
           <div className="mt-3">
-            <label htmlFor="cancel-reason-custom" className="block text-sm font-medium text-slate-700">
+            <label htmlFor="cancel-reason-custom" className="block text-sm font-medium text-[#202124]">
               Add details
             </label>
             <textarea
@@ -126,7 +132,7 @@ export default function CancellationModal({ isOpen, isSubmitting, onClose, onCon
               value={customReason}
               onChange={(event) => setCustomReason(event.target.value)}
               placeholder="Share a short reason"
-              className="mt-2 w-full resize-none rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+              className={googleOverlayStyles.fieldMuted + " mt-2 resize-none"}
               disabled={isSubmitting}
             />
           </div>
@@ -137,14 +143,14 @@ export default function CancellationModal({ isOpen, isSubmitting, onClose, onCon
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex w-full items-center justify-center rounded-xl border border-[#DADCE0] bg-white px-4 py-3 text-sm font-semibold text-[#202124] transition hover:bg-[#F1F3F4] disabled:cursor-not-allowed disabled:opacity-70"
           >
             Keep booking
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-[#D93025] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#B3261E] disabled:cursor-not-allowed disabled:bg-[#FDE7E9] disabled:text-[#D93025]"
           >
             {isSubmitting ? "Cancelling..." : "Confirm cancellation"}
           </button>

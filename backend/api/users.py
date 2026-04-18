@@ -137,6 +137,33 @@ def _set_preferences(user: UserTable, preferences: Dict[str, Any]) -> None:
     user.preferences = preferences
 
 
+def _profile_setup_completed(user: UserTable) -> bool:
+    prefs = _normalize_preferences(user)
+    completed_steps = prefs.get("completed_steps", [])
+    if not isinstance(completed_steps, list):
+        completed_steps = []
+
+    # Normalize completed_steps to strings to avoid type errors
+    try:
+        completed_steps_set = set(str(x) for x in completed_steps if x is not None)
+    except Exception:
+        completed_steps_set = set()
+
+    return bool(
+        prefs.get("profile_setup_completed")
+        or user.onboarding_completed
+        or "profile" in completed_steps_set
+    )
+
+
+def _mark_profile_setup_completed(user: UserTable) -> None:
+    prefs = _normalize_preferences(user)
+    completed_steps = list(dict.fromkeys(list(prefs.get("completed_steps", [])) + ["profile"]))
+    prefs["completed_steps"] = completed_steps
+    prefs["profile_setup_completed"] = True
+    _set_preferences(user, prefs)
+
+
 def _serialize_profile(user: UserTable) -> Dict[str, Any]:
     prefs = _normalize_preferences(user)
     avatar_key = prefs.get("avatar_key")
@@ -158,6 +185,7 @@ def _serialize_profile(user: UserTable) -> Dict[str, Any]:
         "booking_layout": prefs.get("booking_layout", "monthly"),
         "default_calendar_id": prefs.get("default_calendar_id"),
         "preferences": prefs,
+        "profile_setup_completed": _profile_setup_completed(user),
         "onboarding_completed": bool(user.onboarding_completed),
         "completed_steps": prefs.get("completed_steps", []),
         "tier": user.tier,
@@ -306,6 +334,7 @@ async def create_or_update_profile(
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
 
     user = _apply_profile_payload(user, payload)
+    _mark_profile_setup_completed(user)
     await db.commit()
     await db.refresh(user)
 
@@ -324,6 +353,7 @@ async def get_profile_setup_status(current_user: UserTable = Depends(get_current
         "message": "Setup status loaded successfully",
         "data": {
             "completed_steps": prefs.get("completed_steps", []),
+            "profile_setup_completed": _profile_setup_completed(current_user),
             "onboarding_completed": bool(current_user.onboarding_completed),
             "profile": _serialize_profile(current_user),
         },
@@ -427,6 +457,8 @@ async def complete_profile_setup_step(
     prefs = _normalize_preferences(current_user)
     completed_steps = list(dict.fromkeys(list(prefs.get("completed_steps", [])) + [step_id]))
     prefs["completed_steps"] = completed_steps
+    if step_id == "profile":
+        prefs["profile_setup_completed"] = True
     _set_preferences(current_user, prefs)
     await db.commit()
     next_step = None
@@ -526,6 +558,7 @@ async def update_current_user_profile(
                 raise HTTPException(status_code=409, detail="Username already taken")
 
     user = _apply_profile_payload(user, payload)
+    _mark_profile_setup_completed(user)
     await db.commit()
     await db.refresh(user)
 

@@ -45,3 +45,14 @@ async def get_current_user(
         raise credentials_exception
         
     return user
+
+
+async def require_active_subscription(current_user: UserTable = Depends(get_current_user)) -> UserTable:
+    """Dependency to enforce active paid subscription or active trial for premium endpoints."""
+    # Fields are non-nullable with defaults on the model, so access directly
+    if current_user.subscription_status == "active":
+        return current_user
+    if current_user.trial_active:
+        return current_user
+    # 402 Payment Required is appropriate for subscription gating
+    raise HTTPException(status_code=402, detail="Active subscription required to access this resource")

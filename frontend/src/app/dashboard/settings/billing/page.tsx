@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { 
   CreditCard, 
   Zap,
@@ -17,8 +16,6 @@ export default function BillingPage() {
   const { user } = useAuth();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
-  const searchParams = useSearchParams();
-  const router = useRouter();
 
   const stats = user ? {
     tier: user.tier || 'free',
@@ -36,23 +33,22 @@ export default function BillingPage() {
   } : null;
 
   const handleManageSubscription = async () => {
-    setActionLoading("portal");
     try {
-      if (user?.razorpay_subscription_id) {
-        const confirmed = window.confirm("Cancel your current Razorpay subscription and revert to the Free plan?");
-        if (!confirmed) {
-          return;
-        }
-
-        await apiClient.post("/billing/razorpay/cancel-subscription");
-        router.push(`${window.location.pathname}?canceled=true`);
+      setActionLoading("portal");
+      if (stats?.subscription_status !== "active") {
+        window.location.assign("/pricing");
         return;
       }
-      // Without a portal, "Manage Billing" for non-Razorpay users just means upgrading.
-      window.location.assign("/pricing");
+
+      const response = await apiClient.post<{ portal_url: string }>("/billing/stripe/create-portal-session");
+      if (!response.portal_url) {
+        throw new Error("Stripe billing portal is not available right now.");
+      }
+
+      window.location.assign(response.portal_url);
     } catch (err) {
       console.error("Portal redirect failed:", err);
-      setBillingMessage("Could not process request. Please contact support if this persists.");
+      setBillingMessage(err instanceof Error ? err.message : "Could not process request. Please contact support if this persists.");
     } finally {
       setActionLoading(null);
     }
@@ -61,17 +57,6 @@ export default function BillingPage() {
   const handleUpgrade = () => {
     window.location.assign("/pricing");
   };
-
-  useEffect(() => {
-    if (searchParams?.get("canceled") === "true") {
-      setBillingMessage("Your Razorpay subscription was canceled. Your plan has been reverted to Free.");
-      if (typeof window !== "undefined") {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("canceled");
-        window.history.replaceState({}, "", url.pathname + url.search);
-      }
-    }
-  }, [searchParams]);
 
   return (
     <div className="max-w-4xl space-y-5 sm:space-y-8 px-1 sm:px-0">
@@ -119,11 +104,11 @@ export default function BillingPage() {
               <button 
                 onClick={handleManageSubscription}
                 disabled={actionLoading === 'portal'}
-                aria-label={user?.razorpay_subscription_id ? 'Cancel subscription' : 'Manage billing'}
+                  aria-label={stats?.subscription_status === 'active' ? 'Manage billing' : 'Upgrade plan'}
                 className="w-full sm:w-auto min-h-11 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {actionLoading === 'portal' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CreditCard className="w-3.5 h-3.5" />}
-                {user?.razorpay_subscription_id ? 'Cancel Subscription' : 'Manage Billing'}
+                  {stats?.subscription_status === 'active' ? 'Manage Billing' : 'Upgrade Plan'}
               </button>
               
               {stats?.tier === 'free' && (
@@ -145,12 +130,12 @@ export default function BillingPage() {
             <div className="mt-5 sm:mt-8 rounded-2xl sm:rounded-3xl border border-slate-800/60 bg-slate-950/60 p-4 sm:p-6">
               <h3 className="text-xs sm:text-sm font-bold uppercase tracking-[0.2em] sm:tracking-[0.24em] text-slate-400 mb-3">Billing Cycle</h3>
               <ul className="space-y-2.5 sm:space-y-3 text-xs sm:text-sm text-slate-300 leading-5 sm:leading-6">
-                <li>1. Pick a plan and complete Razorpay checkout from the pricing page.</li>
-                <li>2. Razorpay securely processes the payment and confirms the subscription.</li>
-                <li>3. Razorpay sends a webhook to our backend at <code>/api/v1/billing/razorpay/webhook</code>.</li>
+                <li>1. Pick a plan and complete secure Stripe checkout from the pricing page.</li>
+                <li>2. Stripe processes the payment and creates the subscription.</li>
+                <li>3. Stripe sends a webhook to our backend at <code>/api/v1/billing/stripe/webhook</code>.</li>
                 <li>4. The backend updates your user record, activates the plan, and stores subscription info.</li>
-                <li>5. Renewals happen automatically monthly until you cancel.</li>
-                <li>6. Cancel anytime from this dashboard and the system will revert you to Free.</li>
+                <li>5. Renewals happen automatically monthly until you cancel in the billing portal.</li>
+                <li>6. Return here anytime to open the Stripe customer portal or upgrade again.</li>
               </ul>
             </div>
           </div>

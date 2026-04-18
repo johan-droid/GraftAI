@@ -12,6 +12,7 @@ export interface UserProfile {
   time_format: "12h" | "24h"; // Note: snake_case to match Python backends typically
   buffer_minutes: number;
   avatar_url?: string;
+  profile_setup_completed: boolean;
   onboarding_completed: boolean;
   role: "admin" | "member" | "owner";
 }

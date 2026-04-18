@@ -109,6 +109,7 @@ export async function updateUserProfile(data: {
     booking_layout?: string;
     default_calendar_id?: string;
     preferences?: Record<string, any>;
+    profile_setup_completed?: boolean;
     onboarding_completed?: boolean;
     completed_steps?: string[];
     created_at?: string;
@@ -151,6 +152,7 @@ export async function saveUserProfile(data: {
       booking_layout?: string;
       default_calendar_id?: string;
       preferences?: Record<string, any>;
+      profile_setup_completed?: boolean;
       onboarding_completed?: boolean;
       completed_steps?: string[];
       created_at?: string;
@@ -178,6 +180,7 @@ export async function uploadProfileAvatar(file: File) {
 
 export interface ProfileSetupStatus {
   completed_steps: string[];
+  profile_setup_completed: boolean;
   onboarding_completed: boolean;
   profile: {
     id: string;
@@ -196,6 +199,7 @@ export interface ProfileSetupStatus {
     booking_layout?: string;
     default_calendar_id?: string;
     preferences?: Record<string, any>;
+    profile_setup_completed?: boolean;
     onboarding_completed?: boolean;
     completed_steps?: string[];
   };

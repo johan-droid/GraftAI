@@ -361,6 +361,33 @@ async def get_public_user_event_availability_for_day(
     return {"date": date, "slots": slots}
 
 
+# CSRF protection settings
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+
+def validate_csrf_origin(request: Request) -> bool:
+    """Validate that the request comes from an allowed origin."""
+    origin_header = request.headers.get("origin") or request.headers.get("referer")
+    if not origin_header:
+        return False
+
+    try:
+        parsed = urlparse(origin_header)
+    except Exception:
+        return False
+
+    # Must be http or https and have a hostname
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+
+    # Construct normalized origin (include port only if explicitly present and non-default)
+    origin = f"{parsed.scheme}://{parsed.hostname}"
+    if parsed.port and not (parsed.scheme == "http" and parsed.port == 80) and not (parsed.scheme == "https" and parsed.port == 443):
+        origin = f"{origin}:{parsed.port}"
+
+    # Exact match against configured allowed origins
+    normalized_allowed = [o.strip() for o in ALLOWED_ORIGINS if o and o.strip()]
+    return origin in normalized_allowed
+
 @router.post("/public/events/{username}/{event_type}/book", response_model=PublicBookingConfirmation)
 async def book_public_event(
     request: Request,
@@ -369,6 +396,14 @@ async def book_public_event(
     payload: PublicBookingRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    # CSRF Protection: Validate origin/referer
+    if not validate_csrf_origin(request):
+        logger.warning(f"🚫 CSRF rejected: Invalid origin from {request.client.host if request.client else 'unknown'}")
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid request origin. Please use the official booking page."
+        )
+    
     client_id = request.client.host if request.client else "anonymous"
     await rate_limit(client_id, api_limits["public_booking"])
     user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)

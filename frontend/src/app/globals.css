@@ -39,9 +39,9 @@
   --bg-card:      #FFFFFF;
   --bg-hover:     rgba(26, 115, 232, 0.04);
 
-  --primary:      #1a73e8; /* Google Blue */
-  --secondary:    #34a853; /* Google Green */
-  --accent:       #ea4335; /* Google Red */
+  --primary:      #1a73e8; /* Brand primary blue */
+  --secondary:    #34a853; /* Brand secondary green */
+  --accent:       #ea4335; /* Brand accent red */
   --primary-glow: rgba(26, 115, 232, 0.1);
   
   --text-primary: #202124;

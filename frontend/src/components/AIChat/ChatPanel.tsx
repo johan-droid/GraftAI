@@ -129,11 +129,11 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-full sm:w-[420px] bg-white border-l border-[#DADCE0] flex flex-col shadow-2xl z-50">
-      <div className="flex items-center justify-between p-4 border-b border-[#DADCE0] bg-[#F8F9FA]">
+    <div className="fixed inset-y-0 right-0 w-full sm:w-[420px] border-l flex flex-col shadow-2xl z-50" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+      <div className="flex items-center justify-between p-4" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#E8F0FE] flex items-center justify-center text-[#1A73E8]">
-            <Sparkles size={20} />
+          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--primary-glow)', color: 'var(--primary)' }}>
+            <Sparkles size={20} style={{ color: 'var(--primary)' }} />
           </div>
           <div>
             <h3 className="text-[#202124] font-semibold text-sm">GraftAI Assistant</h3>
@@ -152,11 +152,11 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-[#F8F9FA]">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6" style={{ background: 'var(--bg-surface)' }}>
         {messages.length === 0 && (
           <div className="text-center py-8">
-            <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-white border border-[#DADCE0] flex items-center justify-center shadow-sm">
-              <Calendar className="w-7 h-7 text-[#1A73E8]" />
+            <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-white border flex items-center justify-center shadow-sm" style={{ borderColor: 'var(--border-subtle)' }}>
+              <Calendar className="w-7 h-7" style={{ color: 'var(--primary)' }} />
             </div>
             <h4 className="text-[#202124] font-medium mb-2">How can I help?</h4>
             <p className="text-[#5F6368] text-sm mb-8 px-4">
@@ -169,7 +169,8 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
                   key={action.label}
                   type="button"
                   onClick={() => handleQuickAction(action)}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-[#DADCE0] hover:border-[#1A73E8] hover:shadow-sm rounded-2xl transition-all text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:shadow-sm rounded-2xl transition-all text-left"
+                  style={{ border: '1px solid var(--border-subtle)' }}
                 >
                   <span className="text-[#5F6368] bg-[#F1F3F4] p-2 rounded-xl transition-colors">
                     {action.icon}
@@ -192,16 +193,21 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
             {message.role === "assistant" && (
-              <div className="w-8 h-8 shrink-0 rounded-full bg-[#E8F0FE] text-[#1A73E8] flex items-center justify-center mr-3 mt-1">
-                <Sparkles size={14} />
-              </div>
+              <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center mr-3 mt-1" style={{ background: 'var(--primary-glow)', color: 'var(--primary)' }}>
+                  <Sparkles size={14} style={{ color: 'var(--primary)' }} />
+                </div>
             )}
-            <div
+                <div
               className={`max-w-[80%] px-4 py-3 text-[14px] leading-relaxed shadow-sm ${
                 message.role === "user"
-                  ? "bg-[#1A73E8] text-white rounded-2xl rounded-tr-sm"
-                  : "bg-white border border-[#DADCE0] text-[#202124] rounded-2xl rounded-tl-sm"
+                  ? "text-white rounded-2xl rounded-tr-sm"
+                  : "bg-white text-[#202124] rounded-2xl rounded-tl-sm"
               }`}
+              style={
+                message.role === "user"
+                  ? { background: 'var(--primary)' }
+                  : { border: '1px solid var(--border-subtle)', background: 'var(--bg-base)' }
+              }
             >
               <MarkdownRenderer content={message.content} />
               <p className="text-[10px] opacity-60 mt-2 text-right">
@@ -213,10 +219,10 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
 
         {isTyping && (
           <div className="flex justify-start">
-            <div className="w-8 h-8 shrink-0 rounded-full bg-[#E8F0FE] text-[#1A73E8] flex items-center justify-center mr-3 mt-1">
-              <Bot size={14} />
+            <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center mr-3 mt-1" style={{ background: 'var(--primary-glow)', color: 'var(--primary)' }}>
+              <Bot size={14} style={{ color: 'var(--primary)' }} />
             </div>
-            <div className="bg-white border border-[#DADCE0] rounded-2xl rounded-tl-sm px-4 py-4 flex items-center gap-1.5 h-[46px] shadow-sm">
+            <div className="rounded-2xl rounded-tl-sm px-4 py-4 flex items-center gap-1.5 h-[46px] shadow-sm" style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-base)' }}>
               <span className="w-2 h-2 rounded-full bg-[#DADCE0] animate-bounce dot-delay-0" />
               <span className="w-2 h-2 rounded-full bg-[#DADCE0] animate-bounce dot-delay-150" />
               <span className="w-2 h-2 rounded-full bg-[#DADCE0] animate-bounce dot-delay-300" />
@@ -227,8 +233,8 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
         <div ref={messagesEndRef} className="h-2" />
       </div>
 
-      <div className="p-4 bg-white border-t border-[#DADCE0]">
-        <div className="relative flex items-center rounded-[24px] border border-[#DADCE0] bg-[#F1F3F4] px-2 py-1.5 focus-within:bg-white focus-within:border-[#1A73E8] focus-within:ring-1 focus-within:ring-[#1A73E8]/20 transition-all">
+      <div className="p-4" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+      <div className="relative flex items-center rounded-[24px] px-2 py-1.5 transition-all" style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
           <input
             ref={inputRef}
             type="text"
@@ -244,7 +250,8 @@ export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClos
             disabled={!input.trim() || isTyping}
             aria-label="Send message"
             title="Send message"
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-[#1A73E8] text-white hover:bg-[#1557B0] transition-colors disabled:bg-[#DADCE0] disabled:text-[#9AA0A6]"
+            className="w-9 h-9 flex items-center justify-center rounded-full transition-colors disabled:bg-[#DADCE0] disabled:text-[#9AA0A6]"
+            style={{ background: 'var(--primary)', color: '#fff' }}
           >
             {isTyping ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="ml-0.5" />}
           </button>

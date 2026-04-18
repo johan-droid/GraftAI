@@ -1,5 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.tables import UserTable
+from backend.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 async def check_user_role(db: AsyncSession, user_id: str, role: str) -> bool:
@@ -36,10 +39,30 @@ async def get_user_role(db: AsyncSession, user_id: str) -> str:
     return "member"
 
 
+# Whitelist of attributes that can be checked via check_user_attribute
+# This prevents information disclosure of sensitive fields
+ALLOWED_ATTRIBUTES = {
+    "tier",
+    "subscription_status",
+    "role",
+    "timezone",
+    "onboarding_completed",
+}
+
 async def check_user_attribute(
     db: AsyncSession, user_id: str, attribute: str, value: str
 ) -> bool:
-    """Checks whether a user attribute matches the requested value."""
+    """
+    Checks whether a user attribute matches the requested value.
+    
+    SECURITY: Only whitelisted attributes can be checked to prevent
+    information disclosure (e.g., password_hash, mfa_secret).
+    """
+    # SECURITY: Reject non-whitelisted attributes
+    if attribute not in ALLOWED_ATTRIBUTES:
+        logger.warning(f"🚫 Blocked check_user_attribute attempt for non-whitelisted attribute: {attribute}")
+        return False
+    
     user = await db.get(UserTable, user_id)
     if not user:
         return False

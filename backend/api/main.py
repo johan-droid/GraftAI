@@ -307,6 +307,33 @@ def create_app() -> FastAPI:
     app.add_middleware(InputValidationMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
 
+    # Request ID Middleware (for correlation tracing)
+    from starlette.middleware.base import BaseHTTPMiddleware
+    import uuid
+
+    class RequestIDMiddleware(BaseHTTPMiddleware):
+        """Add X-Request-ID header for request correlation across services."""
+        
+        async def dispatch(self, request, call_next):
+            # Generate or propagate request ID
+            request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+            
+            # Store in request state for access in endpoints
+            request.state.request_id = request_id
+            # Add to logging context if available (set before calling downstream handlers)
+            if hasattr(request.state, 'logger_extra'):
+                request.state.logger_extra['request_id'] = request_id
+
+            # Call downstream handlers
+            response = await call_next(request)
+
+            # Add to response headers
+            response.headers["X-Request-ID"] = request_id
+
+            return response
+    
+    app.add_middleware(RequestIDMiddleware)
+
     # Rate Limiting Middleware
     from backend.utils.rate_limiter import RateLimitMiddleware
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -362,6 +389,10 @@ def create_app() -> FastAPI:
 
     # Registering the new unified Authentication router
     app.include_router(auth_router, prefix="/api/v1/auth")
+    
+    # Registering session revocation auth router
+    from backend.api.auth import router as session_auth_router
+    app.include_router(session_auth_router, prefix="/api/v1/auth")
 
 
     # Registering calendar integration router

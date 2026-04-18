@@ -253,7 +253,7 @@ export default function DashboardPage() {
           actionText="Manage apps"
           color="green"
           isDark={isDark}
-          href="/dashboard/settings/integrations"
+          href="/integrations"
         />
       </motion.div>
 

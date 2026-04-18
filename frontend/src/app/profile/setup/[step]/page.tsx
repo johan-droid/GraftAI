@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import { Box, FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import { Button } from "@/components/ui/Button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
 import { getProfileSetupStatus, updateUserProfile, getGoogleCalendarAuthUrl, completeOnboardingStep, createEventType, completeOnboarding, getOnboardingPreview } from "@/lib/api";
@@ -21,16 +22,21 @@ const steps = [
 const timezones = ["UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Tokyo", "Asia/Singapore"];
 const workHourOptions = ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00"];
 const bufferOptions = [0, 15, 30, 45, 60, 90, 120];
+const labelClass = "block text-sm font-semibold text-[#202124]";
+const helperClass = "text-sm text-[#5F6368]";
+const fieldClass = "w-full rounded-xl border border-[#DADCE0] bg-white px-3 py-2 text-sm text-[#202124] outline-none transition-colors placeholder:text-[#80868B] focus:border-[#1A73E8] focus:ring-2 focus:ring-[#D2E3FC]";
 
 export default function StepPage() {
   const router = useRouter();
   const params = useParams<{ step: string }>();
   const step = params.step;
   const { markStepComplete } = useOnboarding();
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const currentStep = useMemo(() => steps.find((item) => item.id === step), [step]);
   const nextStep = currentStep?.next ?? "complete";
+  const currentStepIndex = currentStep ? steps.findIndex((item) => item.id === currentStep.id) : -1;
+  const currentStepPosition = currentStepIndex >= 0 ? currentStepIndex + 1 : 1;
+  const progress = Math.round((currentStepPosition / steps.length) * 100);
 
   useEffect(() => {
     if (!currentStep) {
@@ -43,29 +49,53 @@ export default function StepPage() {
   }
 
   return (
-    <div className="pb-16 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Onboarding step</p>
-          <h1 className="text-3xl font-semibold text-white">{currentStep.label}</h1>
-          <p className="text-sm text-slate-400">Complete this step to keep your scheduler setup moving forward.</p>
+    <div className="px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div className="overflow-hidden rounded-3xl border border-[#DADCE0] bg-white p-5 shadow-[0_24px_60px_-40px_rgba(32,33,36,0.28)] sm:p-6">
+          <p className="text-xs uppercase tracking-[0.3em] text-[#5F6368]">Onboarding step</p>
+          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-semibold tracking-tight text-[#202124]">{currentStep.label}</h1>
+              <p className="max-w-2xl text-sm leading-6 text-[#5F6368]">
+                Complete this step to keep your scheduler setup moving forward.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#DADCE0] bg-[#F8F9FA] px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-[#5F6368]">Step {currentStepPosition} of {steps.length}</p>
+              <p className="mt-1 text-sm font-semibold text-[#202124]">{progress}% complete</p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-full bg-[#F1F3F4] p-1">
+            <Box
+              sx={{
+                height: 8,
+                width: `${progress}%`,
+                borderRadius: 999,
+                background: "linear-gradient(90deg, #1A73E8 0%, #34A853 100%)",
+                transition: "width 180ms ease",
+              }}
+            />
+          </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{currentStep.label}</CardTitle>
+        <Card className="overflow-hidden">
+          <CardHeader className="space-y-2">
+            <CardTitle className="text-[#202124]">{currentStep.label}</CardTitle>
+            <CardDescription className="text-[#5F6368]">
+              Complete this step to keep your scheduler setup moving forward.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             {step === "profile" && <ProfileForm onCompleted={() => { markStepComplete(step); router.push(`/profile/setup/${nextStep}`); }} />}
             {step === "calendar" && <CalendarStep onCompleted={() => { markStepComplete(step); router.push(`/profile/setup/${nextStep}`); }} />}
             {step === "availability" && <AvailabilityStep onCompleted={() => { markStepComplete(step); router.push(`/profile/setup/${nextStep}`); }} />}
             {step === "event_type" && <EventTypeStep onCompleted={() => { markStepComplete(step); router.push(`/profile/setup/${nextStep}`); }} />}
             {step === "complete" && <CompleteStep />}
-            {statusMessage && <div className="text-sm text-slate-300">{statusMessage}</div>}
           </CardContent>
         </Card>
 
-        <div className="flex justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
           <Button variant="secondary" onClick={() => router.back()}>Back</Button>
           <Button variant="ghost" onClick={() => router.push("/profile/setup")}>Checklist</Button>
         </div>
@@ -103,22 +133,22 @@ function CalendarStep({ onCompleted }: { onCompleted: () => void }) {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-slate-400">Your calendar connection is required so GraftAI can check for scheduling conflicts and publish your availability.</p>
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <p className="text-sm font-semibold text-white">Google Calendar</p>
-        <p className="mt-2 text-sm text-slate-300">Connect a Google Calendar account to sync events and availability.</p>
+      <p className={helperClass}>Your calendar connection is required so GraftAI can check for scheduling conflicts and publish your availability.</p>
+      <div className="rounded-2xl border border-[#DADCE0] bg-[#F8F9FA] p-5">
+        <p className="text-sm font-semibold text-[#202124]">Google Calendar</p>
+        <p className="mt-2 text-sm text-[#5F6368]">Connect a Google Calendar account to sync events and availability.</p>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row">
           <Button onClick={handleConnect} disabled={connecting}>{connecting ? "Opening Google..." : "Connect Google Calendar"}</Button>
           <Button variant="secondary" onClick={handleMarkConnected}>Mark as connected</Button>
         </div>
       </div>
-      <div className="text-sm text-slate-300">{status}</div>
+      <div className="text-sm text-[#5F6368]">{status}</div>
     </div>
   );
 }
 
 function AvailabilityStep({ onCompleted }: { onCompleted: () => void }) {
-  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
+  const { control, register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
       timezone: "UTC",
       start_time: "09:00",
@@ -169,39 +199,85 @@ function AvailabilityStep({ onCompleted }: { onCompleted: () => void }) {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <label htmlFor="timezone" className="block text-sm font-semibold text-slate-100">Timezone</label>
-          <select id="timezone" {...register("timezone", { required: true })} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500">
-            {timezones.map((tz) => (<option key={tz} value={tz}>{tz}</option>))}
-          </select>
-          {errors.timezone && <p className="text-sm text-red-400">Timezone is required.</p>}
+          <label htmlFor="timezone" className={labelClass}>Timezone</label>
+          <Controller
+            control={control}
+            name="timezone"
+            rules={{ required: true }}
+            render={({ field }) => (
+              <FormControl fullWidth>
+                <InputLabel id="availability-timezone-label">Timezone</InputLabel>
+                <Select labelId="availability-timezone-label" id="timezone" label="Timezone" {...field}>
+                  {timezones.map((tz) => (<MenuItem key={tz} value={tz}>{tz}</MenuItem>))}
+                </Select>
+              </FormControl>
+            )}
+          />
+          {errors.timezone && <p className="text-sm text-red-500">Timezone is required.</p>}
         </div>
         <div className="space-y-2">
-          <label htmlFor="buffer_minutes" className="block text-sm font-semibold text-slate-100">Buffer Time</label>
-          <select id="buffer_minutes" {...register("buffer_minutes", { required: true, valueAsNumber: true })} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500">
-            {bufferOptions.map((minutes) => (<option key={minutes} value={minutes}>{minutes} minutes</option>))}
-          </select>
+          <label htmlFor="buffer_minutes" className={labelClass}>Buffer Time</label>
+          <Controller
+            control={control}
+            name="buffer_minutes"
+            rules={{ required: true }}
+            render={({ field }) => (
+              <FormControl fullWidth>
+                <InputLabel id="availability-buffer-label">Buffer Time</InputLabel>
+                <Select
+                  labelId="availability-buffer-label"
+                  id="buffer_minutes"
+                  label="Buffer Time"
+                  value={field.value}
+                  onChange={(event) => field.onChange(Number(event.target.value))}
+                >
+                  {bufferOptions.map((minutes) => (<MenuItem key={minutes} value={minutes}>{minutes} minutes</MenuItem>))}
+                </Select>
+              </FormControl>
+            )}
+          />
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <label htmlFor="start_time" className="block text-sm font-semibold text-slate-100">Work start</label>
-          <select id="start_time" {...register("start_time", { required: true })} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500">
-            {workHourOptions.map((time) => <option key={time} value={time}>{time}</option>)}
-          </select>
+          <label htmlFor="start_time" className={labelClass}>Work start</label>
+          <Controller
+            control={control}
+            name="start_time"
+            rules={{ required: true }}
+            render={({ field }) => (
+              <FormControl fullWidth>
+                <InputLabel id="availability-start-label">Work start</InputLabel>
+                <Select labelId="availability-start-label" id="start_time" label="Work start" {...field}>
+                  {workHourOptions.map((time) => <MenuItem key={time} value={time}>{time}</MenuItem>)}
+                </Select>
+              </FormControl>
+            )}
+          />
         </div>
         <div className="space-y-2">
-          <label htmlFor="end_time" className="block text-sm font-semibold text-slate-100">Work end</label>
-          <select id="end_time" {...register("end_time", { required: true })} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500">
-            {workHourOptions.map((time) => <option key={time} value={time}>{time}</option>)}
-          </select>
+          <label htmlFor="end_time" className={labelClass}>Work end</label>
+          <Controller
+            control={control}
+            name="end_time"
+            rules={{ required: true }}
+            render={({ field }) => (
+              <FormControl fullWidth>
+                <InputLabel id="availability-end-label">Work end</InputLabel>
+                <Select labelId="availability-end-label" id="end_time" label="Work end" {...field}>
+                  {workHourOptions.map((time) => <MenuItem key={time} value={time}>{time}</MenuItem>)}
+                </Select>
+              </FormControl>
+            )}
+          />
         </div>
         <div className="space-y-2">
-          <label className="block text-sm font-semibold text-slate-100">Time preference</label>
+          <label className={labelClass}>Time preference</label>
           <div className="grid grid-cols-2 gap-2">
             {(["12h", "24h"] as const).map((value) => (
-              <label key={value} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
-                <input type="radio" value={value} {...register("time_format")} />
+              <label key={value} className="inline-flex items-center gap-2 rounded-xl border border-[#DADCE0] bg-[#F8F9FA] px-3 py-2 text-sm text-[#202124]">
+                <input type="radio" value={value} {...register("time_format")} className="accent-[#1A73E8]" />
                 <span>{value}</span>
               </label>
             ))}
@@ -217,7 +293,7 @@ function AvailabilityStep({ onCompleted }: { onCompleted: () => void }) {
 }
 
 function EventTypeStep({ onCompleted }: { onCompleted: () => void }) {
-  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, watch, setValue, control, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
       name: "Discovery Call",
       slug: "discovery-call",
@@ -265,36 +341,52 @@ function EventTypeStep({ onCompleted }: { onCompleted: () => void }) {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <label htmlFor="name" className="block text-sm font-semibold text-slate-100">Event name</label>
+          <label htmlFor="name" className={labelClass}>Event name</label>
           <Input id="name" {...register("name", { required: "Event name is required", maxLength: { value: 50, message: "Event name must be 1-50 characters" } })} />
-          {errors.name && <p className="text-sm text-red-400">{errors.name.message}</p>}
+          {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
         </div>
         <div className="space-y-2">
-          <label htmlFor="slug" className="block text-sm font-semibold text-slate-100">Slug</label>
+          <label htmlFor="slug" className={labelClass}>Slug</label>
           <Input id="slug" {...register("slug", { required: "Slug is required", pattern: { value: /^[a-z0-9\-]{1,50}$/, message: "Slug may only contain lowercase letters, numbers and hyphens." } })} />
-          {errors.slug && <p className="text-sm text-red-400">{errors.slug.message}</p>}
+          {errors.slug && <p className="text-sm text-red-500">{errors.slug.message}</p>}
         </div>
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="duration_minutes" className="block text-sm font-semibold text-slate-100">Duration</label>
-        <select id="duration_minutes" {...register("duration_minutes", { required: true })} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500">
-          {[15, 30, 45, 60, 90, 120, 180].map((minutes) => (<option key={minutes} value={minutes}>{minutes} minutes</option>))}
-        </select>
+        <label htmlFor="duration_minutes" className={labelClass}>Duration</label>
+        <Controller
+          control={control}
+          name="duration_minutes"
+          rules={{ required: true }}
+          render={({ field }) => (
+            <FormControl fullWidth>
+              <InputLabel id="event-type-duration-label">Duration</InputLabel>
+              <Select
+                labelId="event-type-duration-label"
+                id="duration_minutes"
+                label="Duration"
+                value={field.value}
+                onChange={(event) => field.onChange(Number(event.target.value))}
+              >
+                {[15, 30, 45, 60, 90, 120, 180].map((minutes) => (<MenuItem key={minutes} value={minutes}>{minutes} minutes</MenuItem>))}
+              </Select>
+            </FormControl>
+          )}
+        />
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="description" className="block text-sm font-semibold text-slate-100">Description</label>
-        <textarea id="description" {...register("description", { maxLength: { value: 250, message: "Description must be under 250 characters" } })} rows={4} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500" />
-        {errors.description && <p className="text-sm text-red-400">{errors.description.message}</p>}
+        <label htmlFor="description" className={labelClass}>Description</label>
+        <textarea id="description" {...register("description", { maxLength: { value: 250, message: "Description must be under 250 characters" } })} rows={4} className={`${fieldClass} min-h-[112px]`} />
+        {errors.description && <p className="text-sm text-red-500">{errors.description.message}</p>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 items-end">
         <div className="space-y-2">
-          <label htmlFor="color" className="block text-sm font-semibold text-slate-100">Picker color</label>
-          <Input id="color" type="color" {...register("color")} className="h-12 rounded-lg p-0" />
+          <label htmlFor="color" className={labelClass}>Picker color</label>
+          <Input id="color" type="color" {...register("color")} className="h-12 rounded-xl p-1" />
         </div>
-        <div className="text-slate-400 text-sm">
+        <div className={helperClass}>
           <p>Booking page will publish with this event type. You can always update it later.</p>
         </div>
       </div>
@@ -335,14 +427,14 @@ function CompleteStep() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-slate-400">You are one step away from going live. Complete the setup to activate your scheduler flow.</p>
+      <p className={helperClass}>You are one step away from going live. Complete the setup to activate your scheduler flow.</p>
       {previewUrl && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <p className="text-sm text-slate-100">Preview booking page URL</p>
-          <p className="mt-2 text-sm font-medium text-white">{previewUrl}</p>
+        <div className="rounded-2xl border border-[#DADCE0] bg-[#F8F9FA] p-5">
+          <p className="text-sm font-semibold text-[#202124]">Preview booking page URL</p>
+          <p className="mt-2 break-all text-sm font-medium text-[#1A73E8]">{previewUrl}</p>
         </div>
       )}
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
         <Button onClick={handleComplete} disabled={finished}>{finished ? "Redirecting..." : "Complete setup"}</Button>
       </div>
     </div>

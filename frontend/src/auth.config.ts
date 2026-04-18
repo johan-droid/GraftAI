@@ -67,10 +67,19 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }: { auth: any; request: { nextUrl: any } }) {
       const isLoggedIn = !!auth?.user;
       const isDashboard = nextUrl.pathname.startsWith("/dashboard");
+      const isOnboarding = nextUrl.pathname.startsWith("/onboarding") || nextUrl.pathname.startsWith("/profile/setup");
+      
+      // Allow dashboard access if logged in (skip profile setup check)
       if (isDashboard) {
         if (isLoggedIn) return true;
         return false; // Redirect unauthenticated users to login page
       }
+      
+      // If user is logged in and tries to access onboarding/setup, redirect to dashboard
+      if (isOnboarding && isLoggedIn) {
+        return Response.redirect(new URL("/dashboard", nextUrl));
+      }
+      
       return true;
     },
   },

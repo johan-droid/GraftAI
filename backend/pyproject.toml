@@ -62,6 +62,7 @@ uvloop = {version = ">=0.20.0", markers = "sys_platform != 'win32'"}
 [tool.poetry.dev-dependencies]
 pytest = "^8.0.0"
 pytest-asyncio = "^0.25.0"
+pytest-cov = "^7.1.0"
 black = "^24.0.0"
 
 [tool.ruff]

@@ -231,7 +231,7 @@ export function EmptyEmails() {
       icon={Mail}
       title="No connected emails"
       description="Connect your email accounts to enable smart scheduling and automated follow-ups."
-      action={{ label: "Connect Email", href: "/settings/integrations" }}
+      action={{ label: "Connect Email", href: "/integrations" }}
     />
   );
 }

@@ -1,20 +1,20 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="card" style="border-top-color: #f59e0b;">
-    <div class="badge" style="background-color: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40;">Updated</div>
+<div class="card card-warning">
+    <div class="badge badge-warning">Updated</div>
     <h1>Meeting Details Adjusted</h1>
     <p>There have been changes to your scheduled meeting. Please review the updated details below:</p>
     
-    <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
-        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700;">{{ event_title }}</p>
-        <p style="margin-bottom: 0; font-size: 13px; color: #94a3b8;">📅 {{ event_time }}</p>
+    <div class="booking-summary">
+        <p class="booking-summary-title">{{ event_title }}</p>
+        <p class="booking-summary-meta">📅 {{ event_time }}</p>
         {% if meeting_link %}
-        <p style="margin: 8px 0 0; font-size: 13px;">🔗 <a href="{{ meeting_link }}" style="color: #6366f1;">Updated Meeting Link</a></p>
+        <p class="booking-summary-link">🔗 <a href="{{ meeting_link }}">Updated Meeting Link</a></p>
         {% endif %}
     </div>
 
-    <p style="font-size: 13px; color: #64748b; font-style: italic;">Note: Your calendar has been automatically updated.</p>
+    <p class="booking-summary-note">Note: Your calendar has been automatically updated.</p>
 
     <center>
         <a href="{{ frontend_url }}/dashboard/calendar" class="button">See Changes</a>

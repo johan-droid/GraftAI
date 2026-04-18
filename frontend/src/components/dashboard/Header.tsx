@@ -218,7 +218,7 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
           
           <MenuItem
             component={Link}
-            href="/settings"
+            href="/dashboard/settings"
             onClick={() => setAnchorEl(null)}
             sx={{
               py: 1,

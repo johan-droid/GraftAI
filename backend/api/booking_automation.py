@@ -6,17 +6,19 @@ for bookings created in the scheduler.
 """
 
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from backend.utils.db import get_db
+from backend.utils.db import get_db, get_async_session_maker
 from backend.api.deps import get_current_user
-from backend.models.tables import UserTable
+from backend.models.tables import UserTable, AIAutomationTable
 from backend.services.booking_automation import (
     BookingAutomationService
 )
+from backend.services.notifications import send_custom_notification
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -76,6 +78,107 @@ class AutomationHistoryResponse(BaseModel):
     booking_id: str
     automation_count: int
     history: List[Dict[str, Any]]
+
+
+def _build_actions(actions: Optional[List[Dict[str, Any]]]) -> List[AutomationActionResult]:
+    normalized: List[AutomationActionResult] = []
+    for action in actions or []:
+        normalized.append(
+            AutomationActionResult(
+                tool_name=action.get("tool_name", "unknown"),
+                success=bool(action.get("success", False)),
+                status=action.get("status", "unknown"),
+                timestamp=str(action.get("timestamp") or datetime.utcnow().isoformat()),
+                email_id=action.get("email_id"),
+                event_id=action.get("event_id"),
+                task_id=action.get("task_id"),
+                error=action.get("error"),
+            )
+        )
+    return normalized
+
+
+def _build_agent_decisions(
+    agent_decisions: Optional[Dict[str, Any]],
+    risk_assessment: str,
+    actions: List[Dict[str, Any]],
+) -> AgentDecisionInfo:
+    decisions = agent_decisions or {}
+    action_names = decisions.get("actions") or [action.get("tool_name", "unknown") for action in actions]
+    confidence = decisions.get("confidence", "MEDIUM")
+
+    return AgentDecisionInfo(
+        actions=action_names,
+        reasoning=str(decisions.get("reasoning", ""))[:500],
+        risk_assessment=str(decisions.get("risk_assessment", risk_assessment)),
+        confidence=str(confidence),
+        vip_level=decisions.get("vip_level"),
+        requires_human_review=bool(decisions.get("requires_human_review", False)),
+        human_review_reason=decisions.get("human_review_reason"),
+    )
+
+
+def _build_summary(status: str, decision_score: int, risk_assessment: str, actions: List[Dict[str, Any]]) -> str:
+    if status == "in_progress":
+        return "Automation is currently running."
+
+    successful_actions = sum(1 for action in actions if action.get("success"))
+    total_actions = len(actions)
+    summary = (
+        f"AI Agent executed {successful_actions}/{total_actions} actions "
+        f"with decision score {decision_score}/100. "
+        f"Risk assessment: {risk_assessment.upper()}. "
+    )
+
+    if decision_score >= 90:
+        summary += "Excellent automation performance."
+    elif decision_score >= 70:
+        summary += "Good automation performance."
+    else:
+        summary += "Some issues encountered."
+
+    return summary
+
+
+def _build_status_response(automation: AIAutomationTable) -> AutomationStatusResponse:
+    actions = automation.actions_executed or []
+    decision_score = automation.decision_score or 0
+    risk_assessment = automation.risk_assessment or "unknown"
+    started_at = automation.started_at.isoformat() if automation.started_at else (automation.created_at.isoformat() if automation.created_at else None)
+    completed_at = automation.completed_at.isoformat() if automation.completed_at else None
+
+    return AutomationStatusResponse(
+        booking_id=automation.booking_id,
+        status=automation.status,
+        decision_score=decision_score,
+        risk_assessment=risk_assessment,
+        execution_time_ms=automation.execution_time_ms or 0,
+        timestamp=completed_at or started_at or datetime.utcnow().isoformat(),
+        agent_decisions=_build_agent_decisions(automation.agent_decisions, risk_assessment, actions),
+        actions_executed=_build_actions(actions),
+        external_ids=automation.external_results or {},
+        automation_summary=_build_summary(automation.status, decision_score, risk_assessment, actions),
+    )
+
+
+def _build_result_response(automation: AIAutomationTable) -> AutomationStatusResponse:
+    actions = automation.actions_executed or []
+    decision_score = automation.decision_score or 0
+    risk_assessment = automation.risk_assessment or "unknown"
+    timestamp = automation.completed_at.isoformat() if automation.completed_at else (automation.created_at.isoformat() if automation.created_at else datetime.utcnow().isoformat())
+
+    return AutomationStatusResponse(
+        booking_id=automation.booking_id,
+        status=automation.status,
+        decision_score=decision_score,
+        risk_assessment=risk_assessment,
+        execution_time_ms=automation.execution_time_ms or 0,
+        timestamp=timestamp,
+        agent_decisions=_build_agent_decisions(automation.agent_decisions, risk_assessment, actions),
+        actions_executed=_build_actions(actions),
+        external_ids=automation.external_results or {},
+        automation_summary=_build_summary(automation.status, decision_score, risk_assessment, actions),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -218,15 +321,19 @@ async def get_automation_status(
     but retrieves stored results instead of running automation.
     """
     try:
-        # TODO: Query database for stored automation results
-        # For now, return a not-found response
-        
-        # Check if booking exists and user has access
-        # booking = await db.get(EventTable, booking_id)
-        # if not booking or booking.user_id != current_user.id:
-        #     raise HTTPException(status_code=404, detail="Booking not found")
-        
-        # Return stored results
+        db_result = await db.execute(
+            select(AIAutomationTable)
+            .where(
+                AIAutomationTable.booking_id == booking_id,
+                AIAutomationTable.user_id == current_user.id,
+            )
+            .order_by(AIAutomationTable.created_at.desc())
+        )
+        automation = db_result.scalars().first()
+
+        if automation:
+            return _build_status_response(automation)
+
         raise HTTPException(
             status_code=404,
             detail=f"Automation status for booking {booking_id} not found. "
@@ -257,17 +364,14 @@ async def get_automation_history(
     Returns a list of recent automation results, ordered by timestamp.
     """
     try:
-        # TODO: Query database for automation history
-        # bookings_with_automation = await db.execute(
-        #     select(EventTable)
-        #     .where(EventTable.user_id == current_user.id)
-        #     .where(EventTable.automation_status.isnot(None))
-        #     .order_by(desc(EventTable.last_automation_sync))
-        #     .limit(limit)
-        # )
-        
-        # For now, return empty list
-        return []
+        db_result = await db.execute(
+            select(AIAutomationTable)
+            .where(AIAutomationTable.user_id == current_user.id)
+            .order_by(AIAutomationTable.created_at.desc())
+            .limit(max(limit, 1))
+        )
+        automations = db_result.scalars().all()
+        return [_build_status_response(automation) for automation in automations]
         
     except Exception as e:
         logger.error(f"Error retrieving automation history: {e}")
@@ -334,14 +438,54 @@ async def _run_automation_background(booking_id: str, user_id: str):
             trigger_source="webhook"
         )
         
-        logger.info(f"Background automation complete: {booking_id} "
-                   f"(Score: {result.decision_score})")
-        
-        # TODO: Send notification to user about completion
-        
+        logger.info(f"Background automation complete: {booking_id} (Score: {result.decision_score})")
+
+        session_factory = get_async_session_maker()
+        async with session_factory() as db:
+            user_result = await db.execute(
+                select(UserTable).where(UserTable.id == user_id)
+            )
+            user = user_result.scalars().first()
+            # Capture required fields while session is open to avoid lazy-loading after close
+            user_email = user.email if user else None
+
+            if user_email:
+                try:
+                    await send_custom_notification(
+                        user_email,
+                        subject=f"Booking automation finished for {booking_id}",
+                        message=(
+                            f"Your booking automation for {booking_id} completed with a score of "
+                            f"{result.decision_score}/100 and status {result.automation_status}."
+                        ),
+                    )
+                except Exception as notification_error:
+                    logger.warning(
+                        f"Background notification failed for {booking_id}: {notification_error}"
+                    )
+
     except Exception as e:
         logger.error(f"Background automation failed: {booking_id} - {e}")
-        # TODO: Alert on failure, queue for retry
+
+        try:
+            session_factory = get_async_session_maker()
+            async with session_factory() as db:
+                user_result = await db.execute(
+                    select(UserTable).where(UserTable.id == user_id)
+                )
+                user = user_result.scalars().first()
+                user_email = user.email if user else None
+
+            if user_email:
+                await send_custom_notification(
+                    user_email,
+                    subject=f"Booking automation failed for {booking_id}",
+                    message=f"The automation for booking {booking_id} failed and will need to be retried.",
+                )
+        except Exception as notification_error:
+            logger.warning(
+                f"Failure notification could not be sent for {booking_id}: {notification_error}"
+            )
 
 
 @router.get(
@@ -360,29 +504,56 @@ async def get_automation_stats(
     Returns aggregate metrics about automation performance.
     """
     try:
-        # TODO: Query database for stats
-        # - Total automations
-        # - Success rate
-        # - Average decision score
-        # - Most common actions
-        # - Risk distribution
-        
-        # For now, return placeholder stats
+        cutoff = datetime.utcnow() - timedelta(days=max(days, 1))
+        db_result = await db.execute(
+            select(AIAutomationTable)
+            .where(
+                AIAutomationTable.user_id == current_user.id,
+                AIAutomationTable.created_at >= cutoff,
+            )
+            .order_by(AIAutomationTable.created_at.desc())
+        )
+        automations = db_result.scalars().all()
+
+        total_automations = len(automations)
+        successful = sum(1 for automation in automations if automation.status == "completed")
+        failed = sum(1 for automation in automations if automation.status == "failed")
+        partial = sum(1 for automation in automations if automation.status == "partial")
+
+        decision_scores = [automation.decision_score for automation in automations if automation.decision_score is not None]
+        execution_times = [automation.execution_time_ms for automation in automations if automation.execution_time_ms is not None]
+
+        actions_breakdown: Dict[str, int] = {}
+        risk_distribution: Dict[str, int] = {"low": 0, "medium": 0, "high": 0, "critical": 0}
+        for automation in automations:
+            for action in automation.actions_executed or []:
+                tool_name = action.get("tool_name", "unknown")
+                actions_breakdown[tool_name] = actions_breakdown.get(tool_name, 0) + 1
+
+            # Normalize and validate risk level to avoid unexpected keys
+            raw_risk = automation.risk_assessment or "medium"
+            try:
+                risk_key = str(raw_risk).lower()
+            except Exception:
+                risk_key = "medium"
+
+            allowed = {"low", "medium", "high", "critical"}
+            if risk_key not in allowed:
+                risk_key = "medium"
+
+            risk_distribution[risk_key] = risk_distribution.get(risk_key, 0) + 1
+
         return {
             "period_days": days,
-            "total_automations": 0,
-            "successful": 0,
-            "failed": 0,
-            "partial": 0,
-            "success_rate": 0.0,
-            "avg_decision_score": 0,
-            "avg_execution_time_ms": 0,
-            "actions_breakdown": {},
-            "risk_distribution": {
-                "low": 0,
-                "medium": 0,
-                "high": 0
-            },
+            "total_automations": total_automations,
+            "successful": successful,
+            "failed": failed,
+            "partial": partial,
+            "success_rate": round((successful / total_automations) * 100, 2) if total_automations else 0.0,
+            "avg_decision_score": round(sum(decision_scores) / len(decision_scores), 2) if decision_scores else 0,
+            "avg_execution_time_ms": round(sum(execution_times) / len(execution_times), 2) if execution_times else 0,
+            "actions_breakdown": actions_breakdown,
+            "risk_distribution": risk_distribution,
             "timestamp": datetime.utcnow().isoformat()
         }
         

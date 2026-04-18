@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { composeEndpoint } from "@/lib/api-client";
-import { Box, Typography } from "@mui/material";
+import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 
 /**
  * /auth-callback
@@ -25,8 +25,6 @@ import { Box, Typography } from "@mui/material";
  * 3. Backend code+state flow
  *    The backend sends ?code=...&state=... for SSO Enterprise flows.
  */
-import { AuthLayout } from "@/components/auth/AuthLayout";
-
 /**
  * /auth-callback
  * 
@@ -36,7 +34,7 @@ import { AuthLayout } from "@/components/auth/AuthLayout";
 function AuthCallbackInner() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState("RESOLVING_AUTH_HANDSHAKE...");
-  const [telemetry, setTelemetry] = useState<string[]>([]);
+  const [, setTelemetry] = useState<string[]>([]);
   const [fragmentParams, setFragmentParams] = useState<URLSearchParams | null>(null);
   const [fragmentReady, setFragmentReady] = useState(false);
   const hasFetched = useRef(false);
@@ -44,8 +42,14 @@ function AuthCallbackInner() {
   const accessToken  = fragmentParams?.get("at") || fragmentParams?.get("access_token") || searchParams.get("at") || searchParams.get("access_token");
   const refreshToken = fragmentParams?.get("rt") || fragmentParams?.get("refresh_token") || searchParams.get("rt") || searchParams.get("refresh_token");
   const redirectTo   = fragmentParams?.get("redirect") || searchParams.get("redirect") || "/dashboard";
+  const skipSetup    = searchParams.get("skip_setup") === "true" || redirectTo.includes("skip_setup");
   const code         = searchParams.get("code");
   const state        = searchParams.get("state");
+  const isErrorState = status.startsWith("ERROR_CODE:");
+  const screenTitle = isErrorState ? "Sign in failed" : "Completing sign in";
+  const screenSubtitle = isErrorState
+    ? "We could not restore your session. Redirecting you back to sign in."
+    : "Restoring your session and opening the right workspace.";
 
   const addTelemetry = (msg: string) => {
     setTelemetry(prev => [...prev.slice(-3), `> ${msg}`]);
@@ -105,7 +109,12 @@ function AuthCallbackInner() {
 
           addTelemetry("KERNEL_SESSION_MOUNTED_OK");
           setStatus("SEQUENCE_SUCCESSFUL. REDIRECTING...");
-          safeReplace(redirectTo);
+          
+          // If skip_setup is set, ensure we go to dashboard directly
+          const finalRedirect = skipSetup 
+            ? "/dashboard" 
+            : redirectTo;
+          safeReplace(finalRedirect);
           return;
         }
 
@@ -153,7 +162,12 @@ function AuthCallbackInner() {
             }
 
             setStatus("ACCESS_GRANTED_BY_KERNEL.");
-            safeReplace(data.redirect_to || redirectTo);
+            
+            // If skip_setup is set, ensure we go to dashboard directly
+            const finalRedirect = skipSetup 
+              ? "/dashboard" 
+              : (data.redirect_to || redirectTo);
+            safeReplace(finalRedirect);
             return;
           }
 
@@ -162,6 +176,7 @@ function AuthCallbackInner() {
 
         // ── Scenario 1: NextAuth handles directly — should barely blink if we end up here
         setStatus("POLLING_SESSION_INTEGRITY...");
+        // Always redirect to dashboard, skip any profile setup
         setTimeout(() => safeReplace("/dashboard"), 1000);
 
       } catch (err) {
@@ -176,117 +191,27 @@ function AuthCallbackInner() {
   }, [accessToken, refreshToken, redirectTo, code, state, fragmentReady]);
 
   return (
-    <Box sx={{ width: "100%" }}>
-      <Box 
-        sx={{ 
-          display: "flex", 
-          flexDirection: "column", 
-          alignItems: "center", 
-          gap: 4,
-          py: 4 
-        }}
-      >
-        <Box
-          sx={{
-            width: 48,
-            height: 48,
-            border: "2px solid var(--border-subtle)",
-            borderTopColor: "var(--primary)",
-            borderRadius: 0,
-            animation: "spin 1s linear infinite",
-          }}
-        />
-        
-        <Box sx={{ textAlign: "center", width: "100%" }}>
-          <Typography
-            sx={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "14px",
-              fontWeight: 900,
-              color: "var(--primary)",
-              letterSpacing: "0.1em",
-              mb: 2,
-              textTransform: "uppercase",
-            }}
-          >
-            {status}
-          </Typography>
-          
-          <Box 
-            sx={{ 
-              mt: 4, 
-              p: 2, 
-              background: "rgba(0,0,0,0.3)", 
-              border: "1px dashed var(--border-subtle)",
-              textAlign: "left",
-              minHeight: "100px"
-            }}
-          >
-            {telemetry.map((line, i) => (
-              <Typography 
-                key={i} 
-                sx={{ 
-                  fontFamily: "var(--font-mono)", 
-                  fontSize: "10px", 
-                  color: "var(--text-faint)",
-                  mb: 0.5 
-                }}
-              >
-                {line}
-              </Typography>
-            ))}
-            <Box sx={{ 
-              width: "8px", 
-              height: "2px", 
-              background: "var(--primary)", 
-              display: "inline-block",
-              animation: "pulse 1s infinite",
-              verticalAlign: "middle",
-              ml: 1
-            }} />
-          </Box>
-        </Box>
-      </Box>
-    </Box>
+    <AppLoadingScreen
+      variant="auth"
+      title={screenTitle}
+      subtitle={screenSubtitle}
+    />
   );
 }
 
 export default function AuthCallback() {
   return (
-    <AuthLayout 
-      title="SESSION_RESOLVER" 
-      subtitle="GRAFT_AI :: THREAT_ASSESSMENT_&_IDENTITY_ANCHOR"
+    <Suspense
+      fallback={
+        <AppLoadingScreen
+          variant="auth"
+          title="Completing sign in"
+          subtitle="Restoring your session and opening the right workspace."
+        />
+      }
     >
-      <Suspense
-        fallback={
-          <Box 
-            sx={{ 
-              display: "flex", 
-              flexDirection: "column", 
-              alignItems: "center", 
-              gap: 4,
-              py: 8
-            }}
-          >
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                border: "2px solid var(--border-subtle)",
-                borderTopColor: "var(--primary)",
-                borderRadius: 0,
-                animation: "spin 1.5s linear infinite",
-              }}
-            />
-            <Typography sx={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-faint)" }}>
-              INITIALIZING_ANCHOR...
-            </Typography>
-          </Box>
-        }
-      >
-        <AuthCallbackInner />
-      </Suspense>
-    </AuthLayout>
+      <AuthCallbackInner />
+    </Suspense>
   );
 }
 

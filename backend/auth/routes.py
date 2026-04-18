@@ -693,7 +693,6 @@ async def complete_onboarding(
     # Update user profile with onboarding data
     if req.name:
         current_user.full_name = req.name
-        current_user.name = req.name
     
     # Store preferences
     prefs = dict(current_user.preferences or {})
@@ -720,7 +719,7 @@ async def complete_onboarding(
         "user": {
             "id": current_user.id,
             "email": current_user.email,
-            "name": current_user.name,
+            "name": current_user.full_name,
             "onboarding_completed": True
         }
     }

@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { motion, type Variants } from "framer-motion";
+import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import { toast } from "@/components/ui/Toast";
+import { apiClient } from "@/lib/api-client";
 import { 
   User, Mail, Globe, Clock, Calendar, 
   ShieldAlert, Camera, Check, Loader2 
@@ -56,42 +58,58 @@ export default function SettingsProfilePage() {
     sessionRef.current = session;
   }, [session]);
 
-  // 1. Read from Backend (simulated)
+// 1. Read from Backend
   useEffect(() => {
-    setIsLoading(true);
-    const timeoutId = setTimeout(() => {
-      const s = sessionRef.current;
-      setProfile(prev => ({
-        ...prev,
-        name: s?.user?.name || "System Admin",
-        email: s?.user?.email || "admin@graftai.com",
-        bio: "Scheduling meetings efficiently via GraftAI.",
-      }));
-      setIsLoading(false);
-    }, 800);
-
-    return () => clearTimeout(timeoutId);
-  }, [session]);
+    let active = true;
+    async function loadProfile() {
+      setIsLoading(true);
+      try {
+        const response = await apiClient.get<any>('/users/me');
+        if (active && response?.data) {
+          const profileData = response.data;
+          const s = sessionRef.current;
+          setProfile(prev => ({
+            ...prev,
+            name: profileData.display_name || profileData.full_name || s?.user?.name || "System Admin",
+            email: profileData.email || s?.user?.email || "admin@graftai.com",
+            bio: profileData.bio || "Scheduling meetings efficiently via GraftAI.",
+            timezone: profileData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timeFormat: profileData.time_format || "12h",
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to fetch profile:", err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadProfile();
+    return () => { active = false; };
+  }, []);
 
   // 2. Save to Backend
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      // TODO: Uncomment when backend route is ready
-      // await apiClient.patch('/users/me', profile);
+      const payload = {
+        display_name: profile.name,
+        bio: profile.bio,
+        timezone: profile.timezone,
+        time_format: profile.timeFormat,
+      };
       
+      await apiClient.patch('/users/me', payload);
+
       // Update NextAuth session if name changed
       if (profile.name !== session?.user?.name) {
         await update({ name: profile.name });
       }
 
-      setTimeout(() => {
-        setIsSaving(false);
-        toast.success("Profile updated successfully!");
-      }, 600);
+      toast.success("Profile updated successfully!");
     } catch (err) {
       console.error("Failed to save profile:", err);
       toast.error("Failed to save changes.");
+    } finally {
       setIsSaving(false);
     }
   };
@@ -232,18 +250,22 @@ export default function SettingsProfilePage() {
               <label htmlFor="timezone" className="block text-xs font-semibold text-[#5F6368] uppercase tracking-wider mb-2 flex items-center gap-2">
                 <Globe size={14} /> Timezone
               </label>
-              <select 
-                id="timezone"
-                name="timezone"
-                value={profile.timezone}
-                onChange={handleInputChange}
-                className="w-full bg-[#F8F9FA] border border-[#DADCE0] rounded-xl px-4 py-3 text-[#202124] focus:outline-none focus:border-[#1A73E8] transition-all appearance-none cursor-pointer"
-              >
-                <option value="Asia/Kolkata">India Standard Time (IST)</option>
-                <option value="America/New_York">Eastern Time (ET)</option>
-                <option value="Europe/London">Greenwich Mean Time (GMT)</option>
-                <option value="America/Los_Angeles">Pacific Time (PT)</option>
-              </select>
+              <FormControl fullWidth>
+                <InputLabel id="settings-timezone-label">Timezone</InputLabel>
+                <Select
+                  labelId="settings-timezone-label"
+                  id="timezone"
+                  name="timezone"
+                  value={profile.timezone}
+                  label="Timezone"
+                  onChange={(event) => setProfile((prev) => ({ ...prev, timezone: String(event.target.value) }))}
+                >
+                  <MenuItem value="Asia/Kolkata">India Standard Time (IST)</MenuItem>
+                  <MenuItem value="America/New_York">Eastern Time (ET)</MenuItem>
+                  <MenuItem value="Europe/London">Greenwich Mean Time (GMT)</MenuItem>
+                  <MenuItem value="America/Los_Angeles">Pacific Time (PT)</MenuItem>
+                </Select>
+              </FormControl>
             </div>
 
             <div>
@@ -286,18 +308,22 @@ export default function SettingsProfilePage() {
                 Add extra time before and after events to avoid back-to-back meetings.
               </p>
               <label htmlFor="bufferMinutes" className="sr-only">Buffer time in minutes</label>
-              <select 
-                id="bufferMinutes"
-                name="bufferMinutes"
-                value={profile.bufferMinutes}
-                onChange={handleInputChange}
-                className="w-full bg-white border border-[#DADCE0] rounded-xl px-4 py-2.5 text-sm text-[#202124] focus:outline-none focus:border-[#1A73E8]"
-              >
-                <option value={0}>No buffer</option>
-                <option value={5}>5 minutes</option>
-                <option value={15}>15 minutes</option>
-                <option value={30}>30 minutes</option>
-              </select>
+              <FormControl fullWidth>
+                <InputLabel id="settings-buffer-label">Buffer time</InputLabel>
+                <Select
+                  labelId="settings-buffer-label"
+                  id="bufferMinutes"
+                  name="bufferMinutes"
+                  value={profile.bufferMinutes}
+                  label="Buffer time"
+                  onChange={(event) => setProfile((prev) => ({ ...prev, bufferMinutes: Number(event.target.value) }))}
+                >
+                  <MenuItem value={0}>No buffer</MenuItem>
+                  <MenuItem value={5}>5 minutes</MenuItem>
+                  <MenuItem value={15}>15 minutes</MenuItem>
+                  <MenuItem value={30}>30 minutes</MenuItem>
+                </Select>
+              </FormControl>
             </div>
           </div>
         </motion.div>

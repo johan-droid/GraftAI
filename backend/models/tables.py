@@ -50,8 +50,14 @@ class UserTable(Base):
     # Billing & Quota Fields
     tier: Mapped[str] = mapped_column(String, default="free", nullable=False)
     subscription_status: Mapped[str] = mapped_column(String, default="inactive", nullable=False)
+    
+    # Razorpay (India payments)
     razorpay_customer_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     razorpay_subscription_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    
+    # Stripe (International payments) - separate columns to prevent ID collision
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     
     daily_ai_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     daily_ai_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -110,7 +116,7 @@ class NotificationTable(Base):
     __tablename__ = "notifications"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
-    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     type: Mapped[str] = mapped_column(String, nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
     body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -155,6 +161,10 @@ class BookingTable(Base):
         UniqueConstraint("user_id", "start_time", "end_time", name="uq_bookings_user_start_end"),
         Index("ix_bookings_user_start_time", "user_id", "start_time"),
         Index("ix_bookings_booking_code", "booking_code"),
+        Index("ix_bookings_automation_status", "automation_status"),
+        Index("ix_bookings_automation_run_at", "automation_run_at"),
+        Index("ix_bookings_decision_score", "decision_score"),
+        Index("ix_bookings_risk_level", "risk_level"),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
@@ -173,6 +183,12 @@ class BookingTable(Base):
     metadata_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    
+    # AI Automation tracking fields
+    automation_status: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="pending")
+    automation_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    decision_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    risk_level: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     user: Mapped["UserTable"] = relationship("UserTable", back_populates="bookings")
     event_type: Mapped[Optional["EventTypeTable"]] = relationship("EventTypeTable")
@@ -367,6 +383,34 @@ class AuditLogTable(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
     )
+
+
+class ManualActivationRequestTable(Base):
+    """Manual activation requests for users who cannot complete automated payments.
+
+    Allows users (students) to request a paid tier upgrade which an admin
+    (or parent) can approve manually after reviewing proof.
+    """
+    __tablename__ = "manual_activation_requests"
+    __table_args__ = (
+        Index("ix_manual_activation_requests_user_id", "user_id"),
+        Index("ix_manual_activation_requests_status", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    requested_tier: Mapped[str] = mapped_column(String(50), nullable=False, default="pro")
+    proof_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending, approved, rejected
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Relationships
+    user: Mapped["UserTable"] = relationship("UserTable", foreign_keys=[user_id], backref="manual_activation_requests")
+    reviewer: Mapped[Optional["UserTable"]] = relationship("UserTable", foreign_keys=[reviewed_by])
 
 
 class ChatMessageTable(Base):
@@ -587,3 +631,91 @@ class AIAutomationTable(Base):
     # Relationships
     booking: Mapped["BookingTable"] = relationship("BookingTable", backref="ai_automations")
     user: Mapped["UserTable"] = relationship("UserTable", backref="ai_automations")
+
+
+class DeadLetterQueueItem(Base):
+    """Dead letter queue for failed tasks that need retry or manual resolution."""
+    __tablename__ = "dead_letter_queue"
+    __table_args__ = (
+        Index('ix_dlq_status', 'status'),
+        Index('ix_dlq_task_type', 'task_type'),
+        Index('ix_dlq_retry_count', 'retry_count'),
+        Index('ix_dlq_created_at', 'created_at'),
+        Index('ix_dlq_next_retry', 'next_retry_at'),
+    )
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
+    task_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    task_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+
+    # Original payload
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    # Error information
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    stack_trace: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Retry tracking
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, default=3)
+
+    # Status
+    status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, retrying, failed, resolved
+
+    # Resolution
+    resolution: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # manual, auto, ignored
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    # Timestamps
+    last_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    # Relationship
+    resolver: Mapped[Optional["UserTable"]] = relationship("UserTable", foreign_keys=[resolved_by])
+
+
+class IdempotencyKeyTable(Base):
+    """Stores idempotency keys to prevent duplicate mutation operations."""
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (
+        # Enforce uniqueness of (user_id, key) at the DB level to avoid races
+        UniqueConstraint('user_id', 'key', name='uq_idempotency_keys_user_key'),
+        Index('ix_idempotency_keys_expires', 'expires_at'),
+    )
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
+    key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    # Request fingerprint for verification
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    
+    # Cached response
+    response_body: Mapped[dict] = mapped_column(JSON, nullable=False)
+    status_code: Mapped[int] = mapped_column(Integer, default=200)
+    
+    # TTL
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+    
+    # Relationship
+    user: Mapped["UserTable"] = relationship("UserTable", backref="idempotency_keys")

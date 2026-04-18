@@ -16,33 +16,9 @@ type UiTeam = Omit<Team, "members"> & {
   members: TeamMemberUi[];
 };
 
-const MOCK_TEAMS: UiTeam[] = [
-  {
-    id: "t_1",
-    name: "Sales Engineering",
-    slug: "sales-eng",
-    routing_logic: "round_robin",
-    members: [
-      { user_id: "u1", team_id: "t_1", name: "Alice", role: "admin", initial: "A", color: "bg-[#E8F0FE] text-[#1A73E8]" },
-      { user_id: "u2", team_id: "t_1", name: "Bob", role: "member", initial: "B", color: "bg-[#E6F4EA] text-[#137333]" },
-      { user_id: "u3", team_id: "t_1", name: "Charlie", role: "member", initial: "C", color: "bg-[#FEF7E0] text-[#E37400]" },
-    ],
-  },
-  {
-    id: "t_2",
-    name: "Executive Leadership",
-    slug: "execs",
-    routing_logic: "collective",
-    members: [
-      { user_id: "u1", team_id: "t_2", name: "Alice", role: "admin", initial: "A", color: "bg-[#E8F0FE] text-[#1A73E8]" },
-      { user_id: "u4", team_id: "t_2", name: "Diana", role: "admin", initial: "D", color: "bg-[#FCE8E6] text-[#D93025]" },
-    ],
-  },
-];
-
 export default function TeamsPage() {
   const { teams, isLoading, createTeam, isCreating } = useTeams();
-  const displayTeams: UiTeam[] = teams?.length > 0 ? (teams as UiTeam[]) : MOCK_TEAMS;
+  const displayTeams: UiTeam[] = teams as UiTeam[];
 
   const copyTeamLink = async (slug: string) => {
     const url = `${typeof window !== "undefined" ? window.location.origin : "https://graftai.com"}/${slug}`;
@@ -58,11 +34,62 @@ export default function TeamsPage() {
     }
   };
 
+  const handleCreateTeam = () => {
+    createTeam({
+      name: `New Team ${Date.now()}`,
+      slug: `team-${Date.now()}`,
+      routing_logic: "round_robin",
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 md:p-10 max-w-6xl mx-auto w-full">
         <div className="rounded-3xl border border-[#DADCE0] bg-white p-8 shadow-sm">
           <p className="text-sm text-[#5F6368]">Loading teams...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (displayTeams.length === 0) {
+    return (
+      <div className="p-6 md:p-10 max-w-6xl mx-auto w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 pb-6 border-b border-[#DADCE0]">
+          <div>
+            <h1 className="text-3xl font-medium text-[#202124] tracking-tight mb-2 flex items-center gap-3">
+              Teams & Resources
+            </h1>
+            <p className="text-[#5F6368] text-base max-w-xl">
+              Manage collective availability and distribute meetings intelligently across your organization.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleCreateTeam}
+            disabled={isCreating}
+            className="inline-flex items-center justify-center gap-2 bg-[#1A73E8] text-white hover:bg-[#1557B0] px-6 py-2.5 rounded-full text-sm font-medium transition-colors shadow-sm shrink-0 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <Plus size={18} />
+            {isCreating ? "Creating..." : "New Team"}
+          </button>
+        </div>
+
+        <div className="rounded-3xl border border-[#DADCE0] bg-white p-8 shadow-sm text-center">
+          <Users size={28} className="mx-auto mb-4 text-[#5F6368]" />
+          <h2 className="text-xl font-semibold text-[#202124] mb-2">No teams yet</h2>
+          <p className="text-sm text-[#5F6368] max-w-md mx-auto mb-6">
+            Create your first team to start routing meetings across shared availability instead of assigning them manually.
+          </p>
+          <button
+            type="button"
+            onClick={handleCreateTeam}
+            disabled={isCreating}
+            className="inline-flex items-center justify-center gap-2 bg-[#1A73E8] text-white hover:bg-[#1557B0] px-6 py-2.5 rounded-full text-sm font-medium transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <Plus size={18} />
+            {isCreating ? "Creating..." : "Create your first team"}
+          </button>
         </div>
       </div>
     );
@@ -94,13 +121,7 @@ export default function TeamsPage() {
     }
   };
 
-  const handleCreateTeam = () => {
-    createTeam({
-      name: `New Team ${Date.now()}`,
-      slug: `team-${Date.now()}`,
-      routing_logic: "round_robin",
-    });
-  };
+  
 
   return (
     <div className="p-6 md:p-10 max-w-6xl mx-auto w-full">

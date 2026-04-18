@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { PublicBookingDetailsResponse, getPublicBookingDetails } from "@/lib/api";
+import BookingStatusPill from "@/components/ui/BookingStatusPill";
 
 export default function PublicBookingDetailsPage() {
   const params = useParams<{ bookingId: string }>();
@@ -70,7 +71,9 @@ export default function PublicBookingDetailsPage() {
               </div>
               <div>
                 <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</dt>
-                <dd className="mt-1 text-sm font-semibold text-slate-900 capitalize">{booking.status}</dd>
+                <dd className="mt-1">
+                  <BookingStatusPill status={booking.status} />
+                </dd>
               </div>
               <div>
                 <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Organizer</dt>

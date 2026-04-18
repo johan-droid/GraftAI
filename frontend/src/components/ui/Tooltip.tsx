@@ -66,16 +66,16 @@ export function Tooltip({
           <Paper
             elevation={0}
             sx={{
-              background: "hsl(240, 24%, 14%)",
-              border: "1px solid hsla(239, 84%, 67%, 0.2)",
+              background: "#3C4043",
+              border: "1px solid rgba(255,255,255,0.06)",
               borderRadius: "8px",
               px: 2,
               py: 1,
-              color: "hsl(220, 20%, 98%)",
+              color: "#FFFFFF",
               fontSize: "0.8125rem",
               fontWeight: 500,
               maxWidth: 250,
-              boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
+              boxShadow: "0 12px 28px -12px rgba(32,33,36,0.55)",
             }}
           >
             {content}

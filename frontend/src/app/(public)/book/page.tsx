@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import {
   Clock, Video, Globe, Calendar as CalendarIcon,
   ArrowLeft, User, Mail, MessageSquare, CheckCircle2, XCircle, Loader2
@@ -421,7 +422,7 @@ function BookingForm() {
             <div className="space-y-4 rounded-2xl border border-[#DADCE0] bg-[#F8F9FA] p-4 sm:p-5">
               <div>
                 <p className="text-sm font-semibold text-[#202124]">Custom questions</p>
-                <p className="text-xs text-[#5F6368]">Please answer the organizer's questions to finish booking.</p>
+                <p className="text-xs text-[#5F6368]">Please answer the organizer&apos;s questions to finish booking.</p>
               </div>
 
               {customQuestions.map((question, index) => {
@@ -476,25 +477,29 @@ function BookingForm() {
                         {questionLabel}
                         {isRequired ? <span className="ml-1 text-[#D93025]">*</span> : null}
                       </label>
-                      <select
-                        required={isRequired}
-                        aria-label={questionLabel}
-                        title={questionLabel}
-                        value={String(customAnswers[questionId] ?? "")}
-                        onChange={(event) => setCustomAnswers((prev) => ({ ...prev, [questionId]: event.target.value }))}
-                        className="w-full bg-white border border-[#DADCE0] rounded-xl px-4 py-3 text-[#202124] focus:outline-none focus:ring-2 focus:ring-[#1A73E8]/20 focus:border-[#1A73E8] transition-all"
-                      >
-                        <option value="">Select an option</option>
-                        {options.map((option) => {
-                          const optionValue = typeof option === "string" ? option : option.value ?? option.label ?? "";
-                          const optionLabel = typeof option === "string" ? option : option.label ?? option.value ?? "Option";
-                          return (
-                            <option key={optionValue || optionLabel} value={optionValue}>
-                              {optionLabel}
-                            </option>
-                          );
-                        })}
-                      </select>
+                      <FormControl fullWidth>
+                        <InputLabel id={`${questionId}-label`}>Select an option</InputLabel>
+                        <Select
+                          labelId={`${questionId}-label`}
+                          id={questionId}
+                          value={String(customAnswers[questionId] ?? "")}
+                          label="Select an option"
+                          onChange={(event) => setCustomAnswers((prev) => ({ ...prev, [questionId]: event.target.value }))}
+                          required={isRequired}
+                          inputProps={{ "aria-label": questionLabel, title: questionLabel }}
+                        >
+                          <MenuItem value="">Select an option</MenuItem>
+                          {options.map((option) => {
+                            const optionValue = typeof option === "string" ? option : option.value ?? option.label ?? "";
+                            const optionLabel = typeof option === "string" ? option : option.label ?? option.value ?? "Option";
+                            return (
+                              <MenuItem key={optionValue || optionLabel} value={optionValue}>
+                                {optionLabel}
+                              </MenuItem>
+                            );
+                          })}
+                        </Select>
+                      </FormControl>
                     </div>
                   );
                 }

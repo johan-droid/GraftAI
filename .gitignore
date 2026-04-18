@@ -106,4 +106,8 @@ frontend/src/**/*.js.map
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Tool caches
+.ruff_cache/
+.cache/
 ```

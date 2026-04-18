@@ -1,7 +1,7 @@
 /**
  * Material Design 3 (M3) Design Tokens
  * 
- * Following Google's Material Design 3 specification for:
+ * Following the Material Design 3 specification for:
  * - Color system (primary, secondary, tertiary, error, surface)
  * - Typography scale (display, headline, title, body, label)
  * - Elevation (surface levels, shadows)
@@ -16,7 +16,7 @@
 // ============================================================================
 
 export const m3Colors = {
-  // Primary palette - Google Blue
+  // Primary palette - Primary brand blue
   primary: {
     0: '#000000',
     10: '#001D35',
@@ -257,7 +257,7 @@ export const m3DarkTheme = {
 export const m3Typography = {
   // Font families
   fontFamily: {
-    brand: '"Google Sans", "Plus Jakarta Sans", system-ui, sans-serif',
+    brand: '"Plus Jakarta Sans", system-ui, sans-serif',
     plain: '"Roboto", "Plus Jakarta Sans", system-ui, sans-serif',
   },
   

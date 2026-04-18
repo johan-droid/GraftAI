@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, IconButton, Menu, MenuItem } from "@mui/material";
+import { IconButton, Menu, MenuItem } from "@mui/material";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Sun, Moon, Monitor, Check } from "lucide-react";
@@ -40,14 +40,15 @@ export function ThemeToggle() {
           width: 40,
           height: 40,
           borderRadius: "12px",
-          background: "hsla(239, 84%, 67%, 0.1)",
-          border: "1px solid hsla(239, 84%, 67%, 0.2)",
-          color: "hsl(220, 20%, 98%)",
+          background: "#FFFFFF",
+          border: "1px solid #DADCE0",
+          color: "#5F6368",
           transition: "all 0.2s ease",
+          boxShadow: "0 1px 2px rgba(32,33,36,0.08)",
           "&:hover": {
-            background: "hsla(239, 84%, 67%, 0.2)",
-            borderColor: "hsla(239, 84%, 67%, 0.4)",
-            transform: "scale(1.05)",
+            background: "#F1F3F4",
+            borderColor: "#BDC1C6",
+            transform: "scale(1.02)",
           },
         }}
       >
@@ -68,11 +69,13 @@ export function ThemeToggle() {
         onClose={handleClose}
         PaperProps={{
           sx: {
-            background: "hsl(240, 24%, 14%)",
-            border: "1px solid hsla(239, 84%, 67%, 0.2)",
-            borderRadius: "12px",
-            boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
+            background: "#FFFFFF",
+            border: "1px solid #DADCE0",
+            borderRadius: "20px",
+            boxShadow: "0 24px 60px -38px rgba(32,33,36,0.28)",
             minWidth: 160,
+            mt: 1,
+            py: 0.5,
           },
         }}
       >
@@ -84,13 +87,15 @@ export function ThemeToggle() {
               display: "flex",
               alignItems: "center",
               gap: 1.5,
-              py: 1,
-              px: 2,
-              color: mode === theme.value ? "hsl(239, 84%, 67%)" : "hsl(220, 20%, 98%)",
+              py: 1.1,
+              px: 1.5,
+              mx: 0.5,
+              borderRadius: "12px",
+              color: mode === theme.value ? "#1967D2" : "#202124",
               fontWeight: mode === theme.value ? 600 : 400,
-              background: mode === theme.value ? "hsla(239, 84%, 67%, 0.1)" : "transparent",
+              background: mode === theme.value ? "#E8F0FE" : "transparent",
               "&:hover": {
-                background: "hsla(239, 84%, 67%, 0.1)",
+                background: "#F1F3F4",
               },
             }}
           >

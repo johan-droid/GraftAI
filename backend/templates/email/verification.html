@@ -6,10 +6,8 @@
         <h1>Verify your email address</h1>
         <p>Hi {{ full_name }},</p>
         <p>Use the code below to verify your GraftAI account. This code expires in 15 minutes.</p>
-        <p style="font-size: 24px; font-weight: 800; letter-spacing: 0.2em; color: #ffffff; background: rgba(99,102,241,.1); padding: 20px 0; text-align: center; border-radius: 16px;">
-            {{ code }}
-        </p>
+        <p class="verification-code">{{ code }}</p>
         <p>If you did not request this verification code, please ignore this message.</p>
-        <p class="muted-small">Need help? Visit <a href="{{ frontend_url }}" style="color: #818cf8; text-decoration: none;">{{ frontend_url }}</a>.</p>
+        <p class="muted-small">Need help? Visit <a href="{{ frontend_url }}" class="footer-link-primary">{{ frontend_url }}</a>.</p>
     </div>
 {% endblock %}

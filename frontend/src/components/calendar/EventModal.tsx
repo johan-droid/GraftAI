@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Calendar, Clock, MapPin, AlignLeft, Save, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { googleOverlayStyles } from "@/components/ui/googleOverlayStyles";
 
 interface Event {
   id?: string;
@@ -154,7 +155,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/30 z-50"
+            className={googleOverlayStyles.backdrop}
           />
 
           {/* Modal */}
@@ -162,16 +163,19 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
             initial={{ opacity: 0, scale: 0.98, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 12 }}
-            className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg bg-[var(--bg-card)] rounded-lg shadow-sm z-50 flex flex-col max-h-[90vh]"
+            className={cn(
+              googleOverlayStyles.panel,
+              "fixed inset-4 z-50 flex max-h-[90vh] flex-col sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2"
+            )}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+            <div className="flex items-center justify-between border-b border-[#DADCE0] p-4">
+              <h2 className="text-lg font-semibold text-[#202124]">
                 {event ? "Edit Event" : "Create Event"}
               </h2>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-transparent rounded-md transition-colors"
+                className={googleOverlayStyles.iconButton + " p-2"}
                 aria-label="Close event modal"
               >
                 <X className="w-5 h-5" />
@@ -182,7 +186,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* Title */}
               <div>
-                <label htmlFor="event-title" className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="event-title" className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#202124]">
                   <Calendar className="w-4 h-4" />
                   Event Title
                 </label>
@@ -191,19 +195,16 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className={cn(
-                    "w-full px-3 py-2 rounded-md border transition-colors focus:outline-none focus:ring-0",
-                    errors.title ? "border-red-300" : "border-gray-200"
-                  )}
+                  className={cn(googleOverlayStyles.field, errors.title ? "border-[#EA4335]" : "")}
                   placeholder="Team meeting, Lunch with client..."
                   disabled={loading}
                 />
-                {errors.title && <p className="text-red-500 text-xs mt-1">{errors.title}</p>}
+                {errors.title && <p className="mt-1 text-xs text-[#D93025]">{errors.title}</p>}
               </div>
 
               {/* Start Time */}
               <div>
-                <label htmlFor="event-start" className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="event-start" className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#202124]">
                   <Clock className="w-4 h-4" />
                   Start Time
                 </label>
@@ -212,18 +213,15 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   type="datetime-local"
                   value={formData.start_time}
                   onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                  className={cn(
-                    "w-full px-3 py-2 rounded-md border transition-colors focus:outline-none focus:ring-0",
-                    errors.start_time ? "border-red-300" : "border-gray-200"
-                  )}
+                  className={cn(googleOverlayStyles.field, errors.start_time ? "border-[#EA4335]" : "")}
                   disabled={loading}
                 />
-                {errors.start_time && <p className="text-red-500 text-xs mt-1">{errors.start_time}</p>}
+                {errors.start_time && <p className="mt-1 text-xs text-[#D93025]">{errors.start_time}</p>}
               </div>
 
               {/* End Time */}
               <div>
-                <label htmlFor="event-end" className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="event-end" className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#202124]">
                   <Clock className="w-4 h-4" />
                   End Time
                 </label>
@@ -232,18 +230,15 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   type="datetime-local"
                   value={formData.end_time}
                   onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                  className={cn(
-                    "w-full px-3 py-2 rounded-md border transition-colors focus:outline-none focus:ring-0",
-                    errors.end_time ? "border-red-300" : "border-gray-200"
-                  )}
+                  className={cn(googleOverlayStyles.field, errors.end_time ? "border-[#EA4335]" : "")}
                   disabled={loading}
                 />
-                {errors.end_time && <p className="text-red-500 text-xs mt-1">{errors.end_time}</p>}
+                {errors.end_time && <p className="mt-1 text-xs text-[#D93025]">{errors.end_time}</p>}
               </div>
 
               {/* Location */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#202124]">
                   <MapPin className="w-4 h-4" />
                   Location (Optional)
                 </label>
@@ -251,26 +246,26 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-gray-200 transition-colors focus:outline-none focus:ring-0"
+                  className={googleOverlayStyles.field}
                   placeholder="Conference Room A, Zoom link..."
                   disabled={loading}
                 />
               </div>
 
               {/* Meeting Link */}
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className={googleOverlayStyles.section}>
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Create a meeting link</p>
-                    <p className="text-sm text-slate-500">Use a connected calendar provider to generate Google Meet or Teams links.</p>
+                    <p className="text-sm font-semibold text-[#202124]">Create a meeting link</p>
+                    <p className="text-sm text-[#5F6368]">Use a connected calendar provider to generate Google Meet or Teams links.</p>
                   </div>
-                  <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <label className="inline-flex items-center gap-2 text-sm font-medium text-[#202124]">
                     <input
                       type="checkbox"
                       checked={formData.is_meeting}
                       onChange={(e) => setFormData({ ...formData, is_meeting: e.target.checked })}
                       disabled={loading || integrationLoading}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      className="h-4 w-4 rounded border-[#BDC1C6] text-[#1A73E8] focus:ring-[#D2E3FC]"
                     />
                     Enable
                   </label>
@@ -280,10 +275,10 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   <div className="space-y-4">
                     {availableProviders.length ? (
                       <div>
-                        <div className="text-sm font-semibold text-slate-700 mb-2">Meeting Provider</div>
+                        <div className="mb-2 text-sm font-semibold text-[#202124]">Meeting Provider</div>
                         <div className="grid gap-2 sm:grid-cols-2">
                               {availableProviders.map((provider) => (
-                                <label key={provider} className="inline-flex items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:border-slate-300 transition-colors">
+                                <label key={provider} className="inline-flex items-center gap-3 rounded-xl border border-[#DADCE0] px-3 py-2 text-sm text-[#202124] transition-colors hover:border-[#BDC1C6]">
                               <input
                                 type="radio"
                                 name="meeting_provider"
@@ -291,7 +286,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                                 checked={formData.meeting_provider === provider}
                                 onChange={(e) => setFormData({ ...formData, meeting_provider: e.target.value })}
                                 disabled={loading}
-                                className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                className="h-4 w-4 border-[#BDC1C6] text-[#1A73E8] focus:ring-[#D2E3FC]"
                               />
                               <span className="font-medium capitalize">{provider}</span>
                             </label>
@@ -299,24 +294,24 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      <div className="rounded-2xl border border-[#F9EFD5] bg-[#FFF8E1] p-4 text-sm text-[#8A5D00]">
                         Connect Google or Microsoft under Settings &gt; Integrations to generate a real meeting link.
                       </div>
                     )}
 
                     <div>
-                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                      <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#202124]">
                         <span>Attendees</span>
                       </label>
                       <input
                         type="text"
                         value={attendeesText}
                         onChange={(e) => setAttendeesText(e.target.value)}
-                        className="w-full px-3 py-2 rounded-md border border-gray-200 transition-colors focus:outline-none focus:ring-0"
+                        className={googleOverlayStyles.field}
                         placeholder="Attendee emails, separated by commas"
                         disabled={loading}
                       />
-                      <p className="text-xs text-slate-500 mt-1">Optional; used only when generating a meeting link.</p>
+                      <p className="mt-1 text-xs text-[#5F6368]">Optional; used only when generating a meeting link.</p>
                     </div>
                   </div>
                 )}
@@ -324,7 +319,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
 
               {/* Description */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#202124]">
                   <AlignLeft className="w-4 h-4" />
                   Description (Optional)
                 </label>
@@ -332,15 +327,15 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={4}
-                  className="w-full px-3 py-2 rounded-md border border-gray-200 transition-colors focus:outline-none focus:ring-0 resize-none"
+                  className={googleOverlayStyles.field + " resize-none"}
                   placeholder="Add notes, agenda, or details..."
                   disabled={loading}
                 />
               </div>
 
               {event?.source && event.source !== "local" && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <p className="text-sm text-amber-800">
+                <div className="rounded-xl border border-[#F9EFD5] bg-[#FFF8E1] p-4">
+                  <p className="text-sm text-[#8A5D00]">
                     <strong>Note:</strong> This event is synced from {event.source}. Changes may be overwritten on next sync.
                   </p>
                 </div>
@@ -348,13 +343,13 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
             </form>
 
             {/* Footer */}
-            <div className="flex items-center justify-between p-4 border-t border-[var(--border-subtle)] gap-3">
+            <div className="flex items-center justify-between gap-3 border-t border-[#DADCE0] p-4">
               {event && onDelete && event.source === "local" ? (
                 <button
                   type="button"
                   onClick={handleDelete}
                   disabled={loading}
-                  className="flex items-center gap-2 px-3 py-1 rounded-md font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-md px-3 py-1 font-semibold text-[#D93025] transition-colors hover:bg-[#FDE7E9] disabled:opacity-50"
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete
@@ -367,14 +362,14 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, initialDa
                   type="button"
                   onClick={onClose}
                   disabled={loading}
-                  className="px-4 py-2 rounded-md font-semibold text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  className={googleOverlayStyles.secondaryButton}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmit}
                   disabled={loading}
-                  className="flex items-center gap-2 bg-[var(--primary)] text-white px-4 py-2 rounded-md font-semibold hover:brightness-95 transition-colors disabled:opacity-50"
+                  className={googleOverlayStyles.primaryButton + " flex items-center gap-2"}
                 >
                   <Save className="w-4 h-4" />
                   {loading ? "Saving..." : "Save"}

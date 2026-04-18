@@ -34,7 +34,7 @@ from backend.ai.monitoring import (
     log_automation_complete,
     log_phase_execution
 )
-from backend.utils.db import get_db
+from backend.utils.db import get_async_session_maker
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -466,18 +466,38 @@ class BookingAutomationService:
         - Calendar availability
         - Business rules
         """
-        async with get_db() as db:
+        session_factory = get_async_session_maker()
+        async with session_factory() as db:
+            booking_result = await db.execute(
+                select(BookingTable).where(BookingTable.id == booking_id)
+            )
+            booking = booking_result.scalar_one_or_none()
+
             # 1. Load booking data
-            # TODO: Query booking from database
-            booking_data = {
-                "id": booking_id,
-                "title": "Consultation with John Smith",
-                "start_time": "2024-01-16T14:00:00",
-                "duration_minutes": 30,
-                "attendee_email": "john.smith@example.com",
-                "booking_type": "consultation",
-                "organizer_id": user_id
-            }
+            if booking:
+                metadata = booking.metadata_payload or {}
+                attendees = metadata.get("attendees") or []
+                attendee_email = attendees[0] if attendees else booking.email
+                booking_data = {
+                    "id": booking.id,
+                    "title": metadata.get("title") or f"Booking with {booking.full_name}",
+                    "start_time": booking.start_time.isoformat(),
+                    "duration_minutes": max(int((booking.end_time - booking.start_time).total_seconds() / 60), 1),
+                    "attendee_email": attendee_email,
+                    "booking_type": metadata.get("meeting_type", "consultation"),
+                    "organizer_id": booking.user_id,
+                    "estimated_value": metadata.get("estimated_value"),
+                }
+            else:
+                booking_data = {
+                    "id": booking_id,
+                    "title": "Consultation with John Smith",
+                    "start_time": "2024-01-16T14:00:00",
+                    "duration_minutes": 30,
+                    "attendee_email": "john.smith@example.com",
+                    "booking_type": "consultation",
+                    "organizer_id": user_id,
+                }
             
             # 2. Get attendee profile
             attendee_info = await get_attendee_info(
@@ -733,7 +753,8 @@ class BookingAutomationService:
         external_results: Dict[str, Any],
         reflection_data: Dict[str, Any],
         execution_time_ms: float,
-        fallback_mode: Optional[str] = None
+        fallback_mode: Optional[str] = None,
+        trigger_source: str = "api"
     ):
         """
         Store automation results to database within a transaction.
@@ -769,21 +790,61 @@ class BookingAutomationService:
                 booking.risk_level = decision.risk_analysis.level.value
                 db.add(booking)
 
-            automation_record = AIAutomationTable(
-                user_id=user_id,
-                event_id=booking_id,
-                automation_type="booking",
-                status="completed" if all(r.get("success") for r in action_results) else "partial",
-                decision_score=self._calculate_decision_score(decision, action_results),
-                actions_executed=len(action_results),
-                actions_data=str(action_results),
-                external_results=str(external_results),
-                reflection_data=str(reflection_data),
-                execution_time_ms=int(execution_time_ms),
-                fallback_mode=fallback_mode,
-                error_message=None
+            automation_status = "completed" if all(r.get("success") for r in action_results) else "partial"
+            decision_score = self._calculate_decision_score(decision, action_results)
+            now = datetime.utcnow()
+
+            automation_lookup = await db.execute(
+                select(AIAutomationTable)
+                .where(
+                    AIAutomationTable.booking_id == booking_id,
+                    AIAutomationTable.user_id == user_id,
+                )
+                .order_by(AIAutomationTable.created_at.desc())
             )
-            db.add(automation_record)
+            automation_record = automation_lookup.scalars().first()
+
+            agent_decisions = {
+                "actions": [a.tool_name for a in decision.actions],
+                "reasoning": decision.reasoning,
+                "confidence": getattr(decision.confidence, "name", str(decision.confidence)),
+                "risk_assessment": decision.risk_analysis.level.value,
+                "reflection": reflection_data,
+            }
+
+            if automation_record is None:
+                automation_record = AIAutomationTable(
+                    booking_id=booking_id,
+                    user_id=user_id,
+                    status=automation_status,
+                    decision_score=decision_score,
+                    risk_assessment=decision.risk_analysis.level.value,
+                    agent_decisions=agent_decisions,
+                    actions_executed=action_results,
+                    external_results=external_results,
+                    execution_time_ms=execution_time_ms,
+                    started_at=now,
+                    completed_at=now,
+                    fallback_mode=fallback_mode,
+                    trigger_source=trigger_source,
+                    error_message=None,
+                )
+                db.add(automation_record)
+            else:
+                automation_record.status = automation_status
+                automation_record.decision_score = decision_score
+                automation_record.risk_assessment = decision.risk_analysis.level.value
+                automation_record.agent_decisions = agent_decisions
+                automation_record.actions_executed = action_results
+                automation_record.external_results = external_results
+                automation_record.execution_time_ms = execution_time_ms
+                automation_record.completed_at = now
+                automation_record.fallback_mode = fallback_mode
+                automation_record.trigger_source = trigger_source
+                automation_record.error_message = None
+                if automation_record.started_at is None:
+                    automation_record.started_at = now
+
             await db.flush()
 
             logger.info(
@@ -809,14 +870,16 @@ class BookingAutomationService:
         external_results: Dict[str, Any],
         reflection_data: Dict[str, Any],
         execution_time_ms: float,
-        fallback_mode: Optional[str] = None
+        fallback_mode: Optional[str] = None,
+        trigger_source: str = "api"
     ):
         """
         Store automation results to database with transaction safety.
 
         Legacy method - now wraps _store_results_with_transaction in a transaction.
         """
-        async with get_db() as db:
+        session_factory = get_async_session_maker()
+        async with session_factory() as db:
             async with db.begin():  # Start transaction
                 return await self._store_results_with_transaction(
                     db=db,
@@ -827,7 +890,8 @@ class BookingAutomationService:
                     external_results=external_results,
                     reflection_data=reflection_data,
                     execution_time_ms=execution_time_ms,
-                    fallback_mode=fallback_mode
+                    fallback_mode=fallback_mode,
+                    trigger_source=trigger_source,
                 )
     
     def _calculate_lead_time(self, start_time: str) -> float:

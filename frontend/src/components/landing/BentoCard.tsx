@@ -29,9 +29,9 @@ const toneStyles: Record<
     eyebrow: "text-[#E37400]",
   },
   violet: {
-    accent: "bg-[#9334E6]",
-    badge: "bg-[#F3E8FD] text-[#7E22CE]",
-    eyebrow: "text-[#7E22CE]",
+    accent: "bg-[#D93025]",
+    badge: "bg-[#FDE7E9] text-[#D93025]",
+    eyebrow: "text-[#D93025]",
   },
   slate: {
     accent: "bg-[#5F6368]",
@@ -63,14 +63,14 @@ export function BentoCard({
 
   return (
     <article
-      className={`relative overflow-hidden rounded-[28px] border border-[#DADCE0] bg-white/85 p-5 shadow-[0_24px_80px_-50px_rgba(32,33,36,0.45)] backdrop-blur-xl ${className}`}
+      className={`relative overflow-hidden rounded-[36px] border border-[#DADCE0] bg-white/90 p-6 shadow-[0_28px_90px_-56px_rgba(32,33,36,0.46)] backdrop-blur-2xl ${className}`}
       {...props}
     >
       <div className={`absolute inset-x-0 top-0 h-1 ${palette.accent}`} />
       <div className="relative z-10">
         <div className="flex items-start gap-4">
           {Icon ? (
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${palette.badge}`}>
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] ${palette.badge}`}>
               <Icon size={18} />
             </div>
           ) : null}

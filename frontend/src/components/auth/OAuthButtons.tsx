@@ -1,10 +1,8 @@
 "use client";
 
-import { Box, Button } from "@mui/material";
 import { signIn } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 
-// Custom SVG icons for OAuth providers
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24">
     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -34,9 +32,19 @@ interface OAuthButtonsProps {
 }
 
 export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in" }: OAuthButtonsProps) {
-  const handleOAuth = async (provider: string) => {
+  const handleOAuth = async (provider: string, timestamp: number) => {
     try {
-      await signIn(provider, { callbackUrl: callbackURL });
+      // Force redirect to dashboard, bypassing profile setup/onboarding
+      // Timestamp is provided by the event handler so no impure calls occur during render.
+      const t = timestamp;
+      const finalCallbackUrl = callbackURL.startsWith("/")
+        ? `${callbackURL}?t=${t}&skip_setup=true`
+        : callbackURL;
+
+      await signIn(provider, {
+        callbackUrl: finalCallbackUrl,
+        redirect: true,
+      });
     } catch (error) {
       console.error(`OAuth error for ${provider}:`, error);
       toast.error(
@@ -48,45 +56,29 @@ export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <div className="flex flex-col gap-3">
       {providers.map((provider) => (
-        <Button
+        <button
           key={provider.id}
-          onClick={() => handleOAuth(provider.id)}
-          fullWidth
-          variant="outlined"
-          startIcon={<provider.icon />}
-          sx={{
-            minHeight: 48,
-            py: { xs: 1.4, sm: 1.5 },
-            px: { xs: 2.5, sm: 3 },
-            borderRadius: "18px",
-            textTransform: "none",
-            color: "var(--text-primary, #1f1f1f)",
-            borderColor: "rgba(95, 99, 104, 0.18)",
-            background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,249,250,0.92) 100%)",
-            boxShadow: "0 12px 28px -18px rgba(32, 33, 36, 0.2)",
-            fontFamily: "var(--font-sans, 'Google Sans', Roboto, sans-serif)",
-            fontSize: { xs: "0.93rem", sm: "0.875rem" },
-            fontWeight: 600,
-            justifyContent: "center",
-            gap: 1,
-            transition: "transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease",
-            "&:hover": {
-              backgroundColor: "rgba(255,255,255,0.98)",
-              borderColor: "rgba(26, 115, 232, 0.28)",
-              boxShadow: "0 16px 36px -22px rgba(26, 115, 232, 0.32)",
-              transform: "translateY(-1px)",
-            },
-            "& .MuiButton-startIcon": {
-              marginRight: "8px",
-              marginLeft: "-4px",
-            },
-          }}
+          onClick={() => handleOAuth(provider.id, Date.now())}
+          type="button"
+          className="
+            group relative flex w-full items-center justify-center gap-3
+            rounded-full border border-[#DADCE0] bg-white
+            px-6 py-3.5
+            text-[15px] font-medium text-[#3C4043]
+            shadow-[0_1px_3px_rgba(60,64,67,0.08)]
+            transition-all duration-200 ease-out
+            hover:bg-[#F8F9FA] hover:border-[#D2E3FC]
+            hover:shadow-[0_4px_12px_rgba(26,115,232,0.12)]
+            active:scale-[0.99] active:shadow-sm
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A73E8] focus-visible:ring-offset-2
+          "
         >
-          {actionText} with {provider.name}
-        </Button>
+          <provider.icon />
+          <span>{actionText} with {provider.name}</span>
+        </button>
       ))}
-    </Box>
+    </div>
   );
 }

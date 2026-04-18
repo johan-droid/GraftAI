@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import BookingStatusPill from "@/components/ui/BookingStatusPill";
 
 interface BookingReceiptProps {
   bookingId: string;
@@ -53,10 +54,13 @@ export default function BookingReceipt(props: BookingReceiptProps) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-3">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-600">Booking Receipt</p>
-          <h2 className="mt-2 text-2xl font-semibold text-slate-900">{props.eventTitle}</h2>
-          <p className="mt-1 text-sm text-slate-600">Confirmed for {props.inviteeStartTime} — {props.inviteeEndTime} ({props.inviteeZone})</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-600">Booking Receipt</p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-900">{props.eventTitle}</h2>
+            <p className="mt-1 text-sm text-slate-600">Confirmed for {props.inviteeStartTime} — {props.inviteeEndTime} ({props.inviteeZone})</p>
+          </div>
+          <BookingStatusPill status="confirmed" />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

@@ -1,5 +1,6 @@
 "use client";
 
+import { type ElementType } from "react";
 import { useQuery } from "@/hooks/useQuery";
 import { motion } from "framer-motion";
 import {
@@ -17,9 +18,9 @@ export default function AnalyticsPage() {
       meetings: number;
       hours: number;
       growth: number;
-        meetingsTrend?: string;
-        hoursTrend?: string;
-        growthTrend?: string;
+      meetingsTrend?: string;
+      hoursTrend?: string;
+      growthTrend?: string;
       weeklyBreakdown?: { day: string; count: number }[];
       categoryBreakdown?: { category: string; count: number }[];
     };
@@ -34,8 +35,8 @@ export default function AnalyticsPage() {
 
         <motion.div variants={item} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-h1" style={{ color: "var(--text)" }}>Analytics</h1>
-            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+            <h1 className="text-h1 text-[var(--text)]">Analytics</h1>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
               Your scheduling performance and AI usage metrics
             </p>
           </div>
@@ -45,9 +46,10 @@ export default function AnalyticsPage() {
         </motion.div>
 
         {error && (
-          <motion.div variants={item}
-            className="flex items-center gap-3 p-4 rounded-xl text-sm"
-            style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "var(--error)" }}>
+          <motion.div
+            variants={item}
+            className="flex items-center gap-3 rounded-xl border border-[rgba(248,113,113,0.2)] bg-[rgba(248,113,113,0.08)] p-4 text-sm text-[var(--error)]"
+          >
             <Activity className="w-4 h-4 flex-shrink-0" />
             Failed to load analytics. {error.message}
             <button className="ml-auto underline text-xs" onClick={() => refetch()}>Retry</button>
@@ -65,7 +67,7 @@ export default function AnalyticsPage() {
                 value={data?.details?.meetings ?? 0}
                 suffix=""
                 color="peach"
-                trend={data?.details?.meetingsTrend ?? "(Example) +12% vs last month"}
+                trend={data?.details?.meetingsTrend ?? "No trend data yet"}
               />
               <MetricCard
                 icon={Clock}
@@ -73,7 +75,7 @@ export default function AnalyticsPage() {
                 value={data?.details?.hours ?? 0}
                 suffix="h"
                 color="info"
-                trend={data?.details?.hoursTrend ?? "(Example) Active this week"}
+                trend={data?.details?.hoursTrend ?? "No trend data yet"}
               />
               <MetricCard
                 icon={TrendingUp}
@@ -81,7 +83,7 @@ export default function AnalyticsPage() {
                 value={data?.details?.growth ?? 0}
                 suffix="%"
                 color="success"
-                trend={data?.details?.growthTrend ?? "(Example) Growth this month"}
+                trend={data?.details?.growthTrend ?? "No trend data yet"}
               />
             </>
           )}
@@ -89,7 +91,7 @@ export default function AnalyticsPage() {
 
         <motion.div variants={item} className="card p-6 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-h3 font-semibold" style={{ color: "var(--text)" }}>AI Summary</h2>
+            <h2 className="text-h3 font-semibold text-[var(--text)]">AI Summary</h2>
             <span className="badge badge-peach text-xs">
               <Activity className="w-3 h-3" /> Live
             </span>
@@ -97,7 +99,7 @@ export default function AnalyticsPage() {
           {isLoading ? (
             <SkeletonText lines={4} />
           ) : data?.summary ? (
-            <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+            <p className="text-sm leading-relaxed text-[var(--text-muted)]">
               {data.summary}
             </p>
           ) : (
@@ -111,14 +113,14 @@ export default function AnalyticsPage() {
 
         {data?.details?.weeklyBreakdown && (
           <motion.div variants={item} className="card p-6 space-y-4">
-            <h2 className="text-h3 font-semibold" style={{ color: "var(--text)" }}>Meetings by Day</h2>
+            <h2 className="text-h3 font-semibold text-[var(--text)]">Meetings by Day</h2>
             <BarChart data={data.details.weeklyBreakdown} />
           </motion.div>
         )}
 
         {data?.details?.categoryBreakdown && (
           <motion.div variants={item} className="card p-6 space-y-4">
-            <h2 className="text-h3 font-semibold" style={{ color: "var(--text)" }}>By Category</h2>
+            <h2 className="text-h3 font-semibold text-[var(--text)]">By Category</h2>
             <div className="space-y-3">
               {data.details.categoryBreakdown.map(({ category, count }) => {
                 const max = Math.max(...data.details!.categoryBreakdown!.map(c => c.count), 1);
@@ -126,15 +128,14 @@ export default function AnalyticsPage() {
                 return (
                   <div key={category} className="space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="capitalize font-medium" style={{ color: "var(--text)" }}>{category}</span>
-                      <span style={{ color: "var(--text-muted)" }}>{count}</span>
+                      <span className="capitalize font-medium text-[var(--text)]">{category}</span>
+                      <span className="text-[var(--text-muted)]">{count}</span>
                     </div>
-                    <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
+                    <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-hover)]">
                       <motion.div
-                        className="h-full rounded-full"
-                        style={{ background: "var(--peach)", width: `${pct}%` }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
+                        className="h-full w-full origin-left rounded-full bg-[var(--peach)]"
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: pct / 100 }}
                         transition={{ duration: 0.6, ease: "easeOut" }}
                       />
                     </div>
@@ -145,13 +146,14 @@ export default function AnalyticsPage() {
           </motion.div>
         )}
 
-        <motion.div variants={item}
-          className="flex items-start gap-3 p-4 rounded-xl text-sm"
-          style={{ background: "var(--peach-ghost)", border: "1px solid var(--peach-border)" }}>
-          <ArrowUpRight className="w-4 h-4 flex-shrink-0" style={{ color: "var(--peach)" }} />
-          <p style={{ color: "var(--text-muted)" }}>
-            <strong style={{ color: "var(--peach)" }}>Tip:</strong> Ensure {" "}
-            <code className="text-xs px-1 py-0.5 rounded" style={{ background: "var(--bg-hover)" }}>NEXT_PUBLIC_API_BASE_URL</code>{" "}
+        <motion.div
+          variants={item}
+          className="flex items-start gap-3 rounded-xl border border-[var(--peach-border)] bg-[var(--peach-ghost)] p-4 text-sm"
+        >
+          <ArrowUpRight className="w-4 h-4 flex-shrink-0 text-[var(--peach)]" />
+          <p className="text-[var(--text-muted)]">
+            <strong className="text-[var(--peach)]">Tip:</strong> Ensure {" "}
+            <code className="rounded bg-[var(--bg-hover)] px-1 py-0.5 text-xs">NEXT_PUBLIC_API_BASE_URL</code>{" "}
             is set to your deployed backend URL in Vercel environment variables.
           </p>
         </motion.div>
@@ -163,36 +165,43 @@ export default function AnalyticsPage() {
 function MetricCard({
   icon: Icon, label, value, suffix, color, trend,
 }: {
-  icon: React.ElementType;
+  icon: ElementType;
   label: string;
   value: number;
   suffix: string;
   color: "peach" | "info" | "success";
   trend: string;
 }) {
-  const colorMap: Record<string, string> = {
-    peach:   "var(--peach)",
-    info:    "var(--info)",
-    success: "var(--success)",
+  const variantMap: Record<typeof color, { iconWrap: string; icon: string; trend: string }> = {
+    peach: {
+      iconWrap: "bg-[var(--peach-ghost)]",
+      icon: "text-[var(--peach)]",
+      trend: "text-[var(--peach)]",
+    },
+    info: {
+      iconWrap: "bg-[rgba(96,165,250,0.1)]",
+      icon: "text-[var(--info)]",
+      trend: "text-[var(--info)]",
+    },
+    success: {
+      iconWrap: "bg-[rgba(52,211,153,0.1)]",
+      icon: "text-[var(--success)]",
+      trend: "text-[var(--success)]",
+    },
   };
-  const bgMap: Record<string, string> = {
-    peach:   "var(--peach-ghost)",
-    info:    "rgba(96,165,250,0.1)",
-    success: "rgba(52,211,153,0.1)",
-  };
-  const c = colorMap[color];
+  const variant = variantMap[color];
 
   return (
     <div className="card p-5 space-y-3">
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: bgMap[color] }}>
-        <Icon className="w-5 h-5" style={{ color: c }} />
+      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${variant.iconWrap}`}>
+        <Icon className={`w-5 h-5 ${variant.icon}`} />
       </div>
       <div>
-        <p className="text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>{label}</p>
-        <p className="text-3xl font-bold" style={{ color: "var(--text)" }}>
+        <p className="mb-1 text-xs font-medium text-[var(--text-muted)]">{label}</p>
+        <p className="text-3xl font-bold text-[var(--text)]">
           {value}{suffix}
         </p>
-        <p className="text-xs mt-1 flex items-center gap-1" style={{ color: c }}>
+        <p className={`mt-1 flex items-center gap-1 text-xs ${variant.trend}`}>
           <TrendingUp className="w-3 h-3" /> {trend}
         </p>
       </div>
@@ -203,20 +212,21 @@ function MetricCard({
 function BarChart({ data }: { data: { day: string; count: number }[] }) {
   const max = Math.max(...data.map(d => d.count), 1);
   return (
-    <div className="flex items-end gap-2 h-32">
+    <div className="flex h-32 items-end gap-2">
       {data.map(({ day, count }) => {
         const pct = (count / max) * 100;
         return (
-          <div key={day} className="flex-1 flex flex-col items-center gap-1">
-            <span className="text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>{count}</span>
-            <motion.div
-              className="w-full rounded-t-md"
-              style={{ background: "var(--peach)", opacity: pct > 0 ? 0.7 + (pct / 100) * 0.3 : 0.2 }}
-              initial={{ height: 0 }}
-              animate={{ height: `${Math.max(pct, 4)}%` }}
-              transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
-            />
-            <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>{day.slice(0, 3)}</span>
+          <div key={day} className="flex flex-1 flex-col items-center gap-1">
+            <span className="text-[11px] font-medium text-[var(--text-muted)]">{count}</span>
+            <div className="flex h-20 w-full items-end">
+              <motion.div
+                className="h-full w-full origin-bottom rounded-t-md bg-[var(--peach)] will-change-transform"
+                initial={{ scaleY: 0 }}
+                animate={{ scaleY: Math.max(pct, 4) / 100, opacity: pct > 0 ? 0.7 + (pct / 100) * 0.3 : 0.2 }}
+                transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
+              />
+            </div>
+            <span className="text-[10px] text-[var(--text-faint)]">{day.slice(0, 3)}</span>
           </div>
         );
       })}

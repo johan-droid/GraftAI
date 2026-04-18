@@ -2,12 +2,13 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { MobileSidebar } from "@/components/dashboard/MobileSidebar";
 import { BottomNav } from "@/components/dashboard/BottomNav";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
+import { getProfileSetupStatus } from "@/lib/api";
 
 export default function DashboardLayout({
   children,
@@ -18,6 +19,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const hasPageMobileNav = pathname.startsWith("/dashboard/book");
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -25,12 +27,42 @@ export default function DashboardLayout({
     }
   }, [status, router, pathname]);
 
-  if (status === "loading") {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-[#F8F9FA]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#1A73E8]" />
-      </div>
-    );
+  useEffect(() => {
+    if (status !== "authenticated") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkOnboarding = async () => {
+      try {
+        setIsCheckingOnboarding(true);
+        const setupStatus = await getProfileSetupStatus();
+        const hasCompletedInitialSetup = Boolean(
+          setupStatus.profile_setup_completed || setupStatus.onboarding_completed
+        );
+
+        if (!cancelled && !hasCompletedInitialSetup && !pathname.startsWith("/profile/setup")) {
+          router.replace("/profile/setup");
+        }
+      } catch (error) {
+        console.error("Failed to verify profile setup status:", error);
+      } finally {
+        if (!cancelled) {
+          setIsCheckingOnboarding(false);
+        }
+      }
+    };
+
+    void checkOnboarding();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status, pathname, router]);
+
+  if (status === "loading" || isCheckingOnboarding) {
+    return <AppLoadingScreen variant="dashboard" title="Preparing your dashboard" subtitle="Checking your session and onboarding status before rendering live data." />;
   }
 
   if (status === "authenticated") {

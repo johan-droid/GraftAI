@@ -13,7 +13,7 @@ const navItems = [
   { label: "Calendar", icon: Calendar, href: "/calendar" },
   { label: "AI Copilot", icon: MessageSquare, href: "/copilot" },
   { label: "Integrations", icon: Zap, href: "/integrations" },
-  { label: "Settings", icon: Settings, href: "/settings" },
+  { label: "Settings", icon: Settings, href: "/dashboard/settings" },
 ];
 
 export function MobileSidebar() {
@@ -35,13 +35,14 @@ export function MobileSidebar() {
           width: 44,
           height: 44,
           borderRadius: "12px",
-          background: "hsla(240, 24%, 14%, 0.9)",
-          backdropFilter: "blur(10px)",
-          border: "1px solid hsla(239, 84%, 67%, 0.2)",
-          color: "hsl(220, 20%, 98%)",
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid #DADCE0",
+          color: "#1A73E8",
           display: { xs: "flex", md: "none" },
+          boxShadow: "0 12px 28px -18px rgba(32, 33, 36, 0.24)",
           "&:hover": {
-            background: "hsla(239, 84%, 67%, 0.2)",
+            background: "#F8F9FA",
           },
         }}
       >
@@ -56,9 +57,9 @@ export function MobileSidebar() {
         PaperProps={{
           sx: {
             width: 280,
-            background: "hsl(240, 24%, 10%)",
+            background: "#F8F9FA",
             border: "none",
-            borderRight: "1px solid hsla(239, 84%, 67%, 0.1)",
+            borderRight: "1px solid #DADCE0",
           },
         }}
       >
@@ -72,7 +73,7 @@ export function MobileSidebar() {
                   width: 40,
                   height: 40,
                   borderRadius: "10px",
-                  background: "linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(330, 81%, 60%) 100%)",
+                  background: "#1A73E8",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -85,9 +86,7 @@ export function MobileSidebar() {
                 sx={{
                   fontSize: "1.25rem",
                   fontWeight: 800,
-                  background: "linear-gradient(135deg, hsl(220, 20%, 98%) 0%, hsl(215, 16%, 70%) 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
+                  color: "#202124",
                   letterSpacing: "-0.02em",
                 }}
               >
@@ -98,8 +97,8 @@ export function MobileSidebar() {
             <IconButton
               onClick={() => setOpen(false)}
               sx={{
-                color: "hsl(215, 16%, 55%)",
-                "&:hover": { color: "hsl(220, 20%, 98%)" },
+                color: "#5F6368",
+                "&:hover": { color: "#202124" },
               }}
             >
               <X size={22} />
@@ -122,19 +121,19 @@ export function MobileSidebar() {
                     href={item.href}
                     onClick={() => setOpen(false)}
                     sx={{
-                      borderRadius: "12px",
+                      borderRadius: "16px",
                       mb: 1,
                       px: 2,
                       py: 1.5,
                       background: isActive
-                        ? "linear-gradient(135deg, hsla(239, 84%, 67%, 0.2) 0%, hsla(239, 84%, 67%, 0.1) 100%)"
+                        ? "#E8F0FE"
                         : "transparent",
-                      border: isActive ? "1px solid hsla(239, 84%, 67%, 0.3)" : "1px solid transparent",
-                      color: isActive ? "hsl(239, 84%, 67%)" : "hsl(215, 16%, 70%)",
+                      border: isActive ? "1px solid #D2E3FC" : "1px solid transparent",
+                      color: isActive ? "#1967D2" : "#5F6368",
                       transition: "all 0.2s ease",
                       "&:hover": {
-                        background: "hsla(239, 84%, 67%, 0.1)",
-                        color: "hsl(220, 20%, 98%)",
+                        background: "#F1F3F4",
+                        color: "#202124",
                       },
                     }}
                   >
@@ -162,18 +161,18 @@ export function MobileSidebar() {
             })}
           </List>
 
-          <Divider sx={{ my: 2, borderColor: "hsla(239, 84%, 67%, 0.1)" }} />
+          <Divider sx={{ my: 2, borderColor: "#DADCE0" }} />
 
           {/* Sign Out */}
           <ListItem
             sx={{
-              borderRadius: "12px",
+              borderRadius: "16px",
               px: 2,
               py: 1.5,
-              color: "hsl(346, 84%, 61%)",
+              color: "#D93025",
               cursor: "pointer",
               "&:hover": {
-                background: "hsla(346, 84%, 61%, 0.1)",
+                background: "#FCE8E6",
               },
             }}
           >

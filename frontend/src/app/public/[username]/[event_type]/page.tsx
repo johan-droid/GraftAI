@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import {
   bookPublicEvent,
   confirmPublicPaymentIntent,
@@ -13,6 +14,7 @@ import {
   PublicEventDetailsResponse,
 } from "@/lib/api";
 import BookingReceipt from "@/components/booking/BookingReceipt";
+import BookingStatusPill from "@/components/ui/BookingStatusPill";
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
@@ -388,18 +390,22 @@ export default function PublicBookingPage() {
                               {questionLabel}
                             </label>
                           ) : questionType === "select" && Array.isArray(question.options) ? (
-                            <select
-                              id={questionId}
-                              value={String(answer)}
-                              onChange={(event) => setQuestionAnswers({ ...questionAnswers, [questionId]: event.target.value })}
-                              className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
-                              required={required}
-                            >
-                              <option value="">Select an answer</option>
-                              {question.options.map((option: any) => (
-                                <option key={String(option)} value={String(option)}>{String(option)}</option>
-                              ))}
-                            </select>
+                            <FormControl fullWidth>
+                              <InputLabel id={`${questionId}-label`}>Select an answer</InputLabel>
+                              <Select
+                                labelId={`${questionId}-label`}
+                                id={questionId}
+                                value={String(answer)}
+                                label="Select an answer"
+                                onChange={(event) => setQuestionAnswers({ ...questionAnswers, [questionId]: event.target.value })}
+                                required={required}
+                              >
+                                <MenuItem value="">Select an answer</MenuItem>
+                                {question.options.map((option: any) => (
+                                  <MenuItem key={String(option)} value={String(option)}>{String(option)}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
                           ) : (
                             <input
                               id={questionId}
@@ -431,7 +437,11 @@ export default function PublicBookingPage() {
                     </div>
                     <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
                       <p className="font-medium">Status</p>
-                      <p>{paymentConfirmed ? "Paid" : paymentIntent ? "Ready to confirm" : "Pending"}</p>
+                      <div className="mt-2">
+                        <BookingStatusPill
+                          status={paymentConfirmed ? "confirmed" : "pending"}
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -458,7 +468,10 @@ export default function PublicBookingPage() {
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-                      Payment confirmed, you may submit the booking.
+                      <div className="flex items-center gap-2">
+                        <BookingStatusPill status="confirmed" />
+                        <span>Payment confirmed, you may submit the booking.</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -466,7 +479,14 @@ export default function PublicBookingPage() {
 
               {submissionState ? (
                 <div className={`rounded-2xl px-4 py-3 text-sm ${submissionState.success ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-                  {submissionState.message}
+                  {submissionState.success ? (
+                    <div className="flex items-center gap-2">
+                      <BookingStatusPill status="confirmed" />
+                      <span>{submissionState.message}</span>
+                    </div>
+                  ) : (
+                    submissionState.message
+                  )}
                 </div>
               ) : null}
 

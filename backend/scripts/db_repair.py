@@ -109,6 +109,19 @@ async def repair_database():
                     await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_type};"))
                     logger.info(f"✅ [REPAIR] 'users' table successfully updated with '{col}' column.")
 
+            check_preferences_sql = text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'users' AND column_name = 'preferences';
+            """)
+            result = await conn.execute(check_preferences_sql)
+            if result.fetchone() is None:
+                logger.info("🔧 [REPAIR] Column 'preferences' missing in 'users' table. Patching...")
+                await conn.execute(text("ALTER TABLE users ADD COLUMN preferences JSON;"))
+                logger.info("✅ [REPAIR] 'users' table successfully updated with 'preferences' column.")
+            await conn.execute(text("UPDATE users SET preferences = '{}'::json WHERE preferences IS NULL;"))
+            await conn.execute(text("ALTER TABLE users ALTER COLUMN preferences SET DEFAULT '{}'::json;"))
+
             # 3. Phase 1: Security & RBAC Columns
             security_cols = {
                 "role": "VARCHAR(20) DEFAULT 'member' NOT NULL",

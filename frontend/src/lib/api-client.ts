@@ -91,11 +91,31 @@ class ApiClient {
         const detail = typeof responseData.detail === "string" ? responseData.detail : undefined;
         const message = typeof responseData.message === "string" ? responseData.message : undefined;
         const statusText = response.statusText || `Request failed with status ${response.status}`;
-        throw new Error(error || detail || message || statusText);
+        throw new Error(String(error || detail || message || statusText));
       }
 
       return responseData as T;
     } catch (error) {
+      // Handle network/connection errors specifically
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
+        console.error(`[API Network Error] Cannot connect to backend at ${API_BASE_URL}`);
+        console.error(`[API Network Error] Endpoint: ${endpoint}`);
+        
+        // Provide helpful error message based on environment
+        const isLocalhost = API_BASE_URL.includes("localhost") || API_BASE_URL.includes("127.0.0.1");
+        if (isLocalhost) {
+          throw new Error(
+            "Cannot connect to backend server. Please ensure:\n" +
+            "1. Backend is running on http://localhost:8000\n" +
+            "2. Check NEXT_PUBLIC_API_BASE_URL in .env.local"
+          );
+        } else {
+          throw new Error(
+            "Cannot connect to backend server. The service may be temporarily unavailable."
+          );
+        }
+      }
+      
       console.error(`[API Error] ${options.method || "GET"} ${endpoint}:`, error);
       throw error;
     }

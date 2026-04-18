@@ -94,6 +94,9 @@
             letter-spacing: 0.05em;
             text-transform: uppercase;
         }
+        .button-warning { background-color: #fbbf24; color: #000000 !important; }
+        .button-danger { background-color: #ef4444; color: #ffffff !important; }
+        .button-secondary { background-color: #475569; color: #ffffff !important; }
 
         .footer {
             padding: 40px 20px;
@@ -121,6 +124,106 @@
         .badge-primary { background-color: #6366f120; color: #818cf8; border: 1px solid #6366f140; }
         .badge-success { background-color: #10b98120; color: #34d399; border: 1px solid #10b98140; }
         .badge-alert { background-color: #ef444420; color: #f87171; border: 1px solid #ef444440; }
+        .badge-warning { background-color: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40; }
+
+        /* Card variants */
+        .card-warning { border-top-color: #f59e0b; }
+        .card-danger { border-top-color: #ef4444; }
+
+        /* Alternative booking summary styles */
+        .booking-summary-danger {
+            background-color: #450a0a;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            border: 1px solid #991b1b;
+        }
+
+        .muted-small-centered {
+            text-align: center;
+            margin-top: 32px;
+            font-size: 12px;
+            color: #475569;
+        }
+        .strike { text-decoration: line-through; }
+
+        .booking-summary {
+            background-color: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+        .booking-summary-title {
+            margin-bottom: 8px;
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .booking-summary-meta {
+            margin-bottom: 0;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .booking-summary-note {
+            font-size: 13px;
+            color: #64748b;
+            font-style: italic;
+        }
+        .booking-summary-meta--cancelled { color: #fca5a5; }
+        .booking-summary-meta--success { color: #86efac; }
+        .text-danger { color: #f87171; }
+
+        .booking-summary-link {
+            margin: 8px 0 0;
+            font-size: 13px;
+        }
+
+        .booking-summary-link a {
+            color: #818cf8;
+        }
+
+        .event-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 24px;
+            border-left: 2px solid #6366f1;
+            padding-left: 16px;
+        }
+
+        .event-panel {
+            background-color: rgba(30, 41, 59, 1);
+            border-radius: 16px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+
+        .event-row { display: flex; gap: 24px; }
+        .event-row .label { font-size: 10px; font-weight: 800; color: #6366f1; text-transform: uppercase; }
+        .event-row .value { font-size: 14px; font-weight: 600; color: #ffffff; }
+        .col { flex: 1; }
+        .center-note { font-size: 14px; text-align: center; }
+        .mb-0 { margin-bottom: 0; }
+        .mt-24 { margin-top: 24px; }
+        .text-center { text-align: center; }
+        .view-agenda-link { font-weight: 700; font-size: 13px; }
+
+        .booking-actions {
+            margin-top: -8px;
+        }
+
+        .booking-action-link {
+            color: #818cf8;
+            text-decoration: none;
+            display: block;
+            margin-top: 8px;
+        }
+
+        .booking-action-link.is-cancel {
+            color: #fca5a5;
+        }
 
         .footer-link-primary {
             color: #6366f1;
@@ -139,6 +242,19 @@
         .muted-small {
             color: #cbd5e1;
             font-size: 13px;
+        }
+        .list-item { margin-bottom: 10px; }
+        .pl-20 { padding-left: 20px; }
+
+        .verification-code {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: 0.2em;
+            color: #ffffff;
+            background: rgba(99,102,241,.1);
+            padding: 20px 0;
+            text-align: center;
+            border-radius: 16px;
         }
 
         @media screen and (max-width: 600px) {

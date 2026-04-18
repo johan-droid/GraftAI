@@ -255,11 +255,41 @@ function createCredentialsProvider() {
  * instances, so the map can be missed. In that case, jwt will retry the
  * backend exchange directly as a fallback.
  */
-const _pendingBackendTokens = new Map<string, {
+// Token handoff storage with TTL for cleanup
+// In serverless environments the signIn and jwt callbacks may run in different
+// instances, so the map can be missed. In that case, jwt will retry the
+// backend exchange directly as a fallback.
+const PENDING_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CLEANUP_INTERVAL_MS = 60 * 1000; // Cleanup every minute
+
+interface PendingTokenEntry {
   backendToken: string;
   refreshToken: string;
   backendTokenExpiresAt: number | undefined;
-}>();
+  createdAt: number; // Timestamp for TTL cleanup
+}
+
+const _pendingBackendTokens = new Map<string, PendingTokenEntry>();
+
+// Periodic cleanup to prevent memory leaks
+function cleanupExpiredTokens(): void {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [key, entry] of _pendingBackendTokens.entries()) {
+    if (now - entry.createdAt > PENDING_TOKEN_TTL_MS) {
+      _pendingBackendTokens.delete(key);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    console.warn(`[NextAuth] Cleaned up ${cleaned} expired pending token entries`);
+  }
+}
+
+// Start cleanup interval (only on server, not during build)
+if (typeof window === "undefined" && process.env.NODE_ENV !== "test") {
+  setInterval(cleanupExpiredTokens, CLEANUP_INTERVAL_MS);
+}
 
 async function exchangeBackendTokens(account: SocialAuthAccount, user: SocialAuthUser) {
   const url = `${getBackendApiUrl()}/auth/social/exchange`;
@@ -296,14 +326,35 @@ async function exchangeBackendTokens(account: SocialAuthAccount, user: SocialAut
 
 // ─── NextAuth Config ──────────────────────────────────────────────────────────
 
-export const nextAuthSecret =
-  process.env.NEXTAUTH_SECRET ||
-  process.env.AUTH_SECRET ||
-  "your-development-fallback-secret-here";
+// ─── NextAuth Secret ───────────────────────────────────────────────────────────
+// In production, the secret MUST be provided via environment variable.
+// The secret is used to encrypt session tokens - using a hardcoded value
+// would allow anyone to forge session tokens.
 
-if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET && !process.env.AUTH_SECRET) {
-  console.warn("[NextAuth] NEXTAUTH_SECRET/AUTH_SECRET is missing in production!");
-}
+const getNextAuthSecret = (): string => {
+  const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
+  
+  // In production, crash if secret is missing
+  if (process.env.NODE_ENV === "production") {
+    if (!secret) {
+      throw new Error(
+        "[NextAuth] CRITICAL: NEXTAUTH_SECRET or AUTH_SECRET environment variable is required in production. " +
+        "This secret is used to encrypt session tokens. Set a strong random value (at least 32 characters)."
+      );
+    }
+    return secret;
+  }
+  
+  // In development, use a default only if no secret is provided
+  if (!secret) {
+    console.warn("[NextAuth] Using development fallback secret. Set NEXTAUTH_SECRET for production.");
+    return "dev-fallback-secret-change-in-production-32charsmin";
+  }
+  
+  return secret;
+};
+
+export const nextAuthSecret = getNextAuthSecret();
 
 const authOptions: NextAuthConfig = {
   ...authConfig,
@@ -340,6 +391,7 @@ const authOptions: NextAuthConfig = {
         backendToken: data.access_token,
         refreshToken: data.refresh_token,
         backendTokenExpiresAt: decodeJwtExpiry(data.access_token),
+        createdAt: Date.now(),
       });
 
       return true;
@@ -376,6 +428,7 @@ const authOptions: NextAuthConfig = {
               backendToken: data.access_token,
               refreshToken: data.refresh_token,
               backendTokenExpiresAt: decodeJwtExpiry(data.access_token),
+              createdAt: Date.now(),
             };
           }
         }

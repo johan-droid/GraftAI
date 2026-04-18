@@ -31,7 +31,9 @@ export async function resolveServerAccessToken(reqHeaders: Headers): Promise<Ser
   }
 
   // Look for existing access token in cookies
-  const match = cookieHeader.match(/(?:graftai_access_token|auth_token)=([^;]+)/);
+  // SECURITY FIX H-10: Only check primary cookie name (graftai_access_token)
+  // Legacy auth_token is deprecated and should not be checked
+  const match = cookieHeader.match(/graftai_access_token=([^;]+)/);
   if (match && match[1]) {
     const token = match[1];
     try {
@@ -43,7 +45,7 @@ export async function resolveServerAccessToken(reqHeaders: Headers): Promise<Ser
         return { accessToken: token, refreshed: false };
       }
     } catch (e) {
-      // Decode failed or invalid token, fall through to attempt refresh
+      // Token parsing failed, continue to refresh
     }
   }
 
@@ -95,15 +97,21 @@ export function applyServerAuthCookies(
     maxAge: ACCESS_TOKEN_MAX_AGE,
   };
 
-  response.cookies.set("auth_token", accessToken, cookieOptions);
+  // SECURITY FIX H-10: Standardize on single cookie to prevent auth confusion
+  // Previously we had dual cookies which could lead to inconsistent state
+  // Primary cookie name: graftai_access_token (explicit, branded)
   response.cookies.set("graftai_access_token", accessToken, cookieOptions);
+  
+  // Clear legacy auth_token to prevent stale/untampered cookie issues
+  response.cookies.set("auth_token", "", { ...cookieOptions, maxAge: 0 });
 
   if (refreshToken) {
     const refreshCookieOptions = {
       ...cookieOptions,
       maxAge: REFRESH_TOKEN_MAX_AGE,
     };
-    response.cookies.set("refresh_token", refreshToken, refreshCookieOptions);
     response.cookies.set("graftai_refresh_token", refreshToken, refreshCookieOptions);
+    // Clear legacy refresh_token
+    response.cookies.set("refresh_token", "", { ...refreshCookieOptions, maxAge: 0 });
   }
 }

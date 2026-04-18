@@ -10,7 +10,7 @@ const navItems = [
   { label: "Home", icon: LayoutDashboard, href: "/dashboard" },
   { label: "Calendar", icon: Calendar, href: "/calendar" },
   { label: "Copilot", icon: MessageSquare, href: "/copilot" },
-  { label: "Profile", icon: User, href: "/settings" },
+  { label: "Profile", icon: User, href: "/dashboard/settings" },
 ];
 
 export function BottomNav() {

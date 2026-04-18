@@ -82,5 +82,50 @@ class StorageService:
             logger.warning(f"⚠️ Failed to delete cloud artifact {key}: {e}")
             return False
 
+    def get_presigned_upload_url(self, key: str, expires_in: int = 3600, content_type: str | None = None) -> Optional[dict]:
+        """Generate a presigned upload URL (PUT) or return a backend fallback.
+
+        Returns a dict with shape:
+          - method: 'put' | 'backend'
+          - upload_url: <url> (for 'put')
+          - key: <object key>
+          - access_url: <presigned-get-url> (optional)
+          - upload_endpoint: '/api/v1/uploads' (for backend fallback)
+        """
+        if not self.client:
+            # Local/dev fallback: instruct the frontend to POST to the backend upload endpoint
+            return {
+                "method": "backend",
+                "upload_endpoint": "/api/v1/uploads",
+                "key": key,
+            }
+
+        try:
+            params = {"Bucket": self.bucket, "Key": key}
+            if content_type:
+                # When generating a PUT presign, including ContentType in Params will make
+                # the presigned URL require that header on upload (recommended).
+                params["ContentType"] = content_type
+
+            url = self.client.generate_presigned_url(
+                'put_object',
+                Params=params,
+                ExpiresIn=expires_in,
+            )
+
+            access_url = self.get_presigned_url(key, expires_in=expires_in)
+            result = {
+                "method": "put",
+                "upload_url": url,
+                "key": key,
+            }
+            if access_url is not None:
+                result["access_url"] = access_url
+
+            return result
+        except ClientError as e:
+            logger.error(f"❌ Failed to generate presigned upload URL: {e}")
+            return None
+
 # Export singleton
 storage = StorageService()

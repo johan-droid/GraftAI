@@ -39,53 +39,89 @@ def _get_user_message(category: str, error: Exception) -> str:
     return "An error occurred. Please try again or contact support."
 
 
+def _is_production() -> bool:
+    """Check if running in production environment."""
+    return os.getenv("PYTHON_ENV") == "production" or os.getenv("ENV") == "production"
+
+
 async def http_exception_handler(request: Request, exc: Exception):
     if not isinstance(exc, StarletteHTTPException):
         raise exc
     meta = _get_request_meta(request)
+    
+    # Get request ID for correlation
+    request_id = getattr(request.state, 'request_id', None)
+    
     logger.warning(
         "API HTTPException",
         extra={
             "error": str(exc.detail),
             "status_code": exc.status_code,
+            "request_id": request_id,
             **meta,
         },
     )
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": exc.detail if isinstance(exc.detail, str) else "Request error",
-            "code": "http",
-        },
-    )
+    
+    # Sanitize error message in production (don't expose internal details)
+    if _is_production() and exc.status_code >= 500:
+        user_message = "An internal error occurred. Please try again or contact support."
+    else:
+        user_message = exc.detail if isinstance(exc.detail, str) else "Request error"
+    
+    content = {
+        "error": user_message,
+        "code": "http",
+    }
+    
+    # Include request ID for debugging (safe to expose)
+    if request_id:
+        content["request_id"] = request_id
+    
+    # Only include details in non-production
+    if not _is_production():
+        content["details"] = str(exc.detail)
+    
+    return JSONResponse(status_code=exc.status_code, content=content)
 
 
 async def validation_exception_handler(request: Request, exc: Exception):
     if not isinstance(exc, RequestValidationError):
         raise exc
     meta = _get_request_meta(request)
+    request_id = getattr(request.state, 'request_id', None)
+    
     logger.warning(
         "API validation error",
         extra={
             "error": str(exc),
             "status_code": 422,
+            "request_id": request_id,
             **meta,
         },
     )
-    return JSONResponse(
-        status_code=422,
-        content={
-            "error": "Invalid request payload.",
-            "code": "validation",
-            "details": [err.get("msg") for err in exc.errors()],
-        },
-    )
+    
+    content = {
+        "error": "Invalid request payload.",
+        "code": "validation",
+    }
+    
+    # Include request ID for debugging
+    if request_id:
+        content["request_id"] = request_id
+    
+    # Only include detailed field errors in non-production
+    # (to prevent schema information leakage)
+    if not _is_production():
+        content["details"] = [err.get("msg") for err in exc.errors()]
+    
+    return JSONResponse(status_code=422, content=content)
 
 
 async def generic_exception_handler(request: Request, exc: Exception):
     category = categorize_error(exc)
     status_code = http_status_for_error(exc)
     meta = _get_request_meta(request)
+    request_id = getattr(request.state, 'request_id', None)
 
     logger.error(
         "API error",
@@ -95,6 +131,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
             "path": request.url.path,
             "method": request.method,
             "status_code": status_code,
+            "request_id": request_id,
             **meta,
         },
         exc_info=True,
@@ -104,8 +141,13 @@ async def generic_exception_handler(request: Request, exc: Exception):
         "error": _get_user_message(category, exc),
         "code": category,
     }
+    
+    # Always include request ID for error correlation
+    if request_id:
+        payload["request_id"] = request_id
 
-    if os.getenv("PYTHON_ENV") != "production" and os.getenv("NODE_ENV") != "production":
+    # Only include internal details in non-production
+    if not _is_production():
         payload["details"] = str(exc)
         payload["stack"] = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
 

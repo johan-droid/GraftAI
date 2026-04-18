@@ -2,7 +2,6 @@ import hashlib
 import logging
 import pytz
 from datetime import datetime, timedelta, date as date_cls
-from urllib.parse import quote_plus
 from typing import Optional, List, Dict, Any, Union
 from sqlalchemy import select, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -696,24 +695,38 @@ async def generate_meeting_url(
     organizer_id: str,
     booking_details: Dict[str, Any],
 ) -> Optional[str]:
-    """Generate a provider-specific fallback meeting URL for booking creation."""
+    """
+    Generate a meeting URL for the booking.
+    
+    IMPORTANT: This function only returns real meeting URLs when the provider
+    OAuth integration is configured and working. Otherwise, it returns None
+    to prevent sending non-functional fake URLs to users.
+    
+    For production use, this should integrate with:
+    - Google Calendar API (for Google Meet)
+    - Zoom API (for Zoom meetings)
+    - Microsoft Graph API (for Teams)
+    
+    Returns:
+        Real meeting URL if OAuth integration is available and succeeds
+        None if no integration available (prevents fake URLs)
+    """
     provider = (meeting_provider or "").strip().lower()
     if not provider:
         return None
-
-    attendee_email = str(booking_details.get("attendee_email") or "guest")
-    booking_seed = str(booking_details.get("booking_id") or datetime.now(pytz.UTC).timestamp())
-    digest = hashlib.sha1(f"{organizer_id}:{attendee_email}:{booking_seed}".encode("utf-8")).hexdigest()
-
-    if provider == "google":
-        return f"https://meet.google.com/{digest[:3]}-{digest[3:7]}-{digest[7:10]}"
-    if provider == "zoom":
-        meeting_number = int(digest[:12], 16) % 10_000_000_000
-        return f"https://zoom.us/j/{meeting_number:010d}"
-    if provider in {"microsoft", "teams"}:
-        return f"https://teams.microsoft.com/l/meetup-join/{digest[:32]}"
-
-    return f"https://meet.graftai.tech/{quote_plus(provider)}/{digest[:24]}"
+    
+    # Check if we have valid OAuth tokens for the provider
+    # If not, return None to prevent sending fake/non-functional URLs
+    # TODO: Implement real meeting creation via provider APIs
+    # For now, return None to indicate no meeting link available
+    
+    logger.warning(
+        f"Meeting URL requested for provider '{provider}' but OAuth integration not implemented. "
+        f"Returning None to prevent sending non-functional fake URLs. "
+        f"Booking: {booking_details.get('booking_id', 'unknown')}"
+    )
+    
+    return None
 
 
 async def _is_user_available_for_range(

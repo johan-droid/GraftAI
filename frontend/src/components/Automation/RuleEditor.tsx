@@ -9,6 +9,7 @@
 'use client';
 
 import { useState } from 'react';
+import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import { Save, TestTube, Plus, Trash2, ArrowRight } from 'lucide-react';
 
 interface Condition {
@@ -181,19 +182,23 @@ export default function RuleEditor() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="rule-type" className="block text-sm font-medium text-slate-300 mb-2">Rule Type</label>
-            <select
-              id="rule-type"
-              value={ruleType}
-              onChange={(e) => setRuleType(e.target.value)}
-              className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
-            >
-              <option value="auto_accept">Auto Accept</option>
-              <option value="auto_decline">Auto Decline</option>
-              <option value="auto_reschedule">Auto Reschedule</option>
-              <option value="smart_scheduling">Smart Scheduling</option>
-              <option value="conflict_resolution">Conflict Resolution</option>
-              <option value="team_coordination">Team Coordination</option>
-            </select>
+            <FormControl fullWidth>
+              <InputLabel id="rule-type-label">Rule Type</InputLabel>
+              <Select
+                labelId="rule-type-label"
+                id="rule-type"
+                value={ruleType}
+                label="Rule Type"
+                onChange={(e) => setRuleType(String(e.target.value))}
+              >
+                <MenuItem value="auto_accept">Auto Accept</MenuItem>
+                <MenuItem value="auto_decline">Auto Decline</MenuItem>
+                <MenuItem value="auto_reschedule">Auto Reschedule</MenuItem>
+                <MenuItem value="smart_scheduling">Smart Scheduling</MenuItem>
+                <MenuItem value="conflict_resolution">Conflict Resolution</MenuItem>
+                <MenuItem value="team_coordination">Team Coordination</MenuItem>
+              </Select>
+            </FormControl>
           </div>
 
           <div>
@@ -244,28 +249,36 @@ export default function RuleEditor() {
             {conditions.map((condition, index) => (
               <div key={condition.id} className="flex items-center gap-2">
                 <span className="text-slate-500 text-sm">{index + 1}.</span>
-                <select
-                  aria-label={`Condition ${index + 1} field`}
-                  title={`Condition ${index + 1} field`}
-                  value={condition.field}
-                  onChange={(e) => updateCondition(condition.id, { field: e.target.value })}
-                  className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                >
-                  {fieldOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <select
-                  aria-label={`Condition ${index + 1} operator`}
-                  title={`Condition ${index + 1} operator`}
-                  value={condition.operator}
-                  onChange={(e) => updateCondition(condition.id, { operator: e.target.value })}
-                  className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                >
-                  {operatorOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                <FormControl fullWidth>
+                  <InputLabel id={`condition-${condition.id}-field-label`}>Field</InputLabel>
+                  <Select
+                    labelId={`condition-${condition.id}-field-label`}
+                    aria-label={`Condition ${index + 1} field`}
+                    title={`Condition ${index + 1} field`}
+                    value={condition.field}
+                    label="Field"
+                    onChange={(e) => updateCondition(condition.id, { field: String(e.target.value) })}
+                  >
+                    {fieldOptions.map(opt => (
+                      <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel id={`condition-${condition.id}-operator-label`}>Operator</InputLabel>
+                  <Select
+                    labelId={`condition-${condition.id}-operator-label`}
+                    aria-label={`Condition ${index + 1} operator`}
+                    title={`Condition ${index + 1} operator`}
+                    value={condition.operator}
+                    label="Operator"
+                    onChange={(e) => updateCondition(condition.id, { operator: String(e.target.value) })}
+                  >
+                    {operatorOptions.map(opt => (
+                      <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 <input
                   type="text"
                   value={condition.value}
@@ -308,17 +321,21 @@ export default function RuleEditor() {
             {actions.map((action, index) => (
               <div key={action.id} className="flex items-center gap-2">
                 <span className="text-slate-500 text-sm">{index + 1}.</span>
-                <select
-                  aria-label={`Action ${index + 1} type`}
-                  title={`Action ${index + 1} type`}
-                  value={action.type}
-                  onChange={(e) => updateAction(action.id, { type: e.target.value })}
-                  className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                >
-                  {actionTypes.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                <FormControl fullWidth>
+                  <InputLabel id={`action-${action.id}-type-label`}>Action</InputLabel>
+                  <Select
+                    labelId={`action-${action.id}-type-label`}
+                    aria-label={`Action ${index + 1} type`}
+                    title={`Action ${index + 1} type`}
+                    value={action.type}
+                    label="Action"
+                    onChange={(e) => updateAction(action.id, { type: String(e.target.value) })}
+                  >
+                    {actionTypes.map(opt => (
+                      <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 <ArrowRight className="w-4 h-4 text-slate-500" />
                 <input
                   type="text"

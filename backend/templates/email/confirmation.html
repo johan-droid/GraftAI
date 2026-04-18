@@ -6,11 +6,11 @@
     <h1>Meeting Confirmed</h1>
     <p>Your meeting has been successfully scheduled. Here are the details:</p>
     
-    <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
-        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700;">{{ event_title }}</p>
-        <p style="margin-bottom: 0; font-size: 13px; color: #94a3b8;">📅 {{ event_time }}</p>
+    <div class="booking-summary">
+        <p class="booking-summary-title">{{ event_title }}</p>
+        <p class="booking-summary-meta">📅 {{ event_time }}</p>
         {% if meeting_link %}
-        <p style="margin: 8px 0 0; font-size: 13px;">🔗 <a href="{{ meeting_link }}" style="color: #6366f1;">Join Meeting</a></p>
+        <p class="booking-summary-link">🔗 <a href="{{ meeting_link }}">Join Meeting</a></p>
         {% endif %}
     </div>
 
@@ -23,20 +23,20 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="card" style="border-top-color: #f59e0b;">
-    <div class="badge" style="background-color: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40;">Updated</div>
+<div class="card card-warning">
+    <div class="badge badge-warning">Updated</div>
     <h1>Meeting Details Adjusted</h1>
     <p>There have been changes to your scheduled meeting. Please review the updated details below:</p>
     
-    <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
-        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700;">{{ event_title }}</p>
-        <p style="margin-bottom: 0; font-size: 13px; color: #94a3b8;">📅 {{ event_time }}</p>
+    <div class="booking-summary">
+        <p class="booking-summary-title">{{ event_title }}</p>
+        <p class="booking-summary-meta">📅 {{ event_time }}</p>
         {% if meeting_link %}
-        <p style="margin: 8px 0 0; font-size: 13px;">🔗 <a href="{{ meeting_link }}" style="color: #6366f1;">Updated Meeting Link</a></p>
+        <p class="booking-summary-link">🔗 <a href="{{ meeting_link }}">Updated Meeting Link</a></p>
         {% endif %}
     </div>
 
-    <p style="font-size: 13px; color: #64748b; font-style: italic;">Note: Your calendar has been automatically updated.</p>
+    <p class="booking-summary-note">Note: Your calendar has been automatically updated.</p>
 
     <center>
         <a href="{{ frontend_url }}/dashboard/calendar" class="button">See Changes</a>
@@ -47,14 +47,14 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="card" style="border-top-color: #ef4444;">
+<div class="card card-danger">
     <div class="badge badge-alert">Cancelled</div>
     <h1>Meeting Cancelled</h1>
     <p>The following meeting has been removed from your calendar:</p>
     
-    <div style="background-color: #450a0a; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #991b1b;">
-        <p style="margin-bottom: 8px; color: #ffffff; font-weight: 700; text-decoration: line-through;">{{ event_title }}</p>
-        <p style="margin-bottom: 0; font-size: 13px; color: #fca5a5;">📅 Previously scheduled for {{ event_time }}</p>
+    <div class="booking-summary-danger">
+        <p class="booking-summary-title strike">{{ event_title }}</p>
+        <p class="booking-summary-meta booking-summary-meta--cancelled">📅 Previously scheduled for {{ event_time }}</p>
     </div>
 
     <p>If this was a mistake, you can use the AI Assistant to reschedule immediately.</p>
@@ -75,12 +75,12 @@
     
     <p>We're sorry to see you go. As per our <strong>Full Force Purge</strong> policy, all your synced events, OAuth tokens, and profile metadata have been removed from our systems.</p>
 
-    <p style="font-size: 13px; color: #64748b;">If you change your mind, you can re-register at any time, but your previous data cannot be recovered.</p>
+    <p class="booking-summary-note">If you change your mind, you can re-register at any time, but your previous data cannot be recovered.</p>
 
     <center>
         <a href="{{ frontend_url }}" class="button">Visit Homepage</a>
     </center>
 
-    <p style="text-align: center; margin-top: 32px; font-size: 12px; color: #475569;">We appreciate the time you spent with us. - Tasked with Integrity, GraftAI Team.</p>
+    <p class="muted-small-centered">We appreciate the time you spent with us. - Tasked with Integrity, GraftAI Team.</p>
 </div>
 {% endblock %}

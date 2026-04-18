@@ -17,11 +17,8 @@ export default function FloatingAIButton() {
         onClick={() => setIsOpen(!isOpen)}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-[18px] flex items-center justify-center transition-all duration-300 ${
-          isOpen
-            ? "bg-white border border-[#DADCE0] text-[#5F6368] shadow-md rotate-90"
-            : "bg-[#1A73E8] text-white shadow-lg hover:shadow-xl hover:bg-[#1557B0] hover:-translate-y-1"
-        } ${isHovered && !isOpen ? "shadow-2xl" : ""}`}
+        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-[18px] flex items-center justify-center transition-all duration-300 ${isHovered && !isOpen ? "shadow-2xl" : ""}`}
+        style={isOpen ? { background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', transform: 'rotate(90deg)' } : { background: 'var(--primary)', color: '#fff' }}
       >
         {isOpen ? (
           <X className="w-6 h-6" />

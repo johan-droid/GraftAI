@@ -3,9 +3,13 @@
 import { Box, Container, Typography, Stack, Button } from "@mui/material";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
 import { ShieldAlert } from "lucide-react";
 
 export default function NotFound() {
+  const { status } = useSession();
+  const isAuthenticated = status === "authenticated";
+
   return (
     <Box sx={{ bgcolor: "var(--bg-base)", minHeight: "100vh", position: "relative", display: "grid", placeItems: "center" }}>
       <Container maxWidth="sm" sx={{ position: "relative", zIndex: 1, textAlign: "center" }}>
@@ -50,27 +54,50 @@ export default function NotFound() {
               </Typography>
             </Stack>
 
-            <Button
-              component={Link}
-              href="/"
-              variant="contained"
-              disableElevation
-              sx={{
-                borderRadius: 99,
-                px: 4,
-                py: 1.5,
-                bgcolor: "var(--primary)",
-                color: "#fff",
-                textTransform: "none",
-                fontWeight: 500,
-                fontSize: "0.95rem",
-                "&:hover": {
-                  bgcolor: "var(--primary-hover, rgba(26, 115, 232, 0.9))",
-                }
-              }}
-            >
-              Back to Home
-            </Button>
+            {isAuthenticated ? (
+              <Button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                variant="contained"
+                disableElevation
+                sx={{
+                  borderRadius: 99,
+                  px: 4,
+                  py: 1.5,
+                  bgcolor: "var(--primary)",
+                  color: "#fff",
+                  textTransform: "none",
+                  fontWeight: 500,
+                  fontSize: "0.95rem",
+                  "&:hover": {
+                    bgcolor: "var(--primary-hover, rgba(26, 115, 232, 0.9))",
+                  }
+                }}
+              >
+                Sign out and go home
+              </Button>
+            ) : (
+              <Button
+                component={Link}
+                href="/"
+                variant="contained"
+                disableElevation
+                sx={{
+                  borderRadius: 99,
+                  px: 4,
+                  py: 1.5,
+                  bgcolor: "var(--primary)",
+                  color: "#fff",
+                  textTransform: "none",
+                  fontWeight: 500,
+                  fontSize: "0.95rem",
+                  "&:hover": {
+                    bgcolor: "var(--primary-hover, rgba(26, 115, 232, 0.9))",
+                  }
+                }}
+              >
+                Back to Home
+              </Button>
+            )}
           </Stack>
         </motion.div>
       </Container>

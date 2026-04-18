@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytz
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
+from arq import cron  # Arq cron function for proper job scheduling
 
 from backend.utils.db import AsyncSessionLocal
 from backend.utils.webhook_signing import generate_webhook_signature
@@ -404,9 +405,11 @@ class WorkerSettings:
     """Standard Arq configuration."""
     functions = REGISTERED_TASKS
     on_startup = _worker_startup
+    # Arq cron jobs using proper cron() function calls (not dict literals)
     cron_jobs = [
-        {"coroutine": task_sync_all_users, "minute": {0, 30}},
-        {"coroutine": task_process_reminders, "minute": "*"},
-        {"coroutine": task_send_booking_reminders, "minute": 5},
-        {"coroutine": task_daily_cleanup, "hour": 3, "minute": 0},
+        cron(task_sync_all_users, minute={0, 30}),  # Every hour at :00 and :30
+        # Run reminders every 5 minutes to batch work without excessive frequency
+        cron(task_process_reminders, minute=set(range(0, 60, 5))),
+        cron(task_send_booking_reminders, minute={5}),  # Every hour at :05
+        cron(task_daily_cleanup, hour={3}, minute={0}),  # Daily at 3:00 AM
     ]

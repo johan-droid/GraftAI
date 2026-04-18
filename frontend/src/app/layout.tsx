@@ -4,6 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import { AuthProvider } from "./providers/auth-provider";
 import { QueryProvider } from "./providers/query-provider";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import ThemeRegistry from "@/theme/ThemeRegistry";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
@@ -50,19 +51,21 @@ export default function RootLayout({
           <AuthProvider>
             <QueryProvider>
               <ThemeProvider>
-                {children}
-                {/* Global Toast Notifications */}
-                <Toaster
-                  position="bottom-right"
-                  toastOptions={{
-                    style: {
-                      background: '#333',
-                      color: '#fff',
-                      borderRadius: '100px',
-                      fontSize: '14px',
-                    },
-                  }}
-                />
+                <ThemeRegistry>
+                  {children}
+                  {/* Global Toast Notifications */}
+                  <Toaster
+                    position="bottom-right"
+                    toastOptions={{
+                      style: {
+                        background: '#333',
+                        color: '#fff',
+                        borderRadius: '100px',
+                        fontSize: '14px',
+                      },
+                    }}
+                  />
+                </ThemeRegistry>
               </ThemeProvider>
             </QueryProvider>
           </AuthProvider>

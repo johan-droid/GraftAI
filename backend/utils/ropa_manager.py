@@ -271,6 +271,7 @@ class RoPAManager:
                     "last_reviewed_at": record.last_reviewed_at.isoformat()
                     if record.last_reviewed_at
                     else None,
+                    "review_notes": record.review_notes,
                 }
             )
 
@@ -328,11 +329,7 @@ class RoPAManager:
 
         record.last_reviewed_at = datetime.utcnow()
         record.reviewed_by = reviewed_by
-
-        if review_notes:
-            record.activity_description = (
-                f"{record.activity_description}\n\nReview notes: {review_notes}"
-            )
+        record.review_notes = review_notes
 
         await db.commit()
 

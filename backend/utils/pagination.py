@@ -40,7 +40,9 @@ def get_pagination_params(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
     sort_by: Optional[str] = Query(None, description="Field to sort by"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
+    sort_order: str = Query(
+        "desc", pattern="^(asc|desc)$", description="Sort order"
+    ),
 ) -> PaginationParams:
     """
     Dependency function for FastAPI to get pagination parameters.

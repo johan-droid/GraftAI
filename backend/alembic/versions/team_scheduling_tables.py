@@ -137,7 +137,12 @@ def upgrade():
             sa.Column("attendee_name", sa.String(100), nullable=False),
             sa.Column("attendee_email", sa.String(255), nullable=False),
             sa.Column("attendee_phone", sa.String(50), nullable=True),
-            sa.Column("assigned_to", sa.String(100), nullable=True),
+            sa.Column(
+                "assigned_to",
+                sa.String(100),
+                sa.ForeignKey("users.id", name="fk_team_bookings_assigned_to_users"),
+                nullable=True,
+            ),
             sa.Column("status", sa.String(50), default="confirmed"),
             sa.Column(
                 "confirmation_code",
@@ -161,6 +166,11 @@ def upgrade():
 
 
 def downgrade():
+    op.drop_constraint(
+        "fk_team_bookings_assigned_to_users",
+        "team_bookings",
+        type_="foreignkey",
+    )
     op.drop_table("team_bookings")
     op.drop_table("team_event_types")
     op.drop_table("team_members")

@@ -168,6 +168,7 @@ def upgrade():
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("last_reviewed_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("reviewed_by", sa.String(100), nullable=True),
+            sa.Column("review_notes", sa.Text(), nullable=True),
             sa.Index("ix_data_processing_records_activity_id", "activity_id"),
             sa.Index("ix_data_processing_records_is_active", "is_active"),
         )

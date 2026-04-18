@@ -1,3 +1,5 @@
+import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Optional, TYPE_CHECKING
@@ -13,8 +15,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from .base import Base  # Re-using central Base for consistency
+
+
+logger = logging.getLogger(__name__)
 
 # Type hints for forward references
 if TYPE_CHECKING:
@@ -929,24 +934,42 @@ class AIAutomationTable(Base):
         nullable=False,
     )
 
-    from sqlalchemy.orm import validates
-    import json
-
     @validates("external_results", "agent_decisions", "actions_executed")
     def validate_json_size(self, key, value):
         """Prevent unbounded growth of JSON columns by truncating or limiting."""
         if value is not None:
-            # Check size by serializing to string
-            str_val = json.dumps(value)
-            if len(str_val) > 100000:  # ~100KB limit
-                # If it's a list, try to keep only the most recent/important parts, or truncate
+            serialized_value = json.dumps(value, default=str)
+            original_size = len(serialized_value)
+            if original_size > 100000:  # ~100KB limit
                 if isinstance(value, list):
+                    logger.warning(
+                        "Truncated JSON field %s (size=%s, action=%s)",
+                        key,
+                        original_size,
+                        "truncate_list",
+                    )
                     return value[:50]  # Keep only first 50 items
-                elif isinstance(value, dict):
-                    # Truncate dictionary by keeping a subset of keys or adding a warning
-                    truncated = {k: str(v)[:1000] + "..." if isinstance(v, str) and len(str(v)) > 1000 else v for k, v in list(value.items())[:50]}
+                if isinstance(value, dict):
+                    logger.warning(
+                        "Truncated JSON field %s (size=%s, action=%s)",
+                        key,
+                        original_size,
+                        "truncate_dict",
+                    )
+                    truncated = {
+                        k: str(v)[:1000] + "..."
+                        if isinstance(v, str) and len(str(v)) > 1000
+                        else v
+                        for k, v in list(value.items())[:50]
+                    }
                     truncated["_warning"] = "Data truncated due to size limits"
                     return truncated
+                logger.warning(
+                    "Truncated JSON field %s (size=%s, action=%s)",
+                    key,
+                    original_size,
+                    "replace_placeholder",
+                )
                 return {"_warning": "Data removed due to size limits"}
         return value
     updated_at: Mapped[datetime] = mapped_column(

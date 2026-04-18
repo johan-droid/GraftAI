@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, update, exists, literal, func
+from sqlalchemy import cast, concat, delete, exists, func, literal, select, String, update
 
 from backend.models.dsr import DataRetentionSchedule
 from backend.models.tables import (
@@ -240,9 +240,11 @@ class DataRetentionManager:
                 )
                 .values(
                     full_name="Anonymized User",
-                    email=literal("anonymized-")
-                    + UserTable.id
-                    + literal("@internal.local"),
+                    email=concat(
+                        literal("anonymized-"),
+                        cast(UserTable.id, String),
+                        literal("@internal.local"),
+                    ),
                 )
             )
             result = await db.execute(stmt)

@@ -37,10 +37,20 @@ def get_rate_limiter(max_requests: int = 10, window_seconds: int = 60) -> Callab
 
 
 def _booking_action_secret() -> str:
-    # Fallback to JWT secret so token verification still works in local/dev
-    return os.getenv("BOOKING_ACTION_SECRET") or os.getenv(
-        "JWT_SECRET", "change-me-in-production"
+    secret = os.getenv("BOOKING_ACTION_SECRET", "").strip()
+    if secret:
+        return secret
+
+    jwt_secret = os.getenv("JWT_SECRET", "").strip()
+    if jwt_secret:
+        return jwt_secret
+
+    raise ValueError(
+        "BOOKING_ACTION_SECRET or JWT_SECRET must be configured for booking action tokens."
     )
+
+
+_booking_action_secret()
 
 
 def create_public_action_token(booking_id: str, email: str) -> str:

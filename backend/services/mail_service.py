@@ -21,7 +21,9 @@ def _get_smtp_config():
     }
 
 
-def _send_sync(to_email: str, subject: str, html_content: str):
+def _send_sync(
+    to_email: str, subject: str, html_content: str, text_body: str | None = None
+):
     cfg = _get_smtp_config()
     if not cfg["user"] or not cfg["pass"]:
         logger.error("SMTP credentials missing.")
@@ -31,7 +33,9 @@ def _send_sync(to_email: str, subject: str, html_content: str):
     msg["Subject"] = subject
     msg["From"] = cfg["from"]
     msg["To"] = to_email
-    msg.set_content("Please use an HTML-capable mail client to view this message.")
+    msg.set_content(
+        text_body or "Please use an HTML-capable mail client to view this message."
+    )
     msg.add_alternative(html_content, subtype="html")
 
     try:
@@ -48,7 +52,7 @@ async def send_email(
     to_email: str, subject: str, html_body: str, text_body: str = None
 ):
     """Async wrapper for the blocking SMTP call."""
-    await asyncio.to_thread(_send_sync, to_email, subject, html_body)
+    await asyncio.to_thread(_send_sync, to_email, subject, html_body, text_body)
 
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape

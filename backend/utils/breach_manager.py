@@ -228,7 +228,10 @@ class BreachManager:
 
         await db.commit()
 
-        logger.info(f"Data subjects notified for breach {breach.breach_reference}")
+        logger.info(
+            "Data subjects notified for breach %s",
+            breach.breach_reference,
+        )
 
         return breach
 

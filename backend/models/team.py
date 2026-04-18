@@ -243,7 +243,9 @@ class TeamBooking(Base):
 
     # Assignment
     assigned_to: Mapped[Optional[str]] = mapped_column(
-        String, nullable=True
+        String,
+        ForeignKey("users.id", name="fk_team_bookings_assigned_to_users"),
+        nullable=True,
     )  # User ID of assigned team member
 
     # Status

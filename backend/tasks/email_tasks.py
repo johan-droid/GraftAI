@@ -86,11 +86,16 @@ class EmailService:
         return {"success": True, "message_id": None}
 
     def send_team_invitation(
-        self, to_email: str, inviter_name: str, team_name: str, invite_token: str
+        self,
+        to_email: str,
+        inviter_name: str,
+        team_name: str,
+        invite_token: str,
+        to_name: str = None,
     ):
         subject = f"You're invited to join {team_name}"
         body = (
-            f"Hello,\n\n"
+            f"Hello {to_name or 'there'},\n\n"
             f"{inviter_name} invited you to join {team_name}.\n"
             f"Accept invite using token: {invite_token}\n"
         )

@@ -272,6 +272,7 @@ class DataProcessingRecord(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_reviewed_at = Column(DateTime, nullable=True)
     reviewed_by = Column(String(100), nullable=True)
+    review_notes = Column(Text, nullable=True)
 
 
 class DataBreachRecord(Base):

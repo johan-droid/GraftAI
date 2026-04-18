@@ -1,6 +1,96 @@
+import asyncio
+import hmac
+import logging
+import threading
+
 import pyotp
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.models.tables import UserTable
+from backend.utils.db import get_async_session_maker
+
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_device_fingerprints(preferences: dict) -> list[str]:
+    stored = (
+        preferences.get("trusted_device_fingerprints")
+        or preferences.get("device_fingerprints")
+        or preferences.get("mfa_device_fingerprints")
+    )
+
+    if stored is None:
+        return []
+
+    if isinstance(stored, str):
+        stored = [stored]
+    elif isinstance(stored, dict):
+        stored = stored.get("fingerprints") or stored.get("fingerprint") or []
+
+    if isinstance(stored, (list, tuple, set)):
+        return [item.strip() for item in stored if isinstance(item, str) and item.strip()]
+
+    return []
+
+
+async def _check_device_fingerprint_async(user_id: str, fingerprint: str) -> bool:
+    normalized_fingerprint = fingerprint.strip()
+    if not normalized_fingerprint:
+        logger.warning("Missing device fingerprint for user %s", user_id)
+        return False
+
+    try:
+        session_factory = get_async_session_maker()
+    except RuntimeError as exc:
+        logger.warning(
+            "Device fingerprint check unavailable for user %s: %s", user_id, exc
+        )
+        return False
+
+    async with session_factory() as db:
+        user = await db.get(UserTable, user_id)
+        if not user:
+            logger.warning("No user found for device fingerprint check: %s", user_id)
+            return False
+
+        preferences = user.preferences if isinstance(user.preferences, dict) else {}
+        stored_fingerprints = _extract_device_fingerprints(preferences)
+        if not stored_fingerprints:
+            logger.info("No stored device fingerprint found for user %s", user_id)
+            return False
+
+        for stored_fingerprint in stored_fingerprints:
+            if hmac.compare_digest(stored_fingerprint, normalized_fingerprint):
+                return True
+
+        logger.warning("Device fingerprint mismatch for user %s", user_id)
+        return False
+
+
+def _run_coroutine_sync(coro):
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    result: dict[str, bool] = {}
+    error: list[BaseException] = []
+
+    def runner():
+        try:
+            result["value"] = asyncio.run(coro)
+        except BaseException as exc:
+            error.append(exc)
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    thread.join()
+
+    if error:
+        raise error[0]
+
+    return result.get("value", False)
 
 
 async def start_mfa_enrollment(db: AsyncSession, user_id: str) -> dict:
@@ -69,4 +159,4 @@ async def is_mfa_enabled(db: AsyncSession, user_id: str) -> bool:
 
 
 def check_device_fingerprint(user_id: str, fingerprint: str) -> bool:
-    return True
+    return _run_coroutine_sync(_check_device_fingerprint_async(user_id, fingerprint))

@@ -3,6 +3,7 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import OperationalError
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,15 @@ def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] =
             logger.warning("Pre-create_all repair check failed (non-fatal): %s", exc)
 
     # Create all ORM tables first so SQL patch migrations can safely alter existing relations.
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except OperationalError as exc:
+        msg = str(exc).lower()
+        # Ignore benign "already exists" errors (e.g., index existence on repeated startups)
+        if "already exists" in msg or "index" in msg:
+            logger.warning("Non-fatal DB schema create_all error ignored: %s", exc)
+        else:
+            raise
 
     # SQLite local/test mode: keep a single canonical DB path without Postgres-only SQL scripts.
     if sync_url.startswith("sqlite://"):

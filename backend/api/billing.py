@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import stripe
-import razorpay
+razorpay: Any
+try:
+    import razorpay  # type: ignore
+    HAS_RAZORPAY = True
+except Exception:
+    razorpay = None
+    HAS_RAZORPAY = False
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable, ManualActivationRequestTable, AuditLogTable
@@ -107,8 +113,8 @@ async def create_checkout_session(
             "message": "Payments are disabled for this deployment. Please request an upgrade from the account owner.",
         }
 
-    # If Razorpay keys are present, create a real Razorpay order
-    if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
+    # If Razorpay keys are present, attempt to create a real Razorpay order
+    if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and HAS_RAZORPAY:
         try:
             client = cast(Any, razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)))
             amount = razorpay_tier_amounts.get(tier, 49900)
@@ -127,9 +133,12 @@ async def create_checkout_session(
                 "currency": order.get("currency", "INR"),
                 "mode": "razorpay",
             }
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to create Razorpay order")
             raise HTTPException(status_code=500, detail="Failed to create Razorpay order")
+    elif RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and not HAS_RAZORPAY:
+        # SDK not installed or import failed; log and fall back to simulation when allowed
+        logger.error("Razorpay SDK not available in environment; falling back to simulation if enabled")
 
     # Fallback when no keys are configured
     if PAYMENT_MODE == "test":
@@ -298,7 +307,7 @@ async def verify_razorpay_payment(
         logger.exception("Could not fetch Razorpay order to determine tier")
 
     # Before activating, verify the payment status with Razorpay (must be 'captured')
-    if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
+    if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and HAS_RAZORPAY:
         try:
             client = cast(Any, razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)))
             payment = client.payment.fetch(payment_id)

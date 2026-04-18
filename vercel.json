@@ -5,11 +5,11 @@
   "framework": "nextjs",
   "installCommand": "cd frontend && npm install",
   "env": {
-    "NEXT_PUBLIC_API_URL": "https://graftai.onrender.com",
-    "NEXT_PUBLIC_API_BASE_URL": "https://graftai.onrender.com/api/v1",
+    "NEXT_PUBLIC_API_URL": "https://graftai-abu1.onrender.com",
+    "NEXT_PUBLIC_API_BASE_URL": "https://graftai-abu1.onrender.com/api/v1",
     "NEXT_PUBLIC_APP_URL": "https://www.graftai.tech",
     "NEXTAUTH_URL": "https://www.graftai.tech",
-    "NEXT_PUBLIC_BACKEND_URL": "https://graftai.onrender.com"
+    "NEXT_PUBLIC_BACKEND_URL": "https://graftai-abu1.onrender.com"
   },
   "headers": [
     {

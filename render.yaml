@@ -12,19 +12,19 @@ services:
     branch: main
     autoDeploy: true
     healthCheckPath: /health
-    buildCommand: "python -m pip install --upgrade pip && pip install -r backend/requirements.txt"
-    startCommand: "cd backend && uvicorn api.main:app --host 0.0.0.0 --port $PORT --proxy-headers"
+    buildCommand: "python -m pip install --upgrade pip && python -m pip install -r backend/requirements.txt"
+    startCommand: "cd backend && python -m uvicorn api.main:app --host 0.0.0.0 --port \"$PORT\" --proxy-headers"
     envVars:
       - key: ENV
         value: production
       - key: PYTHONPATH
         value: .
       - key: BACKEND_URL
-        value: https://graftai.onrender.com
+        value: https://graftai-abu1.onrender.com
       - key: TRUSTED_HOSTS
         # Restrict trusted hosts to the app's own Render and public frontend domains.
         # Include localhost/127.0.0.1 for internal health checks and self-ping probes.
-        value: "graftai.onrender.com,www.graftai.tech,127.0.0.1,localhost"
+        value: "graftai-abu1.onrender.com,www.graftai.tech,127.0.0.1,localhost"
       - key: FRONTEND_URL
         value: https://www.graftai.tech
       - key: FRONTEND_BASE_URL
@@ -40,13 +40,13 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_REDIRECT_URI
-        value: https://graftai.onrender.com/api/v1/auth/google/callback
+        value: https://graftai-abu1.onrender.com/api/v1/auth/google/callback
       - key: MICROSOFT_CLIENT_ID
         sync: false
       - key: MICROSOFT_CLIENT_SECRET
         sync: false
       - key: MICROSOFT_REDIRECT_URI
-        value: https://graftai.onrender.com/api/v1/auth/microsoft/callback
+        value: https://graftai-abu1.onrender.com/api/v1/auth/microsoft/callback
       - key: REDIS_URL
         sync: false
       - key: GROQ_API_KEY

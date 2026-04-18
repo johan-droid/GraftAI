@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import json
+from typing import Any, cast
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,7 +68,7 @@ async def get_billing_mode():
         "payment_mode": PAYMENT_MODE,
         "can_simulate": CAN_SIMULATE,
         "gateways": {
-            "razorpay": bool(os.getenv("RAZORPAY_KEY_ID") and os.getenv("RAZORPAY_KEY_SECRET")),
+            "razorpay": bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET),
             "stripe": bool(STRIPE_SECRET_KEY),
         },
         "is_production": IS_PRODUCTION,
@@ -99,8 +100,6 @@ async def create_checkout_session(
         "elite": 149900 # ₹1499.00
     }
 
-    RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
-    RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
     # If payments are disabled for this deployment, return a descriptive response
     if PAYMENT_MODE == "disabled":
         return {
@@ -111,7 +110,7 @@ async def create_checkout_session(
     # If Razorpay keys are present, create a real Razorpay order
     if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
         try:
-            client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+            client = cast(Any, razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)))
             amount = razorpay_tier_amounts.get(tier, 49900)
             # Create order in paise
             order = client.order.create({
@@ -136,7 +135,7 @@ async def create_checkout_session(
     if PAYMENT_MODE == "test":
         return {
             "order_id": "order_simulated_" + current_user.id[:8],
-            "key": os.getenv("RAZORPAY_KEY_ID", "rzp_test_dummy"),
+            "key": RAZORPAY_KEY_ID or "rzp_test_dummy",
             "amount": 1900,
             "currency": "USD",
             "mode": "simulation",
@@ -288,11 +287,10 @@ async def verify_razorpay_payment(
             raise HTTPException(status_code=403, detail="Invalid signature")
 
     # Fetch order info (optional) to retrieve notes like tier
-    RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
     tier = "pro"
     try:
         if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
-            client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+            client = cast(Any, razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)))
             order = client.order.fetch(order_id)
             tier = order.get("notes", {}).get("tier", "pro")
     except Exception:
@@ -302,7 +300,7 @@ async def verify_razorpay_payment(
     # Before activating, verify the payment status with Razorpay (must be 'captured')
     if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
         try:
-            client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+            client = cast(Any, razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)))
             payment = client.payment.fetch(payment_id)
             payment_status = payment.get("status")
             if payment_status != "captured":
@@ -409,7 +407,7 @@ async def create_stripe_checkout_session(
             "checkout_url": checkout_session.url,
             "session_id": checkout_session.id
         }
-    except stripe.error.StripeError as e:
+    except stripe.error.StripeError as e:  # type: ignore[attr-defined]
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -441,7 +439,7 @@ async def create_stripe_portal_session(
         )
         
         return {"portal_url": portal_session.url}
-    except stripe.error.StripeError as e:
+    except stripe.error.StripeError as e:  # type: ignore[attr-defined]
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -465,7 +463,7 @@ async def stripe_webhook(
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError:
+    except stripe.error.SignatureVerificationError:  # type: ignore[attr-defined]
         raise HTTPException(status_code=400, detail="Invalid signature")
     
     # Handle the event

@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] =
     # Create all ORM tables first so SQL patch migrations can safely alter existing relations.
     try:
         Base.metadata.create_all(bind=engine)
-    except OperationalError as exc:
+    except (OperationalError, ProgrammingError) as exc:
         msg = str(exc).lower()
         # Ignore only benign "already exists" errors from repeated create_all on existing schema.
         if "already exists" in msg:

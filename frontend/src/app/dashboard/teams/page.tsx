@@ -263,5 +263,6 @@ export default function TeamsPage() {
     {openTeamToAdd ? (
       <AddMemberModal open={!!openTeamToAdd} onClose={() => setOpenTeamToAdd(null)} teamId={openTeamToAdd!} />
     ) : null}
+  </>
   );
 }

@@ -34,6 +34,9 @@ export default function AnalyticsPage() {
 
   const item = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } };
   const container = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
+  const meetingsData = realtime?.series
+    ? realtime.series.map((s) => ({ day: s.bucket, count: s.meetings }))
+    : data?.details?.weeklyBreakdown ?? [];
 
   return (
     <ErrorBoundary>
@@ -122,11 +125,11 @@ export default function AnalyticsPage() {
             <div className="card p-6">
               <h2 className="text-h3 font-semibold text-[var(--text)]">Meetings Over Time</h2>
               {/* prefer realtime.series if available */}
-              <MeetingsLine data={(realtime?.series ? realtime.series.map(s => ({ day: s.bucket, count: s.meetings })) : data!.details!.weeklyBreakdown)!} />
+              <MeetingsLine data={meetingsData} />
             </div>
             <div className="card p-6">
               <h2 className="text-h3 font-semibold text-[var(--text)]">Meetings by Day</h2>
-              <MeetingsBar data={(realtime?.series ? realtime.series.map(s => ({ day: s.bucket, count: s.meetings })) : data!.details!.weeklyBreakdown)!} />
+              <MeetingsBar data={meetingsData} />
             </div>
           </motion.div>
         )}

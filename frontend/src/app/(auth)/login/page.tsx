@@ -5,9 +5,25 @@ import { useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { OAuthButtons } from "@/components/auth/OAuthButtons";
 
+function isValidCallbackUrl(value?: string) {
+  if (!value || value.trim() === "") return false;
+  if (value.startsWith("/") && !value.startsWith("//")) return true;
+
+  try {
+    const url = new URL(value, window.location.origin);
+    const trustedHosts = ["www.graftai.tech", "graftai.tech"];
+    return trustedHosts.includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export default function LoginPage() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const requestedCallbackUrl = searchParams.get("callbackUrl");
+  const callbackUrl = isValidCallbackUrl(requestedCallbackUrl)
+    ? requestedCallbackUrl!
+    : "/dashboard";
 
   return (
     <AuthLayout

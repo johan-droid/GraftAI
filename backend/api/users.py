@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, validator
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 import pytz
 
 from backend.api.deps import get_db, get_current_user
@@ -18,6 +20,7 @@ from backend.services.storage import storage
 
 
 router = APIRouter(prefix="/users", tags=["users"])
+logger = logging.getLogger(__name__)
 
 
 class UserProfileUpdateRequest(BaseModel):
@@ -357,9 +360,10 @@ async def create_or_update_profile(
         user = _apply_profile_payload(user, payload)
         _mark_profile_setup_completed(user)
         
-        # Explicitly mark as modified
-        from sqlalchemy.orm import inspect
-        inspect(user).mark_modified()
+        # Explicitly mark as modified so SQLAlchemy tracks changed payload fields
+        db.add(user)
+        if hasattr(user, "preferences"):
+            flag_modified(user, "preferences")
         
         await db.commit()
         await db.refresh(user)
@@ -373,10 +377,10 @@ async def create_or_update_profile(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to update profile (onboarding): {e}")
+    except Exception:
+        logger.exception("Failed to update profile (onboarding)")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to save profile: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to save profile")
 
 
 @router.get("/me/profile/setup-status")
@@ -622,9 +626,10 @@ async def update_current_user_profile(
         user = _apply_profile_payload(user, payload)
         _mark_profile_setup_completed(user)
         
-        # Explicitly mark as modified so SQLAlchemy tracks changes
-        from sqlalchemy.orm import inspect
-        inspect(user).mark_modified()
+        # Explicitly mark as modified so SQLAlchemy tracks changed payload fields
+        db.add(user)
+        if hasattr(user, "preferences"):
+            flag_modified(user, "preferences")
         
         # Commit changes
         await db.commit()
@@ -639,10 +644,10 @@ async def update_current_user_profile(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to update profile: {e}")
+    except Exception:
+        logger.exception("Failed to update profile")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to save profile: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to save profile")
 
 
 @router.get("/me/out-of-office")

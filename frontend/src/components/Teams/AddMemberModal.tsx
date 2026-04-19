@@ -65,6 +65,7 @@ export default function AddMemberModal({
 
       toast.success("Member added");
       setEmail("");
+      setRole("member");
       onClose();
     } catch (err: any) {
       const msg = err?.message || String(err || "Failed to add member");
@@ -93,8 +94,13 @@ export default function AddMemberModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Role</label>
-            <select value={role} onChange={(e) => setRole(e.target.value as any)} className="mt-1 block w-full rounded-lg border border-gray-200 p-2">
+            <label htmlFor="team-member-role" className="block text-sm font-medium text-gray-700">Role</label>
+            <select
+              id="team-member-role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as any)}
+              className="mt-1 block w-full rounded-lg border border-gray-200 p-2"
+            >
               <option value="member">Member</option>
               <option value="admin">Admin</option>
             </select>

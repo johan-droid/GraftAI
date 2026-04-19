@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { auth } from "@/auth";
 import { BACKEND_API_URL } from "@/lib/backend";
 
@@ -14,7 +15,8 @@ async function getRedis() {
 }
 
 async function proxyRealtime(accessToken: string, range: string) {
-  const cacheKey = `analytics:realtime:${accessToken}:${range}`;
+  const tokenHash = createHash("sha256").update(accessToken).digest("hex");
+  const cacheKey = `analytics:realtime:${tokenHash}:${range}`;
   const r = await getRedis();
   try {
     if (r) {
@@ -54,12 +56,3 @@ export async function GET(request: Request) {
   return proxyRealtime(backendToken, range);
 }
 
-export async function POST(request: Request) {
-  const session = await auth();
-  const backendToken = (session as any)?.backendToken || (session as any)?.session?.backendToken;
-  if (!backendToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const url = new URL(request.url);
-  const range = url.searchParams.get("range") || "30d";
-  return proxyRealtime(backendToken, range);
-}

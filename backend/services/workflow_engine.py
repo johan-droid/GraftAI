@@ -124,8 +124,7 @@ class WorkflowEngine:
                 # Handle delay
                 if step.delay_minutes > 0:
                     logger.info(f"Delaying step {step.id} for {step.delay_minutes} minutes")
-                    # In production, schedule this as a background task
-                    # For now, execute immediately with note
+                    await asyncio.sleep(step.delay_minutes * 60)
                 
                 result = await self.execute_step(step, event_data)
                 executed_steps.append({
@@ -291,10 +290,11 @@ class WorkflowEngine:
         if not webhook_url:
             raise ValueError("No Slack webhook URL specified")
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 webhook_url,
                 json={"text": message},
+                timeout=30.0,
             )
             response.raise_for_status()
         
@@ -332,10 +332,11 @@ class WorkflowEngine:
             }],
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 webhook_url,
                 json=card,
+                timeout=30.0,
             )
             response.raise_for_status()
         

@@ -41,6 +41,7 @@ import { BottomNav } from "@/components/dashboard/BottomNav";
 import { Header } from "@/components/dashboard/Header";
 import { toast } from "@/components/ui/Toast";
 import { SuccessCelebration } from "@/components/ui/SuccessCelebration";
+import { apiClient } from "@/lib/api-client";
 
 const steps = ["Meeting Details", "Date & Time", "Invitees", "Review"];
 
@@ -106,14 +107,9 @@ export default function BookMeetingPage() {
       setAvailabilityLoading(true);
       setAvailabilityError(null);
       try {
-        const response = await fetch(
-          `/api/calendar/availability/free-slots?date=${selectedDate}&duration=${duration}`,
-          { credentials: "include" }
+        const data = await apiClient.get<{ slots?: any[] }>(
+          `/calendar/availability/free-slots?date=${selectedDate}&duration=${duration}`
         );
-        if (!response.ok) {
-          throw new Error("Failed to fetch availability");
-        }
-        const data = await response.json();
         setTimeSlots(data.slots || []);
       } catch (error) {
         setAvailabilityError(error instanceof Error ? error.message : "Failed to load availability");
@@ -196,24 +192,15 @@ export default function BookMeetingPage() {
       // Calculate end time based on duration
       const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
 
-      const response = await fetch("/api/calendar/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          title: title,
-          start_time: startDateTime.toISOString(),
-          end_time: endDateTime.toISOString(),
-          description: description,
-          location: location,
-          is_meeting: true,
-          attendees: invitees,
-        }),
+      await apiClient.post("/calendar/events", {
+        title: title,
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime.toISOString(),
+        description: description,
+        location: location,
+        is_meeting: true,
+        attendees: invitees,
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to schedule meeting");
-      }
 
       // Show success celebration instead of immediate redirect
       setCreatedMeeting({

@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, model_validator
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.utils.db import get_db
@@ -83,22 +83,41 @@ class ConversationListSchema(BaseModel):
     message_count: int
 
 
-async def analyze_intent_and_extract(user_message: str) -> Dict[str, Any]:
+async def analyze_intent_and_extract(
+    user_message: str,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+    timezone: str = "UTC"
+) -> Dict[str, Any]:
     """
     Uses the LLM to classify intent and extract entities in one JSON response.
+    Includes conversation history for context understanding.
     """
     llm = await get_llm_core()
+    
+    # Build context from conversation history
+    context_prompt = ""
+    if conversation_history and len(conversation_history) > 0:
+        context_prompt = "\nPrevious conversation:\n"
+        for msg in conversation_history[-4:]:  # Last 4 messages for context
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            context_prompt += f"{role}: {content}\n"
+        context_prompt += f"\nCurrent timezone: {timezone}\n"
 
     routing_prompt = f"""
     You are a routing engine for an Executive AI Copilot. 
     Analyze the user's message and determine the correct agent to handle it, along with any extracted entities.
     
     Agent Types:
-    - BOOKING: Creating, moving, or canceling meetings.
+    - BOOKING: Creating, moving, or canceling meetings, finding free slots.
     - OPTIMIZATION: Asking for schedule advice or best times.
     - EXECUTION: Sending emails, creating tasks.
     - MONITORING: Asking for analytics or stats.
     - CHAT: General questions or pleasantries.
+    
+    IMPORTANT: Use the conversation context to understand relative references like "tomorrow", "morning", "8am" etc.
+    If the user previously mentioned a date/time, use that as context.
+    {context_prompt}
     
     User Message: "{user_message}"
     
@@ -161,11 +180,39 @@ def _milestone_for_intent(intent: str, success: bool) -> Optional[str]:
     }.get(intent)
 
 
+async def _load_conversation_history(
+    db: AsyncSession,
+    user_id: str,
+    conversation_id: str,
+    limit: int = 10,
+) -> List[Dict[str, Any]]:
+    """Load conversation history for context."""
+    stmt = (
+        select(ChatMessageTable)
+        .where(
+            ChatMessageTable.user_id == user_id,
+            ChatMessageTable.conversation_id == conversation_id,
+        )
+        .order_by(desc(ChatMessageTable.timestamp))
+        .limit(limit)
+    )
+    
+    result = await db.execute(stmt)
+    messages = result.scalars().all()
+    
+    # Return in chronological order (oldest first)
+    return [
+        {"role": msg.role, "content": msg.content}
+        for msg in reversed(messages)
+    ]
+
+
 async def generate_ai_response(
     user_message: str,
     user_id: str,
     db: AsyncSession,
     conversation_history: Optional[List[Dict]] = None,
+    timezone: str = "UTC",
 ) -> Dict[str, Any]:
     """
     Generate AI response using the 4-phase agent loop architecture.
@@ -175,13 +222,17 @@ async def generate_ai_response(
         user_id: Current user ID
         db: Database session
         conversation_history: Previous messages for context
+        timezone: User's timezone for scheduling
 
     Returns:
         Dict containing response text and optional agent execution results
     """
     try:
         # Step 1: Analyze intent and extract entities (Perception phase entry point)
-        analysis = await analyze_intent_and_extract(user_message)
+        # Pass conversation history for context-aware entity extraction
+        analysis = await analyze_intent_and_extract(
+            user_message, conversation_history, timezone
+        )
         intent = analysis.get("intent", "general_chat")
         agent_type = analysis.get("agent_type")
 
@@ -197,7 +248,7 @@ async def generate_ai_response(
             # Use the 4-phase agent loop
             controller = await get_agent_controller()
 
-            # Create agent request
+            # Create agent request with timezone and full context
             request = AgentRequest(
                 id=f"chat_{datetime.utcnow().timestamp()}",
                 type=agent_type,
@@ -207,11 +258,13 @@ async def generate_ai_response(
                     "intent": intent,
                     "entities": entities,
                     "conversation_history": conversation_history or [],
+                    "timezone": timezone,
                     "extracted_date": entities.get("date"),
                     "extracted_time": entities.get("time"),
                     "extracted_duration": entities.get("duration"),
                     "extracted_attendees": entities.get("attendees"),
                     "extracted_title": entities.get("title"),
+                    "time_range": entities.get("time_range"),  # e.g., "8am-12noon"
                 },
                 priority=5,
             )
@@ -401,8 +454,20 @@ async def send_chat_message(
     )
     db.add(user_message_record)
 
+    # Load conversation history for context
+    conversation_history = await _load_conversation_history(
+        db, current_user.id, conversation_id, limit=10
+    )
+    
     # Generate AI response (returns dict with content + metadata)
-    ai_result = await generate_ai_response(user_message_text, str(current_user.id), db)
+    # Pass conversation history and timezone for context-aware responses
+    ai_result = await generate_ai_response(
+        user_message_text, 
+        str(current_user.id), 
+        db,
+        conversation_history=conversation_history,
+        timezone=request.timezone,
+    )
 
     # Extract content and metadata
     ai_content = ai_result.get("content", "I'm sorry, I couldn't process your request.")

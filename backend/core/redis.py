@@ -2,16 +2,44 @@
 Redis configuration for caching, sessions, and job queues.
 """
 
+import logging
 import os
 import json
 from typing import Optional, Any
+from urllib.parse import urlparse
 import redis.asyncio as redis
+
+logger = logging.getLogger(__name__)
 
 # Redis connection settings
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # Initialize Redis client
 redis_client: Optional[redis.Redis] = None
+
+
+def _redis_connection_advice(redis_url: str) -> str:
+    parsed = urlparse(redis_url)
+    host = parsed.hostname or ""
+    port = parsed.port or 6379
+    if host == "redis":
+        return (
+            f"REDIS_URL={redis_url} uses hostname 'redis', which is only resolvable "
+            "inside Docker Compose. If you are running backend code locally, either "
+            "start Redis with `docker-compose up redis` or set "
+            "REDIS_URL=redis://127.0.0.1:6379/0."
+        )
+
+    if host in {"localhost", "127.0.0.1"}:
+        return (
+            f"REDIS_URL={redis_url} points at local Redis on port {port}. "
+            "Please ensure Redis is running and accessible from this process."
+        )
+
+    return (
+        f"Unable to connect to Redis at {redis_url}. Verify the REDIS_URL environment "
+        "variable and that the Redis host is reachable from this machine."
+    )
 
 
 async def get_redis() -> redis.Redis:
@@ -21,6 +49,15 @@ async def get_redis() -> redis.Redis:
         redis_client = redis.from_url(
             REDIS_URL, encoding="utf-8", decode_responses=True
         )
+        try:
+            await redis_client.ping()
+        except redis.exceptions.ConnectionError as exc:
+            redis_client = None
+            advice = _redis_connection_advice(REDIS_URL)
+            logger.error("Redis connection failed: %s | %s", exc, advice)
+            raise RuntimeError(
+                f"Redis connection failed for REDIS_URL={REDIS_URL}. {advice}"
+            ) from exc
     return redis_client
 
 

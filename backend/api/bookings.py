@@ -407,6 +407,8 @@ async def create_booking(
             """Background task for automation with intelligent fallback"""
             try:
                 from backend.ai.fallback import automate_booking_with_fallback
+                from backend.services.booking_automation import AutomationResult
+                from backend.services.workflow_engine import trigger_booking_workflows
 
                 # Build attendee data from booking metadata
                 attendee_data = None
@@ -455,6 +457,22 @@ async def create_booking(
                     f"✅ Automation completed for {booking.id}: "
                     f"Mode={fallback_result.mode.value}, Status={fallback_result.status}"
                 )
+                
+                # Trigger user-defined workflows (confirmation emails, slack, etc.)
+                try:
+                    await trigger_booking_workflows(
+                        trigger_type="BOOKING_CREATED",
+                        booking_id=booking.id,
+                        user_id=automation_owner_id,
+                        attendee_email=attendee_data.get("email") if attendee_data else booking.email,
+                        attendee_name=attendee_data.get("name") if attendee_data else booking.full_name,
+                        booking_title=booking_data.title,
+                        booking_time=booking.start_time.isoformat(),
+                        booking_id_str=booking.id,
+                    )
+                    logger.info(f"🔄 Workflows triggered for booking {booking.id}")
+                except Exception as wf_error:
+                    logger.error(f"Workflow trigger failed (non-blocking): {wf_error}")
 
             except Exception as e:
                 logger.error(f"❌ Automation failed for {booking.id}: {e}")

@@ -7,6 +7,7 @@ import {
   TrendingUp, Calendar, Clock, Activity,
   ArrowUpRight, RefreshCw,
 } from "lucide-react";
+import { MeetingsLine, MeetingsBar } from "@/components/Analytics/Charts";
 import { StatCardSkeleton, SkeletonText } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
@@ -25,6 +26,11 @@ export default function AnalyticsPage() {
       categoryBreakdown?: { category: string; count: number }[];
     };
   }>("/api/analytics", { revalidateInterval: 60_000 });
+
+  // Realtime series from backend proxy. Preferred for charts when available.
+  const { data: realtime, isLoading: realtimeLoading } = useQuery<{
+    series?: { bucket: string; meetings: number; hours?: number }[];
+  }>("/api/analytics/realtime?range=30d", { revalidateInterval: 60_000 });
 
   const item = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } };
   const container = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
@@ -111,10 +117,17 @@ export default function AnalyticsPage() {
           )}
         </motion.div>
 
-        {data?.details?.weeklyBreakdown && (
-          <motion.div variants={item} className="card p-6 space-y-4">
-            <h2 className="text-h3 font-semibold text-[var(--text)]">Meetings by Day</h2>
-            <BarChart data={data.details.weeklyBreakdown} />
+        { (realtime?.series || data?.details?.weeklyBreakdown) && (
+          <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="card p-6">
+              <h2 className="text-h3 font-semibold text-[var(--text)]">Meetings Over Time</h2>
+              {/* prefer realtime.series if available */}
+              <MeetingsLine data={(realtime?.series ? realtime.series.map(s => ({ day: s.bucket, count: s.meetings })) : data!.details!.weeklyBreakdown)!} />
+            </div>
+            <div className="card p-6">
+              <h2 className="text-h3 font-semibold text-[var(--text)]">Meetings by Day</h2>
+              <MeetingsBar data={(realtime?.series ? realtime.series.map(s => ({ day: s.bucket, count: s.meetings })) : data!.details!.weeklyBreakdown)!} />
+            </div>
           </motion.div>
         )}
 
@@ -209,27 +222,4 @@ function MetricCard({
   );
 }
 
-function BarChart({ data }: { data: { day: string; count: number }[] }) {
-  const max = Math.max(...data.map(d => d.count), 1);
-  return (
-    <div className="flex h-32 items-end gap-2">
-      {data.map(({ day, count }) => {
-        const pct = (count / max) * 100;
-        return (
-          <div key={day} className="flex flex-1 flex-col items-center gap-1">
-            <span className="text-[11px] font-medium text-[var(--text-muted)]">{count}</span>
-            <div className="flex h-20 w-full items-end">
-              <motion.div
-                className="h-full w-full origin-bottom rounded-t-md bg-[var(--peach)] will-change-transform"
-                initial={{ scaleY: 0 }}
-                animate={{ scaleY: Math.max(pct, 4) / 100, opacity: pct > 0 ? 0.7 + (pct / 100) * 0.3 : 0.2 }}
-                transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
-              />
-            </div>
-            <span className="text-[10px] text-[var(--text-faint)]">{day.slice(0, 3)}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+// Replaced with Recharts-based visualizations in '@/components/Analytics/Charts'

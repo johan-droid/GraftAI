@@ -186,6 +186,19 @@ export function generateThemeCSS(mode: ThemeMode = "dark"): string {
       --border-technical: 1px solid rgba(255, 255, 255, 0.1);
       --border-neon: 1px solid ${hsla(colors.brand.primary, 0.3)};
       --border-dotted: 1px dashed rgba(255, 255, 255, 0.2);
+      /* Material-style accents (used by Analytics and small UI badges) */
+      --peach: #ff7043; /* Material Deep Orange 400 */
+      --peach-border: rgba(255,112,67,0.12);
+      --peach-ghost: rgba(255,112,67,0.06);
+
+      /* Semantic shorthands */
+      --info: ${hsl(colors.brand.primary)};
+      --success: ${hsl(colors.semantic.success)};
+
+      /* Typographic tweaks to better match Material scale */
+      --mat-h1-size: 3rem;
+      --mat-h2-size: 2.25rem;
+      --mat-h3-size: 1.5rem;
     }
 
     [data-theme="dark"] {

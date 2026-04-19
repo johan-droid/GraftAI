@@ -50,6 +50,9 @@ class RateLimiter:
         self.default_window = default_window
         self.strategy = strategy
 
+        # In-memory fallback
+        self._memory_store: Dict[str, Dict[str, float]] = {}
+
         # Rate limit configurations per endpoint
         self.endpoint_limits: Dict[str, Dict] = {
             # Strict limits for auth endpoints
@@ -115,13 +118,23 @@ class RateLimiter:
         Check if request is allowed under rate limit.
         Returns: (allowed, remaining, retry_after)
         """
-        if not self.redis:
-            # If no Redis, allow all requests
-            return True, self.default_limit, 0
-
         key = self._get_rate_limit_key(request)
         limit, window = self._get_endpoint_limit(request.url.path)
         now = int(time.time())
+
+        # Clean memory store periodically (approximate)
+        if hasattr(self, '_memory_store') and len(self._memory_store) > 10000:
+            current_time = time.time()
+            keys_to_delete = []
+            for k, data in self._memory_store.items():
+                if data.get("expiration", current_time) <= current_time:
+                    keys_to_delete.append(k)
+            for k in keys_to_delete:
+                del self._memory_store[k]
+
+        if not self.redis:
+            # In-memory fallback (fixed window)
+            return self._memory_fixed_window_check(key, limit, window, now)
 
         try:
             if self.strategy == RateLimitStrategy.SLIDING_WINDOW:
@@ -131,12 +144,37 @@ class RateLimiter:
             else:  # TOKEN_BUCKET
                 return await self._token_bucket_check(key, limit, window, now)
         except redis.RedisError:
-            # If Redis fails, allow the request
-            return True, limit, 0
+            # Fallback to in-memory on redis failure
+            return self._memory_fixed_window_check(key, limit, window, now)
+
+    def _memory_fixed_window_check(
+        self, key: str, limit: int, window: int, now: int
+    ) -> tuple[bool, int, int]:
+        """In-memory fixed window fallback."""
+        if not hasattr(self, '_memory_store'):
+            self._memory_store = {}
+            
+        window_key = f"{key}:{now // window}"
+        
+        entry = self._memory_store.get(window_key)
+        if entry is None or entry.get("expiration", 0) <= now:
+            entry = {"count": 0, "expiration": now + window}
+            
+        entry["count"] += 1
+        self._memory_store[window_key] = entry
+        
+        current_count = entry["count"]
+        if current_count > limit:
+            retry_after = window - (now % window)
+            return False, 0, retry_after
+
+        remaining = limit - current_count
+        return True, remaining, 0
 
     async def _sliding_window_check(
         self, key: str, limit: int, window: int, now: int
     ) -> tuple[bool, int, int]:
+
         """Sliding window rate limiting using Redis sorted sets."""
         pipe = self.redis.pipeline()
 

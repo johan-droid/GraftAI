@@ -335,36 +335,48 @@ async def create_or_update_profile(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(UserTable).where(UserTable.id == current_user.id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
+    """Create or update user profile during onboarding."""
+    try:
+        # Use current_user directly to avoid session detachment issues
+        user = current_user
 
-    if payload.username is not None:
-        username = payload.username.strip().lower()
-        if username and username != user.username:
-            stmt = select(UserTable).where(
-                UserTable.username == username, UserTable.id != current_user.id
-            )
-            existing = (await db.execute(stmt)).scalars().first()
-            if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Username already taken",
+        if payload.username is not None:
+            username = payload.username.strip().lower()
+            if username and username != user.username:
+                stmt = select(UserTable).where(
+                    UserTable.username == username, UserTable.id != user.id
                 )
+                existing = (await db.execute(stmt)).scalars().first()
+                if existing:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Username already taken",
+                    )
 
-    user = _apply_profile_payload(user, payload)
-    _mark_profile_setup_completed(user)
-    await db.commit()
-    await db.refresh(user)
+        # Apply profile changes
+        user = _apply_profile_payload(user, payload)
+        _mark_profile_setup_completed(user)
+        
+        # Explicitly mark as modified
+        from sqlalchemy.orm import inspect
+        inspect(user).mark_modified()
+        
+        await db.commit()
+        await db.refresh(user)
 
-    return {
-        "success": True,
-        "message": "Profile created successfully",
-        "data": _serialize_profile(user),
-    }
+        logger.info(f"Profile updated for user {user.id[:8]}... (onboarding)")
+
+        return {
+            "success": True,
+            "message": "Profile updated successfully",
+            "data": _serialize_profile(user),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update profile (onboarding): {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save profile: {str(e)}")
 
 
 @router.get("/me/profile/setup-status")
@@ -589,32 +601,48 @@ async def update_current_user_profile(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(UserTable).where(UserTable.id == current_user.id))
-    user = result.scalars().first()
+    """Update current user profile settings."""
+    try:
+        # Use the current_user directly - it's already attached to the session
+        # No need to re-query which can cause session detachment issues
+        user = current_user
 
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        # Check username uniqueness if being changed
+        if payload.username is not None:
+            username = payload.username.strip().lower()
+            if username and username != user.username:
+                stmt = select(UserTable).where(
+                    UserTable.username == username, UserTable.id != user.id
+                )
+                existing = (await db.execute(stmt)).scalars().first()
+                if existing:
+                    raise HTTPException(status_code=409, detail="Username already taken")
 
-    if payload.username is not None:
-        username = payload.username.strip().lower()
-        if username and username != user.username:
-            stmt = select(UserTable).where(
-                UserTable.username == username, UserTable.id != current_user.id
-            )
-            existing = (await db.execute(stmt)).scalars().first()
-            if existing:
-                raise HTTPException(status_code=409, detail="Username already taken")
+        # Apply all profile changes
+        user = _apply_profile_payload(user, payload)
+        _mark_profile_setup_completed(user)
+        
+        # Explicitly mark as modified so SQLAlchemy tracks changes
+        from sqlalchemy.orm import inspect
+        inspect(user).mark_modified()
+        
+        # Commit changes
+        await db.commit()
+        await db.refresh(user)
 
-    user = _apply_profile_payload(user, payload)
-    _mark_profile_setup_completed(user)
-    await db.commit()
-    await db.refresh(user)
+        logger.info(f"Profile updated for user {user.id[:8]}...")
 
-    return {
-        "success": True,
-        "message": "Profile updated successfully",
-        "data": _serialize_profile(user),
-    }
+        return {
+            "success": True,
+            "message": "Profile updated successfully",
+            "data": _serialize_profile(user),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update profile: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save profile: {str(e)}")
 
 
 @router.get("/me/out-of-office")

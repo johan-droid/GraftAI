@@ -91,8 +91,19 @@ export default function SettingsProfilePage() {
   const handleSave = async () => {
     try {
       setIsSaving(true);
+      const displayName = profile.name?.trim();
+      if (!displayName) {
+        toast.error("Display name cannot be empty.");
+        setIsSaving(false);
+        return;
+      }
+      if (displayName.length > 100) {
+        toast.error("Display name must be 1-100 characters.");
+        setIsSaving(false);
+        return;
+      }
       const payload = {
-        display_name: profile.name,
+        display_name: displayName,
         bio: profile.bio,
         timezone: profile.timezone,
         time_format: profile.timeFormat,
@@ -108,7 +119,8 @@ export default function SettingsProfilePage() {
       toast.success("Profile updated successfully!");
     } catch (err) {
       console.error("Failed to save profile:", err);
-      toast.error("Failed to save changes.");
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(msg || "Failed to save changes.");
     } finally {
       setIsSaving(false);
     }

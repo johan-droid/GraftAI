@@ -145,6 +145,37 @@ class BookingAutomationService:
     async def process_booking_created(
         self, booking_id: str, user_id: str, trigger_source: str = "scheduler"
     ) -> AutomationResult:
+        """Transaction wrapper for booking automation."""
+        session_factory = get_async_session_maker()
+        async with session_factory() as db:
+            async with db.begin():
+                # Lock the booking first
+                try:
+                    booking_lookup = await db.execute(
+                        select(BookingTable)
+                        .where(BookingTable.id == booking_id)
+                        .with_for_update(nowait=True)
+                    )
+                except Exception as e:
+                    logger.warning(f"Booking {booking_id} locked by another worker: {e}")
+                    return AutomationResult(
+                        booking_id=booking_id, automation_status="failed", actions_executed=[],
+                        agent_decisions={"error": "locked"}, external_results={}, risk_assessment="unknown",
+                        decision_score=0, execution_time_ms=0, timestamp=datetime.utcnow().isoformat()
+                    )
+                
+                if not booking_lookup.scalar_one_or_none():
+                    return AutomationResult(
+                        booking_id=booking_id, automation_status="failed", actions_executed=[],
+                        agent_decisions={"error": "not found"}, external_results={}, risk_assessment="unknown",
+                        decision_score=0, execution_time_ms=0, timestamp=datetime.utcnow().isoformat()
+                    )
+                
+                return await self._execute_booking_automation_core(db, booking_id, user_id, trigger_source)
+
+    async def _execute_booking_automation_core(
+        self, db, booking_id: str, user_id: str, trigger_source: str = "scheduler"
+    ) -> AutomationResult:
         """
         Main entry point - triggered when user creates booking
 
@@ -191,9 +222,7 @@ class BookingAutomationService:
 
             # Measure perception phase with metrics
             phase_start = time.time()
-            perception_data = await self._perception_phase(
-                booking_id=booking_id, user_id=user_id
-            )
+            perception_data = await self._perception_phase(db, booking_id, user_id)
             phase_duration = (time.time() - phase_start) * 1000
 
             # Record phase metrics
@@ -377,8 +406,9 @@ class BookingAutomationService:
             # Calculate execution time
             execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
 
-            # Store results in database
-            await self._store_results(
+            # Store results in database inside current transaction
+            await self._store_results_with_transaction(
+                db=db,
                 booking_id=booking_id,
                 user_id=user_id,
                 decision=decision,
@@ -386,7 +416,8 @@ class BookingAutomationService:
                 external_results=external_results,
                 reflection_data=reflection_data,
                 execution_time_ms=execution_time,
-                fallback_mode=None,  # Set to "rule_based" or "manual_review" if fallback was used
+                fallback_mode=None,
+                trigger_source=trigger_source,
             )
 
             # Calculate decision score
@@ -489,7 +520,7 @@ class BookingAutomationService:
     # PHASE IMPLEMENTATIONS
     # ═════════════════════════════════════════════════════════════════
 
-    async def _perception_phase(self, booking_id: str, user_id: str) -> Dict[str, Any]:
+    async def _perception_phase(self, db, booking_id: str, user_id: str) -> Dict[str, Any]:
         """
         PERCEPTION PHASE
 
@@ -501,8 +532,7 @@ class BookingAutomationService:
         - Calendar availability
         - Business rules
         """
-        session_factory = get_async_session_maker()
-        async with session_factory() as db:
+        if True:
             booking_result = await db.execute(
                 select(BookingTable).where(BookingTable.id == booking_id)
             )

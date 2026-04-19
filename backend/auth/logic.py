@@ -45,12 +45,13 @@ def _booking_action_secret() -> str:
     if jwt_secret:
         return jwt_secret
 
+    secret_key = os.getenv("SECRET_KEY", "").strip()
+    if secret_key:
+        return secret_key
+
     raise ValueError(
-        "BOOKING_ACTION_SECRET or JWT_SECRET must be configured for booking action tokens."
+        "BOOKING_ACTION_SECRET, JWT_SECRET, or SECRET_KEY must be configured for booking action tokens."
     )
-
-
-_booking_action_secret()
 
 
 def create_public_action_token(booking_id: str, email: str) -> str:

@@ -150,11 +150,17 @@ class TestChatAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "total" in data
+        assert "has_more" in data
+        assert "next_cursor" in data
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) >= 1
+        assert data["total"] >= 1
 
         # Check message structure
-        message = data[0]
+        message = data["items"][0]
         assert "id" in message
         assert "role" in message
         assert "content" in message
@@ -300,7 +306,9 @@ class TestChatAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 1
+        assert isinstance(data, dict)
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
 
 
 @pytest.mark.integration
@@ -339,7 +347,11 @@ class TestChatErrorHandling:
         # Should return empty list or 404
         assert response.status_code in [200, 404]
         if response.status_code == 200:
-            assert response.json() == []
+            payload = response.json()
+            assert payload["items"] == []
+            assert payload["total"] == 0
+            assert payload["has_more"] is False
+            assert payload["next_cursor"] is None
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_conversation(self, async_client, test_user):

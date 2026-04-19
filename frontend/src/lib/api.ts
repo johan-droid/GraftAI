@@ -1,4 +1,5 @@
 import { apiClient, API_BASE_URL } from "./api-client";
+import { TeamMemberFull } from "@/types/api";
 
 // Re-exporting API_BASE_URL for backward compatibility if needed
 export { API_BASE_URL } from "./api-client";
@@ -938,6 +939,21 @@ export async function updateEventTypeTeamMember(eventTypeId: string, memberId: s
 
 export async function deleteEventTypeTeamMember(eventTypeId: string, memberId: string) {
   return apiClient.delete<{ status: string }>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members/${encodeURIComponent(memberId)}`);
+}
+
+// ──────────────────────────────────────
+// Teams: Members
+// ──────────────────────────────────────
+export async function getTeamMembers(teamId: string) {
+  return apiClient.get<TeamMemberFull[]>(`/teams/${encodeURIComponent(teamId)}/members`);
+}
+
+export async function addTeamMember(teamId: string, payload: { email: string; role?: string }) {
+  return apiClient.post<TeamMemberFull>(`/teams/${encodeURIComponent(teamId)}/members`, payload);
+}
+
+export async function removeTeamMember(teamId: string, memberId: string) {
+  return apiClient.delete<{ status: string }>(`/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(memberId)}`);
 }
 
 export async function createPublicPaymentIntent(username: string, eventType: string) {

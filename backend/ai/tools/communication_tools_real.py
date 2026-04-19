@@ -243,6 +243,28 @@ else:
         """Internal email sending without retry (tenacity not available)."""
         return await _send_email_impl(*args, **kwargs)
 
+# SMS Retry logic
+SMS_RETRY = {
+    "stop": stop_after_attempt(3) if TENACITY_AVAILABLE else None,
+    "wait": wait_exponential(multiplier=1, min=2, max=10)
+    if TENACITY_AVAILABLE
+    else None,
+    "retry": (retry_if_exception_type((Exception,)) if TENACITY_AVAILABLE else None),
+    "before_sleep": before_sleep_log(logger, "warning") if TENACITY_AVAILABLE else None,
+}
+
+if TENACITY_AVAILABLE:
+
+    @retry(**SMS_RETRY)
+    async def _send_sms_with_retry(*args, **kwargs):
+        """Internal SMS sending with retry logic."""
+        return await _send_sms_impl(*args, **kwargs)
+else:
+
+    async def _send_sms_with_retry(*args, **kwargs):
+        """Internal SMS sending without retry (tenacity not available)."""
+        return await _send_sms_impl(*args, **kwargs)
+
 
 @register_tool(
     name="send_email",
@@ -481,7 +503,7 @@ async def send_email(
     category=ToolCategory.COMMUNICATION,
     priority=ToolPriority.HIGH,
 )
-async def send_sms(
+async def _send_sms_impl(
     to: str,
     message: str,
     from_number: Optional[str] = None,
@@ -542,6 +564,24 @@ async def send_sms(
 
     except Exception as e:
         logger.error(f"Failed to send SMS via Twilio: {e}")
+        # Re-raise to trigger tenacity retry
+        raise
+
+async def send_sms(
+    to: str,
+    message: str,
+    from_number: Optional[str] = None,
+    media_urls: Optional[List[str]] = None,
+) -> dict:
+    """
+    Send SMS using Twilio API with retry logic.
+    """
+    try:
+        return await _send_sms_with_retry(
+            to, message, from_number, media_urls
+        )
+    except Exception as e:
+        logger.error(f"Failed to send SMS via Twilio after retries: {e}")
         return {"success": False, "error": str(e), "to": to, "status": "failed"}
 
 

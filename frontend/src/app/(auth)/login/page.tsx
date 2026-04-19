@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { OAuthButtons } from "@/components/auth/OAuthButtons";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+
   return (
     <AuthLayout
       title="Welcome back"
       subtitle="Sign in to pick up your schedule, messages, and automations where you left off."
     >
       <div className="space-y-5">
-        <OAuthButtons callbackURL="/dashboard" actionText="Sign in" />
+        <OAuthButtons callbackURL={callbackUrl} actionText="Sign in" />
 
         {/* Divider */}
         <div className="flex items-center gap-3">

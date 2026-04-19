@@ -215,6 +215,14 @@ def create_app() -> FastAPI:
             if backend_host:
                 trusted_hosts.append(backend_host)
 
+            # Allow Render and Vercel hosts by default when no explicit production host
+            # configuration is provided. This makes deployment more resilient while still
+            # restricting incoming host names to known platform domains.
+            if os.getenv("RENDER") is not None:
+                trusted_hosts.append("*.render.com")
+            if os.getenv("VERCEL") is not None:
+                trusted_hosts.append("*.vercel.app")
+
             # Always allow internal health checks and local probes in production.
             trusted_hosts.extend(["localhost", "127.0.0.1", "0.0.0.0"])
             trusted_hosts = [host for host in dict.fromkeys(trusted_hosts) if host]
@@ -412,6 +420,7 @@ def create_app() -> FastAPI:
     from backend.routes.calendar_routes import router as calendar_integration_router
     from backend.routes.gdpr_routes import router as gdpr_router
     from backend.api.team_routes import router as team_router
+    from backend.api.workflows import router as workflows_router
     from backend.api.integration_routes import router as integration_router
     from backend.api.email_template_routes import router as email_template_router
     from backend.api.video_conference_routes import router as video_conference_router
@@ -438,6 +447,9 @@ def create_app() -> FastAPI:
 
     # Registering team scheduling router
     app.include_router(team_router, prefix="/api/v1")
+
+    # Registering workflows router
+    app.include_router(workflows_router, prefix="/api/v1")
 
     # Registering analytics router
     app.include_router(analytics_router, prefix="/api/v1")

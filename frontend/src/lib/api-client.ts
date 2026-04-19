@@ -61,63 +61,110 @@ class ApiClient {
 
   private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const { params, ...customConfig } = options;
+    const maxRetries = 3;
+    let retries = 0;
 
     const url = this.buildUrl(endpoint, params);
-    const headers = await this.getHeaders();
+    while (true) {
+      try {
+        const headers = await this.getHeaders();
+        const config: RequestInit = {
+          ...customConfig,
+          headers: {
+            ...headers,
+            ...customConfig.headers,
+          },
+        };
 
-    const config: RequestInit = {
-      ...customConfig,
-      headers: {
-        ...headers,
-        ...customConfig.headers,
-      },
-    };
+        const response = await fetch(url, config);
 
-    try {
-      const response = await fetch(url, config);
-
-      if (response.status === 401) {
-        if (typeof window !== "undefined") {
-          await signOut({ callbackUrl: "/login" });
+        if (response.status === 401) {
+          if (typeof window !== "undefined") {
+            await signOut({ callbackUrl: "/login" });
+          }
+          throw new Error("Unauthorized - Session Expired");
         }
-        throw new Error("Unauthorized - Session Expired");
-      }
 
-      const responseText = await response.text();
-      const responseData = this.parseJsonSafe(responseText);
+        const isServerError = response.status >= 500 && response.status < 600;
 
-      if (!response.ok) {
-        const error = typeof responseData.error === "string" ? responseData.error : undefined;
-        const detail = typeof responseData.detail === "string" ? responseData.detail : undefined;
-        const message = typeof responseData.message === "string" ? responseData.message : undefined;
-        const statusText = response.statusText || `Request failed with status ${response.status}`;
-        throw new Error(String(error || detail || message || statusText));
-      }
+        if (isServerError && retries < maxRetries) {
+            retries++;
+            // Exponential backoff: 500ms, 1000ms, 2000ms
+            const delay = 500 * Math.pow(2, retries - 1);
+            console.warn(`[API] Server error (${response.status}) on ${endpoint}, retrying in ${delay}ms... (Attempt ${retries}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+        }
 
-      return responseData as T;
-    } catch (error) {
-      // Handle network/connection errors specifically
-      if (error instanceof TypeError && error.message === "Failed to fetch") {
-        console.error(`[API Network Error] Cannot connect to backend at ${API_BASE_URL}`);
-        console.error(`[API Network Error] Endpoint: ${endpoint}`);
+        const responseText = await response.text();
+        const responseData = this.parseJsonSafe(responseText);
+
+        if (!response.ok) {
+          const error = typeof responseData.error === "string" ? responseData.error : undefined;
+          const message = typeof responseData.message === "string" ? responseData.message : undefined;
+          const statusText = response.statusText || `Request failed with status ${response.status}`;
+
+          // Try to extract useful detail information
+          let detailMsg: string | undefined;
+          if (responseData) {
+            if (typeof responseData.detail === "string") {
+              detailMsg = responseData.detail;
+            } else if (Array.isArray(responseData.detail)) {
+              try {
+                const msgs = responseData.detail.map((d: any) => {
+                  if (typeof d === "string") return d;
+                  if (d && typeof d.msg === "string") return d.msg;
+                  return JSON.stringify(d);
+                });
+                detailMsg = msgs.join("; ");
+              } catch {
+                detailMsg = JSON.stringify(responseData.detail);
+              }
+            } else if (Array.isArray(responseData.details)) {
+              detailMsg = responseData.details.join("; ");
+            }
+          }
+
+          const finalMsg = error || detailMsg || message || statusText;
+          console.error("[API] Bad response body:", responseData);
+          throw new Error(String(finalMsg));
+        }
+
+        return responseData as T;
+      } catch (error) {
+        // Handle network/connection errors specifically
+        if (error instanceof TypeError && error.message === "Failed to fetch") {
+          if (retries < maxRetries) {
+              retries++;
+              const delay = 500 * Math.pow(2, retries - 1);
+              console.warn(`[API Network Error] Connection failed to ${url}, retrying in ${delay}ms... (Attempt ${retries}/${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+          }
+
+          console.error(`[API Network Error] Cannot connect to backend at ${API_BASE_URL}`);
+          console.error(`[API Network Error] Endpoint: ${endpoint}`);
+          
+          // Provide helpful error message based on environment
+          const isLocalhost = API_BASE_URL.includes("localhost") || API_BASE_URL.includes("127.0.0.1");
+          if (isLocalhost) {
+            throw new Error(
+              "Cannot connect to backend server. Please ensure:\n" +
+              "1. Backend is running on http://localhost:8000\n" +
+              "2. Check NEXT_PUBLIC_API_BASE_URL in .env.local"
+            );
+          } else {
+            throw new Error(
+              "Cannot connect to backend server. The service may be temporarily unavailable."
+            );
+          }
+        }
         
-        // Provide helpful error message based on environment
-        const isLocalhost = API_BASE_URL.includes("localhost") || API_BASE_URL.includes("127.0.0.1");
-        if (isLocalhost) {
-          throw new Error(
-            "Cannot connect to backend server. Please ensure:\n" +
-            "1. Backend is running on http://localhost:8000\n" +
-            "2. Check NEXT_PUBLIC_API_BASE_URL in .env.local"
-          );
-        } else {
-          throw new Error(
-            "Cannot connect to backend server. The service may be temporarily unavailable."
-          );
-        }
+        // Don't retry other errors (like 400 Bad Request, 401 Unauthorized, etc)
+        // just propagate them up if we haven't hit a continue condition above
+        console.error(`[API Error] ${options.method || "GET"} ${endpoint}:`, error);
+        throw error;
       }
-      
-      console.error(`[API Error] ${options.method || "GET"} ${endpoint}:`, error);
-      throw error;
     }
   }
 
@@ -150,34 +197,85 @@ class ApiClient {
 
   public async fetch<T = unknown>(endpoint: string, options: RequestInit & { json?: unknown } = {}): Promise<T> {
     const { json, headers: customHeaders, ...rest } = options;
-    const headers = {
-      ...(await this.getHeaders()),
-    } as Record<string, string>;
-    if (json !== undefined) {
-      headers["Content-Type"] = "application/json";
-      (rest as RequestInit).body = JSON.stringify(json);
+    const maxRetries = 3;
+    let retries = 0;
+    const url = this.buildUrl(endpoint);
+
+    while (true) {
+      try {
+        const headers = {
+          ...(await this.getHeaders()),
+        } as Record<string, string>;
+        if (json !== undefined) {
+          headers["Content-Type"] = "application/json";
+          (rest as RequestInit).body = JSON.stringify(json);
+        }
+
+        const response = await fetch(url, {
+          ...rest,
+          headers: {
+            ...headers,
+            ...customHeaders,
+          },
+        });
+
+        const isServerError = response.status >= 500 && response.status < 600;
+
+        if (isServerError && retries < maxRetries) {
+          retries++;
+          const delay = 500 * Math.pow(2, retries - 1);
+          console.warn(`[API] Server error (${response.status}) on ${endpoint}, retrying in ${delay}ms... (Attempt ${retries}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        const text = await response.text();
+        const data = this.parseJsonSafe(text);
+
+        if (!response.ok) {
+          const error = typeof data.error === "string" ? data.error : undefined;
+          const message = typeof data.message === "string" ? data.message : undefined;
+          const statusText = response.statusText || `Request failed with status ${response.status}`;
+
+          let detailMsg: string | undefined;
+          if (data) {
+            if (typeof data.detail === "string") {
+              detailMsg = data.detail;
+            } else if (Array.isArray(data.detail)) {
+              try {
+                const msgs = data.detail.map((d: any) => {
+                  if (typeof d === "string") return d;
+                  if (d && typeof d.msg === "string") return d.msg;
+                  return JSON.stringify(d);
+                });
+                detailMsg = msgs.join("; ");
+              } catch {
+                detailMsg = JSON.stringify(data.detail);
+              }
+            } else if (Array.isArray(data.details)) {
+              detailMsg = data.details.join("; ");
+            }
+          }
+
+          const finalMsg = error || detailMsg || message || statusText;
+          console.error("[API] Bad response body:", data);
+          throw new Error(String(finalMsg));
+        }
+
+        return (text ? (data as T) : ({} as T));
+      } catch (error) {
+        if (error instanceof TypeError && error.message === "Failed to fetch") {
+          if (retries < maxRetries) {
+            retries++;
+            const delay = 500 * Math.pow(2, retries - 1);
+            console.warn(`[API Network Error] Connection failed to ${url}, retrying in ${delay}ms... (Attempt ${retries}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+        throw error;
+      }
     }
-
-    const response = await fetch(this.buildUrl(endpoint), {
-      ...rest,
-      headers: {
-        ...headers,
-        ...customHeaders,
-      },
-    });
-
-    const text = await response.text();
-    const data = this.parseJsonSafe(text);
-
-    if (!response.ok) {
-      const error = typeof data.error === "string" ? data.error : undefined;
-      const detail = typeof data.detail === "string" ? data.detail : undefined;
-      const message = typeof data.message === "string" ? data.message : undefined;
-      const statusText = response.statusText || `Request failed with status ${response.status}`;
-      throw new Error(String(error || detail || message || statusText));
-    }
-
-    return (text ? (data as T) : ({} as T));
   }
 }
 

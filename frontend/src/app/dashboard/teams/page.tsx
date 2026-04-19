@@ -5,6 +5,9 @@ import { Users, Plus, Shuffle, Layers, ShieldAlert, Link as LinkIcon, MoreVertic
 import { useTeams } from "@/hooks/useTeams";
 import { toast } from "react-hot-toast";
 import { Team, TeamMember } from "@/types/api";
+import AddMemberModal from "@/components/Teams/AddMemberModal";
+import TeamMembersList from "@/components/Teams/TeamMembersList";
+import { useState } from "react";
 
 type TeamMemberUi = TeamMember & {
   name?: string;
@@ -18,6 +21,8 @@ type UiTeam = Omit<Team, "members"> & {
 
 export default function TeamsPage() {
   const { teams, isLoading, createTeam, isCreating } = useTeams();
+  const [openTeamToAdd, setOpenTeamToAdd] = useState<string | null>(null);
+  const [expandedMembersTeam, setExpandedMembersTeam] = useState<string | null>(null);
   const displayTeams: UiTeam[] = teams as UiTeam[];
 
   const copyTeamLink = async (slug: string) => {
@@ -188,9 +193,18 @@ export default function TeamsPage() {
               </div>
 
               <div className="flex-1 mb-6">
-                <p className="text-xs font-semibold text-[#5F6368] uppercase tracking-wider mb-3">
-                  Team Members ({team.members?.length ?? 0})
-                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-[#5F6368] uppercase tracking-wider">
+                    Team Members ({team.members?.length ?? 0})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedMembersTeam(expandedMembersTeam === String(team.id) ? null : String(team.id))}
+                    className="text-sm text-[#1A73E8] hover:underline"
+                  >
+                    {expandedMembersTeam === String(team.id) ? "Hide" : "Manage"}
+                  </button>
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="flex -space-x-3">
                     {team.members?.map((member, idx) => {
@@ -213,11 +227,13 @@ export default function TeamsPage() {
                     type="button"
                     aria-label="Add team member"
                     title="Add team member"
+                    onClick={() => setOpenTeamToAdd(String(team.id))}
                     className="w-9 h-9 rounded-full border border-dashed border-[#DADCE0] flex items-center justify-center text-[#5F6368] hover:bg-[#F8F9FA] hover:text-[#1A73E8] transition-colors ml-2 shadow-sm"
                   >
                     <Plus size={16} />
                   </button>
                 </div>
+                {expandedMembersTeam === String(team.id) ? <TeamMembersList teamId={String(team.id)} /> : null}
               </div>
 
               <div className="pt-4 border-t border-[#F1F3F4] flex items-center justify-between mt-auto">
@@ -244,5 +260,8 @@ export default function TeamsPage() {
         })}
       </div>
     </div>
+    {openTeamToAdd ? (
+      <AddMemberModal open={!!openTeamToAdd} onClose={() => setOpenTeamToAdd(null)} teamId={openTeamToAdd!} />
+    ) : null}
   );
 }

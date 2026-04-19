@@ -66,6 +66,15 @@ export interface TeamMember {
   role: "admin" | "member";
 }
 
+export interface TeamMemberFull {
+  id: string;
+  user_id: string;
+  email?: string;
+  role: "owner" | "admin" | "member" | "viewer";
+  is_active: boolean;
+  joined_at: string;
+}
+
 // ---------------------------------------------------------
 // 4. Workflows & Automations
 // ---------------------------------------------------------

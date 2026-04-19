@@ -250,7 +250,17 @@ async def add_team_member(
     db.add(new_member)
     await db.commit()
 
-    return {"id": new_member.id, "user_id": user.id, "role": invite.role}
+    # Refresh to ensure joined_at and other defaults are populated
+    await db.refresh(new_member)
+
+    return {
+        "id": new_member.id,
+        "user_id": user.id,
+        "email": getattr(user, "email", None),
+        "role": new_member.role,
+        "is_active": new_member.is_active,
+        "joined_at": new_member.joined_at.isoformat(),
+    }
 
 
 @router.get("/{team_id}/members")

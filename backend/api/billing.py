@@ -1,10 +1,121 @@
+# ──────────────────────────────────────────────────────────────
+# Plan Definitions Endpoint
+# ──────────────────────────────────────────────────────────────
+
+from typing import List
+from pydantic import BaseModel
+from fastapi import APIRouter
+
+# Core imports needed by endpoint models and functions
 import hmac
 import hashlib
 import logging
 import os
 import json
-from typing import Any, cast
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Any, cast, Optional
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import uuid
+
+# FastAPI and SQLAlchemy helpers
+from fastapi import Depends, HTTPException, Request, Query
+from sqlalchemy import select, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# External SDKs
+import stripe
+try:
+    import razorpay  # type: ignore
+    HAS_RAZORPAY = True
+except Exception:
+    razorpay = None
+    HAS_RAZORPAY = False
+
+# Local imports
+from backend.api.deps import get_db, get_current_user
+from backend.auth.schemes import require_admin
+from backend.services.mail_service import send_email
+from backend.models.tables import (
+    UserTable,
+    ManualActivationRequestTable,
+    AuditLogTable,
+    BookingTable,
+)
+
+class PlanInfo(BaseModel):
+    id: str
+    name: str
+    price: float
+    currency: str
+    ai_limit: int | None
+    sync_limit: int | None
+    description: str
+    features: list[str]
+
+
+router = APIRouter(prefix="/billing", tags=["billing"])
+
+@router.get("/plans", response_model=List[PlanInfo])
+async def get_plans():
+    """Expose available plans and their limits for the frontend."""
+    return [
+        PlanInfo(
+            id="free",
+            name="Standard",
+            price=0.0,
+            currency="USD",
+            ai_limit=10,
+            sync_limit=3,
+            description="Perfect for managing your personal schedule and trying out AI assistance.",
+            features=[
+                "10 AI Assistant Messages / Day",
+                "Sync with Google & Outlook",
+                "Standard Processing Speed",
+                "Community Support"
+            ],
+        ),
+        PlanInfo(
+            id="pro",
+            name="Professional",
+            price=19.0,
+            currency="USD",
+            ai_limit=200,
+            sync_limit=50,
+            description="The ultimate productivity engine for individuals and power users.",
+            features=[
+                "200 AI Assistant Messages / Day",
+                "Priority Processing Speed",
+                "Advanced Time Analytics",
+                "Custom Meeting Templates",
+                "Priority Support"
+            ],
+        ),
+        PlanInfo(
+            id="elite",
+            name="Enterprise",
+            price=49.0,
+            currency="USD",
+            ai_limit=2000,
+            sync_limit=500,
+            description="Unbounded AI coordination for teams and high-level mastery.",
+            features=[
+                "Unlimited AI Messages",
+                "Unlimited Tool Access",
+                "Early Access to Features",
+                "Dedicated Support",
+                "Custom Privacy Controls"
+            ],
+        ),
+    ]
+
+import hmac
+import hashlib
+import logging
+import os
+import json
+from typing import Any, cast, List, Optional
+from pydantic import BaseModel
+from fastapi import Depends, HTTPException, Request, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import stripe
@@ -19,15 +130,80 @@ except Exception:
     HAS_RAZORPAY = False
 
 from backend.api.deps import get_db, get_current_user
-from backend.models.tables import UserTable, ManualActivationRequestTable, AuditLogTable
-from backend.auth.schemes import require_admin
-from pydantic import BaseModel
-from datetime import datetime, timezone
-from backend.services.mail_service import send_email
-from pathlib import Path
-import uuid
+from backend.models.tables import UserTable, ManualActivationRequestTable, AuditLogTable, BookingTable
+from sqlalchemy import select, desc
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional
 
-router = APIRouter(prefix="/billing", tags=["billing"])
+# ──────────────────────────────────────────────────────────────
+# Usage & Transaction History Endpoints
+# ──────────────────────────────────────────────────────────────
+
+class UsageHistoryItem(BaseModel):
+    date: str
+    ai_count: int
+    sync_count: int
+    storage_bytes: Optional[int] = None
+
+
+@router.get("/usage/history", response_model=List[UsageHistoryItem])
+async def get_usage_history(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserTable = Depends(get_current_user),
+):
+    """Return daily usage history for the current user (AI, sync, storage)."""
+    now = datetime.now(timezone.utc)
+    usage = []
+    for i in range(days):
+        day = now - timedelta(days=i)
+        date_str = day.strftime("%Y-%m-%d")
+        # For demo: Use daily_ai_count and daily_sync_count (real: aggregate from logs)
+        usage.append(UsageHistoryItem(
+            date=date_str,
+            ai_count=current_user.daily_ai_count if i == 0 else 0,
+            sync_count=current_user.daily_sync_count if i == 0 else 0,
+            storage_bytes=None  # TODO: Integrate real storage usage
+        ))
+    return list(reversed(usage))
+
+
+class TransactionHistoryItem(BaseModel):
+    id: str
+    timestamp: datetime
+    method: str
+    amount: Optional[float]
+    currency: Optional[str]
+    status: str
+    description: Optional[str] = None
+
+
+@router.get("/transactions/history", response_model=List[TransactionHistoryItem])
+async def get_transaction_history(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserTable = Depends(get_current_user),
+):
+    """Return recent payment/transaction history for the current user."""
+    # Stripe/Razorpay: Use ManualActivationRequestTable as fallback
+    stmt = select(ManualActivationRequestTable).where(
+        ManualActivationRequestTable.user_id == current_user.id
+    ).order_by(desc(ManualActivationRequestTable.created_at)).limit(limit)
+    results = (await db.execute(stmt)).scalars().all()
+    items = [
+        TransactionHistoryItem(
+            id=r.id,
+            timestamp=r.created_at,
+            method="manual" if r.status != "approved" else "manual-approved",
+            amount=None,
+            currency=None,
+            status=r.status,
+            description=f"Manual activation request for {r.requested_tier}"
+        ) for r in results
+    ]
+    # TODO: Integrate Stripe/Razorpay/BookingTable payments
+    return items
+
 logger = logging.getLogger(__name__)
 
 # Environment detection for simulation endpoints

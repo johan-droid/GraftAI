@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/app/providers/auth-provider";
-import { Box, Container, Typography, Stack, Grid, Button, alpha } from "@mui/material";
+import { Box, Container, Typography, Stack, Grid, Button, alpha, ToggleButton, ToggleButtonGroup, Card, CardContent, CardActions, List, ListItem, ListItemIcon, ListItemText, Divider, Chip } from "@mui/material";
 import { motion } from "framer-motion";
 import { 
   Check, 
@@ -17,11 +17,26 @@ import {
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 
-const TIERS = [
+type Tier = {
+  id: string;
+  name: string;
+  price: string;
+  amount?: number;
+  currency?: string;
+  description: string;
+  features: string[];
+  highlight: boolean;
+  cta: string;
+  icon: React.ReactNode;
+};
+
+const TIERS: Tier[] = [
   {
     id: "free",
     name: "Standard",
     price: "$0",
+    amount: 0,
+    currency: "USD",
     description: "Perfect for managing your personal schedule and trying out AI assistance.",
     features: [
       "10 AI Assistant Messages / Day",
@@ -37,6 +52,8 @@ const TIERS = [
     id: "pro",
     name: "Professional",
     price: "$19",
+    amount: 19,
+    currency: "USD",
     description: "The ultimate productivity engine for individuals and power users.",
     features: [
       "200 AI Assistant Messages / Day",
@@ -53,6 +70,8 @@ const TIERS = [
     id: "elite",
     name: "Enterprise",
     price: "$49",
+    amount: 49,
+    currency: "USD",
     description: "Unbounded AI coordination for teams and high-level mastery.",
     features: [
       "Unlimited AI Messages",
@@ -72,7 +91,60 @@ export default function PricingPage() {
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [region, setRegion] = useState<"US" | "IN">("US");
   const { user } = useAuth();
-  const [billingMode, setBillingMode] = useState<null | { payment_mode?: string; can_simulate?: boolean; gateways?: any }>(null);
+  const [tiers, setTiers] = useState<Tier[]>(TIERS);
+    const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
+    const [billingMode, setBillingMode] = useState<null | { payment_mode?: string; can_simulate?: boolean; gateways?: any }>(null);
+
+  const getIconFor = (id: string) => {
+    if (id === "free") return <Zap size={18} />;
+    if (id === "pro") return <Crown size={18} />;
+    return <Sparkles size={18} />;
+  };
+
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const data = await apiClient.get<any[]>('/billing/plans');
+        if (Array.isArray(data) && data.length) {
+          const mapped = data.map((p) => ({
+            id: p.id,
+            name: p.name,
+            amount: typeof p.price === 'number' ? p.price : undefined,
+            currency: p.currency || 'USD',
+            price: typeof p.price === 'number' && p.currency ? (p.currency.toUpperCase() === 'INR' ? `₹${p.price}` : `$${p.price}`) : getPrice(p.id),
+            description: p.description || '',
+            features: Array.isArray(p.features) ? p.features : [],
+            highlight: p.id === 'pro',
+            cta: p.id === 'elite' ? 'Contact Us' : (p.id === 'free' ? 'Get Started' : 'Upgrade to Pro'),
+            icon: getIconFor(p.id),
+          } as Tier));
+          setTiers(mapped);
+        }
+      } catch (e) {
+        // keep fallback TIERS
+        console.warn('Failed to fetch plans from backend, using fallback', e);
+      }
+    };
+
+    fetchPlans();
+  }, []);
+
+  const currencySymbol = (c?: string) => {
+    if (!c) return '$';
+    if (c.toUpperCase() === 'INR') return '₹';
+    if (c.toUpperCase() === 'USD') return '$';
+    return c + ' ';
+  };
+
+  const formatPrice = (tier: Tier) => {
+    const amt = (tier.amount ?? Number(String(tier.price).replace(/[^0-9.]/g, ''))) || 0;
+    const cur = tier.currency ?? 'USD';
+    if (billingInterval === 'monthly') {
+      return `${currencySymbol(cur)}${amt}`;
+    }
+    const yearly = Math.round(amt * 12 * 0.83); // ~17% discount for yearly
+    return `${currencySymbol(cur)}${yearly}`;
+  };
 
   useEffect(() => {
     const detectRegion = async () => {
@@ -246,60 +318,77 @@ export default function PricingPage() {
                 India
               </Button>
             </Box>
+
+            <Typography
+              variant="h1"
+              className="text-gradient-neon"
+              sx={{
+                fontWeight: 800,
+                fontSize: { xs: 36, md: 56 },
+                letterSpacing: "-0.02em",
+                lineHeight: 1.02,
+                fontFamily: "var(--font-sans)",
+                mb: 1
+              }}
+            >
+              Simple Pricing
+            </Typography>
+
+            <Typography
+              sx={{
+                color: "var(--text-muted)",
+                fontSize: { xs: 14, md: 16 },
+                maxWidth: 720,
+                mx: "auto",
+                fontFamily: "var(--font-sans)",
+                mb: 2
+              }}
+            >
+              Choose the plan that fits your workflow. From personal use to scaling teams, we’ve got you covered.
+            </Typography>
+
+            {billingMode && billingMode.payment_mode === 'test' && (
+              <Box sx={{ mt: 2, px: 3, py: 1.5, borderRadius: 1, border: '1px solid rgba(255,255,255,0.06)', bgcolor: 'rgba(255,255,255,0.02)', color: 'var(--text-muted)', fontSize: 13 }}>
+                Sandbox / Demo mode enabled — no real charges will be processed. Use this mode to test checkout and webhooks.
+              </Box>
+            )}
+            {billingMode && billingMode.payment_mode === 'disabled' && (
+              <Box sx={{ mt: 2, px: 3, py: 1.5, borderRadius: 1, border: '1px solid rgba(255,0,96,0.06)', bgcolor: 'rgba(255,0,96,0.02)', color: 'var(--text-muted)', fontSize: 13 }}>
+                Payments are disabled for this deployment. You can request a manual upgrade from the account owner.
+              </Box>
+            )}
+            {billingMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <Box sx={{ 
+                  mt: 4, px: 3, py: 1.5, borderRadius: 1, border: "1px solid rgba(0, 255, 156, 0.2)", 
+                  bgcolor: "rgba(0, 255, 156, 0.05)", color: "var(--primary)", fontSize: "12px", 
+                  fontFamily: "var(--font-mono)", display: "inline-block" 
+                }}>
+                  [ STATUS: {billingMessage} ]
+                </Box>
+              </motion.div>
+            )}
           </motion.div>
 
-          <Typography
-            variant="h1"
-            className="text-gradient-neon"
-            sx={{
-              fontWeight: 900,
-              fontSize: { xs: 42, md: 72 },
-              letterSpacing: "-0.04em",
-              lineHeight: 1,
-              fontFamily: "var(--font-sans)"
-            }}
-          >
-            Simple Pricing
-          </Typography>
-          <Typography
-            sx={{
-              color: "var(--text-muted)",
-              fontSize: { xs: 16, md: 18 },
-              maxWidth: 600,
-              mx: "auto",
-              fontFamily: "var(--font-sans)"
-            }}
-          >
-            Choose the plan that fits your workflow. From personal use to scaling teams, we&apos;ve got you covered.
-          </Typography>
-          {billingMode && billingMode.payment_mode === 'test' && (
-            <Box sx={{ mt: 2, px: 3, py: 1.5, borderRadius: 1, border: '1px solid rgba(255,255,255,0.06)', bgcolor: 'rgba(255,255,255,0.02)', color: 'var(--text-muted)', fontSize: 13 }}>
-              Sandbox / Demo mode enabled — no real charges will be processed. Use this mode to test checkout and webhooks.
-            </Box>
-          )}
-          {billingMode && billingMode.payment_mode === 'disabled' && (
-            <Box sx={{ mt: 2, px: 3, py: 1.5, borderRadius: 1, border: '1px solid rgba(255,0,96,0.06)', bgcolor: 'rgba(255,0,96,0.02)', color: 'var(--text-muted)', fontSize: 13 }}>
-              Payments are disabled for this deployment. You can request a manual upgrade from the account owner.
-            </Box>
-          )}
-          {billingMessage && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+            <ToggleButtonGroup
+              value={billingInterval}
+              exclusive
+              onChange={(e, val) => { if (val === 'monthly' || val === 'yearly') setBillingInterval(val); }}
+              size="small"
+              sx={{ borderRadius: 99, bgcolor: 'rgba(255,255,255,0.02)', px: 1 }}
             >
-              <Box sx={{ 
-                mt: 4, px: 3, py: 1.5, borderRadius: 1, border: "1px solid rgba(0, 255, 156, 0.2)", 
-                bgcolor: "rgba(0, 255, 156, 0.05)", color: "var(--primary)", fontSize: "12px", 
-                fontFamily: "var(--font-mono)", display: "inline-block" 
-              }}>
-                [ STATUS: {billingMessage} ]
-              </Box>
-            </motion.div>
-          )}
+              <ToggleButton value="monthly">Monthly</ToggleButton>
+              <ToggleButton value="yearly">Yearly — Save 2 months</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
         </Stack>
 
         <Grid container spacing={4} sx={{ mb: 16 }}>
-          {TIERS.map((tier, idx) => (
+          {tiers.map((tier, idx) => (
             <Grid item xs={12} md={4} key={tier.id}>
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -314,8 +403,10 @@ export default function PricingPage() {
                   flexDirection: "column",
                   borderRadius: 2,
                   border: tier.highlight ? "1px solid var(--primary)" : "1px solid var(--border-subtle)",
+                  background: tier.highlight ? 'linear-gradient(135deg, rgba(0,255,156,0.04), rgba(255,255,255,0.01))' : undefined,
+                  boxShadow: tier.highlight ? '0 10px 30px rgba(0,255,156,0.06)' : undefined,
                   position: "relative",
-                  "&:hover": { borderColor: "var(--primary)", transition: "0.3s" }
+                  "&:hover": { borderColor: "var(--primary)", transform: 'translateY(-4px)', transition: "0.25s" }
                 }}>
                   {tier.highlight && (
                     <Box sx={{ 
@@ -339,9 +430,14 @@ export default function PricingPage() {
                   </Typography>
                   <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 3 }}>
                     <Typography variant="h3" sx={{ fontWeight: 900, color: "var(--text-primary)" }}>
-                      {getPrice(tier.id)}
+                      {formatPrice(tier)}
                     </Typography>
-                    <Typography sx={{ color: "var(--text-faint)", fontSize: 14 }}>/ month</Typography>
+                    <Typography sx={{ color: "var(--text-faint)", fontSize: 14 }}>
+                      {billingInterval === 'monthly' ? '/ month' : '/ year'}
+                    </Typography>
+                    {billingInterval === 'yearly' && tier.amount && tier.amount > 0 && (
+                      <Typography sx={{ color: "var(--text-muted)", fontSize: 12, ml: 1 }}>(billed annually)</Typography>
+                    )}
                   </Stack>
                   <Typography sx={{ color: "var(--text-muted)", fontSize: 13, mb: 4, minHeight: 40 }}>
                     {tier.description}

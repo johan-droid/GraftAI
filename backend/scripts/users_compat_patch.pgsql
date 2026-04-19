@@ -17,6 +17,7 @@ ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS job_title VARCHAR(25
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS location VARCHAR(255);
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free' NOT NULL;
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255);
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255);
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS razorpay_customer_id VARCHAR(255);
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS razorpay_subscription_id VARCHAR(255);
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'inactive';
@@ -33,6 +34,7 @@ ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
 
 CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON public.users(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_users_stripe_customer_id ON public.users(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_users_stripe_subscription_id ON public.users(stripe_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_users_razorpay_customer_id ON public.users(razorpay_customer_id);
 CREATE INDEX IF NOT EXISTS idx_users_razorpay_subscription_id ON public.users(razorpay_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON public.users(deleted_at);

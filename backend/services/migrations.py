@@ -27,7 +27,7 @@ def _repo_root() -> Path:
 
 def _canonical_migration_plan() -> list[Path]:
     root = _repo_root()
-    scripts = [root / "backend" / "scripts" / "users_compat_patch.sql"]
+    scripts = [root / "backend" / "scripts" / "users_compat_patch.pgsql"]
     migration_dir = root / "backend" / "models" / "migrations"
 
     sql_migrations = sorted([p for p in migration_dir.glob("*.pgsql") if p.is_file()])

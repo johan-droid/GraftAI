@@ -259,6 +259,7 @@ async def repair_database():
                 "tenant_id": "INTEGER",
                 "tier": "VARCHAR(20) DEFAULT 'free' NOT NULL",
                 "stripe_customer_id": "VARCHAR(255)",
+                "stripe_subscription_id": "VARCHAR(255)",
                 "razorpay_customer_id": "VARCHAR(255)",
                 "razorpay_subscription_id": "VARCHAR(255)",
                 "subscription_status": "VARCHAR(50) DEFAULT 'inactive'",

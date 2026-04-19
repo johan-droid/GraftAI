@@ -219,12 +219,19 @@ def create_app() -> FastAPI:
             # configuration is provided. This makes deployment more resilient while still
             # restricting incoming host names to known platform domains.
             if os.getenv("RENDER") is not None:
-                trusted_hosts.append("*.render.com")
+                trusted_hosts.append("*.onrender.com")  # FIXED: Changed from render.com to onrender.com
             if os.getenv("VERCEL") is not None:
                 trusted_hosts.append("*.vercel.app")
 
             # Always allow internal health checks and local probes in production.
-            trusted_hosts.extend(["localhost", "127.0.0.1", "0.0.0.0","graftai.tech"])
+            # FIXED: Added www.graftai.tech to the explicit fallback list
+            trusted_hosts.extend([
+                "localhost",
+                "127.0.0.1",
+                "0.0.0.0",
+                "graftai.tech",
+                "www.graftai.tech",
+            ])
             trusted_hosts = [host for host in dict.fromkeys(trusted_hosts) if host]
         else:
             trusted_hosts = [

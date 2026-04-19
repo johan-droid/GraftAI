@@ -233,7 +233,7 @@ def create_app() -> FastAPI:
                 "0.0.0.0",
                 "graftai.tech",
                 "*.vercel.app",
-                "*.render.com",
+                "*.onrender.com",
             ]
 
     # If the application is behind a trusted load balancer/proxy, ensure

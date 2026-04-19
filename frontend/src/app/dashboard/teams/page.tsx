@@ -129,8 +129,9 @@ export default function TeamsPage() {
   
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 pb-6 border-b border-[#DADCE0]">
+    <>
+      <div className="p-6 md:p-10 max-w-6xl mx-auto w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 pb-6 border-b border-[#DADCE0]">
         <div>
           <h1 className="text-3xl font-medium text-[#202124] tracking-tight mb-2 flex items-center gap-3">
             Teams & Resources

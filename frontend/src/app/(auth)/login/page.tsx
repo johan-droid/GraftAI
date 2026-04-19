@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { OAuthButtons } from "@/components/auth/OAuthButtons";
 
-function isValidCallbackUrl(value?: string) {
+function isValidCallbackUrl(value: string | null): value is string {
   if (!value || value.trim() === "") return false;
   if (value.startsWith("/") && !value.startsWith("//")) return true;
 
@@ -22,7 +22,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const requestedCallbackUrl = searchParams.get("callbackUrl");
   const callbackUrl = isValidCallbackUrl(requestedCallbackUrl)
-    ? requestedCallbackUrl!
+    ? requestedCallbackUrl
     : "/dashboard";
 
   return (

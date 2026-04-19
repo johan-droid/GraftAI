@@ -224,14 +224,14 @@ def create_app() -> FastAPI:
                 trusted_hosts.append("*.vercel.app")
 
             # Always allow internal health checks and local probes in production.
-            trusted_hosts.extend(["localhost", "127.0.0.1", "0.0.0.0"])
+            trusted_hosts.extend(["localhost", "127.0.0.1", "0.0.0.0","graftai.tech"])
             trusted_hosts = [host for host in dict.fromkeys(trusted_hosts) if host]
         else:
             trusted_hosts = [
                 "localhost",
                 "127.0.0.1",
                 "0.0.0.0",
-                "*.graftai.tech",
+                "graftai.tech",
                 "*.vercel.app",
                 "*.render.com",
             ]

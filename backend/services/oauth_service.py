@@ -2,6 +2,7 @@ import hmac
 import hashlib
 import ipaddress
 import os
+import posixpath
 import secrets
 import time
 from functools import lru_cache
@@ -239,14 +240,17 @@ def sanitize_redirect(redirect: str) -> str:
         if parsed.scheme not in {"http", "https"}:
             return "/dashboard"
 
-        origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+        origin = f"{parsed.scheme}://{parsed.netloc}"
         if origin not in _allowed_frontend_origins():
             return "/dashboard"
 
         path = parsed.path or "/"
+        normalized_path = posixpath.normpath(path)
+        if not normalized_path.startswith("/"):
+            normalized_path = "/" + normalized_path
         query = f"?{parsed.query}" if parsed.query else ""
         fragment = f"#{parsed.fragment}" if parsed.fragment else ""
-        decoded = f"{path}{query}{fragment}"
+        decoded = f"{normalized_path}{query}{fragment}"
 
     if not decoded.startswith("/"):
         decoded = "/" + decoded

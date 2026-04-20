@@ -7,7 +7,9 @@
     "dev-all": "node ./scripts/dev-all.js",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "normalize-sw": "node scripts/normalize-sw.js",
+    "postbuild": "npm run normalize-sw"
   },
   "dependencies": {
     "@auth/core": "^0.34.3",

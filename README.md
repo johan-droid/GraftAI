@@ -109,6 +109,13 @@ GET    /api/v1/ai/suggestions         - Load_Suggestions
 
 ---
 
+## 📚 GITHUB DOCUMENTATION LINKS
+- SES Documentation: https://github.com/johan-droid/GraftAI/blob/main/docs/SES_DOCUMENTATION.md
+- Technical Architecture: https://github.com/johan-droid/GraftAI/blob/main/docs/TECHNICAL_DOCUMENT.md
+- Feature Overview: https://github.com/johan-droid/GraftAI/blob/main/docs/FEATURE_DOCUMENT.md
+
+---
+
 ## 🎨 DESIGN_SYSTEM
 
 | TOKEN | HEX_CODE | PURPOSE |

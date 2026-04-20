@@ -16,7 +16,7 @@ from backend.models.tables import (
     UserTable, WorkflowTable, WorkflowStepTable, generate_uuid
 )
 from backend.services.workflow_engine import (
-    WorkflowEngine, get_workflow_engine, trigger_booking_workflows
+    WorkflowEngine, get_workflow_engine
 )
 from backend.utils.logger import get_logger
 

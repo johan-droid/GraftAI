@@ -428,8 +428,6 @@ async def create_booking(
                 )
 
                 # Convert FallbackResult to AutomationResult for tracking
-                from backend.services.booking_automation import AutomationResult
-
                 result = AutomationResult(
                     booking_id=booking.id,
                     automation_status=fallback_result.status,

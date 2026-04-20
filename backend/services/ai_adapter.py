@@ -4,7 +4,7 @@ Supports OpenAI, Anthropic, Groq, and local models.
 """
 import os
 import logging
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Optional, List
 from enum import Enum
 from abc import ABC, abstractmethod
 

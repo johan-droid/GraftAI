@@ -46,7 +46,39 @@ interface RazorpayCheckoutResponse {
   key?: string;
   amount?: number;
   currency?: string;
-  [k: string]: any;
+}
+
+interface BillingMode {
+  payment_mode?: string;
+  can_simulate?: boolean;
+  gateways?: Record<string, unknown>;
+}
+
+interface RazorpayHandlerResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+interface RazorpayCheckoutOptions {
+  key: string | undefined;
+  amount: number | undefined;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string | undefined;
+  handler: (response: RazorpayHandlerResponse) => Promise<void>;
+  prefill: { name: string; email: string };
+  theme: { color: string };
+}
+
+interface RazorpayCheckoutInstance {
+  on: (event: string, callback: (...args: unknown[]) => void) => void;
+  open: () => void;
+}
+
+interface RazorpayWindow extends Window {
+  Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckoutInstance;
 }
 
 const TIERS: Tier[] = [
@@ -112,8 +144,7 @@ export default function PricingPage() {
   const { user } = useAuth();
   const [tiers, setTiers] = useState<Tier[]>(TIERS);
     const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
-    const [billingMode, setBillingMode] = useState<null | { payment_mode?: string; can_simulate?: boolean; gateways?: any }>(null);
-
+  const [billingMode, setBillingMode] = useState<null | BillingMode>(null);
   
 
   const getIconFor = (id: string) => {
@@ -244,7 +275,8 @@ export default function PricingPage() {
         // Load Razorpay checkout script
         const loadRzp = () => new Promise<boolean>((resolve, reject) => {
           if (typeof window === 'undefined') return reject(false);
-          if ((window as any).Razorpay) return resolve(true);
+          const windowRazorpay = window as RazorpayWindow;
+        if (windowRazorpay.Razorpay) return resolve(true);
           const existing = document.getElementById('razorpay-sdk');
           if (existing) return resolve(true);
           const script = document.createElement('script');
@@ -264,7 +296,7 @@ export default function PricingPage() {
           name: 'GraftAI',
           description: tierId === 'pro' ? 'Professional Subscription' : 'Enterprise Subscription',
           order_id: response.order_id,
-            handler: async function (res: any) {
+            handler: async function (res: RazorpayHandlerResponse) {
             try {
               // Verify payment on server
               await enhancedApiClient.post('/billing/razorpay/verify', res);
@@ -275,9 +307,14 @@ export default function PricingPage() {
           },
           prefill: { name: user?.full_name || user?.email, email: user?.email },
           theme: { color: 'var(--primary)' },
-        } as any;
+        } as RazorpayCheckoutOptions;
 
-        const rzp = new (window as any).Razorpay(options);
+        const windowRazorpay = window as RazorpayWindow;
+        if (!windowRazorpay.Razorpay) {
+          throw new Error('Razorpay script failed to load');
+        }
+
+        const rzp = new windowRazorpay.Razorpay(options);
         rzp.on('payment.failed', function () {
           setBillingMessage('Payment failed or cancelled.');
         });

@@ -1,4 +1,4 @@
-name: Frontend build & sanitize
+name: "Frontend build & sanitize"
 
 on:
   push:

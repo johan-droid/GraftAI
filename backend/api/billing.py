@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # External SDKs
 import stripe
+razorpay: Any = None
 try:
     import razorpay  # type: ignore
     HAS_RAZORPAY = True
@@ -39,7 +40,6 @@ from backend.models.tables import (
     UserTable,
     ManualActivationRequestTable,
     AuditLogTable,
-    BookingTable,
 )
 
 class PlanInfo(BaseModel):
@@ -107,33 +107,6 @@ async def get_plans():
             ],
         ),
     ]
-
-import hmac
-import hashlib
-import logging
-import os
-import json
-from typing import Any, cast, List, Optional
-from pydantic import BaseModel
-from fastapi import Depends, HTTPException, Request, Query
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-import stripe
-
-razorpay: Any
-try:
-    import razorpay  # type: ignore
-
-    HAS_RAZORPAY = True
-except Exception:
-    razorpay = None
-    HAS_RAZORPAY = False
-
-from backend.api.deps import get_db, get_current_user
-from backend.models.tables import UserTable, ManualActivationRequestTable, AuditLogTable, BookingTable
-from sqlalchemy import select, desc
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
 
 # ──────────────────────────────────────────────────────────────
 # Usage & Transaction History Endpoints
@@ -300,8 +273,10 @@ async def create_checkout_session(
     # If Razorpay keys are present, attempt to create a real Razorpay order
     if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and HAS_RAZORPAY:
         try:
+            assert razorpay is not None
+            razorpay_client = cast(Any, razorpay)
             client = cast(
-                Any, razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+                Any, razorpay_client.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
             )
             amount = razorpay_tier_amounts.get(tier, 49900)
             # Create order in paise
@@ -438,13 +413,14 @@ async def razorpay_webhook(request: Request, db: AsyncSession = Depends(get_db))
     body = await request.body()
     signature = request.headers.get("x-razorpay-signature")
 
+    request_host = request.client.host if request.client is not None else "unknown"
     if not signature or not verify_razorpay_signature(
         body, signature, RAZORPAY_WEBHOOK_SECRET
     ):
         # Return 403 to signal Razorpay to retry - returning 200 would confirm receipt
         # and prevent retries, potentially causing missed webhook events
         logger.warning(
-            f"❌ Invalid Razorpay webhook signature from {request.client.host if request.client else 'unknown'}"
+            f"❌ Invalid Razorpay webhook signature from {request_host}"
         )
         raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
@@ -514,9 +490,11 @@ async def verify_razorpay_payment(
     # Fetch order info (optional) to retrieve notes like tier
     tier = "pro"
     try:
-        if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
+        if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and HAS_RAZORPAY:
+            assert razorpay is not None
+            razorpay_client = cast(Any, razorpay)
             client = cast(
-                Any, razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+                Any, razorpay_client.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
             )
             order = client.order.fetch(order_id)
             tier = order.get("notes", {}).get("tier", "pro")
@@ -527,8 +505,10 @@ async def verify_razorpay_payment(
     # Before activating, verify the payment status with Razorpay (must be 'captured')
     if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and HAS_RAZORPAY:
         try:
+            assert razorpay is not None
+            razorpay_client = cast(Any, razorpay)
             client = cast(
-                Any, razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+                Any, razorpay_client.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
             )
             payment = client.payment.fetch(payment_id)
             payment_status = payment.get("status")

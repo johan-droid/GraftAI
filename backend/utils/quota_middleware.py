@@ -6,7 +6,6 @@ Implements a Redis-backed token bucket to prevent LLM cost-exhaustion.
 import time
 import logging
 from typing import Optional, Callable
-import json
 
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware

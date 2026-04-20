@@ -1,6 +1,5 @@
 import time
 import os
-import secrets
 
 def generate_sequential_id() -> str:
     """

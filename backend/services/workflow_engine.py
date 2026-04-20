@@ -5,14 +5,13 @@ Executes workflow steps based on booking triggers.
 Supports: EMAIL, SMS, WEBHOOK, SLACK actions.
 """
 import asyncio
-import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from backend.models.tables import (
-    WorkflowTable, WorkflowStepTable, BookingTable, UserTable
+    WorkflowTable, WorkflowStepTable
 )
 from backend.services.messaging import send_message
 from backend.utils.logger import get_logger

@@ -233,8 +233,20 @@ def sanitize_redirect(redirect: str) -> str:
         return "/dashboard"
 
     decoded = unquote_plus(redirect)
-    if decoded.startswith(("http://", "https://", "//")):
-        return "/dashboard"
+
+    parsed = urlparse(decoded)
+    if parsed.scheme or parsed.netloc:
+        if parsed.scheme not in {"http", "https"}:
+            return "/dashboard"
+
+        origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+        if origin not in _allowed_frontend_origins():
+            return "/dashboard"
+
+        path = parsed.path or "/"
+        query = f"?{parsed.query}" if parsed.query else ""
+        fragment = f"#{parsed.fragment}" if parsed.fragment else ""
+        decoded = f"{path}{query}{fragment}"
 
     if not decoded.startswith("/"):
         decoded = "/" + decoded

@@ -245,6 +245,8 @@ def sanitize_redirect(redirect: str) -> str:
             return "/dashboard"
 
         path = parsed.path or "/"
+        if any(segment == ".." for segment in path.split("/")):
+            return "/dashboard"
         normalized_path = posixpath.normpath(path)
         if not normalized_path.startswith("/"):
             normalized_path = "/" + normalized_path

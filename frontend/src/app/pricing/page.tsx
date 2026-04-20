@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/app/providers/auth-provider";
-import { Box, Container, Typography, Stack, Grid, Button, alpha, ToggleButton, ToggleButtonGroup, Card, CardContent, CardActions, List, ListItem, ListItemIcon, ListItemText, Divider, Chip } from "@mui/material";
+import { Box, Container, Typography, Stack, Grid, Button, alpha, ToggleButton, ToggleButtonGroup } from "@mui/material";
 import { motion } from "framer-motion";
 import { 
   Check, 
@@ -15,7 +15,7 @@ import {
   ArrowRight,
   Loader2
 } from "lucide-react";
-import { apiClient } from "@/lib/api-client";
+import { enhancedApiClient } from "@/lib/api-client-enhanced";
 
 type Tier = {
   id: string;
@@ -29,6 +29,25 @@ type Tier = {
   cta: string;
   icon: React.ReactNode;
 };
+
+interface BillingPlan {
+  id: string;
+  name?: string;
+  price?: number | string;
+  currency?: string;
+  description?: string;
+  features?: string[];
+}
+
+interface RazorpayCheckoutResponse {
+  mode?: string;
+  message?: string;
+  order_id?: string;
+  key?: string;
+  amount?: number;
+  currency?: string;
+  [k: string]: any;
+}
 
 const TIERS: Tier[] = [
   {
@@ -95,16 +114,24 @@ export default function PricingPage() {
     const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
     const [billingMode, setBillingMode] = useState<null | { payment_mode?: string; can_simulate?: boolean; gateways?: any }>(null);
 
+  
+
   const getIconFor = (id: string) => {
     if (id === "free") return <Zap size={18} />;
     if (id === "pro") return <Crown size={18} />;
     return <Sparkles size={18} />;
   };
+  
+  const getPrice = useCallback((tierId: string) => {
+    if (tierId === 'free') return "$0";
+    if (region === "IN") return tierId === 'pro' ? "₹499" : "₹1499";
+    return tierId === 'pro' ? "$19" : "$49";
+  }, [region]);
 
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const data = await apiClient.get<any[]>('/billing/plans');
+        const data = await enhancedApiClient.get<BillingPlan[]>('/billing/plans');
         if (Array.isArray(data) && data.length) {
           const mapped = data.map((p) => ({
             id: p.id,
@@ -127,7 +154,7 @@ export default function PricingPage() {
     };
 
     fetchPlans();
-  }, []);
+  }, [getPrice]);
 
   const currencySymbol = (c?: string) => {
     if (!c) return '$';
@@ -164,18 +191,12 @@ export default function PricingPage() {
           const data = await res.json();
           setBillingMode(data);
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
     };
     fetchBillingMode();
   }, []);
-
-  const getPrice = (tierId: string) => {
-    if (tierId === 'free') return "$0";
-    if (region === "IN") return tierId === 'pro' ? "₹499" : "₹1499";
-    return tierId === 'pro' ? "$19" : "$49";
-  };
 
   const handleSelectTier = async (tierId: string) => {
     if (tierId === 'free') {
@@ -196,7 +217,7 @@ export default function PricingPage() {
       // Use Razorpay for India region
       if (region === "IN") {
         const payload = { tier: tierId };
-        const response = await apiClient.post<any>("/billing/razorpay/checkout", payload);
+        const response = await enhancedApiClient.post<RazorpayCheckoutResponse>("/billing/razorpay/checkout", payload);
 
         if (response?.mode === "disabled" || response?.mode === "manual") {
           setBillingMessage(response?.message || "Payments are not available for this deployment.");
@@ -206,15 +227,15 @@ export default function PricingPage() {
         // Development / simulation mode
         if (response?.mode === "simulation") {
           // Optionally call verify simulation endpoint to flip user tier in dev
-          try {
-            await apiClient.post("/billing/razorpay/verify", {
+            try {
+            await enhancedApiClient.post("/billing/razorpay/verify", {
               razorpay_payment_id: response.order_id + "_sim_pay",
               razorpay_order_id: response.order_id,
               razorpay_signature: "sim_signature",
             });
             window.location.assign("/dashboard/settings/billing?success=true");
             return;
-          } catch (e) {
+          } catch {
             setBillingMessage("Simulation verification failed. Please refresh and try again.");
             return;
           }
@@ -243,12 +264,12 @@ export default function PricingPage() {
           name: 'GraftAI',
           description: tierId === 'pro' ? 'Professional Subscription' : 'Enterprise Subscription',
           order_id: response.order_id,
-          handler: async function (res: any) {
+            handler: async function (res: any) {
             try {
               // Verify payment on server
-              await apiClient.post('/billing/razorpay/verify', res);
+              await enhancedApiClient.post('/billing/razorpay/verify', res);
               window.location.assign('/dashboard/settings/billing?success=true');
-            } catch (err) {
+            } catch {
               setBillingMessage('Payment verification failed. Contact support.');
             }
           },
@@ -257,7 +278,7 @@ export default function PricingPage() {
         } as any;
 
         const rzp = new (window as any).Razorpay(options);
-        rzp.on('payment.failed', function (resp: any) {
+        rzp.on('payment.failed', function () {
           setBillingMessage('Payment failed or cancelled.');
         });
         rzp.open();
@@ -265,7 +286,7 @@ export default function PricingPage() {
       }
 
       // Fallback: Stripe for other regions
-      const response = await apiClient.post<{ checkout_url: string; session_id: string }>("/billing/stripe/create-checkout-session");
+      const response = await enhancedApiClient.post<{ checkout_url: string; session_id: string }>("/billing/stripe/create-checkout-session");
       if (!response.checkout_url) {
         throw new Error("Stripe checkout is not available right now.");
       }

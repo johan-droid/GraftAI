@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
+import { enhancedApiClient } from "@/lib/api-client-enhanced";
 import { AutomationRule } from "@/types/api";
 import { toast } from "react-hot-toast";
 
@@ -8,15 +8,14 @@ export function useAutomations() {
 
   const { data: automations = [], isLoading, error } = useQuery<AutomationRule[]>({
     queryKey: ["automation-rules"],
-    queryFn: () => apiClient.get<AutomationRule[]>("/automation/rules"),
+    queryFn: () => enhancedApiClient.get<AutomationRule[]>("/automation/rules"),
     initialData: [],
   });
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, is_enabled }: { id: string; is_enabled: boolean }) =>
-      apiClient.fetch<AutomationRule>(`/automation/rules/${id}`, {
-        method: "PUT",
-        json: { is_enabled },
+      enhancedApiClient.patch<AutomationRule>(`/automation/rules/${id}`, {
+        is_enabled,
       }),
     onMutate: async (variables: { id: string; is_enabled: boolean }) => {
       await queryClient.cancelQueries({ queryKey: ["automation-rules"] });

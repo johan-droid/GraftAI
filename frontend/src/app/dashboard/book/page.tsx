@@ -41,7 +41,7 @@ import { BottomNav } from "@/components/dashboard/BottomNav";
 import { Header } from "@/components/dashboard/Header";
 import { toast } from "@/components/ui/Toast";
 import { SuccessCelebration } from "@/components/ui/SuccessCelebration";
-import { apiClient } from "@/lib/api-client";
+import { enhancedApiClient } from "@/lib/api-client-enhanced";
 
 const steps = ["Meeting Details", "Date & Time", "Invitees", "Review"];
 
@@ -107,7 +107,7 @@ export default function BookMeetingPage() {
       setAvailabilityLoading(true);
       setAvailabilityError(null);
       try {
-        const data = await apiClient.get<{ slots?: any[] }>(
+        const data = await enhancedApiClient.get<{ slots?: any[] }>(
           `/calendar/availability/free-slots?date=${selectedDate}&duration=${duration}`
         );
         setTimeSlots(data.slots || []);
@@ -192,7 +192,7 @@ export default function BookMeetingPage() {
       // Calculate end time based on duration
       const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
 
-      await apiClient.post("/calendar/events", {
+      await enhancedApiClient.post("/calendar/events", {
         title: title,
         start_time: startDateTime.toISOString(),
         end_time: endDateTime.toISOString(),

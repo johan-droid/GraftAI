@@ -2,7 +2,7 @@ import os
 import logging
 from urllib.parse import quote_plus
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from starlette.responses import Response, RedirectResponse
@@ -152,8 +152,9 @@ async def social_exchange(
             user.full_name = full_name
 
     # ── Issue GraftAI JWTs ────────────────────────────────────────────────────
-    access_token = create_access_token(user.id)
-    refresh_token = create_refresh_token(user.id)
+    token_version = getattr(user, "token_version", 0) or 0
+    access_token = create_access_token(user.id, token_version=token_version)
+    refresh_token = create_refresh_token(user.id, token_version=token_version)
 
     # ── Persist the provider OAuth token for calendar / graph integration ─────
     # Use the canonical backend provider name regardless of what NextAuth sent
@@ -170,6 +171,7 @@ async def social_exchange(
     if req.refresh_token:
         token_payload["refresh_token"] = req.refresh_token
 
+    user.last_login_at = datetime.now(timezone.utc)
     await upsert_user_token(db, user, backend_provider, token_payload)
     await db.commit()
 
@@ -282,6 +284,14 @@ async def check(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    token_version = int(payload.get("version", 0))
+    if getattr(user, "token_version", 0) > token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token has been revoked. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return {
         "authenticated": True,
         "user": {
@@ -334,11 +344,20 @@ async def refresh(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    token_version = int(decoded_payload.get("version", 0))
+    if getattr(user, "token_version", 0) > token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # Add the used refresh token to the blacklist
     await cache_set(f"blacklist:{token_value}", "used", expire=REFRESH_TOKEN_EXPIRE_DAYS * 86400)
 
-    new_access_token = create_access_token(user.id)
-    new_refresh_token = create_refresh_token(user.id)
+    token_version = getattr(user, "token_version", 0) or 0
+    new_access_token = create_access_token(user.id, token_version=token_version)
+    new_refresh_token = create_refresh_token(user.id, token_version=token_version)
     _set_auth_cookies(response, new_access_token, new_refresh_token)
     return {
         "message": "Token refreshed successfully",
@@ -459,12 +478,14 @@ async def google_callback(
                 status_code=400, detail="Failed to retrieve access token"
             )
 
+        user.last_login_at = datetime.now(timezone.utc)
         await upsert_user_token(db, user, "google", token_info)
         await db.commit()
         logger.info(f"Google OAuth successful for user: {email}")
 
-        backend_access_token = create_access_token(user.id)
-        backend_refresh_token = create_refresh_token(user.id)
+        token_version = getattr(user, "token_version", 0) or 0
+        backend_access_token = create_access_token(user.id, token_version=token_version)
+        backend_refresh_token = create_refresh_token(user.id, token_version=token_version)
         return RedirectResponse(
             url=frontend_redirect_token(
                 backend_access_token, redirect_to, frontend_url, backend_refresh_token
@@ -578,12 +599,14 @@ async def sso_callback(
                 detail="Failed to retrieve access token from OAuth provider",
             )
 
+        user.last_login_at = datetime.now(timezone.utc)
         await upsert_user_token(db, user, provider, token_info)
         await db.commit()
 
         # Generate JWT tokens
-        access_token = create_access_token(user.id)
-        refresh_token = create_refresh_token(user.id)
+        token_version = getattr(user, "token_version", 0) or 0
+        access_token = create_access_token(user.id, token_version=token_version)
+        refresh_token = create_refresh_token(user.id, token_version=token_version)
 
         logger.info(f"{provider} OAuth successful for user: {email}")
 
@@ -735,12 +758,14 @@ async def microsoft_callback(
                 status_code=400, detail="Failed to retrieve access token"
             )
 
+        user.last_login_at = datetime.now(timezone.utc)
         await upsert_user_token(db, user, "microsoft", token_info)
         await db.commit()
         logger.info(f"Microsoft OAuth successful for user: {email}")
 
-        backend_access_token = create_access_token(user.id)
-        backend_refresh_token = create_refresh_token(user.id)
+        token_version = getattr(user, "token_version", 0) or 0
+        backend_access_token = create_access_token(user.id, token_version=token_version)
+        backend_refresh_token = create_refresh_token(user.id, token_version=token_version)
         return RedirectResponse(
             url=frontend_redirect_token(
                 backend_access_token, redirect_to, frontend_url, backend_refresh_token

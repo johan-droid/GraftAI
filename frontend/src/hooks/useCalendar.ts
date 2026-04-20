@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
+import { enhancedApiClient } from "@/lib/api-client-enhanced";
 import { Booking } from "@/types/api";
 
 export function useCalendar(currentDate: Date) {
@@ -9,9 +9,11 @@ export function useCalendar(currentDate: Date) {
   const { data: bookings = [], isLoading, error } = useQuery<Booking[]>({
     queryKey: ["bookings", currentDate.getFullYear(), currentDate.getMonth()],
     queryFn: () =>
-      apiClient.get<Booking[]>("/bookings", {
-        start_date: startOfMonth,
-        end_date: endOfMonth,
+      enhancedApiClient.get<Booking[]>("/bookings", {
+        params: {
+          start_date: startOfMonth,
+          end_date: endOfMonth,
+        },
       }),
     initialData: [],
   });

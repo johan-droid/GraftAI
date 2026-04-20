@@ -21,7 +21,7 @@ from backend.services.token_encryption import decrypt_token_value, encrypt_token
 logger = logging.getLogger(__name__)
 
 
-def _create_jwt_token_impl(user_id: str, token_type: str) -> str:
+def _create_jwt_token_impl(user_id: str, token_type: str, token_version: int = 0) -> str:
     now = datetime.now(timezone.utc)
     if token_type == REFRESH_TOKEN_TYPE:
         expire = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
@@ -31,24 +31,25 @@ def _create_jwt_token_impl(user_id: str, token_type: str) -> str:
     payload = {
         "sub": user_id,
         "type": token_type,
+        "version": token_version,
         "exp": expire,
         "iat": now,
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_access_token(user_id: str) -> str:
-    return _create_jwt_token_impl(user_id, ACCESS_TOKEN_TYPE)
+def create_access_token(user_id: str, token_version: int = 0) -> str:
+    return _create_jwt_token_impl(user_id, ACCESS_TOKEN_TYPE, token_version=token_version)
 
 
-def create_refresh_token(user_id: str) -> str:
-    return _create_jwt_token_impl(user_id, REFRESH_TOKEN_TYPE)
+def create_refresh_token(user_id: str, token_version: int = 0) -> str:
+    return _create_jwt_token_impl(user_id, REFRESH_TOKEN_TYPE, token_version=token_version)
 
 
-def create_token_pair(user_id: str) -> dict[str, str]:
+def create_token_pair(user_id: str, token_version: int = 0) -> dict[str, str]:
     return {
-        "access_token": create_access_token(user_id),
-        "refresh_token": create_refresh_token(user_id),
+        "access_token": create_access_token(user_id, token_version=token_version),
+        "refresh_token": create_refresh_token(user_id, token_version=token_version),
     }
 
 

@@ -62,6 +62,14 @@ class UserTable(Base):
         DateTime(timezone=True), nullable=True
     )
     hashed_password: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    password_changed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Billing & Quota Fields
     tier: Mapped[str] = mapped_column(String, default="free", nullable=False)

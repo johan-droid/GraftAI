@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/app/providers/auth-provider";
-import { apiClient } from "@/lib/api-client";
+import { enhancedApiClient } from "@/lib/api-client-enhanced";
 import Charts from "@/components/Analytics/Charts";
 
 type UsageItem = { date: string; ai_count: number; sync_count: number; storage_bytes?: number | null };
@@ -48,7 +48,7 @@ export default function BillingPage() {
         return;
       }
 
-      const response = await apiClient.post<{ portal_url: string }>("/billing/stripe/create-portal-session");
+      const response = await enhancedApiClient.post<{ portal_url: string }>("/billing/stripe/create-portal-session");
       if (!response.portal_url) {
         throw new Error("Stripe billing portal is not available right now.");
       }
@@ -80,8 +80,8 @@ export default function BillingPage() {
       try {
         setLoadingUsage(true);
         setLoadingTransactions(true);
-        const u = await apiClient.get<UsageItem[]>('/billing/usage/history', { params: { days: 30 } });
-        const t = await apiClient.get<TransactionItem[]>('/billing/transactions/history', { params: { limit: 20 } });
+        const u = await enhancedApiClient.get<UsageItem[]>('/billing/usage/history', { params: { days: 30 } });
+        const t = await enhancedApiClient.get<TransactionItem[]>('/billing/transactions/history', { params: { limit: 20 } });
         if (!mounted) return;
         setUsage(Array.isArray(u) ? u : []);
         setTransactions(Array.isArray(t) ? t : []);
@@ -370,13 +370,22 @@ export default function BillingPage() {
                   className="w-full pl-10 pr-10 py-2 bg-slate-900/10 border border-slate-800/40 rounded-md text-sm text-slate-200"
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 p-1">
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear transaction search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 p-1"
+                  >
                     <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
 
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-slate-900/10 border border-slate-800/40 text-sm text-slate-200 px-3 py-2 rounded-md">
+              <select
+                aria-label="Filter transactions by status"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-slate-900/10 border border-slate-800/40 text-sm text-slate-200 px-3 py-2 rounded-md"
+              >
                 <option value="all">All statuses</option>
                 <option value="success">Success</option>
                 <option value="approved">Approved</option>

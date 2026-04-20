@@ -21,6 +21,8 @@ import { motion } from "framer-motion";
 import { toast } from "@/components/ui/Toast";
 import { getAnalyticsSummary } from "@/lib/api";
 import { useTheme } from "@/contexts/ThemeContext";
+import { BentoLayout } from "@/components/ui/BentoLayout";
+import { BentoItem } from "@/components/ui/BentoItem";
 
 type SessionUser = {
   bookingSlug?: string;
@@ -224,37 +226,44 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ ...m3Motion.emphasized, delay: 0.2 }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5"
       >
-        <QuickActionCard
-          icon={LinkIcon}
-          label="Copy Link"
-          description="Share your default booking page"
-          actionText="Copy to clipboard"
-          color="blue"
-          isDark={isDark}
-          onClick={handleCopyBookingLink}
-        />
+        <BentoLayout className="gap-4 sm:gap-5">
+          <BentoItem>
+            <QuickActionCard
+              icon={LinkIcon}
+              label="Copy Link"
+              description="Share your default booking page"
+              actionText="Copy to clipboard"
+              color="blue"
+              isDark={isDark}
+              onClick={handleCopyBookingLink}
+            />
+          </BentoItem>
 
-        <QuickActionCard
-          icon={Calendar}
-          label="My Calendar"
-          description="View and manage your schedule"
-          actionText="Open calendar"
-          color="orange"
-          isDark={isDark}
-          href="/dashboard/calendar"
-        />
+          <BentoItem>
+            <QuickActionCard
+              icon={Calendar}
+              label="My Calendar"
+              description="View and manage your schedule"
+              actionText="Open calendar"
+              color="orange"
+              isDark={isDark}
+              href="/dashboard/calendar"
+            />
+          </BentoItem>
 
-        <QuickActionCard
-          icon={Inbox}
-          label="Integrations"
-          description="Connect Zoom, Google Meet & more"
-          actionText="Manage apps"
-          color="green"
-          isDark={isDark}
-          href="/integrations"
-        />
+          <BentoItem>
+            <QuickActionCard
+              icon={Inbox}
+              label="Integrations"
+              description="Connect Zoom, Google Meet & more"
+              actionText="Manage apps"
+              color="green"
+              isDark={isDark}
+              href="/integrations"
+            />
+          </BentoItem>
+        </BentoLayout>
       </motion.div>
 
       {/* UPCOMING MEETINGS WIDGET - M3 Card */}

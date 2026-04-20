@@ -5,7 +5,7 @@ import { AuthProvider } from "./providers/auth-provider";
 import { QueryProvider } from "./providers/query-provider";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import ThemeRegistry from "@/theme/ThemeRegistry";
-import { Toaster } from "react-hot-toast";
+import { Toaster } from "@/components/ui/Toast";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -54,17 +54,7 @@ export default function RootLayout({
                 <ThemeRegistry>
                   {children}
                   {/* Global Toast Notifications */}
-                  <Toaster
-                    position="bottom-right"
-                    toastOptions={{
-                      style: {
-                        background: '#333',
-                        color: '#fff',
-                        borderRadius: '100px',
-                        fontSize: '14px',
-                      },
-                    }}
-                  />
+                  <Toaster />
                 </ThemeRegistry>
               </ThemeProvider>
             </QueryProvider>

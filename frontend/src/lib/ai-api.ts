@@ -1,6 +1,6 @@
 "use client";
 
-import { apiClient } from "./api-client";
+import { enhancedApiClient } from "./api-client-enhanced";
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES - AI Automation API
@@ -166,24 +166,24 @@ export interface AIChatResponse {
 export const aiAutomationApi = {
   // Bookings
   async createBooking(data: CreateBookingRequest): Promise<CreateBookingResponse> {
-    return apiClient.post<CreateBookingResponse>("/bookings", data);
+    return enhancedApiClient.post<CreateBookingResponse>("/bookings", data);
   },
 
   async getBooking(id: string): Promise<CreateBookingResponse> {
-    return apiClient.get<CreateBookingResponse>(`/bookings/${id}`);
+    return enhancedApiClient.get<CreateBookingResponse>(`/bookings/${id}`);
   },
 
   // Automation Status
   async getAutomationStatus(bookingId: string): Promise<AutomationStatus> {
-    return apiClient.get<AutomationStatus>(`/bookings/${bookingId}/automation-status`);
+    return enhancedApiClient.get<AutomationStatus>(`/bookings/${bookingId}/automation-status`);
   },
 
   async getAutomationResult(bookingId: string): Promise<AutomationResult> {
-    return apiClient.get<AutomationResult>(`/bookings/${bookingId}/automation-result`);
+    return enhancedApiClient.get<AutomationResult>(`/bookings/${bookingId}/automation-result`);
   },
 
   async retryAutomation(bookingId: string): Promise<AutomationResult> {
-    return apiClient.post<AutomationResult>(`/bookings/${bookingId}/retry-automation`);
+    return enhancedApiClient.post<AutomationResult>(`/bookings/${bookingId}/retry-automation`);
   },
 
   async getAutomationQueue(): Promise<{
@@ -191,31 +191,31 @@ export const aiAutomationApi = {
     pending: AutomationStatus[];
     completed_today: number;
   }> {
-    return apiClient.get("/bookings/automation-queue");
+    return enhancedApiClient.get("/bookings/automation-queue");
   },
 
   // Dashboard & Metrics
   async getDashboardMetrics(): Promise<DashboardMetrics> {
-    return apiClient.get<DashboardMetrics>("/monitoring/dashboard");
+    return enhancedApiClient.get<DashboardMetrics>("/monitoring/dashboard");
   },
 
   async getMonitoringStats(): Promise<MonitoringStats> {
-    return apiClient.get<MonitoringStats>("/monitoring/stats");
+    return enhancedApiClient.get<MonitoringStats>("/monitoring/stats");
   },
 
   async getRecentAutomations(limit: number = 10): Promise<AutomationStatus[]> {
-    return apiClient.get<AutomationStatus[]>("/monitoring/automations/recent", {
+    return enhancedApiClient.get<AutomationStatus[]>("/monitoring/automations/recent", {
       params: { limit },
     });
   },
 
   // AI Chat
   async sendChatMessage(data: AIChatRequest): Promise<AIChatResponse> {
-    return apiClient.post<AIChatResponse>("/ai/chat", data);
+    return enhancedApiClient.post<AIChatResponse>("/ai/chat", data);
   },
 
   async getChatHistory(conversationId: string): Promise<AIChatMessage[]> {
-    return apiClient.get<AIChatMessage[]>(`/ai/chat/${conversationId}/history`);
+    return enhancedApiClient.get<AIChatMessage[]>(`/ai/chat/${conversationId}/history`);
   },
 
   // Health Check

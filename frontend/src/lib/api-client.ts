@@ -1,4 +1,5 @@
 import { getSession, signOut } from "next-auth/react";
+import { toast } from "@/components/ui/Toast";
 
 // Normalize API base URL so frontend endpoint calls (which use paths like
 // "/analytics/summary") target the backend API prefix `/api/v1` even when
@@ -100,6 +101,12 @@ class ApiClient {
         const responseData = this.parseJsonSafe(responseText);
 
         if (!response.ok) {
+          if (response.status === 429) {
+            toast.info("Rate limit reached. Retrying in the background.");
+          } else if (response.status === 503 || response.status === 502) {
+            toast.info("The service is busy right now. We are retrying automatically.");
+          }
+
           const error = typeof responseData.error === "string" ? responseData.error : undefined;
           const message = typeof responseData.message === "string" ? responseData.message : undefined;
           const statusText = response.statusText || `Request failed with status ${response.status}`;
@@ -142,6 +149,7 @@ class ApiClient {
               continue;
           }
 
+          toast.warning("Unable to reach the backend. Please check your connection.");
           console.error(`[API Network Error] Cannot connect to backend at ${API_BASE_URL}`);
           console.error(`[API Network Error] Endpoint: ${endpoint}`);
           
@@ -272,6 +280,7 @@ class ApiClient {
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
+          toast.warning("Unable to reach the backend. Please check your connection.");
         }
         throw error;
       }

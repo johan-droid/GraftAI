@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { motion, type Variants } from "framer-motion";
 import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import { toast } from "@/components/ui/Toast";
-import { apiClient } from "@/lib/api-client";
+import { enhancedApiClient } from "@/lib/api-client-enhanced";
 import { 
   User, Mail, Globe, Clock, Calendar, 
   ShieldAlert, Camera, Check, Loader2 
@@ -64,7 +64,7 @@ export default function SettingsProfilePage() {
     async function loadProfile() {
       setIsLoading(true);
       try {
-        const response = await apiClient.get<any>('/users/me');
+        const response = await enhancedApiClient.get<any>('/users/me');
         if (active && response?.data) {
           const profileData = response.data;
           const s = sessionRef.current;
@@ -109,7 +109,7 @@ export default function SettingsProfilePage() {
         time_format: profile.timeFormat,
       };
       
-      await apiClient.patch('/users/me', payload);
+      await enhancedApiClient.patch('/users/me', payload);
 
       // Update NextAuth session if name changed
       if (profile.name !== session?.user?.name) {

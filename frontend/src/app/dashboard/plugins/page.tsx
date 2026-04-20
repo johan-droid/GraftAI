@@ -8,7 +8,7 @@ import { PluginCardSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { toast } from "@/components/ui/Toast";
-import { apiClient } from "@/lib/api-client";
+import { enhancedApiClient } from "@/lib/api-client-enhanced";
 
 interface Plugin {
   id: string;
@@ -40,7 +40,7 @@ export default function PluginsPage() {
   async function handleInstall(plugin: Plugin) {
     setInstalling(plugin.id);
     try {
-      await apiClient.post(`/plugins/${encodeURIComponent(plugin.id)}/enable`);
+      await enhancedApiClient.post(`/plugins/${encodeURIComponent(plugin.id)}/enable`);
       setInstalled(prev => new Set([...prev, plugin.id]));
       toast.success(`${plugin.name} installed successfully.`);
     } catch (error) {

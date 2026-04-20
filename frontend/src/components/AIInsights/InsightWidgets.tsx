@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { Clock, TrendingUp, AlertTriangle, Lightbulb, X, Check } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
+import { enhancedApiClient } from '@/lib/api-client-enhanced';
 
 interface Insight {
   id: string;
@@ -35,7 +35,7 @@ export default function AIInsightWidgets() {
 
   const loadInsights = async () => {
     try {
-      const data = await apiClient.get<{
+      const data = await enhancedApiClient.get<{
         insights?: Array<{
           id?: string;
           type?: Insight['type'];
@@ -148,6 +148,8 @@ export default function AIInsightWidgets() {
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <h4 className="text-white font-medium text-sm">{insight.title}</h4>
                   <button
+                    type="button"
+                    aria-label={`Dismiss ${insight.title}`}
                     onClick={() => dismissInsight(insight.id)}
                     className="p-1 hover:bg-slate-700 rounded transition-colors flex-shrink-0"
                   >
@@ -166,11 +168,13 @@ export default function AIInsightWidgets() {
                   
                   {insight.actionable && (
                     <button
+                      type="button"
+                      aria-label={insight.actionText ?? `Apply ${insight.title}`}
                       onClick={() => applyInsight(insight)}
                       className="flex items-center gap-1 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors text-xs font-medium"
                     >
                       <Check className="w-3 h-3" />
-                      {insight.actionText}
+                      <span className="ml-1">{insight.actionText ?? 'Apply'}</span>
                     </button>
                   )}
                 </div>
@@ -183,6 +187,8 @@ export default function AIInsightWidgets() {
       {/* Dismissed insights toggle */}
       {insights.some(i => i.dismissed) && (
         <button
+          type="button"
+          aria-label="Show dismissed insights"
           onClick={() => setInsights(insights.map(i => ({ ...i, dismissed: false })))}
           className="w-full py-2 text-sm text-slate-400 hover:text-white transition-colors"
         >

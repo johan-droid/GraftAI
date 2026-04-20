@@ -1,10 +1,26 @@
+import asyncio
 import os
 import logging
 import boto3
 from botocore.exceptions import ClientError
 from typing import Optional, BinaryIO
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_path(base_dir: str, remote_path: str) -> str:
+    base_dir = os.path.abspath(base_dir)
+    candidate_path = os.path.abspath(os.path.join(base_dir, remote_path))
+    if os.path.commonpath([base_dir, candidate_path]) != base_dir:
+        raise ValueError(f"Invalid remote path: {remote_path}")
+    return candidate_path
+
+
+def _sync_upload(file_obj: BinaryIO, local_path: str) -> None:
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    with open(local_path, "wb") as f:
+        f.write(file_obj.read())
 
 
 class StorageService:
@@ -42,11 +58,10 @@ class StorageService:
         """Uploads a file to the cloud bucket and returns the object key."""
         if not self.client:
             # Local fallback for development (statelessness not guaranteed)
-            local_path = os.path.join("uploads", remote_path)
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            with open(local_path, "wb") as f:
-                f.write(file_obj.read())
-            return local_path
+            local_path = _safe_path("uploads", remote_path)
+            await asyncio.to_thread(_sync_upload, file_obj, local_path)
+            # Return the logical storage key (remote_path) for consistency with S3 behavior
+            return remote_path
 
         try:
             self.client.upload_fileobj(
@@ -64,7 +79,8 @@ class StorageService:
     def get_presigned_url(self, key: str, expires_in: int = 3600) -> Optional[str]:
         """Generates a secure, time-limited URL for document retrieval."""
         if not self.client:
-            return f"/api/v1/uploads/local/{key}"
+            encoded_key = quote(key, safe='/')
+            return f"/api/v1/uploads/local/{encoded_key}"
 
         try:
             url = self.client.generate_presigned_url(
@@ -78,9 +94,26 @@ class StorageService:
             return None
 
     def delete_file(self, key: str) -> bool:
-        """Deletes an object from the cloud bucket."""
+        """Deletes an object from the cloud bucket or local fallback path."""
         if not self.client:
+            try:
+                local_path = _safe_path("uploads", key)
+            except ValueError:
+                logger.warning("Attempted to delete invalid local storage path: %s", key)
+                return False
+
+            if os.path.exists(local_path):
+                try:
+                    os.remove(local_path)
+                    return True
+                except OSError as exc:
+                    logger.warning(
+                        "Failed to delete local storage file %s: %s",
+                        key,
+                        exc,
+                    )
             return False
+
         try:
             self.client.delete_object(Bucket=self.bucket, Key=key)
             return True

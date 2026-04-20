@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react";
-import { apiClient, API_BASE_URL } from "../../../lib/api-client";
+import { enhancedApiClient } from "../../../lib/api-client-enhanced";
 import styles from "./page.module.css";
 
 interface PresignResponse {
@@ -36,7 +36,7 @@ export default function ManualRequestPage() {
     setStatus("Generating upload URL...");
 
     try {
-      const presign = await apiClient.post<PresignResponse>("/billing/manual/presign", {
+      const presign = await enhancedApiClient.post<PresignResponse>("/billing/manual/presign", {
         filename: file.name,
         content_type: file.type || "application/octet-stream",
       });
@@ -52,23 +52,20 @@ export default function ManualRequestPage() {
         });
         if (!putResp.ok) throw new Error("Upload failed");
       } else if (presign.method === "backend") {
-        // Fallback: upload via backend multiparty endpoint
+        // Fallback: upload via backend multiparty endpoint using enhanced client upload helper
         setStatus("Uploading file through backend...");
         const fd = new FormData();
         fd.append("file", file);
-        const uploadResp = await fetch(`${API_BASE_URL}/uploads`, {
-          method: "POST",
-          body: fd,
-          credentials: "include",
-        });
-        if (!uploadResp.ok) throw new Error("Backend upload failed");
-        const json = await uploadResp.json();
-        key = json.key || json.filename || key;
+        const uploadResp = await enhancedApiClient.upload<{ key?: string; filename?: string }>(
+          '/uploads',
+          fd
+        );
+        key = uploadResp?.key ?? uploadResp?.filename ?? key;
       }
 
       setStatus("Submitting manual activation request...");
 
-      const req = await apiClient.post<ManualRequestResponse>("/billing/manual/request", {
+      const req = await enhancedApiClient.post<ManualRequestResponse>("/billing/manual/request", {
         requested_tier: tier,
         proof_key: key,
         notes,

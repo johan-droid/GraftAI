@@ -1,6 +1,7 @@
 "use client";
 
 import { apiClient, API_BASE_URL } from "./api-client";
+import { toast } from "@/components/ui/Toast";
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -97,6 +98,20 @@ export function calculateRetryDelay(
 
 export async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildEndpointWithParams(
+  endpoint: string,
+  params?: Record<string, string | number | boolean>
+): string {
+  if (!params) {
+    return endpoint;
+  }
+  const url = new URL(endpoint, API_BASE_URL);
+  Object.entries(params).forEach(([key, value]) => {
+    url.searchParams.append(key, String(value));
+  });
+  return url.pathname + url.search;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -300,6 +315,7 @@ export interface EnhancedApiOptions {
   offlineQueue?: boolean;
   priority?: "high" | "normal" | "low";
   signal?: AbortSignal;
+  params?: Record<string, string | number | boolean>;
 }
 
 export const enhancedApiClient = {
@@ -309,10 +325,11 @@ export const enhancedApiClient = {
   ): Promise<T> {
     const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...options.retry };
     let lastError: Error | unknown;
+    const endpointWithParams = buildEndpointWithParams(endpoint, options.params);
     
     for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
       try {
-        return await apiClient.fetch<T>(endpoint, {
+        return await apiClient.fetch<T>(endpointWithParams, {
           method: options.method,
           json: options.json,
           signal: options.signal,

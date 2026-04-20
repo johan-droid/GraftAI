@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Depends, WebSocket, WebSocketDisco
 from starlette.websockets import WebSocketState
 from pydantic import BaseModel
 from jose import JWTError, jwt
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 # Try to import prometheus_client
 try:
@@ -30,6 +30,45 @@ from backend.services.redis_client import get_redis_client
 from backend.utils.db import get_async_session_maker
 from backend.utils.serialization import serializer
 from backend.utils.logger import get_logger
+
+
+async def _check_database() -> Dict[str, Any]:
+    try:
+        session_maker = get_async_session_maker()
+        start = datetime.utcnow()
+        async with session_maker() as db:
+            await db.execute(text("SELECT 1"))
+        latency_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
+        return {
+            "status": "healthy",
+            "latency_ms": latency_ms,
+        }
+    except Exception as exc:
+        return {
+            "status": "unhealthy",
+            "error": str(exc),
+        }
+
+
+async def _check_redis() -> Dict[str, Any]:
+    try:
+        redis_client = await get_redis_client()
+        if redis_client is None:
+            raise RuntimeError("Redis client unavailable")
+
+        start = datetime.utcnow()
+        await redis_client.ping()
+        latency_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
+
+        return {
+            "status": "healthy",
+            "latency_ms": latency_ms,
+        }
+    except Exception as exc:
+        return {
+            "status": "unhealthy",
+            "error": str(exc),
+        }
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
@@ -201,14 +240,21 @@ async def health_check() -> SystemHealthResponse:
     try:
         metrics = get_agent_metrics()
 
-        # Check components
+        db_health = await _check_database()
+        redis_health = await _check_redis()
+
         components = {
             "agent_system": "healthy",
             "metrics_system": "healthy",
             "logging_system": "healthy",
+            "database": db_health,
+            "redis": redis_health,
         }
 
-        # Get current metrics
+        overall_status = "healthy"
+        if db_health["status"] != "healthy" or redis_health["status"] != "healthy":
+            overall_status = "unhealthy"
+
         metrics_summary = {
             "active_automations": 0,  # Would get from gauge
             "total_automations_today": 0,  # Would calculate from counter
@@ -216,7 +262,7 @@ async def health_check() -> SystemHealthResponse:
         }
 
         return SystemHealthResponse(
-            status="healthy",
+            status=overall_status,
             timestamp=datetime.utcnow().isoformat(),
             components=components,
             metrics_summary=metrics_summary,

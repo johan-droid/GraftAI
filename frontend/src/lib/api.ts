@@ -1,4 +1,5 @@
 import { apiClient, API_BASE_URL } from "./api-client";
+import { enhancedApiClient } from "./api-client-enhanced";
 import { TeamMemberFull } from "@/types/api";
 
 // Re-exporting API_BASE_URL for backward compatibility if needed
@@ -10,7 +11,7 @@ export { API_BASE_URL } from "./api-client";
 export async function refreshSession() {
   // Verifies the current JWT by fetching the user profile
   try {
-    const user = await apiClient.get("/users/me");
+    const user = await enhancedApiClient.get("/users/me");
     return { user };
   } catch {
     throw new Error("No valid session to refresh");
@@ -21,11 +22,11 @@ export async function refreshSession() {
 // Auth: DID & Identity
 // ──────────────────────────────────────
 export async function didIssue() {
-  return apiClient.post<{ did: string }>("/auth/did/issue");
+  return enhancedApiClient.post<{ did: string }>("/auth/did/issue");
 }
 
 export async function didVerify(did: string) {
-  return apiClient.post<{ status: string }>("/auth/did/verify", { did });
+  return enhancedApiClient.post<{ status: string }>("/auth/did/verify", { did });
 }
 
 export async function syncUserTimezone(timezone: string) {
@@ -37,26 +38,26 @@ export async function syncUserConsent(consents: {
   consent_notifications?: boolean; 
   consent_ai_training?: boolean 
 }) {
-  return apiClient.post<{ status: string }>("/auth/sync-consent", consents);
+  return enhancedApiClient.post<{ status: string }>("/auth/sync-consent", consents);
 }
 
 // ──────────────────────────────────────
 // Auth: Account Deletion
 // ──────────────────────────────────────
 export async function deleteAccount(payload?: { reason?: string; details?: string }) {
-  return apiClient.delete<{ message: string }>("/auth/account", { json: payload });
+  return enhancedApiClient.fetchWithOfflineSupport<{ message: string }>("/auth/account", { method: "DELETE", json: payload });
 }
 
 export async function submitLogoutFeedback(payload: { reason: string; details?: string }) {
-  return apiClient.post<{ status: string }>("/auth/logout-feedback", payload);
+  return enhancedApiClient.post<{ status: string }>("/auth/logout-feedback", payload);
 }
 
 export async function submitDeletionFeedback(payload: { reason: string; details?: string }) {
-  return apiClient.delete<{ message: string }>("/auth/account", { json: payload });
+  return enhancedApiClient.fetchWithOfflineSupport<{ message: string }>("/auth/account", { method: "DELETE", json: payload });
 }
 
 export async function requestMagicLink(email: string) {
-  return apiClient.post<{ email: string; code?: string; expires_at?: string; message: string }>(
+  return enhancedApiClient.post<{ email: string; code?: string; expires_at?: string; message: string }>(
     "/auth/passwordless/request",
     null,
     { params: { email } }
@@ -64,7 +65,7 @@ export async function requestMagicLink(email: string) {
 }
 
 export async function verifyMagicLink(email: string, code: string) {
-  return apiClient.post<{ access_token: string; refresh_token: string; token_type: string; expires_in: number }>(
+  return enhancedApiClient.post<{ access_token: string; refresh_token: string; token_type: string; expires_in: number }>(
     "/auth/passwordless/verify",
     null,
     { params: { email, code } }
@@ -93,7 +94,7 @@ export async function updateUserProfile(data: {
   default_calendar_id?: string;
   preferences?: Record<string, any>;
 }) {
-  const response = await apiClient.patch<{ 
+  const response = await enhancedApiClient.patch<{ 
     id: string; 
     email: string; 
     username?: string; 
@@ -133,7 +134,7 @@ export async function saveUserProfile(data: {
   default_calendar_id?: string;
   preferences?: Record<string, any>;
 }) {
-  const response = await apiClient.post<{ 
+  const response = await enhancedApiClient.post<{ 
     success: boolean;
     message: string;
     data: {
@@ -165,18 +166,15 @@ export async function saveUserProfile(data: {
 export async function uploadProfileAvatar(file: File) {
   const body = new FormData();
   body.append("file", file);
-  const response = await apiClient.fetch<{
-    success: boolean;
+  const response = await enhancedApiClient.upload<{
+    success?: boolean;
     message?: string;
     data?: { avatar_url?: string };
     avatar_url?: string;
     avatarUrl?: string;
-  }>("/users/me/profile/avatar", {
-    method: "POST",
-    body,
-  });
+  }>("/users/me/profile/avatar", body);
 
-  return response.data?.avatar_url ?? response.avatar_url ?? response.avatarUrl ?? "";
+  return response?.data?.avatar_url ?? response?.avatar_url ?? response?.avatarUrl ?? "";
 }
 
 export interface ProfileSetupStatus {
@@ -207,18 +205,18 @@ export interface ProfileSetupStatus {
 }
 
 export async function getProfileSetupStatus() {
-  const response = await apiClient.get<ProfileSetupStatus | { success?: boolean; data?: ProfileSetupStatus }>("/users/me/profile/setup-status");
+  const response = await enhancedApiClient.get<ProfileSetupStatus | { success?: boolean; data?: ProfileSetupStatus }>("/users/me/profile/setup-status");
   return unwrapApiData(response);
 }
 
 export async function getGoogleCalendarAuthUrl() {
-  const response = await apiClient.get<{ authUrl: string; state: string } | { success?: boolean; data?: { authUrl: string; state: string } }>("/users/me/calendars/oauth/google/auth-url");
+  const response = await enhancedApiClient.get<{ authUrl: string; state: string } | { success?: boolean; data?: { authUrl: string; state: string } }>("/users/me/calendars/oauth/google/auth-url");
   const data = unwrapApiData(response) as { authUrl?: string; auth_url?: string; state: string };
   return { authUrl: data.authUrl ?? data.auth_url ?? "", state: data.state };
 }
 
 export async function completeOnboardingStep(stepId: string, stepData?: Record<string, any>) {
-  const response = await apiClient.post<{ success: boolean; step: string; completed_steps: string[] } | { success: boolean; data?: { completed_steps: string[]; next_step?: string | null } }>(
+  const response = await enhancedApiClient.post<{ success: boolean; step: string; completed_steps: string[] } | { success: boolean; data?: { completed_steps: string[]; next_step?: string | null } }>(
     `/users/me/profile/complete-step/${encodeURIComponent(stepId)}`,
     stepData || {}
   );
@@ -226,12 +224,12 @@ export async function completeOnboardingStep(stepId: string, stepData?: Record<s
 }
 
 export async function getOnboardingPreview() {
-  const response = await apiClient.get<{ bookingPageUrl: string; isLive: boolean } | { success?: boolean; data?: { bookingPageUrl: string; isLive: boolean } }>("/users/me/onboarding/preview");
+  const response = await enhancedApiClient.get<{ bookingPageUrl: string; isLive: boolean } | { success?: boolean; data?: { bookingPageUrl: string; isLive: boolean } }>("/users/me/onboarding/preview");
   return unwrapApiData(response);
 }
 
 export async function completeOnboarding() {
-  const response = await apiClient.post<{ success: boolean; redirectUrl: string } | { success?: boolean; data?: { redirectUrl: string } }>("/users/me/onboarding/complete");
+  const response = await enhancedApiClient.post<{ success: boolean; redirectUrl: string } | { success?: boolean; data?: { redirectUrl: string } }>("/users/me/onboarding/complete");
   const data = unwrapApiData(response) as { redirectUrl?: string; redirect_url?: string };
   return { redirectUrl: data.redirectUrl ?? data.redirect_url ?? "/dashboard" };
 }
@@ -251,15 +249,15 @@ export interface CreatedApiKey extends ApiKeyItem {
 }
 
 export async function listApiKeys() {
-  return apiClient.get<{ items: ApiKeyItem[] }>("/users/me/api-keys");
+  return enhancedApiClient.get<{ items: ApiKeyItem[] }>("/users/me/api-keys");
 }
 
 export async function createApiKey(name?: string) {
-  return apiClient.post<CreatedApiKey>("/users/me/api-keys", { name });
+  return enhancedApiClient.post<CreatedApiKey>("/users/me/api-keys", { name });
 }
 
 export async function revokeApiKey(keyId: string) {
-  return apiClient.delete<{ status: string; id: string }>(`/users/me/api-keys/${encodeURIComponent(keyId)}`);
+  return enhancedApiClient.delete<{ status: string; id: string }>(`/users/me/api-keys/${encodeURIComponent(keyId)}`);
 }
 
 export interface OutOfOfficeBlock {
@@ -271,7 +269,7 @@ export interface OutOfOfficeBlock {
 }
 
 export async function listOutOfOfficeBlocks() {
-  return apiClient.get<{ items: OutOfOfficeBlock[] }>("/users/me/out-of-office");
+  return enhancedApiClient.get<{ items: OutOfOfficeBlock[] }>("/users/me/out-of-office");
 }
 
 export async function createOutOfOfficeBlock(payload: {
@@ -279,18 +277,18 @@ export async function createOutOfOfficeBlock(payload: {
   end_time: string;
   reason?: string;
 }) {
-  return apiClient.post<OutOfOfficeBlock>("/users/me/out-of-office", payload);
+  return enhancedApiClient.post<OutOfOfficeBlock>("/users/me/out-of-office", payload);
 }
 
 export async function deleteOutOfOfficeBlock(blockId: string) {
-  return apiClient.delete<{ status: string; id: string }>(`/users/me/out-of-office/${encodeURIComponent(blockId)}`);
+  return enhancedApiClient.delete<{ status: string; id: string }>(`/users/me/out-of-office/${encodeURIComponent(blockId)}`);
 }
 
 // ──────────────────────────────────────
 // Auth: SSO Start
 // ──────────────────────────────────────
 export async function ssoStart(provider: string = "microsoft", redirectTo: string = "/dashboard") {
-  return apiClient.get<{ authorization_url: string; state: string }>(
+  return enhancedApiClient.get<{ authorization_url: string; state: string }>(
     `/auth/sso/start`, 
     { params: { provider, redirect_to: redirectTo } }
   );
@@ -300,11 +298,11 @@ export async function ssoStart(provider: string = "microsoft", redirectTo: strin
 // Auth: Access Control
 // ──────────────────────────────────────
 export async function checkRole(role: string) {
-  return apiClient.get<{ allowed: boolean }>("/auth/access-control/check-role", { params: { role } });
+  return enhancedApiClient.get<{ allowed: boolean }>("/auth/access-control/check-role", { params: { role } });
 }
 
 export async function checkAttribute(attribute: string, value: string) {
-  return apiClient.get<{ allowed: boolean }>("/auth/access-control/check-attribute", { 
+  return enhancedApiClient.get<{ allowed: boolean }>("/auth/access-control/check-attribute", { 
     params: { attribute, value } 
   });
 }
@@ -313,7 +311,7 @@ export async function checkAttribute(attribute: string, value: string) {
 // Services: Analytics
 // ──────────────────────────────────────
 export async function getAnalyticsSummary(range: string = "7d") {
-  return apiClient.get<{
+  return enhancedApiClient.get<{
     summary: string;
     details?: {
       meetings: number;
@@ -335,10 +333,7 @@ export async function getAnalyticsSummary(range: string = "7d") {
         is_upcoming?: boolean;
       } | null;
     };
-  }>(
-    `/analytics/summary`,
-    { params: { range } }
-  );
+  }>(`/analytics/summary`, { params: { range } });
 }
 
 export interface AnalyticsRealtimeResponse {
@@ -372,7 +367,7 @@ export interface AnalyticsRealtimeResponse {
 }
 
 export async function getAnalyticsRealtime(range: "7d" | "30d" | "90d" = "30d") {
-  return apiClient.get<AnalyticsRealtimeResponse>("/analytics/realtime", { params: { range } });
+  return enhancedApiClient.get<AnalyticsRealtimeResponse>("/analytics/realtime", { params: { range } });
 }
 
 // ──────────────────────────────────────
@@ -392,7 +387,7 @@ export interface AiChatServiceResponse {
 }
 
 export async function sendAiChat(prompt: string, context?: string[], timezone?: string) {
-  return apiClient.post<AiChatServiceResponse>("/ai/chat", { prompt, context, timezone });
+  return enhancedApiClient.post<AiChatServiceResponse>("/ai/chat", { prompt, context, timezone });
 }
 
 export interface AiChatStreamPhaseEvent {
@@ -560,7 +555,7 @@ export interface ProactiveSuggestionResponse {
 }
 
 export async function getProactiveSuggestion(context?: string) {
-  return apiClient.post<ProactiveSuggestionResponse>("/proactive/suggest", { context });
+  return enhancedApiClient.post<ProactiveSuggestionResponse>("/proactive/suggest", { context });
 }
 
 // ──────────────────────────────────────
@@ -578,7 +573,7 @@ export interface PluginItem {
 }
 
 export async function listPlugins() {
-  return apiClient.get<{ plugins: PluginItem[] }>("/plugins/list");
+  return enhancedApiClient.get<{ plugins: PluginItem[] }>("/plugins/list");
 }
 
 export interface IntegrationProviderStatus {
@@ -593,7 +588,7 @@ export interface AuthIntegrationStatusResponse {
 }
 
 export async function getAuthIntegrationStatus() {
-  return apiClient.get<AuthIntegrationStatusResponse>("/auth/integrations/status");
+  return enhancedApiClient.get<AuthIntegrationStatusResponse>("/auth/integrations/status");
 }
 
 // ──────────────────────────────────────
@@ -611,33 +606,33 @@ export interface NotificationItem {
 }
 
 export async function getNotifications(limit: number = 25, unread_only: boolean = false) {
-  return apiClient.get<NotificationItem[]>("/notifications/", { params: { limit, unread_only } });
+  return enhancedApiClient.get<NotificationItem[]>("/notifications/", { params: { limit, unread_only } });
 }
 
 export async function markNotification(id: number, is_read: boolean = true) {
-  return apiClient.patch(`/notifications/${id}`, null, { params: { is_read } });
+  return enhancedApiClient.patch(`/notifications/${id}`, null, { params: { is_read } });
 }
 
 export async function markAllNotificationsRead() {
-  return apiClient.patch(`/notifications/mark_all_read`);
+  return enhancedApiClient.patch(`/notifications/mark_all_read`);
 }
 
 export async function deleteNotification(id: number) {
-  return apiClient.delete(`/notifications/${id}`);
+  return enhancedApiClient.delete(`/notifications/${id}`);
 }
 
 // ──────────────────────────────────────
 // Services: Consent
 // ──────────────────────────────────────
 export async function setConsent(consentType: string, granted: boolean) {
-  return apiClient.post<{ status: string }>("/consent/set", { consent_type: consentType, granted });
+  return enhancedApiClient.post<{ status: string }>("/consent/set", { consent_type: consentType, granted });
 }
 
 // ──────────────────────────────────────
 // Services: LLM Upgrade
 // ──────────────────────────────────────
 export async function upgradeLLM(modelName: string, version?: string) {
-  return apiClient.post<{ status: string; details?: string }>("/upgrade/llm", { model_name: modelName, version });
+  return enhancedApiClient.post<{ status: string; details?: string }>("/upgrade/llm", { model_name: modelName, version });
 }
 
 // ──────────────────────────────────────
@@ -665,19 +660,19 @@ export interface CalendarEvent {
 }
 
 export async function getEvents(start: string, end: string, options: Record<string, unknown> = {}) {
-  return apiClient.get<CalendarEvent[]>(`/calendar/events`, { ...options, params: { start, end } });
+  return enhancedApiClient.get<CalendarEvent[]>(`/calendar/events`, { ...options, params: { start, end } });
 }
 
 export async function createEvent(data: Partial<CalendarEvent>) {
-  return apiClient.post<CalendarEvent>("/calendar/events", data);
+  return enhancedApiClient.post<CalendarEvent>("/calendar/events", data);
 }
 
 export async function updateEvent(id: number | string, data: Partial<CalendarEvent>) {
-  return apiClient.patch<CalendarEvent>(`/calendar/events/${id}`, data);
+  return enhancedApiClient.patch<CalendarEvent>(`/calendar/events/${id}`, data);
 }
 
 export async function deleteEvent(id: number | string) {
-  return apiClient.delete<void>(`/calendar/events/${id}`);
+  return enhancedApiClient.delete<void>(`/calendar/events/${id}`);
 }
 
 // ──────────────────────────────────────
@@ -686,27 +681,9 @@ export async function deleteEvent(id: number | string) {
 export async function uploadFile(file: File) {
   const formData = new FormData();
   formData.append("file", file);
-
-  // We bypass apiClient.post for multipart/form-data to let the browser set the boundary
-  const { API_BASE_URL: BASE } = await import("./api-client");
-
-  const headers: Record<string, string> = {};
-  const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const res = await fetch(`${BASE}/api/v1/uploads`, {
-    method: "POST",
-    body: formData,
-    headers,
-    credentials: "include",
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Upload failed");
-  }
-
-  return res.json() as Promise<{ filename: string; path: string; size: number }>;
+  // Use enhanced client upload helper which handles auth and progress
+  const result = await enhancedApiClient.upload<{ filename: string; path: string; size: number }>("/uploads", formData);
+  return result;
 }
 
 // ──────────────────────────────────────
@@ -715,7 +692,7 @@ export async function uploadFile(file: File) {
 export async function getAvailableSlots(date: string, duration: number = 60, targetTimezone?: string) {
   const params: Record<string, string> = { date, duration: String(duration) };
   if (targetTimezone) params.target_timezone = targetTimezone;
-  return apiClient.get<{start: string; end: string; local_label?: string; guest_label?: string}[]>(
+  return enhancedApiClient.get<{start: string; end: string; local_label?: string; guest_label?: string}[]>(
     "/calendar/slots", 
     { params }
   );
@@ -815,13 +792,13 @@ export interface PublicBookingDetailsResponse {
 }
 
 export async function getPublicEventDetails(username: string, eventType: string) {
-  return apiClient.get<PublicEventDetailsResponse>(
+  return enhancedApiClient.get<PublicEventDetailsResponse>(
     `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}`
   );
 }
 
 export async function getPublicUserProfile(username: string) {
-  return apiClient.get<PublicUserProfileResponse>(
+  return enhancedApiClient.get<PublicUserProfileResponse>(
     `/public/users/${encodeURIComponent(username)}`
   );
 }
@@ -834,7 +811,7 @@ export async function getPublicEventAvailability(
 ) {
   const params: Record<string, string> = { month };
   if (timeZone) params.time_zone = timeZone;
-  return apiClient.get<PublicAvailabilityResponse>(
+  return enhancedApiClient.get<PublicAvailabilityResponse>(
     `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/availability`,
     { params }
   );
@@ -848,7 +825,7 @@ export async function getPublicEventAvailabilityByDate(
 ) {
   const params: Record<string, string> = { date };
   if (timeZone) params.time_zone = timeZone;
-  return apiClient.get<PublicDailyAvailabilityResponse>(
+  return enhancedApiClient.get<PublicDailyAvailabilityResponse>(
     `/public/users/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/availability`,
     { params }
   );
@@ -886,19 +863,19 @@ export interface EventTypeResponse extends EventTypePayload {
 }
 
 export async function listEventTypes() {
-  return apiClient.get<EventTypeResponse[]>("/event-types");
+  return enhancedApiClient.get<EventTypeResponse[]>("/event-types");
 }
 
 export async function createEventType(payload: EventTypePayload) {
-  return apiClient.post<EventTypeResponse>("/event-types", payload);
+  return enhancedApiClient.post<EventTypeResponse>("/event-types", payload);
 }
 
 export async function updateEventType(eventTypeId: string, payload: Partial<EventTypePayload>) {
-  return apiClient.patch<EventTypeResponse>(`/event-types/${encodeURIComponent(eventTypeId)}`, payload);
+  return enhancedApiClient.patch<EventTypeResponse>(`/event-types/${encodeURIComponent(eventTypeId)}`, payload);
 }
 
 export async function deleteEventType(eventTypeId: string) {
-  return apiClient.delete<{ status: string }>(`/event-types/${encodeURIComponent(eventTypeId)}`);
+  return enhancedApiClient.delete<{ status: string }>(`/event-types/${encodeURIComponent(eventTypeId)}`);
 }
 
 export interface PublicPaymentIntentResponse {
@@ -926,45 +903,45 @@ export interface TeamMemberResponse {
 }
 
 export async function getEventTypeTeamMembers(eventTypeId: string) {
-  return apiClient.get<TeamMemberResponse[]>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members`);
+  return enhancedApiClient.get<TeamMemberResponse[]>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members`);
 }
 
 export async function addEventTypeTeamMember(eventTypeId: string, payload: { username: string; assignment_method?: string; priority?: number }) {
-  return apiClient.post<TeamMemberResponse>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members`, payload);
+  return enhancedApiClient.post<TeamMemberResponse>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members`, payload);
 }
 
 export async function updateEventTypeTeamMember(eventTypeId: string, memberId: string, payload: { assignment_method?: string; priority?: number }) {
-  return apiClient.patch<TeamMemberResponse>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members/${encodeURIComponent(memberId)}`, payload);
+  return enhancedApiClient.patch<TeamMemberResponse>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members/${encodeURIComponent(memberId)}`, payload);
 }
 
 export async function deleteEventTypeTeamMember(eventTypeId: string, memberId: string) {
-  return apiClient.delete<{ status: string }>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members/${encodeURIComponent(memberId)}`);
+  return enhancedApiClient.delete<{ status: string }>(`/event-types/${encodeURIComponent(eventTypeId)}/team-members/${encodeURIComponent(memberId)}`);
 }
 
 // ──────────────────────────────────────
 // Teams: Members
 // ──────────────────────────────────────
 export async function getTeamMembers(teamId: string) {
-  return apiClient.get<TeamMemberFull[]>(`/teams/${encodeURIComponent(teamId)}/members`);
+  return enhancedApiClient.get<TeamMemberFull[]>(`/teams/${encodeURIComponent(teamId)}/members`);
 }
 
 export async function addTeamMember(teamId: string, payload: { email: string; role?: string }) {
-  return apiClient.post<TeamMemberFull>(`/teams/${encodeURIComponent(teamId)}/members`, payload);
+  return enhancedApiClient.post<TeamMemberFull>(`/teams/${encodeURIComponent(teamId)}/members`, payload);
 }
 
 export async function removeTeamMember(teamId: string, memberId: string) {
-  return apiClient.delete<{ status: string }>(`/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(memberId)}`);
+  return enhancedApiClient.delete<{ status: string }>(`/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(memberId)}`);
 }
 
 export async function createPublicPaymentIntent(username: string, eventType: string) {
-  return apiClient.post<PublicPaymentIntentResponse>(
+  return enhancedApiClient.post<PublicPaymentIntentResponse>(
     `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/payment-intent`,
     null
   );
 }
 
 export async function confirmPublicPaymentIntent(username: string, eventType: string, payload: { payment_intent_id: string; payment_method?: string }) {
-  return apiClient.post<PublicPaymentConfirmationResponse>(
+  return enhancedApiClient.post<PublicPaymentConfirmationResponse>(
     `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/payment-intent/confirm`,
     payload
   );
@@ -983,7 +960,7 @@ export async function bookPublicEvent(
     metadata?: Record<string, unknown>;
   }
 ) {
-  return apiClient.post<PublicBookingConfirmation>(
+  return enhancedApiClient.post<PublicBookingConfirmation>(
     `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/book`,
     payload
   );
@@ -994,7 +971,7 @@ export async function reschedulePublicBooking(
   token: string,
   payload: { new_start_time: string; time_zone?: string }
 ) {
-  return apiClient.patch<PublicBookingActionResponse>(
+  return enhancedApiClient.patch<PublicBookingActionResponse>(
     `/public/bookings/${encodeURIComponent(bookingId)}/reschedule`,
     payload,
     { params: { token } }
@@ -1002,25 +979,25 @@ export async function reschedulePublicBooking(
 }
 
 export async function getPublicBookingDetails(bookingId: string, token: string) {
-  return apiClient.get<PublicBookingDetailsResponse>(
+  return enhancedApiClient.get<PublicBookingDetailsResponse>(
     `/public/bookings/${encodeURIComponent(bookingId)}`,
     { params: { token } }
   );
 }
 
 export async function cancelPublicBooking(bookingId: string, token: string, reason?: string) {
-  return apiClient.delete<PublicBookingActionResponse>(
+  return enhancedApiClient.fetchWithOfflineSupport<PublicBookingActionResponse>(
     `/public/bookings/${encodeURIComponent(bookingId)}`,
-    { params: { token }, json: reason ? { reason } : undefined }
+    { method: "DELETE", params: { token }, json: reason ? { reason } : undefined }
   );
 }
 
 export async function mfaVerify(userId: number, code: string) {
-  return apiClient.post<{ status: string }>(`/auth/mfa/verify`, null, { params: { token: code } });
+  return enhancedApiClient.post<{ status: string }>(`/auth/mfa/verify`, null, { params: { token: code } });
 }
 
 export async function manualSync() {
-  return apiClient.post<{ status: string; message: string; synced_providers?: string[] }>("/calendar/sync");
+  return enhancedApiClient.post<{ status: string; message: string; synced_providers?: string[] }>("/calendar/sync");
 }
 
 export interface IntegrationsStatusResponse {
@@ -1029,11 +1006,11 @@ export interface IntegrationsStatusResponse {
 }
 
 export async function getIntegrationStatus() {
-  return apiClient.get<IntegrationsStatusResponse>("/users/me/integrations");
+  return enhancedApiClient.get<IntegrationsStatusResponse>("/users/me/integrations");
 }
 
 export async function getEmailDiagnostic() {
-  return apiClient.get<{
+  return enhancedApiClient.get<{
     status: string;
     message: string;
     error_type?: string;
@@ -1043,7 +1020,7 @@ export async function getEmailDiagnostic() {
 }
 
 export async function sendTestEmail(email: string) {
-  return apiClient.post<{ status: string; message: string }>("/admin/email/test", null, {
+  return enhancedApiClient.post<{ status: string; message: string }>("/admin/email/test", null, {
     params: { email }
   });
 }

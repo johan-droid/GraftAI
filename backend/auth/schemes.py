@@ -67,6 +67,14 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
 
+    token_version = int(payload.get("version", 0))
+    if getattr(user, "token_version", 0) > token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been revoked. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user
 
 

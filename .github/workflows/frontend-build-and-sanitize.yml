@@ -11,6 +11,13 @@ on:
 jobs:
   build-frontend:
     runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: "--trace-warnings"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      BACKEND_URL: "http://localhost:8000"
+      NEXTAUTH_SECRET: "test-secret-value-please-change"
+      AUTH_SECRET: "test-secret-value-please-change"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install frontend deps

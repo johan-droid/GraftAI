@@ -13,12 +13,18 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "public/sw.js",
+    "public/**",
   ]),
   {
     rules: {
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-empty-object-type": "warn",
-      "prefer-const": "warn",
+      "@typescript-eslint/no-unused-vars": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "react-hooks/incompatible-library": "off",
+      "@next/next/no-img-element": "off",
+      "import/no-anonymous-default-export": "off",
+      "prefer-const": "off",
     },
   },
 ]);

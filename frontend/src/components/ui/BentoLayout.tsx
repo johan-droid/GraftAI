@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export interface BentoLayoutProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type BentoLayoutProps = React.HTMLAttributes<HTMLDivElement>;
 
 export const BentoLayout = React.forwardRef<HTMLDivElement, BentoLayoutProps>(
   ({ className, children, ...props }, ref) => {

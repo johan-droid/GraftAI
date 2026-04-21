@@ -6,7 +6,7 @@ decision quality, and system health.
 """
 
 from typing import Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 
 # Try to import prometheus_client, provide fallback if not available
@@ -269,7 +269,7 @@ if PROMETHEUS_AVAILABLE:
     agent_build_info.info(
         {
             "version": "1.0.0",
-            "build_date": datetime.utcnow().isoformat(),
+            "build_date": datetime.now(timezone.utc).isoformat(),
             "python_version": "3.10+",
             "framework": "GraftAI",
         }

@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -15,7 +15,7 @@ IS_PRODUCTION = (
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         record_dict = {
-            "timestamp": datetime.utcfromtimestamp(record.created).isoformat() + "Z",
+            "timestamp": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "service": SERVICE_NAME,

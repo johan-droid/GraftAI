@@ -43,8 +43,27 @@ self.addEventListener("fetch", (event: FetchEvent) => {
   }
 });
 
+const normalizePrecacheEntries = (
+  entries: (string | PrecacheEntry)[] | undefined,
+): (string | PrecacheEntry)[] | undefined => {
+  if (!entries) {
+    return entries;
+  }
+
+  return entries.map((entry) => {
+    if (typeof entry === "string") {
+      return entry.replace(/\\/g, "/");
+    }
+
+    return {
+      ...entry,
+      url: entry.url?.replace(/\\/g, "/"),
+    };
+  });
+};
+
 const serwist = new Serwist({
-  precacheEntries: self.__SW_MANIFEST,
+  precacheEntries: normalizePrecacheEntries(self.__SW_MANIFEST),
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,

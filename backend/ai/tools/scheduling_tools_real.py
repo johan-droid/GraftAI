@@ -16,11 +16,27 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from sqlalchemy import select
 
+from backend.utils.db import get_async_session_maker
+from backend.models.tables import UserTokenTable, UserTable
+from backend.services.token_encryption import decrypt_token_value
+from backend.services.integrations.ms_graph import create_ms_event, update_ms_event
 from backend.utils.logger import get_logger
 from .registry import register_tool, ToolCategory, ToolPriority
 
 logger = get_logger(__name__)
+
+
+def _mask_email(email: Optional[str]) -> str:
+    if not email or "@" not in email:
+        return "<unknown>"
+    local, domain = email.split("@", 1)
+    if len(local) <= 2:
+        masked_local = "**"
+    else:
+        masked_local = local[0] + "*" * (len(local) - 2) + local[-1]
+    return f"{masked_local}@{domain}"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -48,6 +64,10 @@ class CalendarConfig:
     OUTLOOK_CLIENT_SECRET = os.getenv("OUTLOOK_CLIENT_SECRET", "")
     OUTLOOK_TENANT_ID = os.getenv("OUTLOOK_TENANT_ID", "")
 
+    @classmethod
+    def is_outlook_configured(cls) -> bool:
+        return bool(cls.OUTLOOK_CLIENT_ID and cls.OUTLOOK_CLIENT_SECRET)
+
     # Default calendar settings
     DEFAULT_TIMEZONE = os.getenv("DEFAULT_TIMEZONE", "America/New_York")
     DEFAULT_REMINDER_MINUTES = int(os.getenv("DEFAULT_REMINDER_MINUTES", "15"))
@@ -55,10 +75,6 @@ class CalendarConfig:
     @classmethod
     def is_google_configured(cls) -> bool:
         return bool(cls.GOOGLE_CLIENT_ID and cls.GOOGLE_CLIENT_SECRET)
-
-    @classmethod
-    def is_outlook_configured(cls) -> bool:
-        return bool(cls.OUTLOOK_CLIENT_ID and cls.OUTLOOK_CLIENT_SECRET)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -373,9 +389,52 @@ class GoogleCalendarService:
 # ═══════════════════════════════════════════════════════════════════
 
 
+def _normalize_calendar_provider(provider: str) -> str:
+    provider = (provider or "").strip().lower()
+    if provider in {"outlook", "microsoft_outlook", "microsoft_365"}:
+        return "microsoft"
+    if provider in {"google_meet", "google_calendar"}:
+        return "google"
+    return provider or "google"
+
+
+async def _get_oauth_token_data_for_email(
+    user_email: Optional[str], provider: str
+) -> Optional[dict]:
+    if not user_email or provider != "microsoft":
+        return None
+
+    session_factory = get_async_session_maker()
+    async with session_factory() as session:
+        stmt = select(UserTable).where(UserTable.email == user_email)
+        user = (await session.execute(stmt)).scalars().first()
+        if not user:
+            return None
+
+        token_stmt = select(UserTokenTable).where(
+            UserTokenTable.user_id == user.id,
+            UserTokenTable.provider == provider,
+            UserTokenTable.is_active == True,
+        )
+        token = (await session.execute(token_stmt)).scalars().first()
+        if not token:
+            return None
+
+        access_token, _ = decrypt_token_value(token.access_token)
+        refresh_token, _ = decrypt_token_value(token.refresh_token)
+        if not access_token or not refresh_token:
+            return None
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "scopes": token.scopes,
+        }
+
+
 @register_tool(
     name="create_calendar_event",
-    description="Create a calendar event using Google Calendar API",
+    description="Create a calendar event using Google or Microsoft Calendar APIs",
     category=ToolCategory.SCHEDULING,
     priority=ToolPriority.CRITICAL,
 )
@@ -408,35 +467,31 @@ async def create_calendar_event(
         Event creation result
     """
     try:
-        # Check if calendar API is configured
-        if not CalendarConfig.is_google_configured():
-            logger.warning("Google Calendar not configured - logging event only")
+        calendar_provider = _normalize_calendar_provider(calendar_provider)
 
-            # In development mode, return success with mock data
-            return {
-                "success": True,
-                "event_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
-                "title": title,
-                "start_time": start_time,
-                "duration_minutes": duration_minutes,
-                "attendees": attendees,
-                "calendar_link": "https://calendar.google.com/calendar/event?eid=dev",
-                "status": "logged",
-                "mode": "development",
-                "provider": calendar_provider,
-            }
-
-        # Use Google Calendar
         if calendar_provider == "google":
-            calendar = GoogleCalendarService()
+            if not CalendarConfig.is_google_configured():
+                logger.warning("Google Calendar not configured - logging event only")
+                return {
+                    "success": True,
+                    "event_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                    "title": title,
+                    "start_time": start_time,
+                    "duration_minutes": duration_minutes,
+                    "attendees": attendees,
+                    "calendar_link": "https://calendar.google.com/calendar/event?eid=dev",
+                    "status": "logged",
+                    "mode": "development",
+                    "provider": calendar_provider,
+                }
 
-            # Authenticate (in production, this uses stored tokens)
+            # Use Google Calendar
+            calendar = GoogleCalendarService()
             auth_success = await calendar.authenticate(
                 organizer_email or "default@graftai.com"
             )
 
             if not auth_success:
-                # Return development mode response if auth fails
                 return {
                     "success": True,
                     "event_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
@@ -450,7 +505,6 @@ async def create_calendar_event(
                     "message": "Calendar auth required - event logged for manual creation",
                 }
 
-            # Create event
             result = await calendar.create_event(
                 title=title,
                 start_time=start_time,
@@ -463,13 +517,48 @@ async def create_calendar_event(
 
             return result
 
-        # Outlook Calendar (future implementation)
-        elif calendar_provider == "outlook":
-            logger.warning("Outlook Calendar not yet implemented")
+        elif calendar_provider == "microsoft":
+            token_data = await _get_oauth_token_data_for_email(
+                organizer_email, "microsoft"
+            )
+            if not token_data:
+                logger.warning(
+                    "Microsoft Outlook token not found for organizer_email=%s",
+                    organizer_email,
+                )
+                return {
+                    "success": False,
+                    "error": "Microsoft Outlook not configured for this organizer",
+                    "status": "failed",
+                }
+
+            event_details = {
+                "title": title,
+                "description": description,
+                "start_time": datetime.fromisoformat(start_time.replace("Z", "+00:00")),
+                "end_time": datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                + timedelta(minutes=duration_minutes),
+                "attendees": attendees,
+                "timezone": timezone,
+                "is_meeting": True,
+            }
+
+            result = await create_ms_event(token_data, event_details)
+            meeting_url = (
+                result.get("onlineMeeting", {}).get("joinUrl")
+                or result.get("webLink")
+                or result.get("joinWebUrl")
+                or result.get("joinUrl")
+            )
             return {
-                "success": False,
-                "error": "Outlook Calendar not yet implemented",
-                "status": "failed",
+                "success": True,
+                "event_id": result.get("id"),
+                "calendar_link": meeting_url,
+                "title": title,
+                "start_time": start_time,
+                "attendees": attendees,
+                "status": "confirmed",
+                "provider": "microsoft",
             }
 
         else:
@@ -501,16 +590,18 @@ async def update_calendar_event(
 ) -> Dict[str, Any]:
     """Update an existing calendar event"""
     try:
-        if not CalendarConfig.is_google_configured():
-            logger.warning("Calendar not configured - logging update only")
-            return {
-                "success": True,
-                "event_id": event_id,
-                "status": "logged",
-                "mode": "development",
-            }
+        calendar_provider = _normalize_calendar_provider(calendar_provider)
 
         if calendar_provider == "google":
+            if not CalendarConfig.is_google_configured():
+                logger.warning("Google Calendar not configured - logging update only")
+                return {
+                    "success": True,
+                    "event_id": event_id,
+                    "status": "logged",
+                    "mode": "development",
+                }
+
             calendar = GoogleCalendarService()
             await calendar.authenticate(organizer_email or "default@graftai.com")
 
@@ -521,6 +612,56 @@ async def update_calendar_event(
                 duration_minutes=duration_minutes,
                 attendees=attendees,
             )
+
+        elif calendar_provider == "microsoft":
+            token_data = await _get_oauth_token_data_for_email(
+                organizer_email, "microsoft"
+            )
+            if not token_data:
+                logger.warning(
+                    "Microsoft Outlook token not found for organizer_email=%s",
+                    _mask_email(organizer_email),
+                )
+                return {
+                    "success": False,
+                    "error": "Microsoft Outlook not configured for this organizer",
+                    "status": "failed",
+                }
+
+            event_details = {
+                "title": title,
+                "description": None,
+                "start_time": None,
+                "end_time": None,
+                "attendees": attendees or [],
+            }
+            if start_time:
+                event_details["start_time"] = datetime.fromisoformat(
+                    start_time.replace("Z", "+00:00")
+                )
+            if duration_minutes and start_time:
+                event_details["end_time"] = datetime.fromisoformat(
+                    start_time.replace("Z", "+00:00")
+                ) + timedelta(minutes=duration_minutes)
+            if title is not None:
+                event_details["title"] = title
+            if attendees is not None:
+                event_details["attendees"] = attendees
+
+            result = await update_ms_event(token_data, event_id, event_details)
+            meeting_url = (
+                result.get("onlineMeeting", {}).get("joinUrl")
+                or result.get("webLink")
+                or result.get("joinWebUrl")
+                or result.get("joinUrl")
+            )
+            return {
+                "success": True,
+                "event_id": event_id,
+                "meeting_url": meeting_url,
+                "status": "updated",
+                "provider": "microsoft",
+            }
 
         return {
             "success": False,

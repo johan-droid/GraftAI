@@ -119,6 +119,14 @@ async def lifespan(app: FastAPI):
     # Inline schema mutations were removed in favor of Alembic-managed migrations
     # to avoid blocking the main event loop during startup.
 
+    # Register Dead Letter Queue handlers
+    try:
+        from backend.services.dlq_handlers import register_dlq_handlers
+        handler_count = register_dlq_handlers()
+        logging.info(f"[STARTUP] Registered {handler_count} DLQ handlers")
+    except Exception as e:
+        logging.error(f"[STARTUP] Failed to register DLQ handlers: {e}")
+
     port = os.getenv("PORT", "8000")
     ping_enabled = os.getenv("SELF_PING_ENABLED", "true").lower() not in {
         "0",

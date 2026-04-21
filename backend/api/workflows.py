@@ -152,14 +152,14 @@ def _serialize_workflow(workflow: WorkflowTable) -> Dict[str, Any]:
 @router.get("/triggers", response_model=TriggerTypeResponse)
 async def get_trigger_types():
     """Get available workflow trigger types."""
-    engine = WorkflowEngine()
+    engine = get_workflow_engine()
     return {"triggers": engine.TRIGGERS}
 
 
 @router.get("/actions", response_model=ActionTypeResponse)
 async def get_action_types():
     """Get available workflow action types."""
-    engine = WorkflowEngine()
+    engine = get_workflow_engine()
     return {"actions": engine.ACTIONS}
 
 

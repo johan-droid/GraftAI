@@ -14,6 +14,7 @@ from backend.models.automation import (
     AutomationExecution,
     AutomationTemplate,
 )
+from backend.utils.pagination import PaginatedResponse, PaginationParams, get_pagination_params
 
 router = APIRouter(prefix="/automation", tags=["automation"])
 
@@ -163,22 +164,19 @@ async def create_automation_rule(
     )
 
 
-@router.get("/rules", response_model=List[AutomationRuleResponse])
+@router.get("/rules", response_model=PaginatedResponse[AutomationRuleResponse])
 async def list_automation_rules(
     rule_type: Optional[str] = None,
     team_id: Optional[str] = None,
     is_enabled: Optional[bool] = None,
-    limit: int = Query(default=50, le=100),
+    pagination: PaginationParams = Depends(get_pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: UserTable = Depends(get_current_user),
 ):
-    """List automation rules."""
-    stmt = (
-        select(AutomationRule)
-        .where(AutomationRule.user_id == current_user.id)
-        .order_by(desc(AutomationRule.priority), desc(AutomationRule.created_at))
-        .limit(limit)
-    )
+    """List automation rules with pagination."""
+    from backend.utils.pagination import paginate
+
+    stmt = select(AutomationRule).where(AutomationRule.user_id == current_user.id)
 
     if rule_type:
         stmt = stmt.where(AutomationRule.rule_type == rule_type)
@@ -189,9 +187,22 @@ async def list_automation_rules(
     if is_enabled is not None:
         stmt = stmt.where(AutomationRule.is_enabled == is_enabled)
 
-    rules = (await db.execute(stmt)).scalars().all()
+    # Apply sorting
+    sort_column = AutomationRule.created_at
+    if pagination.sort_by == "priority":
+        sort_column = AutomationRule.priority
+    elif pagination.sort_by == "name":
+        sort_column = AutomationRule.name
 
-    return [
+    if pagination.sort_order == "desc":
+        stmt = stmt.order_by(desc(sort_column))
+    else:
+        stmt = stmt.order_by(sort_column)
+
+    # Apply pagination
+    items, pagination_meta = await paginate(db, stmt, pagination, AutomationRule)
+
+    rules = [
         AutomationRuleResponse(
             id=r.id,
             name=r.name,
@@ -207,8 +218,10 @@ async def list_automation_rules(
             priority=r.priority,
             created_at=r.created_at,
         )
-        for r in rules
+        for r in items
     ]
+
+    return PaginatedResponse(data=rules, pagination=pagination_meta)
 
 
 @router.get("/rules/{rule_id}", response_model=AutomationRuleResponse)

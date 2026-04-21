@@ -74,9 +74,24 @@ def _build_token_data(token: UserTokenTable) -> dict:
     }
 
 
+def _normalize_provider(provider: Optional[str]) -> Optional[str]:
+    if not provider:
+        return provider
+    provider = provider.strip().lower()
+    if provider == "outlook" or provider == "microsoft_outlook":
+        return "microsoft"
+    if provider == "google_meet" or provider == "google_calendar":
+        return "google"
+    return provider
+
+
 async def _create_external_event(
     db: AsyncSession, user_id: str, provider: str, event_details: dict
 ) -> Optional[dict]:
+    provider = _normalize_provider(provider)
+    if not provider:
+        return None
+
     token = await _get_active_token(db, user_id, provider)
     if not token:
         return None
@@ -225,7 +240,12 @@ async def push_event_to_external_calendar(
 
 
 async def get_events_for_range(
-    db: AsyncSession, user_id: str, start: datetime, end: datetime
+    db: AsyncSession,
+    user_id: str,
+    start: datetime,
+    end: datetime,
+    limit: int = 100,
+    offset: int = 0,
 ) -> List[dict]:
     stmt = (
         select(EventTable)
@@ -237,6 +257,8 @@ async def get_events_for_range(
             )
         )
         .order_by(EventTable.start_time.asc())
+        .limit(limit)
+        .offset(offset)
     )
 
     result = await db.execute(stmt)
@@ -299,7 +321,7 @@ async def create_event(
             external_event_data.get("title")
         )
         provider_preference = ["google", "microsoft", "zoom"]
-        event_provider = event_data.get("meeting_provider")
+        event_provider = _normalize_provider(event_data.get("meeting_provider"))
         if event_provider:
             provider_preference = [event_provider]
 
@@ -324,6 +346,10 @@ async def create_event(
             background_tasks.add_task(_safe_notify, db, "created", user_id, new_event)
         else:
             await _safe_notify(db, "created", user_id, new_event)
+
+    if commit:
+        await db.commit()
+        await db.refresh(new_event)
 
     return new_event
 

@@ -108,6 +108,20 @@ async def test_user(db_session: AsyncSession, test_user_data) -> UserTable:
 
 
 @pytest_asyncio.fixture
+async def other_test_user(db_session: AsyncSession, test_user_data) -> UserTable:
+    """Create and return a second test user in the database."""
+    other_data = {**test_user_data}
+    other_data["id"] = str(uuid.uuid4())
+    other_data["email"] = "other@example.com"
+    other_data["username"] = "otheruser"
+    user = UserTable(**other_data)
+    db_session.add(user)
+    await db_session.flush()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
 async def authenticated_user(
     db_session: AsyncSession, test_user: UserTable
 ) -> UserTable:
@@ -148,6 +162,56 @@ def test_app(
     app.dependency_overrides[get_current_user] = override_get_current_user
 
     return app
+
+
+@pytest.fixture
+def unauthenticated_test_app(override_get_db) -> FastAPI:
+    """Create a test FastAPI application that always rejects authentication."""
+    app = create_app()
+
+    async def _raise_unauthenticated():
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _raise_unauthenticated
+    return app
+
+
+@pytest.fixture
+def override_get_current_other_user(other_test_user: UserTable):
+    """Override get_current_user for a second authenticated user."""
+
+    async def _override():
+        return other_test_user
+
+    return _override
+
+
+@pytest_asyncio.fixture
+async def async_client_for_other_user(
+    override_get_db,
+    override_get_current_other_user,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Provide an async HTTP client authenticated as a second test user."""
+    app = create_app()
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_other_user
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://localhost") as client:
+        yield client
+
+
+@pytest_asyncio.fixture
+async def async_client_unauthenticated(
+    unauthenticated_test_app: FastAPI,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Provide an async client with no authenticated user."""
+    transport = ASGITransport(app=unauthenticated_test_app)
+    async with AsyncClient(transport=transport, base_url="http://localhost") as client:
+        yield client
 
 
 @pytest_asyncio.fixture

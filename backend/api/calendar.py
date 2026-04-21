@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.utils.errors import ValidationError, TimezoneError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # We import the simplified services and models we created earlier
 from backend.api.deps import get_db, get_current_user
@@ -27,15 +27,44 @@ router = APIRouter(prefix="/calendar", tags=["Calendar"])
 
 # --- Pydantic Schemas for Input Validation ---
 class EventCreateSchema(BaseModel):
-    title: str
-    start_time: datetime
-    end_time: datetime
-    description: Optional[str] = None
-    location: Optional[str] = None
-    is_meeting: Optional[bool] = False
-    meeting_provider: Optional[str] = None
-    meeting_type: Optional[str] = None
-    attendees: Optional[List[str]] = Field(default_factory=list)
+    title: str = Field(..., example="Quarterly business review")
+    start_time: datetime = Field(
+        ..., example="2026-05-01T14:00:00Z", description="ISO 8601 formatted UTC start time"
+    )
+    end_time: datetime = Field(
+        ..., example="2026-05-01T15:00:00Z", description="ISO 8601 formatted UTC end time"
+    )
+    description: Optional[str] = Field(
+        None, example="Discuss roadmap and action items."
+    )
+    location: Optional[str] = Field(None, example="Conference Room A")
+    is_meeting: Optional[bool] = Field(False, example=True)
+    meeting_provider: Optional[str] = Field(
+        None,
+        example="microsoft",
+        description="Preferred external calendar/video provider, e.g. google, microsoft, zoom",
+    )
+    meeting_type: Optional[str] = Field(None, example="consultation")
+    attendees: Optional[List[str]] = Field(
+        default_factory=list,
+        example=["alice@example.com", "bob@example.com"],
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "title": "Quarterly business review",
+                "start_time": "2026-05-01T14:00:00Z",
+                "end_time": "2026-05-01T15:00:00Z",
+                "description": "Discuss roadmap and action items.",
+                "location": "Conference Room A",
+                "is_meeting": True,
+                "meeting_provider": "microsoft",
+                "meeting_type": "strategy",
+                "attendees": ["alice@example.com", "bob@example.com"],
+            }
+        }
+    )
 
 
 class EventResponseSchema(BaseModel):
@@ -51,8 +80,7 @@ class EventResponseSchema(BaseModel):
     meeting_provider: Optional[str] = None
     attendees: Optional[List[str]] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AvailabilitySlot(BaseModel):
@@ -71,6 +99,8 @@ class AvailabilityResponse(BaseModel):
 async def list_events(
     start: datetime = Query(..., description="Start of date range"),
     end: datetime = Query(..., description="End of date range"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of events to return"),
+    offset: int = Query(0, ge=0, description="Pagination offset for event results"),
     db: AsyncSession = Depends(get_db),
     current_user: UserTable = Depends(get_current_user),
 ):
@@ -79,7 +109,7 @@ async def list_events(
     for the logged-in user within a specific timeframe.
     """
     events = await get_events_for_range(
-        db, user_id=current_user.id, start=start, end=end
+        db, user_id=current_user.id, start=start, end=end, limit=limit, offset=offset
     )
     return events
 

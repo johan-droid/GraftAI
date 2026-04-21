@@ -17,8 +17,9 @@ Usage:
     await dlq.process_queue()
 """
 
+import inspect
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
@@ -26,12 +27,17 @@ from enum import Enum
 from sqlalchemy import select, delete, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.models.tables import DeadLetterQueueItem
 from backend.utils.db import get_db
 from backend.utils.logger import get_logger
-from backend.models.base import Base
-from sqlalchemy import Column, String, DateTime, Integer, Text, JSON
 
 logger = get_logger(__name__)
+
+
+async def _await_if_needed(value):
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 class DLQStatus(Enum):
@@ -42,32 +48,6 @@ class DLQStatus(Enum):
     COMPLETED = "completed"  # Successfully processed
     FAILED = "failed"  # Exhausted all retries
     CANCELLED = "cancelled"  # Manually cancelled
-
-
-class DeadLetterQueueItem(Base):
-    """Database model for dead letter queue items."""
-
-    __tablename__ = "dead_letter_queue"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    action_type = Column(String(50), nullable=False, index=True)
-    payload = Column(JSON, nullable=False)
-    error_message = Column(Text)
-    status = Column(String(20), default="pending", index=True)
-
-    # Retry configuration
-    max_retries = Column(Integer, default=3)
-    retry_count = Column(Integer, default=0)
-
-    # Timing
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    next_retry_at = Column(DateTime, index=True)
-    last_error_at = Column(DateTime)
-
-    # Processing metadata
-    context = Column(JSON)  # Additional context (user_id, booking_id, etc.)
-    processor_id = Column(String(100))  # ID of worker processing this item
 
 
 @dataclass
@@ -161,14 +141,15 @@ class DeadLetterQueue:
             ID of the queued item
         """
         item_id = str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Calculate next retry time (first retry after 1 minute)
         next_retry = now + timedelta(seconds=self.RETRY_DELAYS[0])
 
         item = DeadLetterQueueItem(
             id=item_id,
-            action_type=action_type,
+            task_id=item_id,
+            task_type=action_type,
             payload=payload,
             error_message=error,
             status=DLQStatus.PENDING.value,
@@ -177,13 +158,12 @@ class DeadLetterQueue:
             created_at=now,
             updated_at=now,
             next_retry_at=next_retry,
-            last_error_at=now,
-            context=context or {},
+            last_retry_at=None,
         )
 
         async with get_db() as session:
             session.add(item)
-            await session.commit()
+            await _await_if_needed(session.commit())
 
         logger.info(
             f"[DLQ] Enqueued item {item_id} "
@@ -205,19 +185,21 @@ class DeadLetterQueue:
         Returns:
             List of pending DLQ items
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         async with get_db() as session:
-            result = await session.execute(
-                select(DeadLetterQueueItem)
-                .where(
-                    and_(
-                        DeadLetterQueueItem.status == DLQStatus.PENDING.value,
-                        DeadLetterQueueItem.next_retry_at <= now,
+            result = await _await_if_needed(
+                session.execute(
+                    select(DeadLetterQueueItem)
+                    .where(
+                        and_(
+                            DeadLetterQueueItem.status == DLQStatus.PENDING.value,
+                            DeadLetterQueueItem.next_retry_at <= now,
+                        )
                     )
+                    .order_by(DeadLetterQueueItem.next_retry_at)
+                    .limit(limit)
                 )
-                .order_by(DeadLetterQueueItem.next_retry_at)
-                .limit(limit)
             )
 
             items = result.scalars().all()
@@ -227,12 +209,16 @@ class DeadLetterQueue:
                 item.status = DLQStatus.PROCESSING.value
                 item.updated_at = now
 
-            await session.commit()
+            await _await_if_needed(session.commit())
 
             return [
                 DLQItem(
                     id=item.id,
-                    action_type=item.action_type,
+                    action_type=(
+                        item.__dict__.get("task_type")
+                        if item.__dict__.get("task_type") is not None
+                        else item.__dict__.get("action_type")
+                    ),
                     payload=item.payload,
                     error_message=item.error_message,
                     status=item.status,
@@ -241,8 +227,12 @@ class DeadLetterQueue:
                     created_at=item.created_at,
                     updated_at=item.updated_at,
                     next_retry_at=item.next_retry_at,
-                    last_error_at=item.last_error_at,
-                    context=item.context,
+                    last_error_at=(
+                        item.__dict__.get("last_retry_at")
+                        if item.__dict__.get("last_retry_at") is not None
+                        else item.__dict__.get("last_error_at")
+                    ),
+                    context=None,
                 )
                 for item in items
             ]
@@ -250,15 +240,17 @@ class DeadLetterQueue:
     async def mark_completed(self, item_id: str):
         """Mark a queue item as successfully completed."""
         async with get_db() as session:
-            result = await session.execute(
-                select(DeadLetterQueueItem).where(DeadLetterQueueItem.id == item_id)
+            result = await _await_if_needed(
+                session.execute(
+                    select(DeadLetterQueueItem).where(DeadLetterQueueItem.id == item_id)
+                )
             )
             item = result.scalar_one_or_none()
 
             if item:
                 item.status = DLQStatus.COMPLETED.value
-                item.updated_at = datetime.utcnow()
-                await session.commit()
+                item.updated_at = datetime.now(timezone.utc)
+                await _await_if_needed(session.commit())
                 logger.info(f"[DLQ] Item {item_id} marked as completed")
 
     async def mark_failed(self, item_id: str, error: str, retry: bool = True):
@@ -270,11 +262,13 @@ class DeadLetterQueue:
             error: Error message
             retry: Whether to schedule another retry (if retries remain)
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         async with get_db() as session:
-            result = await session.execute(
-                select(DeadLetterQueueItem).where(DeadLetterQueueItem.id == item_id)
+            result = await _await_if_needed(
+                session.execute(
+                    select(DeadLetterQueueItem).where(DeadLetterQueueItem.id == item_id)
+                )
             )
             item = result.scalar_one_or_none()
 
@@ -282,7 +276,7 @@ class DeadLetterQueue:
                 return
 
             item.retry_count += 1
-            item.last_error_at = now
+            item.last_retry_at = now
             item.error_message = error
             item.updated_at = now
 
@@ -305,7 +299,7 @@ class DeadLetterQueue:
                     f"{item.retry_count} retries"
                 )
 
-            await session.commit()
+            await _await_if_needed(session.commit())
 
     async def process_queue(self, limit: int = 50) -> Dict[str, int]:
         """
@@ -363,27 +357,33 @@ class DeadLetterQueue:
             # Count by status
             from sqlalchemy import func
 
-            result = await session.execute(
-                select(
-                    DeadLetterQueueItem.status, func.count(DeadLetterQueueItem.id)
-                ).group_by(DeadLetterQueueItem.status)
+            result = await _await_if_needed(
+                session.execute(
+                    select(
+                        DeadLetterQueueItem.status, func.count(DeadLetterQueueItem.id)
+                    ).group_by(DeadLetterQueueItem.status)
+                )
             )
 
             status_counts = {status: count for status, count in result.all()}
 
             # Total count
-            total_result = await session.execute(
-                select(func.count(DeadLetterQueueItem.id))
+            total_result = await _await_if_needed(
+                session.execute(
+                    select(func.count(DeadLetterQueueItem.id))
+                )
             )
             total = total_result.scalar()
 
             # Recent failed items (last 24 hours)
-            yesterday = datetime.utcnow() - timedelta(days=1)
-            recent_failed = await session.execute(
-                select(func.count(DeadLetterQueueItem.id)).where(
-                    and_(
-                        DeadLetterQueueItem.status == DLQStatus.FAILED.value,
-                        DeadLetterQueueItem.last_error_at >= yesterday,
+            yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+            recent_failed = await _await_if_needed(
+                session.execute(
+                    select(func.count(DeadLetterQueueItem.id)).where(
+                        and_(
+                            DeadLetterQueueItem.status == DLQStatus.FAILED.value,
+                            DeadLetterQueueItem.last_retry_at >= yesterday,
+                        )
                     )
                 )
             )
@@ -398,13 +398,15 @@ class DeadLetterQueue:
     async def cancel_item(self, item_id: str) -> bool:
         """Manually cancel a pending item."""
         async with get_db() as session:
-            result = await session.execute(
-                select(DeadLetterQueueItem).where(
-                    and_(
-                        DeadLetterQueueItem.id == item_id,
-                        DeadLetterQueueItem.status.in_(
-                            [DLQStatus.PENDING.value, DLQStatus.PROCESSING.value]
-                        ),
+            result = await _await_if_needed(
+                session.execute(
+                    select(DeadLetterQueueItem).where(
+                        and_(
+                            DeadLetterQueueItem.id == item_id,
+                            DeadLetterQueueItem.status.in_(
+                                [DLQStatus.PENDING.value, DLQStatus.PROCESSING.value]
+                            ),
+                        )
                     )
                 )
             )
@@ -412,8 +414,8 @@ class DeadLetterQueue:
 
             if item:
                 item.status = DLQStatus.CANCELLED.value
-                item.updated_at = datetime.utcnow()
-                await session.commit()
+                item.updated_at = datetime.now(timezone.utc)
+                await _await_if_needed(session.commit())
                 logger.info(f"[DLQ] Item {item_id} cancelled")
                 return True
 
@@ -422,8 +424,10 @@ class DeadLetterQueue:
     async def retry_item_now(self, item_id: str) -> bool:
         """Manually retry a failed or pending item immediately."""
         async with get_db() as session:
-            result = await session.execute(
-                select(DeadLetterQueueItem).where(DeadLetterQueueItem.id == item_id)
+            result = await _await_if_needed(
+                session.execute(
+                    select(DeadLetterQueueItem).where(DeadLetterQueueItem.id == item_id)
+                )
             )
             item = result.scalar_one_or_none()
 
@@ -434,15 +438,15 @@ class DeadLetterQueue:
                 # Reset for another retry cycle
                 item.status = DLQStatus.PENDING.value
                 item.retry_count = 0
-                item.next_retry_at = datetime.utcnow()
-                item.updated_at = datetime.utcnow()
+                item.next_retry_at = datetime.now(timezone.utc)
+                item.updated_at = datetime.now(timezone.utc)
             else:
                 # Just set to retry now
-                item.next_retry_at = datetime.utcnow()
+                item.next_retry_at = datetime.now(timezone.utc)
                 item.status = DLQStatus.PENDING.value
-                item.updated_at = datetime.utcnow()
+                item.updated_at = datetime.now(timezone.utc)
 
-            await session.commit()
+            await _await_if_needed(session.commit())
             logger.info(f"[DLQ] Item {item_id} scheduled for immediate retry")
             return True
 
@@ -456,24 +460,26 @@ class DeadLetterQueue:
         Returns:
             Number of items removed
         """
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         async with get_db() as session:
-            result = await session.execute(
-                delete(DeadLetterQueueItem).where(
-                    and_(
-                        DeadLetterQueueItem.status.in_(
-                            [
-                                DLQStatus.COMPLETED.value,
-                                DLQStatus.FAILED.value,
-                                DLQStatus.CANCELLED.value,
-                            ]
-                        ),
-                        DeadLetterQueueItem.updated_at < cutoff,
+            result = await _await_if_needed(
+                session.execute(
+                    delete(DeadLetterQueueItem).where(
+                        and_(
+                            DeadLetterQueueItem.status.in_(
+                                [
+                                    DLQStatus.COMPLETED.value,
+                                    DLQStatus.FAILED.value,
+                                    DLQStatus.CANCELLED.value,
+                                ]
+                            ),
+                            DeadLetterQueueItem.updated_at < cutoff,
+                        )
                     )
                 )
             )
-            await session.commit()
+            await _await_if_needed(session.commit())
 
             deleted_count = result.rowcount
             logger.info(f"[DLQ] Cleaned up {deleted_count} old items")

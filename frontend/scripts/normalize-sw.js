@@ -13,12 +13,12 @@ if (!fs.existsSync(swPath)) {
 let content = fs.readFileSync(swPath, 'utf8');
 let changed = false;
 
-content = content.replace(/('url'\\s*:\\s*')([^']*)(')/g, (m, p1, url, p3) => {
-  if (!url.includes('\\\\')) return m;
-  if (!/^[\\/_.]/.test(url)) return m;
-  const normalized = url.replace(/\\\\/g, '/');
+content = content.replace(/(["'])url\1\s*:\s*\1([^"']*)\1/g, (m, quote, url) => {
+  if (!url.includes('\\')) return m;
+  if (!/^[\\\/.]/.test(url)) return m;
+  const normalized = url.replace(/\\/g, '/');
   changed = true;
-  return `${p1}${normalized}${p3}`;
+  return m.replace(url, normalized);
 });
 
 if (changed) {

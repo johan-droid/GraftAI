@@ -61,12 +61,12 @@ interface RazorpayHandlerResponse {
 }
 
 interface RazorpayCheckoutOptions {
-  key: string | undefined;
-  amount: number | undefined;
+  key: string;
+  amount: number;
   currency: string;
   name: string;
   description: string;
-  order_id: string | undefined;
+  order_id: string;
   handler: (response: RazorpayHandlerResponse) => Promise<void>;
   prefill: { name: string; email: string };
   theme: { color: string };
@@ -289,14 +289,18 @@ export default function PricingPage() {
 
         await loadRzp();
 
-        const options = {
+        if (!response.key || typeof response.amount !== 'number' || !response.order_id) {
+          throw new Error('Razorpay checkout response missing required payment information.');
+        }
+
+        const options: RazorpayCheckoutOptions = {
           key: response.key,
           amount: response.amount,
           currency: response.currency || 'INR',
           name: 'GraftAI',
           description: tierId === 'pro' ? 'Professional Subscription' : 'Enterprise Subscription',
           order_id: response.order_id,
-            handler: async function (res: RazorpayHandlerResponse) {
+          handler: async function (res: RazorpayHandlerResponse) {
             try {
               // Verify payment on server
               await enhancedApiClient.post('/billing/razorpay/verify', res);
@@ -305,9 +309,9 @@ export default function PricingPage() {
               setBillingMessage('Payment verification failed. Contact support.');
             }
           },
-          prefill: { name: user?.full_name || user?.email, email: user?.email },
+          prefill: { name: user?.full_name ?? '', email: user?.email ?? '' },
           theme: { color: 'var(--primary)' },
-        } as RazorpayCheckoutOptions;
+        };
 
         const windowRazorpay = window as RazorpayWindow;
         if (!windowRazorpay.Razorpay) {

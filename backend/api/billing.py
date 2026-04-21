@@ -223,6 +223,19 @@ def verify_razorpay_signature(body: bytes, signature: str, secret: str) -> bool:
         return False
 
 
+def _get_razorpay_client() -> Optional[Any]:
+    """Return a configured Razorpay client when gateway config and SDK are available."""
+    if not (RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and HAS_RAZORPAY):
+        return None
+
+    assert razorpay is not None
+    razorpay_module = cast(Any, razorpay)
+    return cast(
+        Any,
+        razorpay_module.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)),
+    )
+
+
 @router.get("/mode")
 async def get_billing_mode():
     """Return the effective payment mode and available gateways for frontend display."""
@@ -271,13 +284,8 @@ async def create_checkout_session(
         }
 
     # If Razorpay keys are present, attempt to create a real Razorpay order
-    if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and HAS_RAZORPAY:
+    if client := _get_razorpay_client():
         try:
-            assert razorpay is not None
-            razorpay_client = cast(Any, razorpay)
-            client = cast(
-                Any, razorpay_client.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-            )
             amount = razorpay_tier_amounts.get(tier, 49900)
             # Create order in paise
             order = client.order.create(
@@ -490,12 +498,7 @@ async def verify_razorpay_payment(
     # Fetch order info (optional) to retrieve notes like tier
     tier = "pro"
     try:
-        if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and HAS_RAZORPAY:
-            assert razorpay is not None
-            razorpay_client = cast(Any, razorpay)
-            client = cast(
-                Any, razorpay_client.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-            )
+        if client := _get_razorpay_client():
             order = client.order.fetch(order_id)
             tier = order.get("notes", {}).get("tier", "pro")
     except Exception:
@@ -503,13 +506,8 @@ async def verify_razorpay_payment(
         logger.exception("Could not fetch Razorpay order to determine tier")
 
     # Before activating, verify the payment status with Razorpay (must be 'captured')
-    if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET and HAS_RAZORPAY:
+    if client := _get_razorpay_client():
         try:
-            assert razorpay is not None
-            razorpay_client = cast(Any, razorpay)
-            client = cast(
-                Any, razorpay_client.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-            )
             payment = client.payment.fetch(payment_id)
             payment_status = payment.get("status")
             if payment_status != "captured":

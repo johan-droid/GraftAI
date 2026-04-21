@@ -5,19 +5,40 @@ Executes workflow steps based on booking triggers.
 Supports: EMAIL, SMS, WEBHOOK, SLACK actions.
 """
 import asyncio
+from enum import Enum
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 
 from backend.models.tables import (
     WorkflowTable, WorkflowStepTable
 )
+from backend.utils.dead_letter_queue import get_dlq
 from backend.services.messaging import send_message
 from backend.utils.logger import get_logger
 from backend.utils.db import AsyncSessionLocal
 
 logger = get_logger(__name__)
+
+
+class TriggerType(Enum):
+    BOOKING_CREATED = "BOOKING_CREATED"
+    BOOKING_CONFIRMED = "BOOKING_CONFIRMED"
+    BOOKING_CANCELLED = "BOOKING_CANCELLED"
+    BOOKING_RESCHEDULED = "BOOKING_RESCHEDULED"
+    REMINDER = "REMINDER"
+    FOLLOW_UP = "FOLLOW_UP"
+
+
+class ActionType(Enum):
+    EMAIL = "EMAIL"
+    SMS = "SMS"
+    WEBHOOK = "WEBHOOK"
+    SLACK = "SLACK"
+    TEAMS = "TEAMS"
+    CALENDAR = "CALENDAR"
 
 
 class WorkflowEngine:
@@ -43,6 +64,88 @@ class WorkflowEngine:
         "CALENDAR": "Add to Calendar",
     }
     
+    async def _get_workflows_for_trigger(
+        self,
+        db: AsyncSession,
+        trigger_type: str,
+        user_id: str,
+    ) -> List[WorkflowTable]:
+        """Fetch active workflows for a user and trigger."""
+        stmt = select(WorkflowTable).where(
+            and_(
+                WorkflowTable.user_id == user_id,
+                WorkflowTable.trigger == trigger_type,
+                WorkflowTable.is_active == True,
+            )
+        )
+        result = await db.execute(stmt)
+        return result.scalars().all()
+
+    def _validate_action_config(
+        self, action_type: str, config: Dict[str, Any]
+    ) -> tuple[bool, Optional[str]]:
+        """Validate action configuration for workflow steps."""
+        if action_type == ActionType.EMAIL.value:
+            if not config.get("to"):
+                return False, "Email config requires a recipient 'to'."
+            return True, None
+
+        if action_type == ActionType.WEBHOOK.value:
+            url = config.get("url")
+            if not url or not isinstance(url, str) or not url.startswith("http"):
+                return False, "Webhook config requires a valid 'url'."
+            return True, None
+
+        if action_type in {
+            ActionType.SMS.value,
+            ActionType.SLACK.value,
+            ActionType.TEAMS.value,
+            ActionType.CALENDAR.value,
+        }:
+            return True, None
+
+        return False, f"Unknown action type: {action_type}"
+
+    def _replace_template_variables(
+        self,
+        template: str,
+        event_data: Dict[str, Any],
+    ) -> str:
+        result = template
+        for key, value in event_data.items():
+            placeholder = f"{{{{{key}}}}}"
+            result = result.replace(placeholder, str(value))
+        return result
+
+    async def _execute_workflow_step(
+        self,
+        db: AsyncSession,
+        step: WorkflowStepTable,
+        event_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Execute a workflow step and return structured result."""
+        try:
+            result = await self.execute_step(step, event_data)
+            return {"success": True, "result": result}
+        except Exception as exc:
+            logger.error(f"Workflow step execution failed: {exc}")
+            return {"success": False, "error": str(exc)}
+
+    async def process_trigger(
+        self,
+        trigger_type: str,
+        booking_id: str,
+        user_id: str,
+        event_data: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Alias for triggering workflows, used by unit tests."""
+        return await self.trigger_workflows(
+            trigger_type=trigger_type,
+            booking_id=booking_id,
+            user_id=user_id,
+            event_data=event_data,
+        )
+
     async def trigger_workflows(
         self,
         trigger_type: str,
@@ -386,7 +489,7 @@ async def trigger_booking_workflows(
         )
     """
     engine = get_workflow_engine()
-    return await engine.trigger_workflows(
+    return await engine.process_trigger(
         trigger_type=trigger_type,
         booking_id=booking_id,
         user_id=user_id,

@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 import json
@@ -17,6 +17,13 @@ from sqlalchemy import select
 
 from backend.utils.db import get_db, get_async_session_maker
 from backend.api.deps import get_current_user
+from backend.core.redis import (
+    cache_set,
+    cache_get,
+    cache_delete,
+    publish_message,
+    get_redis,
+)
 from backend.models.tables import (
     UserTable,
     BookingTable,
@@ -44,16 +51,50 @@ router = APIRouter(prefix="/bookings", tags=["bookings"])
 class BookingCreateRequest(BaseModel):
     """Request to create a new booking"""
 
-    title: str = Field(..., description="Meeting title")
-    description: Optional[str] = Field(None, description="Meeting description")
-    start_time: str = Field(..., description="Start time (ISO format)")
-    duration_minutes: int = Field(30, description="Duration in minutes")
-    attendees: list[str] = Field(..., description="List of attendee emails")
-    organizer_id: Optional[str] = Field(None, description="Organizer user ID")
-    location: Optional[str] = Field(None, description="Meeting location")
-    meeting_type: str = Field("consultation", description="Type of meeting")
+    title: str = Field(..., example="Quarterly business review", description="Meeting title")
+    description: Optional[str] = Field(
+        None,
+        example="Discuss roadmap and action items.",
+        description="Meeting description",
+    )
+    start_time: str = Field(
+        ..., example="2026-05-01T14:00:00Z", description="Start time (ISO format)"
+    )
+    duration_minutes: int = Field(
+        30, example=60, description="Duration in minutes"
+    )
+    attendees: list[str] = Field(
+        ..., example=["alice@example.com", "bob@example.com"], description="List of attendee emails"
+    )
+    organizer_id: Optional[str] = Field(
+        None,
+        example="user_1234",
+        description="Organizer user ID",
+    )
+    location: Optional[str] = Field(
+        None, example="Conference Room A", description="Meeting location"
+    )
+    meeting_type: str = Field(
+        "consultation", example="strategy", description="Type of meeting"
+    )
     estimated_value: Optional[float] = Field(
-        None, description="Estimated business value"
+        None, example=2500.0, description="Estimated business value"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "title": "Quarterly business review",
+                "description": "Discuss roadmap and action items.",
+                "start_time": "2026-05-01T14:00:00Z",
+                "duration_minutes": 60,
+                "attendees": ["alice@example.com", "bob@example.com"],
+                "organizer_id": "user_1234",
+                "location": "Conference Room A",
+                "meeting_type": "strategy",
+                "estimated_value": 2500.0,
+            }
+        }
     )
 
 
@@ -97,13 +138,67 @@ class AutomationResultResponse(BaseModel):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# IN-MEMORY AUTOMATION TRACKING (Replace with Redis in production)
+# AUTOMATION STATE TRACKING
 # ═══════════════════════════════════════════════════════════════════
 
 _automation_tasks: Dict[str, Dict[str, Any]] = {}
 
 
-def _track_automation_start(
+def _automation_state_key(booking_id: str) -> str:
+    return f"automation:status:{booking_id}"
+
+
+async def _store_automation_state(
+    booking_id: str, payload: dict, expire_seconds: int = 3600
+) -> None:
+    try:
+        await cache_set(_automation_state_key(booking_id), payload, expire_seconds)
+    except Exception as exc:
+        logger.warning(
+            "Unable to persist automation state to Redis for booking %s: %s",
+            booking_id,
+            exc,
+        )
+
+
+async def _load_automation_state(booking_id: str) -> Optional[dict]:
+    try:
+        return await cache_get(_automation_state_key(booking_id))
+    except Exception as exc:
+        logger.warning(
+            "Unable to load automation state from Redis for booking %s: %s",
+            booking_id,
+            exc,
+        )
+        return None
+
+
+async def _delete_automation_state(booking_id: str) -> None:
+    try:
+        await cache_delete(_automation_state_key(booking_id))
+    except Exception as exc:
+        logger.warning(
+            "Unable to delete automation state from Redis for booking %s: %s",
+            booking_id,
+            exc,
+        )
+
+
+def _serialize_automation_result(result: AutomationResult) -> dict:
+    return {
+        "booking_id": result.booking_id,
+        "automation_status": result.automation_status,
+        "decision_score": result.decision_score,
+        "risk_assessment": result.risk_assessment,
+        "execution_time_ms": result.execution_time_ms,
+        "timestamp": result.timestamp,
+        "agent_decisions": result.agent_decisions,
+        "actions_executed": result.actions_executed,
+        "external_results": result.external_results,
+    }
+
+
+async def _track_automation_start(
     booking_id: str, task: asyncio.Task, automation_id: Optional[str] = None
 ) -> str:
     """Track the start of an automation task"""
@@ -111,43 +206,39 @@ def _track_automation_start(
         automation_id or f"auto_{booking_id}_{datetime.utcnow().timestamp()}"
     )
 
-    _automation_tasks[booking_id] = {
+    state = {
         "automation_id": automation_id,
-        "task": task,
         "status": "in_progress",
         "started_at": datetime.utcnow().isoformat(),
         "completed_at": None,
         "result": None,
+        "decision_score": 0,
+        "risk_assessment": "unknown",
+        "actions_completed": 0,
+        "actions_total": 0,
+        "current_action": None,
         "error": None,
     }
 
+    _automation_tasks[booking_id] = {
+        **state,
+        "task": task,
+    }
+
+    await _store_automation_state(booking_id, state)
+    await _publish_automation_update(booking_id, state)
     return automation_id
 
 
-def _update_automation_result(booking_id: str, result: AutomationResult):
-    """Update automation with result"""
-    if booking_id in _automation_tasks:
-        _automation_tasks[booking_id].update(
-            {
-                "status": result.automation_status,
-                "completed_at": datetime.utcnow().isoformat(),
-                "result": result,
-                "decision_score": result.decision_score,
-                "risk_assessment": result.risk_assessment,
-                "actions_completed": len(result.actions_executed),
-            }
-        )
-
-
-def _update_automation_error(booking_id: str, error: str):
-    """Update automation with error"""
-    if booking_id in _automation_tasks:
-        _automation_tasks[booking_id].update(
-            {
-                "status": "failed",
-                "completed_at": datetime.utcnow().isoformat(),
-                "error": error,
-            }
+async def _publish_automation_update(booking_id: str, payload: dict) -> None:
+    channel = f"automation:stream:{booking_id}"
+    try:
+        await publish_message(channel, payload)
+    except Exception as exc:
+        logger.warning(
+            "Unable to publish automation update for booking %s: %s",
+            booking_id,
+            exc,
         )
 
 
@@ -266,6 +357,40 @@ async def _update_automation_result(
         trigger_source=trigger_source,
     )
 
+    if booking_id in _automation_tasks:
+        _automation_tasks[booking_id].update(
+            {
+                "status": result.automation_status,
+                "completed_at": datetime.utcnow().isoformat(),
+                "result": _serialize_automation_result(result),
+                "decision_score": result.decision_score,
+                "risk_assessment": result.risk_assessment,
+                "actions_completed": len(result.actions_executed),
+                "actions_total": len(result.actions_executed),
+                "current_action": None,
+                "error": None,
+                "done": True,
+            }
+        )
+
+    state_payload = {
+        "automation_id": _automation_tasks.get(booking_id, {}).get("automation_id"),
+        "status": result.automation_status,
+        "started_at": _automation_tasks.get(booking_id, {}).get("started_at"),
+        "completed_at": datetime.utcnow().isoformat(),
+        "result": _serialize_automation_result(result),
+        "decision_score": result.decision_score,
+        "risk_assessment": result.risk_assessment,
+        "actions_completed": len(result.actions_executed),
+        "actions_total": len(result.actions_executed),
+        "current_action": None,
+        "error": None,
+        "done": True,
+    }
+
+    await _store_automation_state(booking_id, state_payload)
+    await _publish_automation_update(booking_id, state_payload)
+
 
 async def _update_automation_error(
     booking_id: str,
@@ -284,6 +409,34 @@ async def _update_automation_error(
         error=error,
         trigger_source=trigger_source,
     )
+
+    if booking_id in _automation_tasks:
+        _automation_tasks[booking_id].update(
+            {
+                "status": "failed",
+                "completed_at": datetime.utcnow().isoformat(),
+                "error": error,
+                "done": True,
+            }
+        )
+
+    state_payload = {
+        "automation_id": _automation_tasks.get(booking_id, {}).get("automation_id"),
+        "status": "failed",
+        "started_at": _automation_tasks.get(booking_id, {}).get("started_at"),
+        "completed_at": datetime.utcnow().isoformat(),
+        "result": None,
+        "decision_score": 0,
+        "risk_assessment": "unknown",
+        "actions_completed": 0,
+        "actions_total": 0,
+        "current_action": None,
+        "error": error,
+        "done": True,
+    }
+
+    await _store_automation_state(booking_id, state_payload)
+    await _publish_automation_update(booking_id, state_payload)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -486,7 +639,7 @@ async def create_booking(
         task = asyncio.create_task(run_automation())
 
         # Track the automation
-        automation_id = _track_automation_start(
+        automation_id = await _track_automation_start(
             booking.id, task, automation_id=automation_id
         )
 
@@ -552,24 +705,23 @@ async def get_automation_status(
         Current automation status and progress
     """
     try:
-        # Check in-memory tracking
-        if booking_id in _automation_tasks:
-            auto = _automation_tasks[booking_id]
+        auto = _automation_tasks.get(booking_id)
+        if not auto:
+            auto = await _load_automation_state(booking_id)
 
-            # Get result if available
-            result = auto.get("result")
-
+        if auto:
+            result = auto.get("result") or {}
             return AutomationStatusResponse(
                 booking_id=booking_id,
-                status=auto["status"],
+                status=auto.get("status", "pending"),
                 automation_id=auto.get("automation_id"),
                 started_at=auto.get("started_at"),
                 completed_at=auto.get("completed_at"),
                 decision_score=auto.get("decision_score"),
                 risk_assessment=auto.get("risk_assessment"),
                 actions_completed=auto.get("actions_completed", 0),
-                actions_total=len(result.actions_executed) if result else 0,
-                current_action=None,  # Could track current action in service
+                actions_total=len(result.get("actions_executed", [])) if isinstance(result, dict) else 0,
+                current_action=auto.get("current_action"),
                 error=auto.get("error"),
             )
 
@@ -653,37 +805,29 @@ async def get_automation_result(
         Complete automation result
     """
     try:
-        # Check in-memory tracking
-        if booking_id in _automation_tasks:
-            auto = _automation_tasks[booking_id]
-            result = auto.get("result")
+        auto = _automation_tasks.get(booking_id)
+        if not auto:
+            auto = await _load_automation_state(booking_id)
+        result = auto.get("result") if auto else None
 
-            if not result:
+        if result:
+            result_data = result if isinstance(result, dict) else _serialize_automation_result(result)
+            if auto.get("status") not in {"completed", "partial"}:
                 raise HTTPException(
                     status_code=404,
                     detail=f"Automation result not yet available for {booking_id}",
                 )
 
             return AutomationResultResponse(
-                booking_id=result.booking_id,
-                status=result.automation_status,
-                decision_score=result.decision_score,
-                risk_assessment=result.risk_assessment,
-                execution_time_ms=result.execution_time_ms,
-                timestamp=result.timestamp,
-                agent_decisions=result.agent_decisions,
-                actions_executed=[
-                    {
-                        "tool_name": a.get("tool_name"),
-                        "success": a.get("success"),
-                        "status": a.get("status"),
-                        "email_id": a.get("email_id"),
-                        "event_id": a.get("event_id"),
-                        "task_id": a.get("task_id"),
-                    }
-                    for a in result.actions_executed
-                ],
-                external_ids=result.external_results,
+                booking_id=result_data.get("booking_id", booking_id),
+                status=result_data.get("automation_status", auto.get("status", "unknown")),
+                decision_score=result_data.get("decision_score", 0),
+                risk_assessment=result_data.get("risk_assessment", "unknown"),
+                execution_time_ms=result_data.get("execution_time_ms", 0),
+                timestamp=result_data.get("timestamp", auto.get("completed_at") or auto.get("started_at") or datetime.utcnow().isoformat()),
+                agent_decisions=result_data.get("agent_decisions", {}),
+                actions_executed=result_data.get("actions_executed", []),
+                external_ids=result_data.get("external_results", {}),
             )
 
         db_result = await db.execute(
@@ -740,11 +884,31 @@ async def stream_automation_status(
         last_status = None
         max_attempts = 60  # 2 minutes max (2s intervals)
         attempts = 0
+        channel = f"automation:stream:{booking_id}"
+        pubsub = None
 
-        while attempts < max_attempts:
-            # Use a fresh DB session for each poll to avoid stale/closed connections
-            session_factory = get_async_session_maker()
-            async with session_factory() as session:
+        async def build_state_payload(state: dict) -> dict:
+            return {
+                "booking_id": booking_id,
+                "automation_id": state.get("automation_id"),
+                "status": state.get("status"),
+                "decision_score": state.get("decision_score"),
+                "risk_assessment": state.get("risk_assessment"),
+                "execution_time_ms": state.get("execution_time_ms"),
+                "timestamp": state.get("completed_at") or state.get("started_at"),
+                "actions_executed": state.get("result", {}).get("actions_executed", []),
+                "done": state.get("done", state.get("status") in {"completed", "failed", "partial"}),
+                "error": state.get("error"),
+            }
+
+        async def load_latest_state() -> Optional[dict]:
+            state = _automation_tasks.get(booking_id)
+            if not state:
+                state = await _load_automation_state(booking_id)
+            if state:
+                return await build_state_payload(state)
+
+            async with get_async_session_maker() as session:
                 db_result = await session.execute(
                     select(AIAutomationTable)
                     .where(
@@ -755,40 +919,74 @@ async def stream_automation_status(
                 )
                 automation_record = db_result.scalars().first()
 
-            if automation_record:
-                current_status = {
-                    "booking_id": automation_record.booking_id,
-                    "status": automation_record.status,
-                    "decision_score": automation_record.decision_score,
-                    "risk_assessment": automation_record.risk_assessment,
-                    "execution_time_ms": automation_record.execution_time_ms,
-                    "timestamp": (
-                        automation_record.completed_at or automation_record.created_at
-                    ).isoformat()
-                    if automation_record.completed_at or automation_record.created_at
-                    else None,
-                    "actions_executed": automation_record.actions_executed or [],
-                }
+                if automation_record:
+                    return {
+                        "booking_id": automation_record.booking_id,
+                        "automation_id": automation_record.id,
+                        "status": automation_record.status,
+                        "decision_score": automation_record.decision_score,
+                        "risk_assessment": automation_record.risk_assessment,
+                        "execution_time_ms": automation_record.execution_time_ms,
+                        "timestamp": (
+                            automation_record.completed_at or automation_record.created_at
+                        ).isoformat()
+                        if automation_record.completed_at or automation_record.created_at
+                        else None,
+                        "actions_executed": automation_record.actions_executed or [],
+                        "done": automation_record.status in {"completed", "failed", "partial"},
+                        "error": automation_record.error_message,
+                    }
+            return None
 
-                # Only send if status changed
-                if current_status != last_status:
-                    last_status = current_status
-                    yield f"data: {json.dumps(current_status)}\n\n"
+        try:
+            try:
+                redis = await get_redis()
+                pubsub = redis.pubsub()
+                await pubsub.subscribe(channel)
+            except Exception as exc:
+                logger.warning(
+                    "Redis pubsub unavailable for booking stream %s: %s",
+                    booking_id,
+                    exc,
+                )
+                pubsub = None
 
-                # End stream if completed or failed
-                if automation_record.status in {"completed", "failed", "partial"}:
-                    yield f"data: {json.dumps({'done': True})}\n\n"
-                    break
-            else:
-                # No automation record yet
-                yield f"data: {json.dumps({'status': 'pending', 'booking_id': booking_id})}\n\n"
+            while attempts < max_attempts:
+                if pubsub:
+                    message = await pubsub.get_message(
+                        ignore_subscribe_messages=True, timeout=2
+                    )
+                    if message and message.get("type") == "message":
+                        data = json.loads(message.get("data", "{}"))
+                        if data != last_status:
+                            last_status = data
+                            yield f"data: {json.dumps(data)}\n\n"
+                        if data.get("done"):
+                            return
+                        attempts += 1
+                        continue
 
-            attempts += 1
-            await asyncio.sleep(2)  # Poll every 2 seconds
+                state = await load_latest_state()
+                if state and state != last_status:
+                    last_status = state
+                    yield f"data: {json.dumps(state)}\n\n"
+                    if state.get("done"):
+                        return
 
-        # Timeout reached
-        if attempts >= max_attempts:
+                if last_status is None:
+                    yield f"data: {json.dumps({'status': 'pending', 'booking_id': booking_id})}\n\n"
+
+                attempts += 1
+                await asyncio.sleep(2)
+
             yield f"data: {json.dumps({'error': 'Stream timeout', 'done': True})}\n\n"
+        finally:
+            if pubsub:
+                try:
+                    await pubsub.unsubscribe(channel)
+                except Exception:
+                    pass
+                await pubsub.close()
 
     return StreamingResponse(
         event_generator(),
@@ -796,7 +994,7 @@ async def stream_automation_status(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "X-Accel-Buffering": "no",
         },
     )
 

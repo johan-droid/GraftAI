@@ -98,6 +98,7 @@ frontend/.cache/
 frontend/src/**/*.js
 frontend/src/**/*.jsx
 frontend/src/**/*.js.map
+frontend/public/swe-worker-*.js
 
 # Package manager lockfiles and caches
 .pnpm-store/

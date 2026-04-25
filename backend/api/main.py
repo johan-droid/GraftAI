@@ -474,6 +474,8 @@ def create_app() -> FastAPI:
 
     # Core Monolithic Routers
     from backend.auth.routes import router as auth_router
+    from backend.api.bookings import router as bookings_router
+    from backend.api.booking_automation import router as booking_automation_router
     from backend.api.calendar import router as calendar_router
     from backend.api.users import router as users_router
     from backend.api.analytics import router as analytics_router
@@ -503,6 +505,10 @@ def create_app() -> FastAPI:
 
     # Registering the new unified Authentication router
     app.include_router(auth_router, prefix="/api/v1/auth")
+
+    # Registering Bookings and Automation routers
+    app.include_router(bookings_router, prefix="/api/v1")
+    app.include_router(booking_automation_router, prefix="/api/v1")
 
     # Registering session revocation auth router
     from backend.api.auth import router as session_auth_router

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+
 from typing import Any, Dict, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.tables import AuditLogTable

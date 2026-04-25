@@ -33,7 +33,7 @@ export default function PageTransition({ isLoading, children }: PageTransitionPr
           filter: isLoading ? 'blur(10px)' : 'blur(0px)',
           scale: isLoading ? 0.995 : 1,
         }}
-        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] as const }}
       >
         {children}
       </motion.div>
@@ -45,7 +45,7 @@ export default function PageTransition({ isLoading, children }: PageTransitionPr
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] as const }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950"
           >
             <div className="flex flex-col items-center gap-6">

@@ -9,7 +9,7 @@ from alembic import context
 from urllib.parse import urlparse, urlunparse
 
 # Import your models here
-from backend.models import *
+from backend.models import Base
 from backend.utils.db import DATABASE_URL
 
 logger = logging.getLogger("alembic.env")

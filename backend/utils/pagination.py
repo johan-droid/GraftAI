@@ -28,7 +28,7 @@ class PaginationMeta(BaseModel):
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
-    data: Sequence[T]
+    items: Sequence[T]
     pagination: PaginationMeta
 
 
@@ -36,7 +36,7 @@ def get_pagination_params(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     sort_by: Optional[str] = Query(None),
-    sort_order: str = Query("asc", regex="^(asc|desc)$"),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$"),
 ) -> PaginationParams:
     return PaginationParams(
         page=page,
@@ -48,7 +48,7 @@ def get_pagination_params(
 
 def paginate(items: Sequence[T], total: int, page: int, size: int) -> PaginatedResponse[T]:
     return PaginatedResponse(
-        data=items,
+        items=items,
         pagination=PaginationMeta(
             total=total,
             page=page,

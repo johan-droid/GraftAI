@@ -18,6 +18,7 @@ from backend.services.messaging import send_message
 from backend.utils.logger import get_logger
 from backend.utils.db import AsyncSessionLocal
 from backend.core.celery_app import celery_app
+from backend.utils.dead_letter_queue import get_dlq
 
 logger = get_logger(__name__)
 
@@ -250,6 +251,26 @@ class WorkflowEngine:
                 
             except Exception as e:
                 logger.error(f"Step {step.id} failed: {e}")
+                
+                # Enqueue to DLQ for retry
+                try:
+                    dlq = get_dlq()
+                    await dlq.enqueue(
+                        action_type=step.action_type,
+                        payload=step.action_config,
+                        error=str(e),
+                        max_retries=3,
+                        context={
+                            "workflow_id": workflow.id,
+                            "step_id": step.id,
+                            "booking_id": booking_id,
+                            "user_id": workflow.user_id,
+                        }
+                    )
+                    logger.info(f"Failed step {step.id} enqueued to DLQ")
+                except Exception as dlq_err:
+                    logger.error(f"Failed to enqueue to DLQ: {dlq_err}")
+
                 executed_steps.append({
                     "step_id": step.id,
                     "action": step.action_type,

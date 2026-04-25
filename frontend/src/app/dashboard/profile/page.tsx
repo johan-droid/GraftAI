@@ -10,6 +10,7 @@ import {
   Clock,
   Globe,
   Zap,
+  Activity,
 } from "lucide-react";
 import { UsageProgress } from "@/components/profile/UsageProgress";
 import { RecentActivity } from "@/components/profile/RecentActivity";

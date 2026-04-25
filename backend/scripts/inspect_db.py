@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from pathlib import Path
+
 
 def inspect_db():
     db_path = "dev.db" # Updated for local dev

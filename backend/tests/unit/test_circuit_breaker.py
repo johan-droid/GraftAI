@@ -48,10 +48,9 @@ class TestCircuitBreakerStates:
         """Test that circuit opens after failure threshold reached."""
         # Record failures up to threshold
         for _ in range(3):
-            fresh_breaker.record_failure()
-            await asyncio.sleep(0.1)  # Allow async processing
+            await fresh_breaker.record_failure()
         
-        await asyncio.sleep(0.2)  # Wait for async state update
+        assert fresh_breaker.state == CircuitState.OPEN
         
         assert fresh_breaker.state == CircuitState.OPEN
         assert fresh_breaker.can_execute() is False
@@ -60,17 +59,10 @@ class TestCircuitBreakerStates:
     async def test_opens_after_consecutive_failures(self, fresh_breaker):
         """Test that circuit opens only after consecutive failures."""
         # Mix of successes and failures - should stay closed
-        fresh_breaker.record_success()
-        await asyncio.sleep(0.1)
-        
-        fresh_breaker.record_failure()
-        await asyncio.sleep(0.1)
-        
-        fresh_breaker.record_success()
-        await asyncio.sleep(0.1)
-        
-        fresh_breaker.record_failure()
-        await asyncio.sleep(0.1)
+        await fresh_breaker.record_success()
+        await fresh_breaker.record_failure()
+        await fresh_breaker.record_success()
+        await fresh_breaker.record_failure()
         
         # Still closed - not enough consecutive failures
         assert fresh_breaker.state == CircuitState.CLOSED
@@ -80,10 +72,8 @@ class TestCircuitBreakerStates:
         """Test that circuit transitions to HALF_OPEN after recovery timeout."""
         # Open the circuit
         for _ in range(3):
-            fresh_breaker.record_failure()
-            await asyncio.sleep(0.1)
+            await fresh_breaker.record_failure()
         
-        await asyncio.sleep(0.2)
         assert fresh_breaker.state == CircuitState.OPEN
         
         # Wait for recovery timeout (1 second in test config)
@@ -99,21 +89,20 @@ class TestCircuitBreakerStates:
         """Test that circuit closes after success threshold in HALF_OPEN."""
         # Open the circuit
         for _ in range(3):
-            fresh_breaker.record_failure()
-            await asyncio.sleep(0.1)
+            await fresh_breaker.record_failure()
         
-        await asyncio.sleep(0.2)
         assert fresh_breaker.state == CircuitState.OPEN
         
         # Wait for recovery
         await asyncio.sleep(1.5)
         
-        # Record successes to close circuit
-        fresh_breaker.record_success()
-        await asyncio.sleep(0.1)
+        # Must call can_execute to transition from OPEN to HALF_OPEN
+        assert fresh_breaker.can_execute() is True
+        assert fresh_breaker.state == CircuitState.HALF_OPEN
         
-        fresh_breaker.record_success()
-        await asyncio.sleep(0.1)
+        # Record successes to close circuit
+        await fresh_breaker.record_success()
+        await fresh_breaker.record_success()
         
         assert fresh_breaker.state == CircuitState.CLOSED
 
@@ -122,10 +111,8 @@ class TestCircuitBreakerStates:
         """Test that circuit reopens on failure in HALF_OPEN state."""
         # Open the circuit
         for _ in range(3):
-            fresh_breaker.record_failure()
-            await asyncio.sleep(0.1)
+            await fresh_breaker.record_failure()
         
-        await asyncio.sleep(0.2)
         assert fresh_breaker.state == CircuitState.OPEN
         
         # Wait for recovery
@@ -135,8 +122,7 @@ class TestCircuitBreakerStates:
         assert fresh_breaker.can_execute() is True
         
         # Record failure in half-open
-        fresh_breaker.record_failure()
-        await asyncio.sleep(0.1)
+        await fresh_breaker.record_failure()
         
         # Should reopen
         assert fresh_breaker.state == CircuitState.OPEN
@@ -200,10 +186,9 @@ class TestCircuitBreakerDecorator:
         """Test that decorated function is blocked when circuit is open."""
         # Manually open the circuit
         for _ in range(2):
-            test_breaker.record_failure()
-            await asyncio.sleep(0.1)
+            await test_breaker.record_failure()
         
-        await asyncio.sleep(0.2)
+        assert test_breaker.state == CircuitState.OPEN
         
         @test_breaker
         async def should_be_blocked():
@@ -229,17 +214,10 @@ class TestCircuitBreakerStats:
     async def test_stats_tracking(self, stats_breaker):
         """Test that statistics are tracked correctly."""
         # Record mixed successes and failures
-        stats_breaker.record_success()
-        await asyncio.sleep(0.05)
-        
-        stats_breaker.record_success()
-        await asyncio.sleep(0.05)
-        
-        stats_breaker.record_failure()
-        await asyncio.sleep(0.05)
-        
-        stats_breaker.record_success()
-        await asyncio.sleep(0.05)
+        await stats_breaker.record_success()
+        await stats_breaker.record_success()
+        await stats_breaker.record_failure()
+        await stats_breaker.record_success()
         
         stats = stats_breaker.stats
         assert stats.total_calls == 4
@@ -251,8 +229,7 @@ class TestCircuitBreakerStats:
     @pytest.mark.asyncio
     async def test_get_status(self, stats_breaker):
         """Test the get_status method."""
-        stats_breaker.record_success()
-        await asyncio.sleep(0.05)
+        await stats_breaker.record_success()
         
         status = stats_breaker.get_status()
         

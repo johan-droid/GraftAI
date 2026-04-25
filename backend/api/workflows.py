@@ -6,7 +6,7 @@ Fully functional workflow management for automation.
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, delete
 
@@ -55,12 +55,22 @@ class WorkflowUpdate(BaseModel):
 class WorkflowStepResponse(BaseModel):
     """Workflow step response."""
     id: str
+    workflow_id: str
     step_number: int
     action_type: str
     action_config: Dict[str, Any]
     delay_minutes: int
     is_active: bool
-    created_at: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkflowStepListResponse(BaseModel):
+    """List workflow steps response."""
+    success: bool
+    message: str
+    data: List[WorkflowStepResponse]
 
 
 class WorkflowResponse(BaseModel):
@@ -70,9 +80,11 @@ class WorkflowResponse(BaseModel):
     description: Optional[str]
     trigger: str
     is_active: bool
-    steps: List[WorkflowStepResponse]
-    created_at: str
-    updated_at: str
+    steps: List[WorkflowStepResponse] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WorkflowListResponse(BaseModel):
@@ -370,6 +382,35 @@ async def add_workflow_step(
         "message": "Step added successfully",
         "data": _serialize_step(new_step),
     }
+
+
+@router.get("/{workflow_id}/steps", response_model=WorkflowStepListResponse)
+async def list_workflow_steps(
+    workflow_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserTable = Depends(get_current_user),
+):
+    """List all steps for a specific workflow."""
+    # Verify workflow ownership
+    stmt = select(WorkflowTable).where(
+        and_(WorkflowTable.id == workflow_id, WorkflowTable.user_id == current_user.id)
+    )
+    workflow = (await db.execute(stmt)).scalars().first()
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    stmt = (
+        select(WorkflowStepTable)
+        .where(WorkflowStepTable.workflow_id == workflow_id)
+        .order_by(WorkflowStepTable.step_order)
+    )
+    steps = (await db.execute(stmt)).scalars().all()
+
+    return WorkflowStepListResponse(
+        success=True,
+        message=f"Retrieved {len(steps)} steps",
+        data=[WorkflowStepResponse.model_validate(s) for s in steps],
+    )
 
 
 @router.delete("/{workflow_id}/steps/{step_id}")

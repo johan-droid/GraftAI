@@ -72,7 +72,7 @@ const DayDetailModal = ({
         initial={{ opacity: 0, scale: 0.95, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 16 }}
-        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] as const }}
         className={cn(googleOverlayStyles.panel, "relative z-10 max-w-lg overflow-hidden")}
       >
         <div className="flex items-center justify-between border-b border-[#DADCE0] px-6 py-4">

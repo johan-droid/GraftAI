@@ -7,7 +7,7 @@ import re
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel, ConfigDict, field_validator, validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -62,7 +62,7 @@ class UserProfileUpdateRequest(BaseModel):
             return v
         return html.escape(v.strip())
 
-    @validator("username")
+    @field_validator("username")
     def username_must_be_valid(cls, value: Optional[str]):
         if value is None:
             return value
@@ -72,7 +72,7 @@ class UserProfileUpdateRequest(BaseModel):
             )
         return value.lower()
 
-    @validator("display_name")
+    @field_validator("display_name")
     def display_name_must_be_valid(cls, value: Optional[str]):
         if value is None:
             return value
@@ -85,7 +85,7 @@ class UserProfileUpdateRequest(BaseModel):
             )
         return normalized
 
-    @validator("bio")
+    @field_validator("bio")
     def bio_length(cls, value: Optional[str]):
         if value is None:
             return value
@@ -93,7 +93,7 @@ class UserProfileUpdateRequest(BaseModel):
             raise ValueError("Bio must be under 500 characters")
         return value.strip()
 
-    @validator("phone")
+    @field_validator("phone")
     def validate_phone(cls, value: Optional[str]):
         if value is None or not value.strip():
             return None
@@ -102,7 +102,7 @@ class UserProfileUpdateRequest(BaseModel):
             raise ValueError("Please enter a valid phone number")
         return normalized
 
-    @validator("timezone")
+    @field_validator("timezone")
     def validate_timezone(cls, value: Optional[str]):
         if value is None:
             return value
@@ -110,7 +110,7 @@ class UserProfileUpdateRequest(BaseModel):
             raise ValueError("Invalid timezone selected")
         return value
 
-    @validator("time_format")
+    @field_validator("time_format")
     def validate_time_format(cls, value: Optional[str]):
         if value is None:
             return value
@@ -118,7 +118,7 @@ class UserProfileUpdateRequest(BaseModel):
             raise ValueError("Invalid time format")
         return value
 
-    @validator("theme")
+    @field_validator("theme")
     def validate_theme(cls, value: Optional[str]):
         if value is None:
             return value
@@ -126,7 +126,7 @@ class UserProfileUpdateRequest(BaseModel):
             raise ValueError("Invalid theme")
         return value
 
-    @validator("brand_color_light", "brand_color_dark")
+    @field_validator("brand_color_light", "brand_color_dark")
     def validate_color(cls, value: Optional[str]):
         if value is None:
             return value
@@ -134,7 +134,7 @@ class UserProfileUpdateRequest(BaseModel):
             raise ValueError("Please select a valid color")
         return value.lower()
 
-    @validator("booking_layout")
+    @field_validator("booking_layout")
     def validate_booking_layout(cls, value: Optional[str]):
         if value is None:
             return value
@@ -148,9 +148,9 @@ class OutOfOfficeBlockCreateRequest(BaseModel):
     end_time: datetime
     reason: Optional[str] = None
 
-    @validator("end_time")
-    def end_must_be_after_start(cls, value: datetime, values: Dict[str, Any]):
-        start_time = values.get("start_time")
+    @field_validator("end_time")
+    def end_must_be_after_start(cls, value: datetime, info):
+        start_time = info.data.get("start_time")
         if start_time and value <= start_time:
             raise ValueError("end_time must be after start_time")
         return value

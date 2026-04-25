@@ -32,7 +32,7 @@ const item = {
     opacity: 1, 
     y: 0, 
     scale: 1,
-    transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } 
+    transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const } 
   }
 };
 
@@ -43,10 +43,10 @@ const shimmer = {
     transition: { 
       repeat: Infinity, 
       duration: 2, 
-      ease: "linear" 
+      ease: "linear" as const
     } 
   }
-};
+} as const;
 
 // --- Main Page Component ---
 export default function AnalyticsPage() {
@@ -189,7 +189,7 @@ export default function AnalyticsPage() {
                     ) : data?.summary ? (
                       <div className="relative">
                         <p className="text-2xl leading-relaxed text-[#3c4043] font-medium font-serif italic opacity-90 group-hover:opacity-100 transition-opacity">
-                          "{data.summary}"
+                          &quot;{data.summary}&quot;
                         </p>
                         <div className="mt-8 flex flex-wrap gap-3">
                           {["Productivity Peak", "Low Attrition", "Optimal Focus"].map(tag => (
@@ -334,7 +334,7 @@ export default function AnalyticsPage() {
                               <motion.div
                                 initial={{ width: 0 }}
                                 animate={{ width: `${pct}%` }}
-                                transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.3 + i * 0.1 }}
+                                transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] as const, delay: 0.3 + i * 0.1 }}
                                 className="h-full rounded-full"
                                 style={{ backgroundColor: colors[i % colors.length] }}
                               />

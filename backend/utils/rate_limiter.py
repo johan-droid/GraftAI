@@ -52,6 +52,7 @@ class RateLimiter:
         self.default_limit = default_limit
         self.default_window = default_window
         self.strategy = strategy
+        self._memory_store: Dict[str, Dict[str, Any]] = {}
 
         # No in-memory fallback: require Redis for rate limiting.
         # If Redis is not configured or experiences errors, the limiter
@@ -129,9 +130,9 @@ class RateLimiter:
 
         if not self.redis:
             logger.warning(
-                "Redis client not configured; rate limiting disabled (fail-open)."
+                "Redis client not configured; falling back to in-memory rate limiting."
             )
-            return True, limit, 0
+            return await self._in_memory_check(key, limit, window, now)
 
         try:
             if self.strategy == RateLimitStrategy.SLIDING_WINDOW:
@@ -142,11 +143,88 @@ class RateLimiter:
                 return await self._token_bucket_check(key, limit, window, now)
         except redis.RedisError:
             logger.warning(
-                "Redis error during rate check; allowing request (fail-open)."
+                "Redis error during rate check; falling back to in-memory rate limiting."
             )
-            return True, limit, 0
+            return await self._in_memory_check(key, limit, window, now)
 
-    # In-memory fallback removed intentionally to avoid process-local state.
+    async def _in_memory_check(
+        self, key: str, limit: int, window: int, now: int
+    ) -> tuple[bool, int, int]:
+        """In-memory fallback for rate limiting."""
+        # Clean up if store gets large or periodically
+        if len(self._memory_store) >= 100 or now % 60 == 0:
+            self._cleanup_memory_store(now)
+
+        if self.strategy == RateLimitStrategy.FIXED_WINDOW:
+            window_id = now // window
+            mem_key = f"{key}:{window_id}"
+            
+            if mem_key not in self._memory_store:
+                self._memory_store[mem_key] = {"count": 0, "expires": now + window}
+            
+            data = self._memory_store[mem_key]
+            data["count"] += 1
+            
+            if data["count"] > limit:
+                retry_after = window - (now % window)
+                return False, 0, retry_after
+                
+            return True, limit - data["count"], 0
+            
+        elif self.strategy == RateLimitStrategy.SLIDING_WINDOW:
+            if key not in self._memory_store:
+                self._memory_store[key] = {"hits": [], "expires": now + window}
+            
+            data = self._memory_store[key]
+            # Filter hits within window
+            window_start = now - window
+            data["hits"] = [h for h in data["hits"] if h > window_start]
+            
+            if len(data["hits"]) >= limit:
+                retry_after = int(data["hits"][0] + window - now)
+                return False, 0, max(1, retry_after)
+                
+            data["hits"].append(now)
+            data["expires"] = now + window
+            return True, limit - len(data["hits"]), 0
+            
+        else:  # TOKEN_BUCKET
+            bucket_key = f"{key}:bucket"
+            if bucket_key not in self._memory_store:
+                self._memory_store[bucket_key] = {
+                    "tokens": float(limit),
+                    "last_update": now,
+                    "expires": now + window * 2
+                }
+            
+            data = self._memory_store[bucket_key]
+            time_passed = now - data["last_update"]
+            rate = limit / window
+            data["tokens"] = min(limit, data["tokens"] + time_passed * rate)
+            data["last_update"] = now
+            data["expires"] = now + window * 2
+            
+            if data["tokens"] < 1:
+                retry_after = int((1 - data["tokens"]) / rate) + 1
+                return False, 0, retry_after
+                
+            data["tokens"] -= 1
+            return True, int(data["tokens"]), 0
+
+    def _cleanup_memory_store(self, now: int):
+        """Remove expired entries from memory store."""
+        expired_keys = []
+        for k, v in self._memory_store.items():
+            # Check both 'expires' and 'expiration' (for test compatibility)
+            expiry = v.get("expires") or v.get("expiration") or 0
+            if expiry < now:
+                expired_keys.append(k)
+                
+        for k in expired_keys:
+            del self._memory_store[k]
+        
+        if expired_keys:
+            logger.debug(f"Cleaned up {len(expired_keys)} expired entries from memory store")
 
     async def _sliding_window_check(
         self, key: str, limit: int, window: int, now: int
@@ -369,23 +447,32 @@ _rate_limiter_instance: Optional[RateLimiter] = None
 
 
 def get_rate_limiter(
-    redis_url: Optional[str] = None, default_limit: int = 100, default_window: int = 60
+    redis_url: Optional[str] = None,
+    default_limit: int = 100,
+    default_window: int = 60,
+    strategy: RateLimitStrategy = RateLimitStrategy.SLIDING_WINDOW,
 ) -> RateLimiter:
-    """Get or create global rate limiter instance."""
+    """Get or create a global RateLimiter instance."""
     global _rate_limiter_instance
-
     if _rate_limiter_instance is None:
         redis_client = None
         if redis_url:
+            import redis.asyncio as redis
             try:
                 redis_client = redis.from_url(redis_url, decode_responses=True)
             except Exception:
-                pass
+                redis_client = None
 
         _rate_limiter_instance = RateLimiter(
             redis_client=redis_client,
             default_limit=default_limit,
             default_window=default_window,
+            strategy=strategy,
         )
-
     return _rate_limiter_instance
+
+
+def reset_rate_limiter():
+    """Reset the global rate limiter instance (primarily for testing)."""
+    global _rate_limiter_instance
+    _rate_limiter_instance = None

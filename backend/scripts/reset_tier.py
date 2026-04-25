@@ -7,7 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 
 from backend.utils.db import get_async_session_maker
 from backend.models.tables import UserTable
-from sqlalchemy import select, update
+from sqlalchemy import update
 
 async def reset_user_tier():
     Session = get_async_session_maker()

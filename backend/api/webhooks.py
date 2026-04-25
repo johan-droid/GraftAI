@@ -9,7 +9,7 @@ from typing import List, Optional
 import stripe
 
 from fastapi import APIRouter, Request, Response, Depends, HTTPException, status
-from pydantic import BaseModel, AnyHttpUrl, Field
+from pydantic import BaseModel, AnyHttpUrl, Field, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.api.deps import get_db, get_current_user
@@ -53,8 +53,7 @@ class WebhookSubscriptionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WebhookLogResponse(BaseModel):
@@ -68,8 +67,7 @@ class WebhookLogResponse(BaseModel):
     next_retry_at: Optional[datetime]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 async def verify_stripe_webhook(request: Request) -> bytes:

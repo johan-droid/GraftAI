@@ -11,7 +11,6 @@ from fastapi.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import bleach
 import time
-import logging
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -228,7 +227,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        import time
         from backend.utils.logger import get_logger
 
         logger = get_logger(__name__)

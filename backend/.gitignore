@@ -1,7 +1,23 @@
-# Python bytecode
+# =============================================================================
+# GraftAI Backend — .gitignore
+# =============================================================================
+# The root .gitignore covers most cases; this file adds backend-specific rules.
+
+# =============================================================================
+# Python
+# =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyd
+.Python
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
 
 # Virtual environments
 .venv/
@@ -9,20 +25,64 @@ venv/
 ENV/
 env/
 
-# Distribution / Build
-dist/
-build/
-*.egg-info/
-
-# Tests & Coverage
-.pytest_cache/
-.ruff_cache/
+# =============================================================================
+# Type-checking, linting & testing
+# =============================================================================
 .mypy_cache/
+.ruff_cache/
+.pyre/
+.pytest_cache/
+.tox/
 htmlcov/
 .coverage
 .coverage.*
+coverage.xml
+*.cover
 
-# Environment
+# Test output artifacts
+pytest_test_results.txt
+test_output.txt
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
 .env
 .env.*
 !.env.example
+
+# =============================================================================
+# Databases
+# =============================================================================
+*.db
+*.sqlite
+*.sqlite3
+dev.db
+
+# =============================================================================
+# Logs & Uploads
+# =============================================================================
+logs/
+uploads/
+*.log
+
+# =============================================================================
+# Alembic — keep versions and config, ignore generated cache
+# =============================================================================
+# (nothing to ignore here by default; alembic/versions/ should be committed)
+
+# =============================================================================
+# uv / Poetry packaging metadata
+# =============================================================================
+# uv.lock IS committed for reproducible installs — do not ignore it.
+# poetry.lock IS committed — do not ignore it.
+# Ignore only transient caches:
+.uv/
+
+# =============================================================================
+# OS & IDEs
+# =============================================================================
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

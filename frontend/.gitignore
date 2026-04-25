@@ -1,28 +1,56 @@
+# =============================================================================
+# GraftAI Frontend — .gitignore
+# =============================================================================
+# The root .gitignore covers most cases; this file adds frontend-specific rules.
+
+# =============================================================================
 # Dependencies
+# =============================================================================
 node_modules/
 .pnp
 .pnp.js
 
-# Build outputs
+# =============================================================================
+# Next.js Build Outputs
+# =============================================================================
 .next/
 out/
 build/
 dist/
-next-env.d.ts
-*.tsbuildinfo
-.vercel/
 .turbo/
+.vercel/
 
-# Environment secrets
+# =============================================================================
+# TypeScript Build Info
+# =============================================================================
+*.tsbuildinfo
+next-env.d.ts
+
+# =============================================================================
+# Compiled JS from TypeScript source (tracked as .ts/.tsx)
+# =============================================================================
+src/**/*.js
+src/**/*.jsx
+src/**/*.js.map
+public/swe-worker-*.js
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
 .env
 .env.local
+.env.development
 .env.development.local
+.env.test
 .env.test.local
+.env.production
 .env.production.local
 *.env.*
 !.env.example
 
+# =============================================================================
 # Logs & Debug
+# =============================================================================
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -30,17 +58,25 @@ yarn-error.log*
 .pnpm-debug.log*
 build_log*.txt
 lint_output*.txt
-test-client.ts
 
+# =============================================================================
+# Auto-generated schema helpers (transient, not for source control)
+# =============================================================================
+generate-schema.cjs
+generate-schema.js
+
+# =============================================================================
 # OS & IDEs
+# =============================================================================
 .DS_Store
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Ignore compiled JS artifacts in source (TypeScript/Next compiled outputs)
-# Prevent committing transient compiled JS under `src/`.
-src/**/*.js
-src/**/*.jsx
-src/**/*.js.map
+# =============================================================================
+# Test/Analysis artifacts left in frontend dir
+# =============================================================================
+.pytest_cache/
+.ruff_cache/
+test-client.ts

@@ -98,7 +98,7 @@ export function AppLoadingScreen({
       </Box>
 
       <Container maxWidth="lg" sx={{ position: "relative", zIndex: 1, py: { xs: 2, sm: 4, md: 6 } }}>
-        <motion.div initial={{ opacity: 0, y: 16, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}>
+        <motion.div initial={{ opacity: 0, y: 16, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] as const }}>
           <Paper
             elevation={0}
             sx={{

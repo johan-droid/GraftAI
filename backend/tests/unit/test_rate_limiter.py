@@ -16,6 +16,7 @@ from backend.utils.rate_limiter import (
     RateLimitMiddleware,
     rate_limit,
     get_rate_limiter,
+    reset_rate_limiter,
 )
 
 
@@ -254,6 +255,7 @@ class TestRedisIntegration:
     @patch("backend.utils.rate_limiter.redis.from_url")
     async def test_redis_connection_attempt(self, mock_from_url):
         """Test that Redis connection is attempted."""
+        reset_rate_limiter()
         mock_redis = AsyncMock()
         mock_from_url.return_value = mock_redis
         
@@ -266,6 +268,7 @@ class TestRedisIntegration:
     @patch("backend.utils.rate_limiter.redis.from_url")
     async def test_redis_fallback_on_failure(self, mock_from_url):
         """Test fallback to in-memory when Redis fails."""
+        reset_rate_limiter()
         mock_from_url.side_effect = Exception("Redis connection failed")
         
         limiter = get_rate_limiter(redis_url="redis://localhost:6379")

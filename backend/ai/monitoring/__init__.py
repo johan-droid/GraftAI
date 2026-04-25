@@ -25,6 +25,11 @@ from .logging_config import (
     log_agent_decision,
     log_tool_execution,
     log_memory_operation,
+    log_automation_start,
+    log_automation_complete,
+    log_phase_execution,
+    log_llm_call,
+    log_error,
     LogAnalyzer,
 )
 
@@ -48,5 +53,10 @@ __all__ = [
     "log_agent_decision",
     "log_tool_execution",
     "log_memory_operation",
+    "log_automation_start",
+    "log_automation_complete",
+    "log_phase_execution",
+    "log_llm_call",
+    "log_error",
     "LogAnalyzer",
 ]

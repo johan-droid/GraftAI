@@ -22,8 +22,7 @@ class AuditLogResponse(DBModel):
     resource_id: Optional[str]
     metadata_json: Optional[dict]
 
-    class Config:
-        from_attributes = True
+
 
 @router.get("/me", response_model=List[AuditLogResponse])
 async def get_my_audit_logs(

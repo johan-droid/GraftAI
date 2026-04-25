@@ -17,12 +17,12 @@ class TestBookingAPI:
     async def test_create_booking(self, async_client, test_event):
         """Test creating a new booking."""
         booking_data = {
-            "event_id": test_event.id,
-            "name": "Test Booker",
-            "email": "booker@example.com",
+            "title": "Test Booking",
+            "description": "Integration test booking",
+            "attendees": ["booker@example.com"],
             "start_time": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-            "end_time": (datetime.now(timezone.utc) + timedelta(days=1, hours=1)).isoformat(),
-            "timezone": "UTC",
+            "duration_minutes": 60,
+            "meeting_type": "consultation",
         }
         
         response = await async_client.post("/api/v1/bookings", json=booking_data)
@@ -30,10 +30,8 @@ class TestBookingAPI:
         assert response.status_code in [200, 201]
         data = response.json()
         
-        assert "id" in data
-        assert data["name"] == booking_data["name"]
-        assert data["email"] == booking_data["email"]
-        assert data["status"] in ["pending", "confirmed"]
+        assert "booking_id" in data
+        assert data["status"] in ["created", "confirmed"]
 
     @pytest.mark.asyncio
     async def test_list_bookings(self, async_client, test_booking):
@@ -139,11 +137,11 @@ class TestBookingValidation:
     async def test_create_booking_invalid_email(self, async_client, test_event):
         """Test that invalid email is rejected."""
         booking_data = {
-            "event_id": test_event.id,
-            "name": "Test Booker",
-            "email": "not-an-email",
+            "title": "Test Booking",
+            "description": "Invalid email test",
+            "attendees": ["not-an-email"],
             "start_time": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-            "end_time": (datetime.now(timezone.utc) + timedelta(days=1, hours=1)).isoformat(),
+            "duration_minutes": 60,
         }
         
         response = await async_client.post("/api/v1/bookings", json=booking_data)
@@ -155,11 +153,11 @@ class TestBookingValidation:
     async def test_create_booking_past_date(self, async_client, test_event):
         """Test that booking in the past is rejected."""
         booking_data = {
-            "event_id": test_event.id,
-            "name": "Test Booker",
-            "email": "booker@example.com",
+            "title": "Test Booking",
+            "description": "Past date test",
+            "attendees": ["booker@example.com"],
             "start_time": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
-            "end_time": (datetime.now(timezone.utc) - timedelta(days=1, hours=-1)).isoformat(),
+            "duration_minutes": 60,
         }
         
         response = await async_client.post("/api/v1/bookings", json=booking_data)
@@ -201,11 +199,11 @@ class TestBookingWorkflowIntegration:
     async def test_booking_triggers_workflow(self, async_client, test_event):
         """Test that creating a booking triggers workflow."""
         booking_data = {
-            "event_id": test_event.id,
-            "name": "Workflow Test Booker",
-            "email": "workflow-test@example.com",
+            "title": "Workflow Test Booking",
+            "description": "Trigger test",
+            "attendees": ["workflow-test@example.com"],
             "start_time": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-            "end_time": (datetime.now(timezone.utc) + timedelta(days=1, hours=1)).isoformat(),
+            "duration_minutes": 60,
         }
         
         response = await async_client.post("/api/v1/bookings", json=booking_data)

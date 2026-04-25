@@ -18,7 +18,7 @@ class TestWorkflowAPI:
         response = await async_client.get("/api/v1/workflows/triggers")
         
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         
         # Should return list of triggers
         assert isinstance(data, list)
@@ -36,7 +36,7 @@ class TestWorkflowAPI:
         response = await async_client.get("/api/v1/workflows/actions")
         
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         
         # Should return list of actions
         assert isinstance(data, list)
@@ -62,7 +62,7 @@ class TestWorkflowAPI:
         response = await async_client.post("/api/v1/workflows", json=workflow_data)
         
         assert response.status_code in [200, 201]
-        data = response.json()
+        data = response.json()["data"]
         
         # Should return created workflow
         assert "id" in data
@@ -85,7 +85,7 @@ class TestWorkflowAPI:
         response = await async_client.get("/api/v1/workflows")
         
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         
         # Should return list
         assert isinstance(data, list)
@@ -107,7 +107,7 @@ class TestWorkflowAPI:
         response = await async_client.get(f"/api/v1/workflows/{workflow_id}")
         
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         
         assert data["id"] == workflow_id
         assert data["name"] == workflow_data["name"]
@@ -132,7 +132,7 @@ class TestWorkflowAPI:
         response = await async_client.patch(f"/api/v1/workflows/{workflow_id}", json=update_data)
         
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         
         assert data["name"] == update_data["name"]
         assert data["is_active"] == update_data["is_active"]
@@ -195,7 +195,7 @@ class TestWorkflowStepsAPI:
         )
         
         assert response.status_code in [200, 201]
-        data = response.json()
+        data = response.json()["data"]
         
         assert "id" in data
         assert data["action_type"] == step_data["action_type"]
@@ -217,7 +217,7 @@ class TestWorkflowStepsAPI:
         response = await async_client.get(f"/api/v1/workflows/{created_workflow}/steps")
         
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         
         assert isinstance(data, list)
         assert len(data) >= 1
@@ -284,7 +284,7 @@ class TestWorkflowTestAPI:
         
         # Should return test results
         assert response.status_code in [200, 202]
-        data = response.json()
+        data = response.json()["data"]
         
         # Response structure may vary, but should indicate success
         assert "success" in data or "message" in data or "results" in data

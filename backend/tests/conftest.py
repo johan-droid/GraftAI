@@ -20,6 +20,18 @@ from sqlalchemy.pool import StaticPool
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import asyncio
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create a session-scoped event loop."""
+    try:
+        loop = asyncio.get_event_loop_policy().get_event_loop()
+    except RuntimeError:
+        loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
 from backend.models.base import Base
 from backend.models.tables import UserTable, EventTable, BookingTable
 from backend.api.main import create_app
@@ -48,7 +60,7 @@ AsyncTestingSessionLocal = async_sessionmaker(
 )
 
 
-@pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
+@pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_test_database():
     """Create test database tables."""
     async with test_engine.begin() as conn:
@@ -71,11 +83,6 @@ async def setup_test_database():
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Provide a transactional database session for tests."""
     async with AsyncTestingSessionLocal() as session:
-
-        async def _commit(*_args, **_kwargs):
-            await session.flush()
-
-        session.commit = _commit  # type: ignore[assignment]
         yield session
         await session.rollback()
 
@@ -263,12 +270,12 @@ def test_booking_data(test_user: UserTable, test_event: EventTable):
         "id": str(uuid.uuid4()),
         "user_id": test_user.id,
         "event_id": test_event.id,
-        "name": "Test Booker",
+        "full_name": "Test Booker",
         "email": "booker@example.com",
         "status": "confirmed",
         "start_time": datetime.now(timezone.utc),
         "end_time": datetime.now(timezone.utc),
-        "timezone": "UTC",
+        "time_zone": "UTC",
         "booking_code": "ABC123",
     }
 

@@ -153,16 +153,16 @@ class AgentDecision:
     actions: List[ActionDecision]
     execution_order: List[str]  # Ordered action IDs
     requires_human_review: bool
-    human_review_reason: Optional[str] = None
-
+    
     # Monitoring
-    metrics_to_track: List[str]
-    alert_thresholds: Dict[str, float]
+    metrics_to_track: List[str] = field(default_factory=list)
+    alert_thresholds: Dict[str, float] = field(default_factory=dict)
 
     # Metadata
-    confidence: DecisionConfidence
-    decision_timestamp: datetime
-    reasoning: str
+    confidence: DecisionConfidence = DecisionConfidence.MEDIUM
+    decision_timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    reasoning: str = ""
+    human_review_reason: Optional[str] = None
 
 
 class DecisionEngine:

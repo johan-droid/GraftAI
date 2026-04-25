@@ -639,7 +639,9 @@ export async function deleteNotification(id: number) {
 // SaaS: Audit & Usage
 // ──────────────────────────────────────
 export async function getAuditLogs(limit: number = 20, category?: string) {
-  return enhancedApiClient.get<any[]>("/audit/me", { params: { limit, category } });
+  const params: Record<string, string | number> = { limit };
+  if (category) params.category = category;
+  return enhancedApiClient.get<any[]>("/audit/me", { params });
 }
 
 export async function getUsageStats() {

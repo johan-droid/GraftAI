@@ -20,6 +20,7 @@ import {
   RefreshCw,
   MoreVertical,
   Plus,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "@/app/providers/auth-provider";
 import { MobileSidebar } from "@/components/dashboard/MobileSidebar";

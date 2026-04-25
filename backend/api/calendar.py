@@ -27,27 +27,27 @@ router = APIRouter(prefix="/calendar", tags=["Calendar"])
 
 # --- Pydantic Schemas for Input Validation ---
 class EventCreateSchema(BaseModel):
-    title: str = Field(..., example="Quarterly business review")
+    title: str = Field(..., json_schema_extra={"example": "Quarterly business review"})
     start_time: datetime = Field(
-        ..., example="2026-05-01T14:00:00Z", description="ISO 8601 formatted UTC start time"
+        ..., json_schema_extra={"example": "2026-05-01T14:00:00Z"}, description="ISO 8601 formatted UTC start time"
     )
     end_time: datetime = Field(
-        ..., example="2026-05-01T15:00:00Z", description="ISO 8601 formatted UTC end time"
+        ..., json_schema_extra={"example": "2026-05-01T15:00:00Z"}, description="ISO 8601 formatted UTC end time"
     )
     description: Optional[str] = Field(
-        None, example="Discuss roadmap and action items."
+        None, json_schema_extra={"example": "Discuss roadmap and action items."}
     )
-    location: Optional[str] = Field(None, example="Conference Room A")
-    is_meeting: Optional[bool] = Field(False, example=True)
+    location: Optional[str] = Field(None, json_schema_extra={"example": "Conference Room A"})
+    is_meeting: Optional[bool] = Field(False, json_schema_extra={"example": True})
     meeting_provider: Optional[str] = Field(
         None,
-        example="microsoft",
+        json_schema_extra={"example": "microsoft"},
         description="Preferred external calendar/video provider, e.g. google, microsoft, zoom",
     )
-    meeting_type: Optional[str] = Field(None, example="consultation")
+    meeting_type: Optional[str] = Field(None, json_schema_extra={"example": "consultation"})
     attendees: Optional[List[str]] = Field(
         default_factory=list,
-        example=["alice@example.com", "bob@example.com"],
+        json_schema_extra={"example": ["alice@example.com", "bob@example.com"]},
     )
 
     model_config = ConfigDict(

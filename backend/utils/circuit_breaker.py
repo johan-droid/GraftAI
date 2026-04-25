@@ -175,72 +175,47 @@ class CircuitBreaker:
 
         return True
 
-    def record_success(self):
+    async def record_success(self):
         """Record a successful call."""
+        async with self._lock:
+            self._stats.successes += 1
+            self._stats.consecutive_successes += 1
+            self._stats.consecutive_failures = 0
+            self._stats.total_calls += 1
 
-        async def _record():
-            async with self._lock:
-                self._stats.successes += 1
-                self._stats.consecutive_successes += 1
-                self._stats.consecutive_failures = 0
-                self._stats.total_calls += 1
-
-                if self._state == CircuitState.HALF_OPEN:
-                    if self._stats.consecutive_successes >= self.success_threshold:
-                        logger.info(
-                            f"[CircuitBreaker:{self.name}] Success threshold reached, "
-                            f"closing circuit"
-                        )
-                        self._state = CircuitState.CLOSED
-                        self._half_open_calls = 0
-
-        # Run async operation
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(_record())
-            else:
-                loop.run_until_complete(_record())
-        except RuntimeError:
-            # No event loop running
-            pass
-
-    def record_failure(self):
-        """Record a failed call."""
-
-        async def _record():
-            async with self._lock:
-                self._stats.failures += 1
-                self._stats.consecutive_failures += 1
-                self._stats.consecutive_successes = 0
-                self._stats.last_failure_time = time.time()
-                self._stats.total_calls += 1
-
-                if self._state == CircuitState.CLOSED:
-                    if self._stats.consecutive_failures >= self.failure_threshold:
-                        logger.warning(
-                            f"[CircuitBreaker:{self.name}] Failure threshold reached "
-                            f"({self.failure_threshold}), opening circuit"
-                        )
-                        self._state = CircuitState.OPEN
-
-                elif self._state == CircuitState.HALF_OPEN:
-                    logger.warning(
-                        f"[CircuitBreaker:{self.name}] Failure in half-open state, "
-                        f"re-opening circuit"
+            if self._state == CircuitState.HALF_OPEN:
+                if self._stats.consecutive_successes >= self.success_threshold:
+                    logger.info(
+                        f"[CircuitBreaker:{self.name}] Success threshold reached, "
+                        f"closing circuit"
                     )
-                    self._state = CircuitState.OPEN
+                    self._state = CircuitState.CLOSED
                     self._half_open_calls = 0
 
-        # Run async operation
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(_record())
-            else:
-                loop.run_until_complete(_record())
-        except RuntimeError:
-            pass
+    async def record_failure(self):
+        """Record a failed call."""
+        async with self._lock:
+            self._stats.failures += 1
+            self._stats.consecutive_failures += 1
+            self._stats.consecutive_successes = 0
+            self._stats.last_failure_time = time.time()
+            self._stats.total_calls += 1
+
+            if self._state == CircuitState.CLOSED:
+                if self._stats.consecutive_failures >= self.failure_threshold:
+                    logger.warning(
+                        f"[CircuitBreaker:{self.name}] Failure threshold reached "
+                        f"({self.failure_threshold}), opening circuit"
+                    )
+                    self._state = CircuitState.OPEN
+
+            elif self._state == CircuitState.HALF_OPEN:
+                logger.warning(
+                    f"[CircuitBreaker:{self.name}] Failure in half-open state, "
+                    f"re-opening circuit"
+                )
+                self._state = CircuitState.OPEN
+                self._half_open_calls = 0
 
     def __call__(self, func: Callable) -> Callable:
         """
@@ -264,12 +239,12 @@ class CircuitBreaker:
 
             try:
                 result = await func(*args, **kwargs)
-                self.record_success()
+                await self.record_success()
                 return result
             except Exception as e:
                 # Don't count certain exceptions as failures
                 if not isinstance(e, (CircuitBreakerOpen, asyncio.TimeoutError)):
-                    self.record_failure()
+                    await self.record_failure()
                 raise
 
         return wrapper

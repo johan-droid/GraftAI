@@ -107,7 +107,7 @@ async def test_booking_pagination_limits(async_client: AsyncClient, db_session):
     3. Response contains pagination metadata
     """
     # Try to request more than 100 items (should be capped)
-    response = await async_client.get("/api/v1/bookings?per_page=200")
+    response = await async_client.get("/api/v1/bookings?size=200")
     
     # Should either succeed with capped results or reject
     if response.status_code == 200:
@@ -123,7 +123,7 @@ async def test_booking_pagination_limits(async_client: AsyncClient, db_session):
                 assert len(data["items"]) <= 100, "Should not return more than 100 items"
     
     # Test valid pagination
-    response = await async_client.get("/api/v1/bookings?page=1&per_page=20")
+    response = await async_client.get("/api/v1/bookings?page=1&size=20")
     assert response.status_code in [200, 404], f"Expected 200 or 404, got {response.status_code}"
 
 
@@ -217,7 +217,7 @@ async def test_booking_automation_status(async_client: AsyncClient, db_session):
     
     if booking_id:
         # Try to get automation status
-        status_response = await async_client.get(f"/api/v1/bookings/{booking_id}/automation")
+        status_response = await async_client.get(f"/api/v1/bookings/{booking_id}/automation-status")
         
         # Endpoint might not exist or require different path
         if status_response.status_code == 200:

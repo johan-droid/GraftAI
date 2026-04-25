@@ -13,6 +13,49 @@ IS_PRODUCTION = (
 
 
 class JsonFormatter(logging.Formatter):
+    def __init__(self):
+        super().__init__()
+        # Sensitive fields to mask in logs
+        self.sensitive_fields = {
+            "password",
+            "token",
+            "authorization",
+            "cookie",
+            "api_key",
+            "secret",
+            "refresh_token",
+            "access_token",
+            "oauth_token",
+            "session_id",
+            "csrf_token",
+        }
+
+    def _mask_sensitive_value(self, value: str) -> str:
+        """Mask sensitive values in log output."""
+        if not value or not isinstance(value, str):
+            return value
+        if len(value) <= 8:
+            return "********"
+        return value[:4] + "****" + value[-4:]
+
+    def _sanitize_dict(self, data: dict) -> dict:
+        """Recursively sanitize dictionary to mask sensitive fields."""
+        sanitized = {}
+        for key, value in data.items():
+            key_lower = key.lower()
+            if any(sensitive in key_lower for sensitive in self.sensitive_fields):
+                sanitized[key] = self._mask_sensitive_value(str(value))
+            elif isinstance(value, dict):
+                sanitized[key] = self._sanitize_dict(value)
+            elif isinstance(value, list):
+                sanitized[key] = [
+                    self._sanitize_dict(item) if isinstance(item, dict) else item
+                    for item in value
+                ]
+            else:
+                sanitized[key] = value
+        return sanitized
+
     def format(self, record: logging.LogRecord) -> str:
         record_dict = {
             "timestamp": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
@@ -26,7 +69,7 @@ class JsonFormatter(logging.Formatter):
             record_dict["exception"] = self.formatException(record.exc_info)
 
         if hasattr(record, "extra") and isinstance(record.extra, dict):
-            record_dict.update(record.extra)
+            record_dict.update(self._sanitize_dict(record.extra))
 
         # Include structured fields on the record if present
         for key in [

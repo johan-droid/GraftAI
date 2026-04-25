@@ -1,16 +1,40 @@
-name: Deploy placeholder
+name: GraftAI Production Pipeline
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
 
 jobs:
-  deploy:
+  test-and-deploy-backend:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Placeholder deploy step
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
         run: |
-          echo "No-op deploy placeholder. Replace with your real deploy steps."
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run Integration Tests (CRITICAL GATE)
+        env:
+          ENV: testing
+          # Add any mock API keys needed for tests here
+        run: |
+          cd backend
+          pytest -v tests/integration/
+
+      # ONLY RUNS IF TESTS PASS GREEN
+      - name: Deploy to Render
+        env:
+          deploy_url: ${{ secrets['RENDER_DEPLOY_HOOK_URL'] }}
+        run: |
+          curl -fS --show-error "$deploy_url"

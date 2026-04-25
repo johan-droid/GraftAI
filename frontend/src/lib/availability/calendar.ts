@@ -5,6 +5,24 @@ interface CalendarCredential {
   [key: string]: unknown;
 }
 
+// PHASE 3: Fetch availability with strict cache busting
+export async function getAvailableSlots(
+  username: string,
+  date: string
+): Promise<unknown> {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/v1/availability?user=${encodeURIComponent(
+      username
+    )}&date=${encodeURIComponent(date)}`,
+    {
+      cache: 'no-store',
+    }
+  );
+
+  if (!res.ok) throw new Error('Failed to fetch availability');
+  return await res.json();
+}
+
 export async function getCalendarBusyTimes(config: AvailabilityConfig): Promise<CalendarBusyTime[]> {
   const busyTimes: CalendarBusyTime[] = [];
 

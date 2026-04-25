@@ -1,5 +1,6 @@
 const { spawn, execSync } = require("child_process");
 const http = require("http");
+const net = require("net");
 const path = require("path");
 const os = require("os");
 
@@ -58,6 +59,49 @@ function waitForHealthCheck(host, port, service, timeoutMs = 60000) {
           setTimeout(check, 500);
         }
       }
+    };
+    check();
+  });
+}
+
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port);
+  });
+}
+
+async function findAvailablePort(startPort, maxPort = startPort + 50) {
+  for (let port = startPort; port <= maxPort; port += 1) {
+    if (await isPortAvailable(port)) {
+      return port;
+    }
+  }
+  throw new Error(`No available port found between ${startPort} and ${maxPort}`);
+}
+
+function waitForPort(host, port, timeoutMs = 60000) {
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      const socket = net.createConnection({ host, port }, () => {
+        socket.destroy();
+        resolve();
+      });
+
+      socket.on("error", () => {
+        socket.destroy();
+        if (Date.now() - start >= timeoutMs) {
+          reject(new Error(`Timeout waiting for port ${port} on ${host}`));
+        } else {
+          setTimeout(check, 500);
+        }
+      });
     };
     check();
   });
@@ -157,13 +201,26 @@ async function main() {
     }
 
     // Start Frontend
+    const selectedFrontendPort = await findAvailablePort(frontendPort, frontendPort + 50);
+    if (selectedFrontendPort !== frontendPort) {
+      log("MAIN", `Port ${frontendPort} is busy; using frontend port ${selectedFrontendPort} instead.`);
+    }
+
     log("MAIN", "Starting Frontend...");
-    const frontendArgs = ["run", "dev"];
+    const frontendArgs = ["run", "dev", "--", "--port", `${selectedFrontendPort}`];
     spawnProcess(npmCmd, frontendArgs, path.join(repoRoot, "frontend"), "FRONTEND");
+
+    try {
+      await waitForPort("127.0.0.1", selectedFrontendPort, 60000);
+    } catch (error) {
+      log("MAIN", `✗ Frontend failed to start: ${error.message}`);
+      cleanup("frontend health check failed");
+      return;
+    }
 
     log("MAIN", "✓ All services started successfully!");
     log("MAIN", `Backend: http://${backendHost}:${backendPort}`);
-    log("MAIN", `Frontend: http://localhost:${frontendPort}`);
+    log("MAIN", `Frontend: http://localhost:${selectedFrontendPort}`);
     log("MAIN", "Press Ctrl+C to stop all services");
 
   } catch (error) {

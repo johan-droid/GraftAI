@@ -11,7 +11,7 @@ Manages agent tools with:
 
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import asyncio
 import functools
@@ -226,21 +226,21 @@ class ToolRegistry:
             return ToolExecution(
                 tool_name=tool_name,
                 parameters=parameters,
-                start_time=datetime.utcnow(),
-                end_time=datetime.utcnow(),
+                start_time=datetime.now(timezone.utc),
+                end_time=datetime.now(timezone.utc),
                 error=f"Tool '{tool_name}' not found",
                 success=False,
             )
 
         execution = ToolExecution(
-            tool_name=tool_name, parameters=parameters, start_time=datetime.utcnow()
+            tool_name=tool_name, parameters=parameters, start_time=datetime.now(timezone.utc)
         )
 
         # Validate parameters
         missing_params = [p for p in tool_def.required_params if p not in parameters]
 
         if missing_params:
-            execution.end_time = datetime.utcnow()
+            execution.end_time = datetime.now(timezone.utc)
             execution.error = f"Missing required parameters: {missing_params}"
             return execution
 
@@ -278,7 +278,7 @@ class ToolRegistry:
                 else:
                     await asyncio.sleep(0.5 * (attempt + 1))
 
-        execution.end_time = datetime.utcnow()
+        execution.end_time = datetime.now(timezone.utc)
         execution.execution_time_ms = (
             execution.end_time - execution.start_time
         ).total_seconds() * 1000

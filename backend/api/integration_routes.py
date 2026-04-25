@@ -8,13 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc
 
 from backend.api.deps import get_db, get_current_user
-from backend.models.tables import UserTable
+from backend.models.tables import UserTable, UserTokenTable
 from backend.models.integration import Integration, IntegrationLog
 from backend.services.integrations.webhook_service import (
     WebhookService,
     WebhookPayload,
     WebhookEventType,
 )
+from backend.services.google_auth import get_google_auth_url
+from backend.services.zoom_auth import get_zoom_auth_url
+from backend.services.oauth_service import build_oauth_state
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -114,7 +117,9 @@ async def list_integrations(
 ):
     """List all integrations for the current user."""
 
-    stmt = select(Integration).where(Integration.user_id == current_user.id)
+    stmt = select(Integration).where(
+        and_(Integration.user_id == current_user.id, Integration.is_deleted == False)
+    )
 
     if provider:
         stmt = stmt.where(Integration.provider == provider)
@@ -140,6 +145,67 @@ async def list_integrations(
     ]
 
 
+@router.get("/health")
+async def get_integration_health(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserTable = Depends(get_current_user),
+):
+    """Return the current user's integration health status."""
+    stmt = select(UserTokenTable).where(
+        and_(
+            UserTokenTable.user_id == current_user.id,
+            UserTokenTable.provider == "google",
+            UserTokenTable.is_active == True,
+        )
+    )
+    token = (await db.execute(stmt)).scalars().first()
+    if token and token.expires_at and token.expires_at <= datetime.now(timezone.utc):
+        token = None
+
+    return {
+        "google_calendar_status": "healthy" if token else "disconnected"
+    }
+
+
+@router.get("/{provider}/auth-url")
+async def get_integration_auth_url(
+    provider: str,
+    current_user: UserTable = Depends(get_current_user),
+):
+    """Generate an OAuth authorization URL for the requested integration provider."""
+    provider_map = {
+        "google_calendar": {
+            "provider": "google",
+            "auth_func": get_google_auth_url,
+            "redirect_to": "/dashboard",
+        },
+        "zoom": {
+            "provider": "zoom",
+            "auth_func": get_zoom_auth_url,
+            "redirect_to": "/dashboard",
+        },
+    }
+
+    mapping = provider_map.get(provider)
+    if not mapping:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported integration provider."
+        )
+
+    state = build_oauth_state(
+        current_user.id,
+        redirect_to=mapping["redirect_to"],
+        provider=mapping["provider"],
+    )
+
+    auth_url = await mapping["auth_func"](state)
+    return {
+        "success": True,
+        "auth_url": auth_url,
+    }
+
+
 @router.get("/{integration_id}", response_model=IntegrationResponse)
 async def get_integration(
     integration_id: str,
@@ -149,7 +215,11 @@ async def get_integration(
     """Get details of a specific integration."""
 
     stmt = select(Integration).where(
-        and_(Integration.id == integration_id, Integration.user_id == current_user.id)
+        and_(
+            Integration.id == integration_id,
+            Integration.user_id == current_user.id,
+            Integration.is_deleted == False,
+        )
     )
     integration = (await db.execute(stmt)).scalars().first()
 
@@ -183,7 +253,11 @@ async def update_integration(
     """Update an integration."""
 
     stmt = select(Integration).where(
-        and_(Integration.id == integration_id, Integration.user_id == current_user.id)
+        and_(
+            Integration.id == integration_id,
+            Integration.user_id == current_user.id,
+            Integration.is_deleted == False,
+        )
     )
     integration = (await db.execute(stmt)).scalars().first()
 
@@ -231,15 +305,22 @@ async def delete_integration(
     """Delete an integration."""
 
     stmt = select(Integration).where(
-        and_(Integration.id == integration_id, Integration.user_id == current_user.id)
+        and_(
+            Integration.id == integration_id,
+            Integration.user_id == current_user.id,
+            Integration.is_deleted == False,
+        )
     )
     integration = (await db.execute(stmt)).scalars().first()
 
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not found")
 
-    await db.delete(integration)
-    await db.commit()
+    if hasattr(integration, "soft_delete"):
+        await integration.soft_delete(db, deleted_by=current_user.id)
+    else:
+        await db.delete(integration)
+        await db.commit()
 
     return {"status": "success", "message": "Integration deleted"}
 

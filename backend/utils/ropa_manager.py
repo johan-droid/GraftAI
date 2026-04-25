@@ -1,7 +1,7 @@
 """Records of Processing Activities (RoPA) manager for GDPR Article 30 compliance."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -239,7 +239,7 @@ class RoPAManager:
         records = (await db.execute(stmt)).scalars().all()
 
         report = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "data_controller": "GraftAI Inc.",
             "contact_dpo": "dpo@graftai.com",
             "total_activities": len(records),
@@ -294,14 +294,14 @@ class RoPAManager:
             # Update existing
             for key, value in activity_data.items():
                 setattr(existing, key, value)
-            existing.last_reviewed_at = datetime.utcnow()
+            existing.last_reviewed_at = datetime.now(timezone.utc)
             existing.reviewed_by = reviewed_by
             await db.commit()
             return existing
 
         record = DataProcessingRecord(
             activity_id=activity_id,
-            last_reviewed_at=datetime.utcnow(),
+            last_reviewed_at=datetime.now(timezone.utc),
             reviewed_by=reviewed_by,
             **activity_data,
         )
@@ -327,7 +327,7 @@ class RoPAManager:
         if not record:
             raise ValueError(f"Activity not found: {activity_id}")
 
-        record.last_reviewed_at = datetime.utcnow()
+        record.last_reviewed_at = datetime.now(timezone.utc)
         record.reviewed_by = reviewed_by
         record.review_notes = review_notes
 

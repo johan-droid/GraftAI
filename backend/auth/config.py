@@ -1,14 +1,56 @@
+import logging
 import os
 import secrets
 import sys
 
+logger = logging.getLogger(__name__)
+
+
+def _parse_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == "":
+        return default
+
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid integer for %s: %r. Falling back to %s.",
+            name,
+            raw_value,
+            default,
+        )
+        return default
+
+    if value < minimum:
+        logger.warning(
+            "%s=%s below minimum %s. Clamping to %s.",
+            name,
+            value,
+            minimum,
+            minimum,
+        )
+        return minimum
+    if value > maximum:
+        logger.warning(
+            "%s=%s above maximum %s. Clamping to %s.",
+            name,
+            value,
+            maximum,
+            maximum,
+        )
+        return maximum
+
+    return value
+
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")
-)  # Reduced from 1 week to 15 minutes
-REFRESH_TOKEN_EXPIRE_DAYS = int(
-    os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")
-)  # Reduced from 30 days to 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = _parse_int_env(
+    "ACCESS_TOKEN_EXPIRE_MINUTES", 15, 1, 60
+)
+REFRESH_TOKEN_EXPIRE_DAYS = _parse_int_env(
+    "REFRESH_TOKEN_EXPIRE_DAYS", 7, 1, 30
+)
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
 

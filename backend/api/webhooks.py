@@ -1,9 +1,14 @@
 import hmac
+import hashlib
+import json
 import logging
+import os
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Request, Response, Depends, HTTPException
+import stripe
+
+from fastapi import APIRouter, Request, Response, Depends, HTTPException, status
 from pydantic import BaseModel, AnyHttpUrl, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -65,6 +70,104 @@ class WebhookLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+async def verify_stripe_webhook(request: Request) -> bytes:
+    """Validates Stripe webhooks to prevent forged payment confirmations."""
+    signature = request.headers.get("stripe-signature")
+    if not signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Stripe signature",
+        )
+
+    payload = await request.body()
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Stripe webhook secret not configured",
+        )
+
+    try:
+        stripe.Webhook.construct_event(payload, signature, secret)
+    except ValueError:
+        logger.warning("[WEBHOOK] Stripe payload verification failed")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Stripe webhook payload",
+        )
+    except stripe.error.SignatureVerificationError:
+        logger.warning("[WEBHOOK] Stripe signature verification failed")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Stripe webhook signature",
+        )
+
+    return payload
+
+
+async def verify_generic_webhook(request: Request, secret_env_key: str) -> bytes:
+    """Validates standard HMAC-SHA256 webhooks (e.g., custom third-party payloads)."""
+    secret = os.getenv(secret_env_key, "").encode("utf-8")
+    signature = request.headers.get("X-GraftAI-Signature")
+
+    if not secret or not signature:
+        logger.warning("[WEBHOOK] Missing generic webhook signature or secret")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid webhook configuration",
+        )
+
+    payload = await request.body()
+    expected_sig = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(expected_sig, signature):
+        logger.warning("[WEBHOOK] Generic webhook signature mismatch")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Signature mismatch",
+        )
+
+    return payload
+
+
+@router.post("/stripe")
+async def stripe_webhook(request: Request):
+    payload = await verify_stripe_webhook(request)
+    try:
+        event = json.loads(payload)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Malformed JSON payload",
+        )
+
+    logger.info("[WEBHOOK] Verified Stripe webhook: %s", event.get("type"))
+    return {"received": True, "event_type": event.get("type")}
+
+
+@router.post("/custom")
+async def custom_webhook(request: Request):
+    payload = await verify_generic_webhook(request, "WEBHOOK_HMAC_SECRET")
+    try:
+        event = json.loads(payload)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Malformed JSON payload",
+        )
+
+    logger.info(
+        "[WEBHOOK] Verified custom webhook: id=%s type=%s",
+        event.get("id"),
+        event.get("type"),
+    )
+    safe_payload = {
+        "id": event.get("id"),
+        "type": event.get("type"),
+    }
+    return {"received": True, "payload": safe_payload}
 
 
 @router.post("/google")

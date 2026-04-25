@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import HTTPException, status
 from redis.asyncio import Redis
@@ -11,12 +11,10 @@ from redis.exceptions import RedisError
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 _redis_client: Optional[Redis] = None
-# Local in-memory fallback used only when Redis is unavailable.
-# This is intentionally simple and process-local — used as a last-resort
-# fail-closed mechanism for sensitive endpoints (login/register).
-_LOCAL_FALLBACK_CACHE_TTL_SECONDS = 3600
-_LOCAL_FALLBACK_CACHE_MAX_ENTRIES = 1000
-_local_fallback_cache: dict[str, dict[str, Any]] = {}
+# No process-local in-memory fallback — rely on Redis for distributed
+# rate limiting. If Redis is unavailable, behavior is:
+# - Sensitive endpoints (login/register): fail-closed (block requests)
+# - Non-critical endpoints: fail-open (allow requests)
 
 RATE_LIMIT_LUA = r"""
 local key = KEYS[1]
@@ -49,24 +47,7 @@ async def get_redis_client() -> Redis:
     return _redis_client
 
 
-def _prune_local_fallback_cache(now: float) -> None:
-    stale_keys = [
-        key
-        for key, entry in _local_fallback_cache.items()
-        if now - entry.get("last_access", 0) > _LOCAL_FALLBACK_CACHE_TTL_SECONDS
-    ]
-    for key in stale_keys:
-        _local_fallback_cache.pop(key, None)
-
-    if len(_local_fallback_cache) > _LOCAL_FALLBACK_CACHE_MAX_ENTRIES:
-        oldest = sorted(
-            _local_fallback_cache.items(),
-            key=lambda item: item[1].get("last_access", 0),
-        )
-        for key, _ in oldest[
-            : len(_local_fallback_cache) - _LOCAL_FALLBACK_CACHE_MAX_ENTRIES
-        ]:
-            _local_fallback_cache.pop(key, None)
+# local fallback removed
 
 
 @dataclass
@@ -77,38 +58,7 @@ class RateLimitResult:
     reset_seconds: int
 
 
-def _local_fallback_rate_limit(
-    name: str,
-    identifier: str,
-    max_requests: int,
-    window_seconds: int,
-) -> RateLimitResult:
-    now = time.time()
-    _prune_local_fallback_cache(now)
-
-    key = f"rate_limit:{name}:{identifier}"
-    entry = _local_fallback_cache.setdefault(key, {"calls": [], "last_access": now})
-    entry["last_access"] = now
-
-    calls = [ts for ts in entry["calls"] if ts > now - window_seconds]
-    if len(calls) >= max_requests:
-        reset = int(max(0, window_seconds - (now - min(calls))))
-        entry["calls"] = calls
-        return RateLimitResult(
-            success=False,
-            count=len(calls),
-            remaining=0,
-            reset_seconds=reset,
-        )
-
-    calls.append(now)
-    entry["calls"] = calls
-    return RateLimitResult(
-        success=True,
-        count=len(calls),
-        remaining=max(0, max_requests - len(calls)),
-        reset_seconds=window_seconds,
-    )
+# local fallback removed
 
 
 class RateLimit:
@@ -146,25 +96,19 @@ class RateLimit:
                 reset_seconds=reset,
             )
         except (RedisError, ConnectionError) as exc:
-            # Redis unavailable — use a conservative, local fallback.
-            # For sensitive endpoints (login/register) fail-closed using
-            # a simple in-memory token bucket sliding window. For other
-            # endpoints we degrade gracefully (fail-open) to avoid blocking
-            # non-critical operations.
-            logging.warning(
-                "Redis rate limiter unavailable, using local fallback: %s",
-                exc,
-            )
+            # Redis unavailable — do not use process-local dict fallback.
+            # For sensitive endpoints (login/register) we fail-closed
+            # to avoid allowing credential brute-force. For others, allow.
+            logging.warning("Redis rate limiter unavailable: %s", exc)
 
             if self.name in {"login", "register"}:
-                return _local_fallback_rate_limit(
-                    self.name,
-                    identifier,
-                    self.max_requests,
-                    self.window_seconds,
+                return RateLimitResult(
+                    success=False,
+                    count=0,
+                    remaining=0,
+                    reset_seconds=self.window_seconds,
                 )
 
-            # Non-critical endpoints: fail-open (allow)
             return RateLimitResult(
                 success=True,
                 count=0,

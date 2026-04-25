@@ -3,6 +3,7 @@ Rate limiting implementation for GraftAI backend.
 Uses Redis for distributed rate limiting across multiple workers.
 """
 
+import logging
 import time
 from typing import Optional, Callable, Dict
 from functools import wraps
@@ -11,6 +12,8 @@ from enum import Enum
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 import redis.asyncio as redis
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimitStrategy(Enum):
@@ -50,8 +53,9 @@ class RateLimiter:
         self.default_window = default_window
         self.strategy = strategy
 
-        # In-memory fallback
-        self._memory_store: Dict[str, Dict[str, float]] = {}
+        # No in-memory fallback: require Redis for rate limiting.
+        # If Redis is not configured or experiences errors, the limiter
+        # will operate in fail-open mode (allow requests) and log a warning.
 
         # Rate limit configurations per endpoint
         self.endpoint_limits: Dict[str, Dict] = {
@@ -122,19 +126,12 @@ class RateLimiter:
         limit, window = self._get_endpoint_limit(request.url.path)
         now = int(time.time())
 
-        # Clean memory store periodically (approximate)
-        if hasattr(self, '_memory_store') and len(self._memory_store) > 10000:
-            current_time = time.time()
-            keys_to_delete = []
-            for k, data in self._memory_store.items():
-                if data.get("expiration", current_time) <= current_time:
-                    keys_to_delete.append(k)
-            for k in keys_to_delete:
-                del self._memory_store[k]
 
         if not self.redis:
-            # In-memory fallback (fixed window)
-            return self._memory_fixed_window_check(key, limit, window, now)
+            logger.warning(
+                "Redis client not configured; rate limiting disabled (fail-open)."
+            )
+            return True, limit, 0
 
         try:
             if self.strategy == RateLimitStrategy.SLIDING_WINDOW:
@@ -144,32 +141,12 @@ class RateLimiter:
             else:  # TOKEN_BUCKET
                 return await self._token_bucket_check(key, limit, window, now)
         except redis.RedisError:
-            # Fallback to in-memory on redis failure
-            return self._memory_fixed_window_check(key, limit, window, now)
+            logger.warning(
+                "Redis error during rate check; allowing request (fail-open)."
+            )
+            return True, limit, 0
 
-    def _memory_fixed_window_check(
-        self, key: str, limit: int, window: int, now: int
-    ) -> tuple[bool, int, int]:
-        """In-memory fixed window fallback."""
-        if not hasattr(self, '_memory_store'):
-            self._memory_store = {}
-            
-        window_key = f"{key}:{now // window}"
-        
-        entry = self._memory_store.get(window_key)
-        if entry is None or entry.get("expiration", 0) <= now:
-            entry = {"count": 0, "expiration": now + window}
-            
-        entry["count"] += 1
-        self._memory_store[window_key] = entry
-        
-        current_count = entry["count"]
-        if current_count > limit:
-            retry_after = window - (now % window)
-            return False, 0, retry_after
-
-        remaining = limit - current_count
-        return True, remaining, 0
+    # In-memory fallback removed intentionally to avoid process-local state.
 
     async def _sliding_window_check(
         self, key: str, limit: int, window: int, now: int

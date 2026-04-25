@@ -1,7 +1,7 @@
 """API routes for audit log access."""
 
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +33,7 @@ async def get_my_audit_logs(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     stmt = (
         select(AuditLogTable)
         .where(AuditLogTable.user_id == user_id, AuditLogTable.timestamp >= cutoff)

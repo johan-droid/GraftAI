@@ -37,12 +37,29 @@ export async function resolveServerAccessToken(reqHeaders: Headers): Promise<Ser
   if (match && match[1]) {
     const token = match[1];
     try {
+      // SECURITY: Do not trust client-side JWT decoding without signature verification
+      // Always validate token expiry through backend or use jose.jwtVerify with secret
+      // For now, check with backend introspection endpoint or attempt refresh
+      // Client-side expiry check is for UX optimization only - backend validates signature
       const payloadBase64 = token.split('.')[1];
       const payloadStr = Buffer.from(payloadBase64, 'base64').toString('utf8');
       const payload = JSON.parse(payloadStr);
       // Check if token is valid for at least another minute
       if (payload.exp && payload.exp * 1000 > Date.now() + 60000) {
-        return { accessToken: token, refreshed: false };
+        // Validate token with backend introspection endpoint
+        const introspectionResponse = await fetch(`${BACKEND_API_URL}/auth/introspect`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: `token=${token}`,
+        });
+        if (introspectionResponse.ok) {
+          const introspectionData = await introspectionResponse.json();
+          if (introspectionData.active) {
+            return { accessToken: token, refreshed: false };
+          }
+        }
       }
     } catch (e) {
       // Token parsing failed, continue to refresh

@@ -288,7 +288,7 @@ class DecisionEngine:
             metrics_to_track=metrics_to_track,
             alert_thresholds=alert_thresholds,
             confidence=confidence,
-            decision_timestamp=datetime.utcnow(),
+            decision_timestamp=datetime.now(timezone.utc),
             reasoning=reasoning,
         )
 
@@ -427,7 +427,7 @@ class DecisionEngine:
         # TODO: Calculate optimal send time based on timezone
         # For now, use attendee timezone as guide
 
-        optimal_time = datetime.utcnow().isoformat()
+        optimal_time = datetime.now(timezone.utc).isoformat()
 
         return TimingAnalysis(
             optimal_send_time=optimal_time,
@@ -488,8 +488,8 @@ class DecisionEngine:
         return ContextAnalysis(
             calendar_conflicts=context.get("calendar_conflicts", []),
             concurrent_bookings=context.get("concurrent_bookings", 0),
-            day_of_week=datetime.utcnow().strftime("%A"),
-            time_of_day=datetime.utcnow().strftime("%H:%M"),
+            day_of_week=datetime.now(timezone.utc).strftime("%A"),
+            time_of_day=datetime.now(timezone.utc).strftime("%H:%M"),
             weather=context.get("weather"),
             local_events=context.get("local_events", []),
             market_trends=context.get("market_trends"),

@@ -4,7 +4,7 @@ Uses ML/AI to learn preferences and suggest optimal meeting times
 """
 
 from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 import statistics
 from backend.ai.agents.base import BaseAgent, AgentContext
@@ -67,7 +67,7 @@ class OptimizationAgent(BaseAgent):
         results = {
             "user_id": user_id,
             "analysis_type": analysis_type,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         if analysis_type == "find_best_slots":

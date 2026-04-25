@@ -5,6 +5,7 @@ Tests sliding window, fixed window, and token bucket strategies.
 
 import pytest
 import pytest_asyncio
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 import time
 

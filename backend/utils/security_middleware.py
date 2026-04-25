@@ -6,9 +6,12 @@ Provides security headers, request validation, and input sanitization.
 import re
 from typing import Optional, Callable
 from fastapi import Request, Response, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import bleach
+import time
+import logging
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -257,9 +260,18 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             duration = time.time() - start_time
             logger.error(
                 f"Request failed: {method} {path} | "
-                f"Error: {str(e)} | Duration: {duration:.3f}s"
+                f"Error: {str(e)} | Duration: {duration:.3f}s",
+                exc_info=True
             )
-            raise
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "Internal Server Error",
+                    "message": str(e),
+                    "code": "middleware_error",
+                    "path": path
+                }
+            )
 
 
 class TrustedHostMiddleware(BaseHTTPMiddleware):

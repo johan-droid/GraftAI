@@ -2,7 +2,7 @@
 
 import secrets
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -47,13 +47,13 @@ class BreachManager:
         """
         # Generate breach reference
         breach_ref = (
-            f"BRE-{datetime.utcnow().strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
+            f"BRE-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
         )
 
         # Create breach record
         breach = DataBreachRecord(
             breach_reference=breach_ref,
-            discovered_at=datetime.utcnow(),
+            discovered_at=datetime.now(timezone.utc),
             nature_of_breach=breach_details.get("nature", "other"),
             data_categories=breach_details.get("data_categories", []),
             data_subjects_affected=breach_details.get("subjects_affected"),
@@ -110,7 +110,7 @@ class BreachManager:
                 ]
 
         if status == "closed":
-            breach.closed_at = datetime.utcnow()
+            breach.closed_at = datetime.now(timezone.utc)
 
         await db.commit()
 
@@ -142,7 +142,7 @@ class BreachManager:
 
         # Check deadline
         hours_since_discovery = (
-            datetime.utcnow() - breach.discovered_at
+            datetime.now(timezone.utc) - breach.discovered_at
         ).total_seconds() / 3600
         if hours_since_discovery > self.SUPERVISORY_NOTIFICATION_DEADLINE:
             logger.error(
@@ -158,7 +158,7 @@ class BreachManager:
             "likely_consequences": breach.likely_consequences,
             "measures_taken": breach.containment_measures,
             "contact_details": "dpo@graftai.com",
-            "submitted_at": datetime.utcnow().isoformat(),
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Send notification (in production, integrate with DPC API)
@@ -166,7 +166,7 @@ class BreachManager:
 
         # Update breach record
         breach.supervisory_notified = True
-        breach.supervisory_notified_at = datetime.utcnow()
+        breach.supervisory_notified_at = datetime.now(timezone.utc)
         breach.supervisory_authority = supervisory_authority
 
         await db.commit()
@@ -215,7 +215,7 @@ class BreachManager:
             "likely_consequences": breach.likely_consequences,
             "measures_taken": breach.containment_measures,
             "contact_details": "dpo@graftai.com",
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Send notifications to affected subjects
@@ -223,7 +223,7 @@ class BreachManager:
 
         # Update breach record
         breach.data_subjects_notified = True
-        breach.data_subjects_notified_at = datetime.utcnow()
+        breach.data_subjects_notified_at = datetime.now(timezone.utc)
         breach.notification_method = notification_method
 
         await db.commit()

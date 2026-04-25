@@ -307,6 +307,12 @@ class NetworkMonitor {
 export const networkMonitor = new NetworkMonitor();
 
 // ═══════════════════════════════════════════════════════════════════
+// CRITICAL MUTATION ENDPOINTS (NO OFFLINE QUEUEING)
+// ═══════════════════════════════════════════════════════════════════
+
+const CRITICAL_MUTATION_ENDPOINTS = ['/api/v1/bookings', '/api/v1/payments'];
+
+// ═══════════════════════════════════════════════════════════════════
 // ENHANCED API CLIENT
 // ═══════════════════════════════════════════════════════════════════
 
@@ -363,6 +369,17 @@ export const enhancedApiClient = {
     endpoint: string,
     options: EnhancedApiOptions & { method?: string; json?: unknown } = {}
   ): Promise<T> {
+    const endpointPath = endpoint.split("?")[0];
+    const isCritical = CRITICAL_MUTATION_ENDPOINTS.some((critical) =>
+      endpointPath === critical || endpointPath.startsWith(`${critical}/`)
+    );
+    const isPostOrPut = options.method === "POST" || options.method === "PUT";
+    
+    // PHASE 1: Fail fast for critical mutations when offline
+    if (!networkMonitor.isOnline() && isCritical && isPostOrPut) {
+      throw new Error("OFFLINE_CRITICAL: You must be online to confirm a booking or make a payment.");
+    }
+    
     // If offline and queue enabled, add to queue for mutations
     if (!networkMonitor.isOnline() && options.offlineQueue && options.method && options.method !== "GET") {
       const id = offlineQueue.add({
@@ -469,13 +486,10 @@ export const enhancedApiClient = {
       
       xhr.open("POST", `${API_BASE_URL}${endpoint}`);
       
-      // Add auth token
-      const token = typeof window !== "undefined"
-        ? localStorage.getItem("token") || localStorage.getItem("graftai_access_token")
-        : null;
-      if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      }
+      // SECURITY FIX: Use cookies with credentials instead of localStorage tokens
+      // Cookies are automatically sent with XMLHttpRequest when withCredentials is set
+      // No need to manually set Authorization header from localStorage
+      xhr.withCredentials = true; // Sends httpOnly cookies automatically
       
       xhr.send(formData);
     });

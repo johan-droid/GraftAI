@@ -19,8 +19,8 @@ Example Usage:
         settings={"waiting_room": True}
     )
 
-    print(meeting.join_url)  # URL for attendees
-    print(meeting.host_url)   # URL for host to start
+    logger.info(f"Meeting join URL: {meeting.join_url}")
+    logger.info(f"Meeting host URL: {meeting.host_url}")
 """
 
 import secrets

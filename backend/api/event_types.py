@@ -1,8 +1,9 @@
+import html
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable
@@ -21,6 +22,14 @@ class EventTypePayload(BaseModel):
     name: str
     description: Optional[str] = None
     slug: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("name", "description", mode="before")
+    @classmethod
+    def sanitize_html(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return html.escape(v.strip())
     color: Optional[str] = Field(default="#3b82f6", pattern=r"^#[0-9A-Fa-f]{6}$")
     duration_minutes: int = Field(default=60, ge=1)
     meeting_provider: Optional[str] = None

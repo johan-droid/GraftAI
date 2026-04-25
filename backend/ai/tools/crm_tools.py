@@ -5,7 +5,7 @@ Tools for managing contacts, tasks, and CRM operations.
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.utils.logger import get_logger
 from .registry import register_tool, ToolCategory, ToolPriority
 
@@ -48,7 +48,7 @@ async def create_contact(
         Dict with contact_id and details
     """
     try:
-        contact_id = f"contact_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        contact_id = f"contact_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         logger.info(f"Creating contact: {name} ({email})")
 
@@ -71,7 +71,7 @@ async def create_contact(
             "email": email,
             "details": details or {},
             "tags": tags or [],
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "crm_link": f"https://crm.example.com/contacts/{contact_id}",
         }
 
@@ -110,7 +110,7 @@ async def update_contact(id: str, changes: Dict[str, Any]) -> dict:
             "success": True,
             "contact_id": id,
             "changes": changes,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -158,7 +158,7 @@ async def create_task(
         Dict with task_id and details
     """
     try:
-        task_id = f"task_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        task_id = f"task_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         logger.info(f"Creating task: {title} (due: {due_date})")
 
@@ -180,7 +180,7 @@ async def create_task(
             "priority": priority,
             "related_to": related_to,
             "task_type": task_type,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "crm_link": f"https://crm.example.com/tasks/{task_id}",
         }
 
@@ -222,7 +222,7 @@ async def query_contacts(filters: Dict[str, Any], limit: int = 10) -> dict:
             "contacts": contacts,
             "total": len(contacts),
             "limit": limit,
-            "queried_at": datetime.utcnow().isoformat(),
+            "queried_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -263,7 +263,7 @@ async def get_contact_history(
             "contact_id": id,
             "history": history,
             "total_interactions": sum(len(v) for v in history.values()),
-            "queried_at": datetime.utcnow().isoformat(),
+            "queried_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:

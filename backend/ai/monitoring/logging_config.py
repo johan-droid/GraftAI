@@ -8,7 +8,7 @@ and operations with structured JSON format for easy parsing.
 import logging
 import json
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.utils.logger import get_logger
@@ -76,7 +76,7 @@ class AgentLogger:
         class JsonFormatter(logging.Formatter):
             def format(self, record):
                 log_data = {
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "level": record.levelname,
                     "logger": record.name,
                     "message": record.getMessage(),
@@ -180,7 +180,7 @@ def log_agent_decision(
             "actions_count": len(actions),
             "actions": [a.get("tool_name", str(a)) for a in actions],
             "latency_ms": latency_ms,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -212,7 +212,7 @@ def log_tool_execution(
         "booking_id": booking_id,
         "success": success,
         "duration_ms": duration_ms,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     if result:
@@ -252,7 +252,7 @@ def log_memory_operation(
             "key": key,
             "duration_ms": duration_ms,
             "success": success,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -279,7 +279,7 @@ def log_automation_start(
             "attendee_id": _mask_email(attendee_email),
             "booking_type": booking_type,
             "estimated_value": estimated_value,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -315,7 +315,7 @@ def log_automation_complete(
         "risk_assessment": risk_assessment,
         "actions_executed": actions_executed,
         "execution_time_ms": execution_time_ms,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     if error:
@@ -351,7 +351,7 @@ def log_phase_execution(
             "phase": phase,
             "duration_ms": duration_ms,
             "success": success,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -384,7 +384,7 @@ def log_llm_call(
             "tokens_used": tokens_used,
             "latency_ms": latency_ms,
             "status": status,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -413,7 +413,7 @@ def log_error(
         "error_type": error_type,
         "component": component,
         "booking_id": booking_id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     if exception:
@@ -456,7 +456,7 @@ class LogAnalyzer:
         logs = self.parse_logs()
 
         # Filter by time and event type
-        cutoff = datetime.utcnow() - __import__("datetime").timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=hours)
 
         automations = [
             log
@@ -492,7 +492,7 @@ class LogAnalyzer:
         """Get summary of errors in time window"""
         logs = self.parse_logs()
 
-        cutoff = datetime.utcnow() - __import__("datetime").timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=hours)
 
         errors = [
             log

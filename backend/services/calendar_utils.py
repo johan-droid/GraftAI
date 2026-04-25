@@ -34,6 +34,7 @@ async def simple_upsert_event(
     stmt = select(EventTable).where(
         and_(
             EventTable.user_id == user_id,
+            EventTable.is_deleted == False,
             (EventTable.external_id == external_id)
             | (EventTable.fingerprint == fingerprint),
         )

@@ -33,9 +33,10 @@ logger = get_logger(__name__)
 class LLaMAModel(Enum):
     """Available LLaMA model variants"""
 
-    LLAMA_3_1_8B = "llama-3.1-8b"
-    LLAMA_3_1_70B = "llama-3.1-70b"
-    LLAMA_3_1_405B = "llama-3.1-405b"
+    LLAMA_3_3_70B = "llama-3.3-70b-versatile"
+    LLAMA_3_1_70B = "llama-3.1-70b-versatile"
+    LLAMA_3_1_8B = "llama-3.1-8b-instant"
+    LLAMA_3_1_405B = "llama-3.1-405b-reasoning"
 
 
 @dataclass
@@ -75,7 +76,6 @@ class LLaMACore:
         self.model = model
         # prefer the HUMANIZED_SYSTEM_PROMPT for system behavior
         self.system_prompt = HUMANIZED_SYSTEM_PROMPT
-        self.conversation_history: Dict[str, List[ConversationMessage]] = {}
         self.tools: List[Dict[str, Any]] = []
 
         # Initialize AsyncGroq client for Groq API if configured
@@ -118,6 +118,42 @@ class LLaMACore:
         self.tools.append(tool)
         logger.info(f"Registered tool: {name}")
 
+    async def _get_history(self, conversation_id: str) -> List[ConversationMessage]:
+        """Retrieve conversation history from Redis."""
+        try:
+            from backend.core.redis import cache_get
+            key = f"chat_history:{conversation_id}"
+            data = await cache_get(key)
+            if data and isinstance(data, list):
+                return [
+                    ConversationMessage(
+                        role=m["role"],
+                        content=m["content"],
+                        timestamp=m.get("timestamp"),
+                        metadata=m.get("metadata")
+                    ) for m in data
+                ]
+        except Exception as e:
+            logger.error(f"Failed to retrieve chat history from Redis: {e}")
+        return []
+
+    async def _save_history(self, conversation_id: str, history: List[ConversationMessage]):
+        """Save conversation history to Redis."""
+        try:
+            from backend.core.redis import cache_set
+            key = f"chat_history:{conversation_id}"
+            data = [
+                {
+                    "role": m.role,
+                    "content": m.content,
+                    "timestamp": m.timestamp,
+                    "metadata": m.metadata
+                } for m in history
+            ]
+            await cache_set(key, data, expire=3600 * 24) # 24 hour retention
+        except Exception as e:
+            logger.error(f"Failed to save chat history to Redis: {e}")
+
     async def generate_response(
         self,
         user_message: str,
@@ -144,10 +180,7 @@ class LLaMACore:
             conversation_id = str(uuid.uuid4())
 
         # Get or create conversation history
-        if conversation_id not in self.conversation_history:
-            self.conversation_history[conversation_id] = []
-
-        history = self.conversation_history[conversation_id]
+        history = await self._get_history(conversation_id)
 
         # Build messages
         messages = [ConversationMessage(role="system", content=self.system_prompt)]
@@ -183,7 +216,7 @@ class LLaMACore:
         if len(history) > 20:
             history = history[-20:]
 
-        self.conversation_history[conversation_id] = history
+        await self._save_history(conversation_id, history)
 
         return LLMResponse(
             content=response.content,
@@ -229,8 +262,8 @@ class LLaMACore:
             context_str = self._format_context(context)
             messages_cm.append(ConversationMessage(role="system", content=context_str))
 
-        if conversation_id in self.conversation_history:
-            messages_cm.extend(self.conversation_history[conversation_id])
+        history = await self._get_history(conversation_id)
+        messages_cm.extend(history)
 
         messages_cm.append(ConversationMessage(role="user", content=user_message))
 
@@ -548,7 +581,8 @@ Extract and respond in JSON format:
                 logger.error(f"Groq API Error: {e}")
                 # Fall through to local fallback below
 
-        # Fallback: simple rule-based placeholder (retained for offline/dev)
+        # 🔴 [DEGRADED MODE] Fallback: simple rule-based placeholder (retained for offline/dev)
+        logger.warning("System entered DEGRADED MODE: Using keyword-based fallback logic")
         last_message = messages[-1].content if messages else ""
 
         if "schedule" in last_message.lower() or "book" in last_message.lower():

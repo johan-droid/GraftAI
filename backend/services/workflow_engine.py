@@ -10,15 +10,14 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from sqlalchemy.orm import selectinload
 
 from backend.models.tables import (
     WorkflowTable, WorkflowStepTable
 )
-from backend.utils.dead_letter_queue import get_dlq
 from backend.services.messaging import send_message
 from backend.utils.logger import get_logger
 from backend.utils.db import AsyncSessionLocal
+from backend.core.celery_app import celery_app
 
 logger = get_logger(__name__)
 
@@ -223,10 +222,23 @@ class WorkflowEngine:
         
         for step in steps:
             try:
-                # Handle delay
+                # Handle delay - CRITICAL FIX: Use Celery countdown instead of asyncio.sleep
+                # asyncio.sleep blocks the worker thread, potentially exhausting all workers
                 if step.delay_minutes > 0:
-                    logger.info(f"Delaying step {step.id} for {step.delay_minutes} minutes")
-                    await asyncio.sleep(step.delay_minutes * 60)
+                    logger.info(f"Scheduling delayed step {step.id} for {step.delay_minutes} minutes via Celery")
+                    # Dispatch to Celery with countdown instead of blocking
+                    execute_delayed_workflow_step.apply_async(
+                        args=[step.id, booking_id, event_data],
+                        countdown=step.delay_minutes * 60
+                    )
+                    executed_steps.append({
+                        "step_id": step.id,
+                        "action": step.action_type,
+                        "success": True,
+                        "result": {"status": "scheduled", "delay_minutes": step.delay_minutes},
+                        "delayed": True,
+                    })
+                    continue  # Skip immediate execution, Celery will handle it
                 
                 result = await self.execute_step(step, event_data)
                 executed_steps.append({
@@ -495,3 +507,66 @@ async def trigger_booking_workflows(
         user_id=user_id,
         event_data=event_data,
     )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CELERY TASKS FOR DELAYED EXECUTION
+# ═══════════════════════════════════════════════════════════════════
+
+@celery_app.task(name="backend.services.workflow_engine.execute_delayed_workflow_step")
+def execute_delayed_workflow_step(
+    step_id: str,
+    booking_id: str,
+    event_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Celery task for executing a delayed workflow step.
+    
+    This task is scheduled with a countdown to handle delays without blocking workers.
+    
+    Args:
+        step_id: The workflow step ID to execute
+        booking_id: The booking that triggered the workflow
+        event_data: Event data for template variables
+        
+    Returns:
+        Execution result
+    """
+    
+    async def _execute():
+        async with AsyncSessionLocal() as db:
+            # Load step from database
+            stmt = select(WorkflowStepTable).where(
+                WorkflowStepTable.id == step_id,
+                WorkflowStepTable.is_active == True
+            )
+            result = await db.execute(stmt)
+            step = result.scalar_one_or_none()
+            
+            if not step:
+                logger.error(f"Delayed step {step_id} not found or inactive")
+                return {"success": False, "error": "Step not found or inactive"}
+            
+            # Get workflow engine and execute step
+            engine = get_workflow_engine()
+            try:
+                execution_result = await engine.execute_step(step, event_data)
+                logger.info(f"Delayed step {step_id} executed successfully for booking {booking_id}")
+                return {
+                    "success": True,
+                    "step_id": step_id,
+                    "booking_id": booking_id,
+                    "action_type": step.action_type,
+                    "result": execution_result
+                }
+            except Exception as e:
+                logger.error(f"Delayed step {step_id} execution failed: {e}")
+                return {
+                    "success": False,
+                    "step_id": step_id,
+                    "booking_id": booking_id,
+                    "action_type": step.action_type,
+                    "error": str(e)
+                }
+    
+    return asyncio.run(_execute())

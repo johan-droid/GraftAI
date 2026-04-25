@@ -245,22 +245,27 @@ async def add_team_member(
     if existing:
         raise HTTPException(status_code=400, detail="User is already a member")
 
-    new_member = TeamMember(team_id=team_id, user_id=user.id, role=invite.role)
+    try:
+        new_member = TeamMember(team_id=team_id, user_id=user.id, role=invite.role)
+        db.add(new_member)
+        await db.commit()
+        await db.refresh(new_member)
 
-    db.add(new_member)
-    await db.commit()
-
-    # Refresh to ensure joined_at and other defaults are populated
-    await db.refresh(new_member)
-
-    return {
-        "id": new_member.id,
-        "user_id": user.id,
-        "email": getattr(user, "email", None),
-        "role": new_member.role,
-        "is_active": new_member.is_active,
-        "joined_at": new_member.joined_at.isoformat(),
-    }
+        return {
+            "id": new_member.id,
+            "user_id": user.id,
+            "email": getattr(user, "email", invite.email),
+            "role": new_member.role,
+            "is_active": getattr(new_member, "is_active", True),
+            "joined_at": new_member.joined_at.isoformat() if hasattr(new_member, "joined_at") and new_member.joined_at else datetime.now().isoformat(),
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to add team member: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error while adding team member: {str(e)}"
+        )
 
 
 @router.get("/{team_id}/members")

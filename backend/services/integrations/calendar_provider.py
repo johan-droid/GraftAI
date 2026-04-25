@@ -44,12 +44,15 @@ class CalendarSyncProvider(ABC):
                     stmt = select(EventTable).where(
                         and_(
                             EventTable.user_id == self.token_record.user_id,
+                            EventTable.is_deleted.is_(False),
                             EventTable.external_id == ext_id,
                         )
                     )
                     existing = (await db.execute(stmt)).scalars().first()
-                    if existing:
-                        await db.delete(existing)
+                    if existing and hasattr(existing, "soft_delete"):
+                        await existing.soft_delete(db, deleted_by=self.token_record.user_id)
+                    elif existing:
+                        await existing.hard_delete(db)
                 continue
 
             normalized["user_id"] = self.token_record.user_id

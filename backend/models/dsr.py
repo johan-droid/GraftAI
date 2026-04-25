@@ -1,6 +1,6 @@
 """Data Subject Request (DSR) models for GDPR compliance."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy import (
@@ -56,7 +56,7 @@ class DSRRecord(Base):
     status = Column(SQLEnum(DSRStatus), default=DSRStatus.SUBMITTED)
 
     # Request metadata
-    submitted_at = Column(DateTime, default=datetime.utcnow)
+    submitted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     deadline_at = Column(DateTime, nullable=False)  # 30 days from submission
     completed_at = Column(DateTime, nullable=True)
 
@@ -98,7 +98,7 @@ class DSRRecord(Base):
             DSRStatus.CANCELLED,
         ]:
             return False
-        return datetime.utcnow() > self.deadline_at
+        return datetime.now(timezone.utc) > self.deadline_at
 
     @property
     def days_remaining(self) -> int:
@@ -109,7 +109,7 @@ class DSRRecord(Base):
             DSRStatus.CANCELLED,
         ]:
             return 0
-        delta = self.deadline_at - datetime.utcnow()
+        delta = self.deadline_at - datetime.now(timezone.utc)
         return max(0, delta.days)
 
 
@@ -128,7 +128,7 @@ class DSRAuditLog(Base):
     )  # verify_identity, locate_data, delete_data, etc.
     action_details = Column(JSON, default=dict)
     performed_by = Column(String(100), nullable=True)  # User ID or 'system'
-    performed_at = Column(DateTime, default=datetime.utcnow)
+    performed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # For data modifications
     data_location = Column(String(200), nullable=True)
@@ -166,8 +166,8 @@ class DataRetentionSchedule(Base):
     last_applied_at = Column(DateTime, nullable=True)
 
     # Audit
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class ConsentRecord(Base):
@@ -268,8 +268,8 @@ class DataProcessingRecord(Base):
 
     # Status
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     last_reviewed_at = Column(DateTime, nullable=True)
     reviewed_by = Column(String(100), nullable=True)
     review_notes = Column(Text, nullable=True)
@@ -327,5 +327,5 @@ class DataBreachRecord(Base):
     dpo_consulted = Column(Boolean, default=False)
     dpo_recommendations = Column(Text, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

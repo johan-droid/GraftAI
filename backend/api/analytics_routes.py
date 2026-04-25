@@ -1,6 +1,6 @@
 """Analytics API routes for usage metrics and insights."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
@@ -67,7 +67,7 @@ async def get_analytics_overview(
     total_revenue = total_bookings * 19.0  # Assuming $19 per booking
 
     # Active users (users with bookings in last 30 days)
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
     stmt = select(func.count(func.distinct(BookingTable.user_id))).where(
         BookingTable.created_at >= thirty_days_ago
     )
@@ -107,7 +107,7 @@ async def get_booking_timeline(
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Get bookings grouped by day
     stmt = (
@@ -185,7 +185,7 @@ async def get_user_analytics(
     if current_user.id != user_id and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Get user's bookings
     stmt = select(BookingTable).where(
@@ -226,7 +226,7 @@ async def get_realtime_metrics(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     # Bookings in last hour
-    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
     stmt = select(func.count(BookingTable.id)).where(
         BookingTable.created_at >= one_hour_ago
     )
@@ -251,7 +251,7 @@ async def get_realtime_metrics(
         "active_users_last_hour": active_users_last_hour,
         "total_users": total_users,
         "total_event_types": total_event_types,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -264,17 +264,26 @@ async def get_user_dashboard_summary(
     from backend.models.tables import EventTable
 
     # Get user's bookings this week
-    today = datetime.utcnow()
-    week_start = today - timedelta(days=today.weekday())
-    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=today_start.weekday())
     week_end = week_start + timedelta(days=7)
+
+    # Helper to handle SQLite naive datetimes in comparisons
+    # In SQLite, SQLAlchemy returns naive datetimes. To compare with aware 'week_start',
+    # we can either make the query parameters naive or make the DB results aware.
+    # For the query filter, making the parameter naive (UTC) is safest for SQLite.
+    week_start_naive = week_start.replace(tzinfo=None)
+    week_end_naive = week_end.replace(tzinfo=None)
+    now_naive = now.replace(tzinfo=None)
+    tomorrow_naive = (now + timedelta(days=1)).replace(tzinfo=None)
 
     # Get this week's meetings
     stmt = select(BookingTable).where(
         and_(
             BookingTable.user_id == current_user.id,
-            BookingTable.start_time >= week_start,
-            BookingTable.start_time < week_end,
+            BookingTable.start_time >= week_start_naive,
+            BookingTable.start_time < week_end_naive,
             BookingTable.status != "cancelled",
         )
     )
@@ -288,13 +297,13 @@ async def get_user_dashboard_summary(
             total_hours += duration
 
     # Get previous week for comparison
-    prev_week_start = week_start - timedelta(days=7)
-    prev_week_end = week_start
+    prev_week_start_naive = (week_start - timedelta(days=7)).replace(tzinfo=None)
+    prev_week_end_naive = week_start.replace(tzinfo=None)
     stmt = select(func.count(BookingTable.id)).where(
         and_(
             BookingTable.user_id == current_user.id,
-            BookingTable.start_time >= prev_week_start,
-            BookingTable.start_time < prev_week_end,
+            BookingTable.start_time >= prev_week_start_naive,
+            BookingTable.start_time < prev_week_end_naive,
             BookingTable.status != "cancelled",
         )
     )
@@ -308,12 +317,11 @@ async def get_user_dashboard_summary(
         growth = 100 if current_week_count > 0 else 0
 
     # Get upcoming events count (next 24 hours)
-    tomorrow = today + timedelta(days=1)
     stmt = select(func.count(EventTable.id)).where(
         and_(
             EventTable.user_id == current_user.id,
-            EventTable.start_time >= today,
-            EventTable.start_time <= tomorrow,
+            EventTable.start_time >= now_naive,
+            EventTable.start_time <= tomorrow_naive,
             EventTable.source != "deleted",
         )
     )

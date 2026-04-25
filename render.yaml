@@ -13,7 +13,7 @@ services:
     autoDeploy: true
     healthCheckPath: /health
     buildCommand: "python -m pip install --upgrade pip && python -m pip install -r backend/requirements.txt"
-    startCommand: "cd backend && python -m uvicorn api.main:app --host 0.0.0.0 --port \"$PORT\" --proxy-headers"
+    startCommand: "python -m uvicorn backend.api.main:app --host 0.0.0.0 --port \"$PORT\" --proxy-headers"
     envVars:
       - key: ENV
         value: production
@@ -92,8 +92,50 @@ services:
       - key: SECURITY_WEBHOOK_URL
         sync: false
 
+  # CRITICAL FIX: Add Celery Worker Service
+  # asyncio.create_task does not survive API worker restarts
+  # A dedicated Celery worker handles background automation, workflows, and reminders
+  - type: worker
+    name: graftai-celery-worker
+    runtime: python
+    region: oregon
+    plan: starter
+    branch: main
+    autoDeploy: true
+    buildCommand: "python -m pip install --upgrade pip && python -m pip install -r backend/requirements.txt"
+    startCommand: "celery -A backend.core.celery_app worker --loglevel=info --concurrency=4"
+    envVars:
+      - key: ENV
+        value: production
+      - key: PYTHONPATH
+        value: .
+      - key: DATABASE_URL
+        fromDatabase:
+          name: graftai-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+
 # Note: Redis must be created manually in Render Dashboard
-# Then add REDIS_URL environment variable to this service
+# Then add REDIS_URL environment variable to both services
 
 databases:
   - name: graftai-db

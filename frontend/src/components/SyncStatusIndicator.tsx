@@ -1,130 +1,73 @@
-/**
- * Sync Status Indicator Component
- * 
- * Visual indicator showing sync status (Synced, Syncing, Offline, Error)
- * with pending action count and manual sync trigger.
- */
-
 'use client';
 
-import { useNetworkStatus, SyncStatus } from '@/hooks/useNetworkStatus';
-import { useState } from 'react';
-import { offlineQueue } from '@/lib/offlineQueue';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, RefreshCcw, CheckCircle } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { apiClient } from '@/lib/api-client';
 
-export default function SyncStatusIndicator() {
-  const status = useNetworkStatus();
-  const [isSyncing, setIsSyncing] = useState(false);
+type SyncStatus = 'healthy' | 'disconnected' | 'syncing';
 
-  const handleManualSync = async () => {
-    if (isSyncing || !status.isOnline) return;
-    
-    setIsSyncing(true);
-    try {
-      await offlineQueue.manualSync();
-    } catch (error) {
-      console.error('Manual sync failed:', error);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+export function SyncStatusIndicator() {
+  const [status, setStatus] = useState<SyncStatus>('syncing');
 
-  const getStatusConfig = (syncStatus: SyncStatus) => {
-    switch (syncStatus) {
-      case 'synced':
-        return {
-          icon: '✓',
-          color: 'text-green-500',
-          bgColor: 'bg-green-500/10',
-          borderColor: 'border-green-500/30',
-          label: 'Synced',
-          showPending: false,
-        };
-      case 'syncing':
-        return {
-          icon: '⟳',
-          color: 'text-blue-500',
-          bgColor: 'bg-blue-500/10',
-          borderColor: 'border-blue-500/30',
-          label: 'Syncing',
-          showPending: true,
-          animate: true,
-        };
-      case 'offline':
-        return {
-          icon: '⚡',
-          color: 'text-amber-500',
-          bgColor: 'bg-amber-500/10',
-          borderColor: 'border-amber-500/30',
-          label: 'Offline',
-          showPending: true,
-        };
-      case 'error':
-        return {
-          icon: '⚠',
-          color: 'text-red-500',
-          bgColor: 'bg-red-500/10',
-          borderColor: 'border-red-500/30',
-          label: 'Sync Error',
-          showPending: true,
-        };
-    }
-  };
+  useEffect(() => {
+    const checkSyncHealth = async () => {
+      try {
+        const data = await apiClient.get<any>('/integrations/health');
+        
+        if (data.google_calendar_status === 'disconnected') {
+          setStatus('disconnected');
+        } else {
+          setStatus('healthy');
+        }
+      } catch (error) {
+        setStatus('disconnected');
+      }
+    };
 
-  const config = getStatusConfig(status.syncStatus);
+    checkSyncHealth();
+    // Poll every 5 minutes while the dashboard is open
+    const interval = setInterval(checkSyncHealth, 300000); 
+    return () => clearInterval(interval);
+  }, []);
 
-  const formatLastSync = (timestamp: number | null) => {
-    if (!timestamp) return 'Never';
-    const diff = Date.now() - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  };
+  if (status === 'healthy') {
+    return (
+      <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-full border border-green-100">
+        <CheckCircle className="w-3.5 h-3.5" />
+        <span>Calendar Synced</span>
+      </div>
+    );
+  }
+
+  if (status === 'disconnected') {
+    return (
+      <div className="flex items-center gap-3 text-sm text-red-700 bg-red-50 p-3 rounded-lg border border-red-200 w-full mb-6 shadow-sm">
+        <AlertTriangle className="w-5 h-5 flex-shrink-0 animate-pulse" />
+        <div className="flex-1">
+          <p className="font-bold">Calendar Disconnected</p>
+          <p className="text-xs text-red-600 mt-0.5">Your booking pages are temporarily disabled. Please reconnect your Google Calendar.</p>
+        </div>
+        <Button 
+          variant="destructive" 
+          size="sm"
+          onClick={() => {
+            window.location.href = '/dashboard/settings/integrations';
+          }}
+        >
+          Fix Connection
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-2 rounded-lg border backdrop-blur-sm transition-all duration-300 ${config.bgColor} ${config.borderColor} ${config.color}`}>
-      {/* Status Icon */}
-      <span className={`text-lg ${config.animate ? 'animate-spin' : ''}`}>
-        {config.icon}
-      </span>
-
-      {/* Status Label */}
-      <span className="text-sm font-medium">{config.label}</span>
-
-      {/* Pending Count */}
-      {config.showPending && status.pendingCount > 0 && (
-        <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-current text-white">
-          {status.pendingCount}
-        </span>
-      )}
-
-      {/* Last Sync Time */}
-      {status.isOnline && status.lastSyncTime && (
-        <span className="text-xs opacity-70 ml-2 hidden sm:inline">
-          Last: {formatLastSync(status.lastSyncTime)}
-        </span>
-      )}
-
-      {/* Manual Sync Button */}
-      {status.isOnline && status.pendingCount > 0 && (
-        <button
-          onClick={handleManualSync}
-          disabled={isSyncing}
-          className="ml-2 px-2 py-1 text-xs font-medium rounded bg-current text-white hover:opacity-80 disabled:opacity-50 transition-opacity"
-        >
-          {isSyncing ? 'Syncing...' : 'Sync Now'}
-        </button>
-      )}
-
-      {/* Offline Indicator */}
-      {!status.isOnline && (
-        <span className="text-xs opacity-70 ml-2 hidden sm:inline">
-          Working offline
-        </span>
-      )}
+    <div className="flex items-center gap-2 text-xs text-gray-500">
+      <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+      <span>Checking sync...</span>
     </div>
   );
 }
+
+// Export as default for backward compatibility
+export default SyncStatusIndicator;

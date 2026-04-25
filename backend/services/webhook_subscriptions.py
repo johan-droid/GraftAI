@@ -46,7 +46,10 @@ async def list_webhook_subscriptions(
     db: AsyncSession, user_id: str
 ) -> List[WebhookSubscriptionTable]:
     stmt = select(WebhookSubscriptionTable).where(
-        WebhookSubscriptionTable.user_id == user_id
+        and_(
+            WebhookSubscriptionTable.user_id == user_id,
+            WebhookSubscriptionTable.is_deleted == False,
+        )
     )
     result = await db.execute(stmt)
     return result.scalars().all()
@@ -59,6 +62,7 @@ async def get_webhook_subscription(
         and_(
             WebhookSubscriptionTable.id == webhook_id,
             WebhookSubscriptionTable.user_id == user_id,
+            WebhookSubscriptionTable.is_deleted == False,
         )
     )
     result = await db.execute(stmt)
@@ -132,8 +136,11 @@ async def delete_webhook_subscription(
     webhook = await get_webhook_subscription(db, user_id, webhook_id)
     if not webhook:
         return False
-    await db.delete(webhook)
-    await db.commit()
+    if hasattr(webhook, "soft_delete"):
+        await webhook.soft_delete(db, deleted_by=user_id)
+    else:
+        await db.delete(webhook)
+        await db.commit()
     return True
 
 

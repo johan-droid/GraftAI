@@ -9,23 +9,49 @@ Integrates with:
 """
 
 import os
+import asyncio
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+try:
+    from tenacity import (
+        retry,
+        stop_after_attempt,
+        wait_exponential,
+        retry_if_exception_type,
+        before_sleep_log,
+    )
+
+    TENACITY_AVAILABLE = True
+except ImportError:
+    TENACITY_AVAILABLE = False
+
+    def retry(*args, **kwargs):
+        def decorator(func):
+            return func
+
+        return decorator
 
 from backend.utils.db import get_async_session_maker
-from backend.models.tables import UserTokenTable, UserTable
+from backend.models.tables import BookingTable, UserTokenTable, UserTable
 from backend.services.token_encryption import decrypt_token_value
 from backend.services.integrations.ms_graph import create_ms_event, update_ms_event
 from backend.utils.logger import get_logger
 from .registry import register_tool, ToolCategory, ToolPriority
 
 logger = get_logger(__name__)
+
+RETRYABLE_EXCEPTIONS = (
+    ConnectionError,
+    TimeoutError,
+    OSError,
+)
 
 
 def _mask_email(email: Optional[str]) -> str:
@@ -75,6 +101,60 @@ class CalendarConfig:
     @classmethod
     def is_google_configured(cls) -> bool:
         return bool(cls.GOOGLE_CLIENT_ID and cls.GOOGLE_CLIENT_SECRET)
+
+
+CALENDAR_RETRY = {
+    "stop": stop_after_attempt(4) if TENACITY_AVAILABLE else None,
+    "wait": wait_exponential(multiplier=1, min=2, max=15)
+    if TENACITY_AVAILABLE
+    else None,
+    "retry": retry_if_exception_type(RETRYABLE_EXCEPTIONS)
+    if TENACITY_AVAILABLE
+    else None,
+    "before_sleep": before_sleep_log(logger, "warning") if TENACITY_AVAILABLE else None,
+}
+
+if TENACITY_AVAILABLE:
+
+    @retry(**CALENDAR_RETRY)
+    async def _retry_with_backoff(fn, *args, **kwargs):
+        return await fn(*args, **kwargs)
+
+else:
+
+    async def _retry_with_backoff(fn, *args, **kwargs):
+        return await fn(*args, **kwargs)
+
+
+@retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(Exception),
+    reraise=True,
+)
+async def _execute_with_retry(func, *args, **kwargs):
+    if asyncio.iscoroutinefunction(func):
+        return await func(*args, **kwargs)
+
+    # Offload blocking sync Google API calls to a thread to avoid
+    # blocking the event loop (googleapiclient is synchronous).
+    return await asyncio.to_thread(func, *args, **kwargs)
+
+
+async def _enqueue_calendar_dlq(action_type: str, payload: Dict[str, Any], error: str):
+    try:
+        from backend.utils.dead_letter_queue import get_dlq
+
+        dlq = get_dlq()
+        await dlq.enqueue(
+            action_type=action_type,
+            payload=payload,
+            error=error,
+            max_retries=3,
+            context={"provider": "google_calendar"},
+        )
+    except Exception as dlq_error:
+        logger.error("Failed to enqueue calendar action to DLQ: %s", dlq_error)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -149,71 +229,63 @@ class GoogleCalendarService:
         Returns:
             Event details including event_id and calendar_link
         """
-        try:
-            if not self.service:
-                raise Exception("Not authenticated with Google Calendar")
+        if not self.service:
+            raise Exception("Not authenticated with Google Calendar")
 
-            # Parse times
-            start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            end = start + timedelta(minutes=duration_minutes)
+        # Parse times
+        start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        end = start + timedelta(minutes=duration_minutes)
 
-            # Build event body
-            event_body = {
-                "summary": title,
-                "description": description,
-                "location": location,
-                "start": {
-                    "dateTime": start.isoformat(),
-                    "timeZone": timezone,
-                },
-                "end": {
-                    "dateTime": end.isoformat(),
-                    "timeZone": timezone,
-                },
-                "attendees": [{"email": email} for email in attendees],
-                "reminders": {
-                    "useDefault": False,
-                    "overrides": reminders
-                    or [
-                        {"method": "email", "minutes": 24 * 60},  # 1 day before
-                        {"method": "popup", "minutes": 15},  # 15 min before
-                    ],
-                },
-                "guestsCanInviteOthers": False,
-                "guestsCanModify": False,
-                "guestsCanSeeOtherGuests": True,
-            }
+        # Build event body
+        event_body = {
+            "summary": title,
+            "description": description,
+            "location": location,
+            "start": {
+                "dateTime": start.isoformat(),
+                "timeZone": timezone,
+            },
+            "end": {
+                "dateTime": end.isoformat(),
+                "timeZone": timezone,
+            },
+            "attendees": [{"email": email} for email in attendees],
+            "reminders": {
+                "useDefault": False,
+                "overrides": reminders
+                or [
+                    {"method": "email", "minutes": 24 * 60},  # 1 day before
+                    {"method": "popup", "minutes": 15},  # 15 min before
+                ],
+            },
+            "guestsCanInviteOthers": False,
+            "guestsCanModify": False,
+            "guestsCanSeeOtherGuests": True,
+        }
 
-            # Create event
-            event = (
-                self.service.events()
-                .insert(
-                    calendarId="primary",
-                    body=event_body,
-                    sendUpdates="all",  # Send email invitations
-                )
-                .execute()
+        # Create event
+        event = await _execute_with_retry(
+            lambda: self.service.events()
+            .insert(
+                calendarId="primary",
+                body=event_body,
+                sendUpdates="all",  # Send email invitations
             )
+            .execute()
+        )
 
-            logger.info(f"Google Calendar event created: {event['id']}")
+        logger.info(f"Google Calendar event created: {event['id']}")
 
-            return {
-                "success": True,
-                "event_id": event["id"],
-                "calendar_link": event.get("htmlLink", ""),
-                "title": title,
-                "start_time": start_time,
-                "attendees": attendees,
-                "status": event.get("status", "confirmed"),
-                "provider": "google_calendar",
-            }
-
-        except HttpError as e:
-            logger.error(f"Google Calendar API error: {e}")
-            return {"success": False, "error": str(e), "status": "failed"}
-        except Exception as e:
-            logger.error(f"Failed to create Google Calendar event: {e}")
-            return {"success": False, "error": str(e), "status": "failed"}
+        return {
+            "success": True,
+            "event_id": event["id"],
+            "calendar_link": event.get("htmlLink", ""),
+            "title": title,
+            "start_time": start_time,
+            "attendees": attendees,
+            "status": event.get("status", "confirmed"),
+            "provider": "google_calendar",
+        }
 
     async def update_event(
         self,
@@ -230,8 +302,8 @@ class GoogleCalendarService:
                 raise Exception("Not authenticated")
 
             # Get existing event
-            event = (
-                self.service.events()
+            event = await _execute_with_retry(
+                lambda: self.service.events()
                 .get(calendarId="primary", eventId=event_id)
                 .execute()
             )
@@ -251,8 +323,8 @@ class GoogleCalendarService:
                 event["attendees"] = [{"email": email} for email in attendees]
 
             # Update event
-            updated_event = (
-                self.service.events()
+            updated_event = await _execute_with_retry(
+                lambda: self.service.events()
                 .update(
                     calendarId="primary",
                     eventId=event_id,
@@ -271,28 +343,25 @@ class GoogleCalendarService:
 
         except Exception as e:
             logger.error(f"Failed to update Google Calendar event: {e}")
-            return {"success": False, "error": str(e), "status": "failed"}
+            raise
 
     async def delete_event(self, event_id: str) -> Dict[str, Any]:
         """Delete a calendar event"""
-        try:
-            if not self.service:
-                raise Exception("Not authenticated")
+        if not self.service:
+            raise Exception("Not authenticated")
 
-            self.service.events().delete(
-                calendarId="primary", eventId=event_id, sendUpdates="all"
-            ).execute()
+        await _execute_with_retry(
+            lambda: self.service.events()
+            .delete(calendarId="primary", eventId=event_id, sendUpdates="all")
+            .execute()
+        )
 
-            return {
-                "success": True,
-                "event_id": event_id,
-                "status": "deleted",
-                "provider": "google_calendar",
-            }
-
-        except Exception as e:
-            logger.error(f"Failed to delete Google Calendar event: {e}")
-            return {"success": False, "error": str(e), "status": "failed"}
+        return {
+            "success": True,
+            "event_id": event_id,
+            "status": "deleted",
+            "provider": "google_calendar",
+        }
 
     async def check_availability(
         self, start_time: str, duration_minutes: int, timezone: str = "UTC"
@@ -316,7 +385,9 @@ class GoogleCalendarService:
                 "items": [{"id": "primary"}],
             }
 
-            result = self.service.freebusy().query(body=body).execute()
+            result = await _execute_with_retry(
+                lambda: self.service.freebusy().query(body=body).execute()
+            )
 
             calendars = result.get("calendars", {})
             primary = calendars.get("primary", {})
@@ -432,6 +503,50 @@ async def _get_oauth_token_data_for_email(
         }
 
 
+async def _lock_organizer_booking_timeslot(
+    organizer_email: Optional[str],
+    start_time: str,
+    duration_minutes: int,
+    timezone: str = "UTC",
+    db: Optional[AsyncSession] = None,
+) -> None:
+    """Pessimistically lock overlapping bookings for the organizer."""
+    if not organizer_email:
+        return
+
+    try:
+        start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        end = start + timedelta(minutes=duration_minutes)
+    except Exception:
+        return
+
+    async def _lock(session: AsyncSession) -> None:
+        user_stmt = select(UserTable).where(UserTable.email == organizer_email)
+        user = (await session.execute(user_stmt)).scalars().first()
+        if not user:
+            return
+
+        lock_stmt = (
+            select(BookingTable)
+            .where(
+                BookingTable.user_id == user.id,
+                BookingTable.start_time < end,
+                BookingTable.end_time > start,
+            )
+            .with_for_update()
+        )
+        await session.execute(lock_stmt)
+
+    if db is not None:
+        await _lock(db)
+        return
+
+    session_factory = get_async_session_maker()
+    async with session_factory() as session:
+        async with session.begin():
+            await _lock(session)
+
+
 @register_tool(
     name="create_calendar_event",
     description="Create a calendar event using Google or Microsoft Calendar APIs",
@@ -448,6 +563,7 @@ async def create_calendar_event(
     timezone: str = "UTC",
     organizer_email: Optional[str] = None,
     calendar_provider: str = "google",
+    db: Optional[AsyncSession] = None,
 ) -> Dict[str, Any]:
     """
     Create a calendar event with real API integration
@@ -474,7 +590,7 @@ async def create_calendar_event(
                 logger.warning("Google Calendar not configured - logging event only")
                 return {
                     "success": True,
-                    "event_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                    "event_id": f"dev_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
                     "title": title,
                     "start_time": start_time,
                     "duration_minutes": duration_minutes,
@@ -486,6 +602,13 @@ async def create_calendar_event(
                 }
 
             # Use Google Calendar
+            await _lock_organizer_booking_timeslot(
+                organizer_email or "default@graftai.com",
+                start_time,
+                duration_minutes,
+                timezone=timezone,
+                db=db,
+            )
             calendar = GoogleCalendarService()
             auth_success = await calendar.authenticate(
                 organizer_email or "default@graftai.com"
@@ -494,7 +617,7 @@ async def create_calendar_event(
             if not auth_success:
                 return {
                     "success": True,
-                    "event_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                    "event_id": f"dev_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
                     "title": title,
                     "start_time": start_time,
                     "duration_minutes": duration_minutes,
@@ -505,7 +628,8 @@ async def create_calendar_event(
                     "message": "Calendar auth required - event logged for manual creation",
                 }
 
-            result = await calendar.create_event(
+            result = await _retry_with_backoff(
+                calendar.create_event,
                 title=title,
                 start_time=start_time,
                 duration_minutes=duration_minutes,
@@ -543,7 +667,9 @@ async def create_calendar_event(
                 "is_meeting": True,
             }
 
-            result = await create_ms_event(token_data, event_details)
+            result = await _retry_with_backoff(
+                create_ms_event, token_data, event_details
+            )
             meeting_url = (
                 result.get("onlineMeeting", {}).get("joinUrl")
                 or result.get("webLink")
@@ -570,6 +696,21 @@ async def create_calendar_event(
 
     except Exception as e:
         logger.error(f"Failed to create calendar event: {e}")
+        await _enqueue_calendar_dlq(
+            action_type="calendar_create",
+            payload={
+                "title": title,
+                "start_time": start_time,
+                "duration_minutes": duration_minutes,
+                "attendees": attendees,
+                "description": description,
+                "location": location,
+                "timezone": timezone,
+                "calendar_provider": calendar_provider,
+                "organizer_email": organizer_email,
+            },
+            error=str(e),
+        )
         return {"success": False, "error": str(e), "status": "failed"}
 
 
@@ -605,13 +746,16 @@ async def update_calendar_event(
             calendar = GoogleCalendarService()
             await calendar.authenticate(organizer_email or "default@graftai.com")
 
-            return await calendar.update_event(
+            result = await _retry_with_backoff(
+                calendar.update_event,
                 event_id=event_id,
                 title=title,
                 start_time=start_time,
                 duration_minutes=duration_minutes,
                 attendees=attendees,
             )
+
+            return result
 
         elif calendar_provider == "microsoft":
             token_data = await _get_oauth_token_data_for_email(
@@ -648,7 +792,9 @@ async def update_calendar_event(
             if attendees is not None:
                 event_details["attendees"] = attendees
 
-            result = await update_ms_event(token_data, event_id, event_details)
+            result = await _retry_with_backoff(
+                update_ms_event, token_data, event_id, event_details
+            )
             meeting_url = (
                 result.get("onlineMeeting", {}).get("joinUrl")
                 or result.get("webLink")
@@ -671,6 +817,19 @@ async def update_calendar_event(
 
     except Exception as e:
         logger.error(f"Failed to update calendar event: {e}")
+        await _enqueue_calendar_dlq(
+            action_type="calendar_update",
+            payload={
+                "event_id": event_id,
+                "title": title,
+                "start_time": start_time,
+                "duration_minutes": duration_minutes,
+                "attendees": attendees,
+                "organizer_email": organizer_email,
+                "calendar_provider": calendar_provider,
+            },
+            error=str(e),
+        )
         return {"success": False, "error": str(e), "status": "failed"}
 
 
@@ -685,6 +844,7 @@ async def check_calendar_availability(
     duration_minutes: int,
     timezone: str = "UTC",
     organizer_email: Optional[str] = None,
+    db: Optional[AsyncSession] = None,
 ) -> Dict[str, Any]:
     """Check if a time slot is available"""
     try:
@@ -697,11 +857,22 @@ async def check_calendar_availability(
                 "mode": "development",
             }
 
+        await _lock_organizer_booking_timeslot(
+            organizer_email or "default@graftai.com",
+            start_time,
+            duration_minutes,
+            timezone=timezone,
+            db=db,
+        )
+
         calendar = GoogleCalendarService()
         await calendar.authenticate(organizer_email or "default@graftai.com")
 
-        return await calendar.check_availability(
-            start_time=start_time, duration_minutes=duration_minutes, timezone=timezone
+        return await _retry_with_backoff(
+            calendar.check_availability,
+            start_time=start_time,
+            duration_minutes=duration_minutes,
+            timezone=timezone,
         )
 
     except Exception as e:
@@ -871,6 +1042,73 @@ async def handle_google_callback(code: str, user_email: str) -> bool:
     except Exception as e:
         logger.error(f"Failed to handle Google callback: {e}")
         return False
+
+
+async def sync_calendar_event(
+    action: str,
+    event_id: Optional[str] = None,
+    calendar_id: str = "primary",
+    details: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Synchronize a calendar action via DLQ or retry processing.
+
+    Args:
+        action: create, update, delete
+        event_id: Event ID for update/delete operations
+        calendar_id: Calendar identifier (primary by default)
+        details: Payload details for the action
+
+    Returns:
+        Result dictionary
+    """
+    details = details or {}
+    provider = _normalize_calendar_provider(details.get("calendar_provider", "google"))
+    organizer_email = details.get("organizer_email") or "default@graftai.com"
+
+    if action == "create":
+        return await create_calendar_event(
+            title=details.get("title", "Calendar Event"),
+            start_time=details.get("start_time", ""),
+            duration_minutes=int(details.get("duration_minutes", 30)),
+            attendees=details.get("attendees", []),
+            description=details.get("description"),
+            location=details.get("location"),
+            timezone=details.get("timezone", "UTC"),
+            organizer_email=organizer_email,
+            calendar_provider=provider,
+        )
+
+    if action == "update":
+        return await update_calendar_event(
+            event_id=event_id or details.get("event_id", ""),
+            title=details.get("title"),
+            start_time=details.get("start_time"),
+            duration_minutes=details.get("duration_minutes"),
+            attendees=details.get("attendees"),
+            organizer_email=organizer_email,
+            calendar_provider=provider,
+        )
+
+    if action == "delete":
+        if provider == "google":
+            calendar = GoogleCalendarService()
+            auth_success = await calendar.authenticate(organizer_email)
+            if not auth_success:
+                return {
+                    "success": False,
+                    "error": "Google Calendar auth required for deletion",
+                    "status": "failed",
+                }
+            return await _retry_with_backoff(calendar.delete_event, event_id)
+
+        return {
+            "success": False,
+            "error": f"Unsupported calendar provider: {provider}",
+            "status": "failed",
+        }
+
+    return {"success": False, "error": f"Unknown calendar action: {action}", "status": "failed"}
 
 
 async def revoke_google_auth(user_email: str) -> bool:

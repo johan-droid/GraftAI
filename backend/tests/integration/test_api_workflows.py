@@ -5,7 +5,6 @@ Tests the complete flow from HTTP request to database persistence.
 
 import pytest
 from datetime import datetime, timezone
-from uuid import uuid4
 
 
 @pytest.mark.integration

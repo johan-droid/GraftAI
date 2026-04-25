@@ -1,7 +1,7 @@
 """Data retention automation for GDPR Article 5.1.e compliance."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import cast, concat, delete, exists, func, literal, select, String, update
@@ -120,7 +120,7 @@ class DataRetentionManager:
                 results[schedule.data_category] = count
 
                 # Update last applied timestamp
-                schedule.last_applied_at = datetime.utcnow()
+                schedule.last_applied_at = datetime.now(timezone.utc)
 
             except Exception as e:
                 logger.error(
@@ -138,7 +138,7 @@ class DataRetentionManager:
     ) -> int:
         """Apply a single retention schedule."""
         category = schedule.data_category
-        cutoff_date = datetime.utcnow() - timedelta(days=schedule.retention_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=schedule.retention_days)
         action = schedule.action_after_retention
 
         if action == "delete":
@@ -282,7 +282,7 @@ class DataRetentionManager:
         schedules = (await db.execute(stmt)).scalars().all()
 
         report = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "total_schedules": len(schedules),
             "active_schedules": len([s for s in schedules if s.auto_apply]),
             "schedules": [],
@@ -322,7 +322,7 @@ class DataRetentionManager:
         ).scalar() or 0
 
         return {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "data_inventory": {
                 "users": {
                     "count": user_count,

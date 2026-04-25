@@ -5,7 +5,7 @@ Tools for sending messages through various channels.
 """
 
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.utils.logger import get_logger
 from .registry import register_tool, ToolCategory, ToolPriority
 
@@ -61,7 +61,7 @@ async def send_email(
         # In production, integrate with email service (SendGrid, SES, etc.)
         # For now, simulate successful sending
 
-        email_id = f"email_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        email_id = f"email_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         logger.info(
             "Sending email", extra={"recipient": _mask_email(to), "subject": subject}
@@ -78,7 +78,7 @@ async def send_email(
             "email_id": email_id,
             "to": to,
             "subject": subject,
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": datetime.now(timezone.utc).isoformat(),
             "status": "sent",
             "message": f"Email sent to {to}",
         }
@@ -113,7 +113,7 @@ async def send_sms(to: str, message: str, from_number: Optional[str] = None) -> 
         if len(message) > 1600:
             raise ValueError("Message exceeds 1600 character limit")
 
-        sms_id = f"sms_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        sms_id = f"sms_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         logger.info(f"Sending SMS to {to}")
 
@@ -129,7 +129,7 @@ async def send_sms(to: str, message: str, from_number: Optional[str] = None) -> 
             "sms_id": sms_id,
             "to": to,
             "message": message,
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": datetime.now(timezone.utc).isoformat(),
             "status": "sent",
             "segments": (len(message) // 160) + 1,
         }
@@ -175,7 +175,7 @@ async def post_to_slack(
     try:
         # In production, integrate with Slack API
 
-        message_id = f"slack_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        message_id = f"slack_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         logger.info(f"Posting to Slack channel {channel}")
 
@@ -192,7 +192,7 @@ async def post_to_slack(
             "success": True,
             "message_id": message_id,
             "channel": channel,
-            "posted_at": datetime.utcnow().isoformat(),
+            "posted_at": datetime.now(timezone.utc).isoformat(),
             "status": "posted",
             "message": f"Posted to {channel}",
         }
@@ -239,7 +239,7 @@ async def send_teams_message(
         if user and channel:
             raise ValueError("Provide only user or channel, not both")
 
-        message_id = f"teams_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        message_id = f"teams_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         recipient = user or channel
         logger.info(
@@ -254,7 +254,7 @@ async def send_teams_message(
             "success": True,
             "message_id": message_id,
             "recipient": recipient,
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": datetime.now(timezone.utc).isoformat(),
             "status": "sent",
         }
 
@@ -310,7 +310,7 @@ async def send_calendar_invite(
         start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
         end = start + timedelta(minutes=duration_minutes)
 
-        invite_id = f"invite_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        invite_id = f"invite_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         logger.info(f"Sending calendar invite to {attendee} for {title}")
 
@@ -333,7 +333,7 @@ async def send_calendar_invite(
             "end_time": end.isoformat(),
             "duration_minutes": duration_minutes,
             "location": location,
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": datetime.now(timezone.utc).isoformat(),
             "status": "sent",
         }
 

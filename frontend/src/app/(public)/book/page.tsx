@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
@@ -9,6 +9,7 @@ import {
   ArrowLeft, User, Mail, MessageSquare, CheckCircle2, XCircle, Loader2
 } from "lucide-react";
 import Link from "next/link";
+import { v4 as uuidv4 } from "uuid";
 import {
   bookPublicEvent,
   confirmPublicPaymentIntent,
@@ -17,6 +18,7 @@ import {
   type PublicBookingConfirmation,
   type PublicEventDetailsResponse,
 } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
 
 type CustomQuestionDefinition = {
   id?: string;
@@ -87,6 +89,9 @@ function BookingForm() {
   const eventType = searchParams.get("event_type");
   const dateParam = searchParams.get("date");
   const timeParam = searchParams.get("time");
+
+  // PHASE 2: Generate idempotency key once when form mounts
+  const idempotencyKey = useRef(uuidv4());
 
   const [browserTimezone, setBrowserTimezone] = useState<string>("");
   const [eventDetails, setEventDetails] = useState<PublicEventDetailsResponse | null>(null);
@@ -161,8 +166,10 @@ function BookingForm() {
     };
   }, [eventType, username]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
+    // PHASE 2: UI safeguard against double-clicks
+    if (isSubmitting) return;
+    
     if (!username || !eventType) {
       setLoadError("Missing booking details in the link.");
       return;
@@ -205,29 +212,70 @@ function BookingForm() {
         });
       }
 
-      const booking = await bookPublicEvent(username, eventType, {
-        full_name: formData.name.trim(),
-        email: formData.email.trim(),
-        start_time: selectedStart.toISOString(),
-        end_time: selectedEnd.toISOString(),
-        time_zone: browserTimezone,
-        questions: {
-          ...customAnswers,
-          ...(formData.notes.trim() ? { notes: formData.notes.trim() } : {}),
+      // PHASE 2: Send idempotency key with booking request
+      const booking = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/public/${username}/${eventType}/book`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": idempotencyKey.current,
         },
-        metadata: {
-          source: "public-book-page",
-          date_param: dateParam,
-          time_param: timeParam,
-          payment_verified: !eventDetails.requires_payment ? undefined : true,
-          payment_status: eventDetails.requires_payment ? "paid" : undefined,
-        },
+        body: JSON.stringify({
+          full_name: formData.name.trim(),
+          email: formData.email.trim(),
+          start_time: selectedStart.toISOString(),
+          end_time: selectedEnd.toISOString(),
+          time_zone: browserTimezone,
+          questions: {
+            ...customAnswers,
+            ...(formData.notes.trim() ? { notes: formData.notes.trim() } : {}),
+          },
+          metadata: {
+            source: "public-book-page",
+            date_param: dateParam,
+            time_param: timeParam,
+            payment_verified: !eventDetails.requires_payment ? undefined : true,
+            payment_status: eventDetails.requires_payment ? "paid" : undefined,
+          },
+        }),
       });
 
-      setBookingResult(booking);
+      if (!booking.ok) {
+        throw new Error("Booking failed");
+      }
+
+      const result = await booking.json();
+      setBookingResult(result);
       setIsSuccess(true);
-    } catch {
-      setLoadError("We could not complete the booking. Please try again.");
+
+      // Send postMessage to parent window if in embed mode
+      try {
+        if (window.parent && window.parent !== window) {
+          const parentOrigin = document.referrer
+            ? new URL(document.referrer).origin
+            : null;
+
+          if (parentOrigin) {
+            window.parent.postMessage(
+              {
+                type: 'graftai:booking_complete',
+                payload: {
+                  bookingId: result.id,
+                  attendeeEmail: formData.email,
+                  eventSlug: eventType,
+                },
+              },
+              parentOrigin
+            );
+          }
+        }
+      } catch (e) {
+        // Silently fail if postMessage is blocked by cross-origin security policies
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error && error.message === "OFFLINE_CRITICAL: You must be online to confirm a booking or make a payment."
+        ? "You must be online to confirm a booking. Please check your connection and try again."
+        : "We could not complete the booking. Please try again.";
+      setLoadError(errorMessage);
     }
 
     setIsSubmitting(false);
@@ -527,17 +575,15 @@ function BookingForm() {
           ) : null}
 
           <div className="pt-4 mt-6 border-t border-[#F1F3F4]">
-            <button
-              type="submit"
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              loadingText="Scheduling..."
+              className="w-full sm:w-auto"
               disabled={isSubmitting}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 text-sm font-medium bg-[#1A73E8] text-white hover:bg-[#1557B0] px-8 py-3.5 rounded-full transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? (
-                <><Loader2 size={18} className="animate-spin" /> Scheduling...</>
-              ) : (
-                eventDetails?.requires_payment ? "Confirm and schedule" : "Schedule Event"
-              )}
-            </button>
+              {eventDetails?.requires_payment ? "Confirm and schedule" : "Schedule Event"}
+            </Button>
           </div>
 
           {eventDetails?.requires_payment ? (

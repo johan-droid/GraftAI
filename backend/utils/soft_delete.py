@@ -6,8 +6,9 @@ Provides soft delete functionality with query filtering.
 from datetime import datetime, timezone
 from typing import Optional, List, Type
 
-from sqlalchemy import Column, DateTime, Boolean, select
+from sqlalchemy import DateTime, Boolean, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class SoftDeleteMixin:
@@ -34,11 +35,13 @@ class SoftDeleteMixin:
         await MyModel.get_all(db)
     """
 
-    deleted_at: Optional[datetime] = Column(
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None, index=True
     )
 
-    is_deleted: bool = Column(Boolean, default=False, nullable=False, index=True)
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, index=True
+    )
 
     async def soft_delete(
         self, db: AsyncSession, deleted_by: Optional[str] = None

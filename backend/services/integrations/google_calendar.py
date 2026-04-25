@@ -17,8 +17,20 @@ from backend.services.token_encryption import decrypt_token_value
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+def _resolve_google_calendar_credentials() -> tuple[Optional[str], Optional[str]]:
+    client_id = (
+        os.getenv("GOOGLE_CLIENT_ID")
+        or os.getenv("GOOGLE_ID")
+        or os.getenv("NEXTAUTH_GOOGLE_ID")
+        or os.getenv("AUTH_GOOGLE_ID")
+    )
+    client_secret = (
+        os.getenv("GOOGLE_CLIENT_SECRET")
+        or os.getenv("GOOGLE_SECRET")
+        or os.getenv("NEXTAUTH_GOOGLE_SECRET")
+        or os.getenv("AUTH_GOOGLE_SECRET")
+    )
+    return client_id, client_secret
 
 
 async def get_google_service(db: AsyncSession, user_id: str):
@@ -55,12 +67,13 @@ async def get_google_service(db: AsyncSession, user_id: str):
 
 def get_google_credentials(token_data: dict) -> Credentials:
     """Reconstructs Google credentials from stored token data."""
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    client_id, client_secret = _resolve_google_calendar_credentials()
 
     if not client_id or not client_secret:
         logger.error(
-            "❌ CRITICAL: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment."
+            "❌ CRITICAL: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment. "
+            "Also check GOOGLE_ID/GOOGLE_SECRET, NEXTAUTH_GOOGLE_ID/NEXTAUTH_GOOGLE_SECRET, "
+            "or AUTH_GOOGLE_ID/AUTH_GOOGLE_SECRET."
         )
         # We try to proceed but expect refresh failure if credentials are not specified
 

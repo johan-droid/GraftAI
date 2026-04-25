@@ -1,5 +1,6 @@
 from __future__ import annotations
 import re
+import html
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -25,6 +26,14 @@ class EventTypeBase(BaseModel):
     is_default: bool = Field(default=False)
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator('name', 'description', 'location', mode='before')
+    @classmethod
+    def sanitize_html(cls, v: str | None) -> str | None:
+        """Neutralizes malicious script tags into harmless plain text."""
+        if v is None:
+            return v
+        return html.escape(v.strip())
 
     @field_validator("slug")
     @classmethod

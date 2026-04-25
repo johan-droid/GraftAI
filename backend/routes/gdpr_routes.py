@@ -1,6 +1,6 @@
 """GDPR compliance API routes for Data Subject Requests."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
@@ -251,7 +251,7 @@ async def update_consent(
 
     # If first time consenting, set consented_at
     if not consent.consented_at:
-        consent.consented_at = datetime.utcnow()
+        consent.consented_at = datetime.now(timezone.utc)
 
     # Reset withdrawal dates for newly consented categories
     if request.analytics:
@@ -299,7 +299,7 @@ async def withdraw_consent(
 
     # Set withdrawal timestamp
     withdrawal_attr = f"{category}_withdrawn_at"
-    setattr(consent, withdrawal_attr, datetime.utcnow())
+    setattr(consent, withdrawal_attr, datetime.now(timezone.utc))
 
     # If all categories withdrawn, mark full withdrawal
     if all(
@@ -310,7 +310,7 @@ async def withdraw_consent(
             consent.third_party_sharing_withdrawn_at,
         ]
     ):
-        consent.withdrawn_at = datetime.utcnow()
+        consent.withdrawn_at = datetime.now(timezone.utc)
         consent.withdrawal_reason = request.reason
 
     await db.commit()

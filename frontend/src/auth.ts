@@ -98,6 +98,13 @@ declare module "next-auth" {
     backendTokenExpiresAt?: number;
     user: {
       id: string;
+      tier?: string;
+      subscription_status?: string;
+      daily_ai_count?: number;
+      daily_ai_limit?: number;
+      total_ai_tokens?: number;
+      total_api_calls?: number;
+      total_scheduling_count?: number;
     } & DefaultSession["user"];
     error?: "RefreshTokenError";
   }
@@ -272,6 +279,7 @@ interface PendingTokenEntry {
   backendToken: string;
   refreshToken: string;
   backendTokenExpiresAt: number | undefined;
+  user: any; // Backend user profile
   createdAt: number; // Timestamp for TTL cleanup
 }
 
@@ -397,6 +405,7 @@ const authOptions: NextAuthConfig = {
         backendToken: data.access_token,
         refreshToken: data.refresh_token,
         backendTokenExpiresAt: decodeJwtExpiry(data.access_token),
+        user: data.user,
         createdAt: Date.now(),
       });
 
@@ -413,6 +422,7 @@ const authOptions: NextAuthConfig = {
             token.backendToken = credentialUser.backendToken;
             token.refreshToken = credentialUser.refreshToken;
             token.backendTokenExpiresAt = credentialUser.backendTokenExpiresAt ?? decodeJwtExpiry(credentialUser.backendToken);
+            token.user = credentialUser; // This contains the profile data
             token.provider = "credentials";
             token.error = undefined;
           } else {
@@ -434,6 +444,7 @@ const authOptions: NextAuthConfig = {
               backendToken: data.access_token,
               refreshToken: data.refresh_token,
               backendTokenExpiresAt: decodeJwtExpiry(data.access_token),
+              user: data.user,
               createdAt: Date.now(),
             };
           }
@@ -444,6 +455,7 @@ const authOptions: NextAuthConfig = {
           token.backendToken = pending.backendToken;
           token.refreshToken = pending.refreshToken;
           token.backendTokenExpiresAt = pending.backendTokenExpiresAt;
+          token.user = pending.user;
           token.providerAccessToken = account.access_token ?? undefined;
           token.providerRefreshToken = account.refresh_token ?? undefined;
           token.provider = account.provider;
@@ -487,6 +499,18 @@ const authOptions: NextAuthConfig = {
       // Ensure the session user has a stable `id` from the JWT subject
       if (token.sub) {
         session.user.id = token.sub;
+      }
+      
+      // Propagate usage fields to frontend
+      if (token.user) {
+        const u = token.user as any;
+        session.user.tier = u.tier;
+        session.user.subscription_status = u.subscription_status;
+        session.user.daily_ai_count = u.daily_ai_count;
+        session.user.daily_ai_limit = u.daily_ai_limit;
+        session.user.total_ai_tokens = u.total_ai_tokens;
+        session.user.total_api_calls = u.total_api_calls;
+        session.user.total_scheduling_count = u.total_scheduling_count;
       }
 
       return session;

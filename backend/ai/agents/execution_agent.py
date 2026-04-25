@@ -5,7 +5,7 @@ Handles actual operations like sending emails, creating calendar events, etc.
 
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import re
 import uuid
@@ -126,7 +126,7 @@ class ExecutionAgent(BaseAgent):
         rollback_on_failure: bool = False,
     ) -> ActionResult:
         """Execute a single action with retry logic"""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Get action handler
         handler = self.actions.get(action_type)
@@ -150,7 +150,7 @@ class ExecutionAgent(BaseAgent):
                 # Execute the action
                 result = await handler(params, user_id)
 
-                execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
                 # Log success
                 self._log_execution(
@@ -184,7 +184,7 @@ class ExecutionAgent(BaseAgent):
                     await asyncio.sleep(wait_time)
 
         # All retries failed
-        execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
         self._log_execution(
             action_type=action_type,
@@ -364,7 +364,7 @@ class ExecutionAgent(BaseAgent):
     def _log_execution(self, **kwargs):
         """Log execution details"""
         self.execution_history.append(
-            {**kwargs, "timestamp": datetime.utcnow().isoformat()}
+            {**kwargs, "timestamp": datetime.now(timezone.utc).isoformat()}
         )
 
         # Keep only last 1000 entries

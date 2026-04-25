@@ -100,6 +100,7 @@ async def create_user_from_oauth(
 ) -> UserTable:
     """Create a passwordless user from OAuth identity."""
     preferences = extra_fields.pop("preferences", None)
+    now = datetime.now(timezone.utc)
     user = UserTable(
         email=email,
         username=username,
@@ -107,6 +108,9 @@ async def create_user_from_oauth(
         email_verified=verified,
         hashed_password=None,  # Pure OAuth 2.0
         preferences=preferences or {},
+        tier="free",
+        trial_active=False,
+        trial_expires_at=now + timedelta(days=14),
         **extra_fields,
     )
     db.add(user)

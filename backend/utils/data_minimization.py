@@ -2,7 +2,7 @@
 
 import logging
 from typing import Dict, List, Set, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,7 @@ class DataMinimizationEngine:
         required = DataMinimizationEngine.REQUIRED_FIELDS.get(feature, set())
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "feature": feature,
             "is_valid": is_valid,
             "issues": issues,

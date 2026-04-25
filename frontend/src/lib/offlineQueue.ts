@@ -264,11 +264,9 @@ class OfflineQueue {
   }
 
   private async executeAction(action: OfflineAction): Promise<void> {
-    const token = localStorage.getItem('access_token');
-    if (!token) throw new Error('No auth token');
-
+    // SECURITY FIX: Use credentials:include instead of localStorage token
+    // httpOnly cookies are sent automatically for auth
     const headers: HeadersInit = {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     };
 
@@ -307,6 +305,7 @@ class OfflineQueue {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
       method,
       headers,
+      credentials: 'include', // Sends httpOnly cookies automatically
       body: method !== 'DELETE' ? JSON.stringify(action.data) : undefined,
     });
 

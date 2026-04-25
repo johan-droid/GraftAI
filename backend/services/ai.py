@@ -8,13 +8,13 @@ from typing import Optional, Any, Dict
 from zoneinfo import ZoneInfo
 from functools import lru_cache
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.schemes import get_current_user_id
-from backend.auth.logic import get_rate_limiter
+from backend.utils.rate_limiter import rate_limit
 from backend.services import scheduler
 from backend.services.llm_context import build_implementation_context
 from backend.services.langchain_client import llm
@@ -58,6 +58,13 @@ def _chunk_text(text: str, chunk_size: int = 96) -> list[str]:
     return [
         text[index : index + chunk_size] for index in range(0, len(text), chunk_size)
     ]
+
+
+def _estimate_tokens(text: str) -> int:
+    if not text:
+        return 0
+    # ~4 characters per token heuristic for English
+    return max(1, len(text) // 4)
 
 
 def _sse_event(event_name: str, payload: Dict[str, Any]) -> str:
@@ -803,15 +810,13 @@ async def _generate_with_groq(
     return content
 
 
-@router.post("/chat", response_model=AIResponse)
-async def ai_chat(
-    request: AIRequest,
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-    _usage_check: bool = Depends(check_usage_limit("ai_messages")),
-    _rate_limit: bool = Depends(get_rate_limiter(max_requests=10, window_seconds=60)),
-):
-    prompt = (request.prompt or "").strip()
+async def _execute_ai_chat(
+    payload: AIRequest,
+    user_id: str,
+    db: AsyncSession,
+    _usage_check: bool,
+) -> AIResponse:
+    prompt = (payload.prompt or "").strip()
     if not prompt:
         return AIResponse(
             result="Please provide a message.", model_used="graftai-assistant"
@@ -822,7 +827,7 @@ async def ai_chat(
         case "list" | "schedule" | "update" | "delete":
             try:
                 result_text, action = await _offline_assistant_response(
-                    prompt, request.timezone, db, user_id
+                    prompt, payload.timezone, db, user_id
                 )
             except ValueError as ve:
                 logger.warning(f"Offline action logic failure: {ve}")
@@ -834,7 +839,9 @@ async def ai_chat(
                 action = {"type": intent, "status": "error"}
 
             try:
+                tokens = _estimate_tokens(result_text)
                 await increment_usage(db, user_id, "ai_messages")
+                await increment_usage(db, user_id, "ai_tokens", amount=tokens)
             except Exception as exc:
                 logger.warning(
                     f"AI usage bookkeeping failed (offline): {exc}", exc_info=True
@@ -849,11 +856,13 @@ async def ai_chat(
         case _:
             pass
 
-    cache_key = f"ai:chat:{user_id}:{hash((prompt, request.timezone))}"
+    cache_key = f"ai:chat:{user_id}:{hash((prompt, payload.timezone))}"
     cached = await get_cache(cache_key)
     if isinstance(cached, str) and cached.strip():
         try:
+            tokens = _estimate_tokens(cached)
             await increment_usage(db, user_id, "ai_messages")
+            await increment_usage(db, user_id, "ai_tokens", amount=tokens)
         except Exception as exc:
             logger.warning(
                 f"AI usage bookkeeping failed (cache hit): {exc}", exc_info=True
@@ -883,7 +892,7 @@ async def ai_chat(
         or "No recent email context."
     )
 
-    compact_context = _format_events_compact(events, request.timezone)
+    compact_context = _format_events_compact(events, payload.timezone)
     implementation_context = build_implementation_context()
 
     system_prompt = (
@@ -909,7 +918,7 @@ async def ai_chat(
         f"### IMPLEMENTATION CONTEXT\n{implementation_context}\n\n"
         f"### AUTHORITATIVE CONTEXT (C-Table: ID|Title|Day|TimeRange)\n{compact_context}\n\n"
         f"### RECENT EMAIL CONTEXT\n{email_context}\n\n"
-        f"### USER ENVIRONMENT\nTimezone: {request.timezone}\n"
+        f"### USER ENVIRONMENT\nTimezone: {payload.timezone}\n"
         f"Current Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
         f"### USER MESSAGE\n{prompt}"
     )
@@ -927,12 +936,12 @@ async def ai_chat(
     except Exception as e:
         logger.warning(f"Groq AI is UNAVAILABLE (Circuit Tripped): {e}")
         try:
-            now_local = datetime.now(_safe_zoneinfo(request.timezone))
+            now_local = datetime.now(_safe_zoneinfo(payload.timezone))
             window_end = now_local + timedelta(hours=48)
             fallback_events = await scheduler.get_events_for_range(
                 db, user_id, now_local, window_end
             )
-            agenda = _format_events(fallback_events, request.timezone)
+            agenda = _format_events(fallback_events, payload.timezone)
 
             result_text = (
                 "I'm in High-Stability mode due to a provider service outage. "
@@ -973,7 +982,9 @@ async def ai_chat(
 
     await set_cache(cache_key, result_text, 120)
     try:
+        tokens = _estimate_tokens(result_text)
         await increment_usage(db, user_id, "ai_messages")
+        await increment_usage(db, user_id, "ai_tokens", amount=tokens)
     except Exception as exc:
         logger.warning(f"AI usage bookkeeping failed (online): {exc}", exc_info=True)
 
@@ -997,24 +1008,36 @@ async def ai_chat(
     )
 
 
-@router.post("/stream")
-async def ai_chat_stream(
-    request: AIRequest,
+@router.post("/chat", response_model=AIResponse)
+@rate_limit(limit=10, window=60)
+async def ai_chat(
+    request: Request,
+    payload: AIRequest,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     _usage_check: bool = Depends(check_usage_limit("ai_messages")),
-    _rate_limit: bool = Depends(get_rate_limiter(max_requests=10, window_seconds=60)),
+):
+    return await _execute_ai_chat(payload, user_id, db, _usage_check)
+
+
+@router.post("/stream")
+@rate_limit(limit=10, window=60)
+async def ai_chat_stream(
+    request: Request,
+    payload: AIRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+    _usage_check: bool = Depends(check_usage_limit("ai_messages")),
 ):
     async def event_stream():
         yield _sse_event("phase", {"phase": "perception", "status": "started"})
 
         try:
-            base_response = await ai_chat(
-                request=request,
+            base_response = await _execute_ai_chat(
+                payload=payload,
                 user_id=user_id,
                 db=db,
                 _usage_check=_usage_check,
-                _rate_limit=_rate_limit,
             )
 
             yield _sse_event("phase", {"phase": "perception", "status": "completed"})

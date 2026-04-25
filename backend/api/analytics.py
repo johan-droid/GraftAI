@@ -27,7 +27,8 @@ async def analytics_summary(
     days = _parse_range_window(range)
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=days)
-    events = await get_events_for_range(db, str(current_user.id), start, now)
+    end = now + timedelta(days=days)
+    events = await get_events_for_range(db, str(current_user.id), start, end)
 
     meetings = len(events)
     hours = sum(
@@ -82,7 +83,8 @@ async def analytics_realtime(
     days = _parse_range_window(range)
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=days)
-    events = await get_events_for_range(db, str(current_user.id), start, now)
+    end = now + timedelta(days=days)
+    events = await get_events_for_range(db, str(current_user.id), start, end)
 
     meetings = len(events)
     hours = sum(

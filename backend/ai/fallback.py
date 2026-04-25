@@ -37,7 +37,7 @@ Level 3: Manual Review (notify admin for human handling)
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from enum import Enum
 import asyncio
@@ -266,7 +266,7 @@ class RuleBasedFallbackEngine:
         Returns:
             FallbackResult with actions taken
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         booking_id = booking.get("id", "unknown")
 
         logger.info(f"[{booking_id}] Executing rule-based fallback")
@@ -282,7 +282,7 @@ class RuleBasedFallbackEngine:
                 action_results.append(result)
 
             # Calculate execution time
-            execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             # Determine status
             success = all(r.get("success") for r in action_results)
@@ -301,7 +301,7 @@ class RuleBasedFallbackEngine:
                 mode=FallbackLevel.RULE_BASED,
                 actions=action_results,
                 execution_time_ms=execution_time,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
         except Exception as e:
@@ -312,9 +312,9 @@ class RuleBasedFallbackEngine:
                 mode=FallbackLevel.RULE_BASED,
                 actions=[],
                 error=str(e),
-                execution_time_ms=(datetime.utcnow() - start_time).total_seconds()
+                execution_time_ms=(datetime.now(timezone.utc) - start_time).total_seconds()
                 * 1000,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
     async def _execute_action(
@@ -446,7 +446,7 @@ class AdminNotifier:
                     f"Booking: `{booking_id}`\n"
                     f"Reason: {reason}\n"
                     f"Urgency: {urgency}\n"
-                    f"Time: {datetime.utcnow().isoformat()}"
+                    f"Time: {datetime.now(timezone.utc).isoformat()}"
                 ),
             )
             results["slack"] = slack_result
@@ -465,7 +465,7 @@ class AdminNotifier:
                     f"Booking {booking_id} requires manual review.\n\n"
                     f"Reason: {reason}\n"
                     f"Urgency: {urgency}\n"
-                    f"Timestamp: {datetime.utcnow().isoformat()}\n\n"
+                    f"Timestamp: {datetime.now(timezone.utc).isoformat()}\n\n"
                     f"Details: {details or 'None provided'}\n\n"
                     f"Please review and take appropriate action."
                 ),
@@ -537,7 +537,7 @@ class FallbackOrchestrator:
             FallbackResult from the highest successful level
         """
         booking_id = booking.get("id", "unknown")
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         logger.info(f"[{booking_id}] Starting automation with fallback")
 
@@ -559,7 +559,7 @@ class FallbackOrchestrator:
             )
 
             # AI agent succeeded
-            execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             logger.info(
                 f"[{booking_id}] ✅ AI Agent succeeded: score={result.decision_score}"
@@ -571,7 +571,7 @@ class FallbackOrchestrator:
                 mode=FallbackLevel.AI_AGENT,
                 actions=result.actions_executed,
                 execution_time_ms=execution_time,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
         except Exception as e:
@@ -631,14 +631,14 @@ class FallbackOrchestrator:
                 details={
                     "booking": booking,
                     "attendee": attendee,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
         except Exception as e:
             logger.error(f"[{booking_id}] Admin notification also failed: {e}")
             notification_results = {"error": str(e)}
 
-        execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
         return FallbackResult(
             booking_id=booking_id,
@@ -646,7 +646,7 @@ class FallbackOrchestrator:
             mode=FallbackLevel.MANUAL_REVIEW,
             actions=[{"type": "admin_notification", "results": notification_results}],
             execution_time_ms=execution_time,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     async def _apply_default_rules(self, booking: Dict[str, Any]) -> FallbackResult:
@@ -659,7 +659,7 @@ class FallbackOrchestrator:
         Returns:
             FallbackResult with standard actions
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         booking_id = booking.get("id", "unknown")
 
         # Standard actions for any booking
@@ -679,7 +679,7 @@ class FallbackOrchestrator:
             )
             action_results.append(result)
 
-        execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
         return FallbackResult(
             booking_id=booking_id,
@@ -689,7 +689,7 @@ class FallbackOrchestrator:
             mode=FallbackLevel.RULE_BASED,
             actions=action_results,
             execution_time_ms=execution_time,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
 

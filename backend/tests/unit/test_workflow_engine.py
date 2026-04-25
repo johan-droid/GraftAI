@@ -6,7 +6,7 @@ Tests the core workflow triggering, action execution, and error handling.
 import pytest
 import pytest_asyncio
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -17,8 +17,7 @@ from backend.services.workflow_engine import (
     ActionType,
     TriggerType,
 )
-from backend.models.tables import WorkflowTable, WorkflowStepTable, UserTable
-from backend.utils.dead_letter_queue import DLQStatus
+from backend.models.tables import WorkflowTable, WorkflowStepTable
 
 
 @pytest.fixture

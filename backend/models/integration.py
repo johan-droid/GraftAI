@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List, TYPE_CHECKING
 import secrets
 
+from backend.utils.soft_delete import SoftDeleteMixin
 from .base import Base
 
 if TYPE_CHECKING:
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
     from backend.models.integration import IntegrationLog
 
 
-class Integration(Base):
+class Integration(Base, SoftDeleteMixin):
     """Third-party service integrations."""
 
     __tablename__ = "integrations"

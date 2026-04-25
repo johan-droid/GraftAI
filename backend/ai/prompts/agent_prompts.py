@@ -9,7 +9,7 @@ Structured prompts for the LLM to guide each phase of the agent loop:
 """
 
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ═════════════════════════════════════════════════════════════════
 # SYSTEM PROMPT
@@ -374,7 +374,7 @@ def format_agent_cognition_prompt(
             user_request=context.get("user_request", ""),
             agent_type=context.get("agent_type", "general"),
             current_goal=context.get("current_goal", ""),
-            current_time=datetime.utcnow().isoformat(),
+            current_time=datetime.now(timezone.utc).isoformat(),
             short_term_memory=context.get("short_term_memory", "None"),
             medium_term_memory=context.get("medium_term_memory", "None"),
             long_term_memory=context.get("long_term_memory", "None"),
@@ -411,7 +411,7 @@ def format_agent_cognition_prompt(
             original_plan=context.get("original_plan", ""),
             agent_type=context.get("agent_type", ""),
             user_id=context.get("user_id", ""),
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     else:

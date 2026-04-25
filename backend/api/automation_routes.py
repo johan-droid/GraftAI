@@ -174,7 +174,7 @@ async def list_automation_rules(
     current_user: UserTable = Depends(get_current_user),
 ):
     """List automation rules with pagination."""
-    from backend.utils.pagination import paginate
+    from backend.utils.pagination import paginate_query
 
     stmt = select(AutomationRule).where(AutomationRule.user_id == current_user.id)
 
@@ -200,7 +200,7 @@ async def list_automation_rules(
         stmt = stmt.order_by(sort_column)
 
     # Apply pagination
-    items, pagination_meta = await paginate(db, stmt, pagination, AutomationRule)
+    items, pagination_meta = await paginate_query(db, stmt, pagination, AutomationRule)
 
     rules = [
         AutomationRuleResponse(

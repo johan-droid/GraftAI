@@ -5,9 +5,12 @@ Provides endpoints for triggering and monitoring AI agent automation
 for bookings created in the scheduler.
 """
 
+import hashlib
+import hmac
+import os
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -100,7 +103,7 @@ def _build_actions(
                 tool_name=action.get("tool_name", "unknown"),
                 success=bool(action.get("success", False)),
                 status=action.get("status", "unknown"),
-                timestamp=str(action.get("timestamp") or datetime.utcnow().isoformat()),
+                timestamp=str(action.get("timestamp") or datetime.now(timezone.utc).isoformat()),
                 email_id=action.get("email_id"),
                 event_id=action.get("event_id"),
                 task_id=action.get("task_id"),
@@ -178,7 +181,7 @@ def _build_status_response(automation: AIAutomationTable) -> AutomationStatusRes
         decision_score=decision_score,
         risk_assessment=risk_assessment,
         execution_time_ms=automation.execution_time_ms or 0,
-        timestamp=completed_at or started_at or datetime.utcnow().isoformat(),
+        timestamp=completed_at or started_at or datetime.now(timezone.utc).isoformat(),
         agent_decisions=_build_agent_decisions(
             automation.agent_decisions, risk_assessment, actions
         ),
@@ -200,7 +203,7 @@ def _build_result_response(automation: AIAutomationTable) -> AutomationStatusRes
         else (
             automation.created_at.isoformat()
             if automation.created_at
-            else datetime.utcnow().isoformat()
+            else datetime.now(timezone.utc).isoformat()
         )
     )
 
@@ -295,7 +298,7 @@ async def trigger_booking_automation(
                 tool_name=action.get("tool_name", "unknown"),
                 success=action.get("success", False),
                 status=action.get("status", "unknown"),
-                timestamp=action.get("timestamp", datetime.utcnow().isoformat()),
+                timestamp=action.get("timestamp", datetime.now(timezone.utc).isoformat()),
                 email_id=action.get("email_id"),
                 event_id=action.get("event_id"),
                 task_id=action.get("task_id"),
@@ -427,11 +430,41 @@ async def get_automation_history(
     "Triggers AI automation automatically.\n"
     "Requires webhook secret for authentication.",
 )
+async def _verify_booking_webhook(request: Request, webhook_secret: Optional[str]) -> bytes:
+    secret = os.getenv("AUTOMATION_WEBHOOK_SECRET")
+    if not secret:
+        raise HTTPException(
+            status_code=500,
+            detail="Automation webhook secret not configured",
+        )
+
+    header_signature = request.headers.get("X-GraftAI-Signature")
+    payload = await request.body()
+
+    if header_signature:
+        expected_sig = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected_sig, header_signature):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid webhook signature",
+            )
+        return payload
+
+    if not webhook_secret or not hmac.compare_digest(webhook_secret, secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid webhook secret",
+        )
+
+    return payload
+
+
 async def webhook_booking_created(
+    request: Request,
     booking_id: str,
     user_id: str,
     background_tasks: BackgroundTasks,
-    webhook_secret: str,  # Should be validated
+    webhook_secret: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """
@@ -441,9 +474,7 @@ async def webhook_booking_created(
     Runs automation in background and returns immediately.
     """
     try:
-        # Validate webhook secret
-        # if webhook_secret != settings.WEBHOOK_SECRET:
-        #     raise HTTPException(status_code=401, detail="Invalid webhook secret")
+        await _verify_booking_webhook(request, webhook_secret)
 
         logger.info(f"🔔 Webhook: Booking created {booking_id} for user {user_id}")
 
@@ -457,7 +488,7 @@ async def webhook_booking_created(
             "status": "accepted",
             "booking_id": booking_id,
             "message": "Automation queued for background execution",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -543,7 +574,7 @@ async def get_automation_stats(
     Returns aggregate metrics about automation performance.
     """
     try:
-        cutoff = datetime.utcnow() - timedelta(days=max(days, 1))
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max(days, 1))
         db_result = await db.execute(
             select(AIAutomationTable)
             .where(
@@ -616,7 +647,7 @@ async def get_automation_stats(
             else 0,
             "actions_breakdown": actions_breakdown,
             "risk_distribution": risk_distribution,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.utils.logger import get_logger
 from backend.ai.agents.base import BaseAgent, AgentState
 from backend.ai.memory.vector_store import VectorStore
@@ -35,7 +35,7 @@ class AgentRequest:
     user_id: str
     context: Dict[str, Any]
     priority: int = 5  # 1-10, lower is higher priority
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     callback: Optional[Callable] = None
 
 
@@ -223,7 +223,7 @@ class AgentController:
 
     async def _process_request(self, request: AgentRequest):
         """Process a single request"""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Get appropriate agent
@@ -242,7 +242,7 @@ class AgentController:
             result = await agent.execute(request)
 
             # Calculate processing time
-            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            processing_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             # Create response
             response = AgentResponse(
@@ -258,7 +258,7 @@ class AgentController:
 
         except Exception as e:
             logger.error(f"Request {request.id} failed: {e}")
-            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            processing_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             response = AgentResponse(
                 request_id=request.id,
@@ -274,12 +274,29 @@ class AgentController:
         if future and not future.done():
             future.set_result(response)
 
-        # Log to vector store for learning (fire-and-forget so slow vector DB
-        # operations don't block the worker loop).
+        # Log to vector store for learning via Celery (survives restarts)
         try:
-            asyncio.create_task(self._log_interaction(request, response))
+            from backend.tasks.automation_tasks import log_agent_interaction_task
+            
+            # Prepare data for serialization
+            req_data = {
+                "id": request.id,
+                "agent_type": request.type.value,
+                "user_id": request.user_id,
+                "context": request.context,
+                "timestamp": request.timestamp.isoformat() if request.timestamp else None
+            }
+            res_data = {
+                "success": response.success,
+                "result": response.result,
+                "error": response.error,
+                "processing_time_ms": response.processing_time_ms
+            }
+            
+            log_agent_interaction_task.delay(req_data, res_data)
+            logger.info(f"Queued persistent logging for request {request.id}")
         except Exception as e:
-            logger.error(f"Failed to spawn logging task: {e}")
+            logger.error(f"Failed to queue logging task: {e}")
 
     async def _log_interaction(self, request: AgentRequest, response: AgentResponse):
         """Log agent interaction for learning"""
@@ -295,7 +312,7 @@ class AgentController:
                     "success": response.success,
                     "error": response.error,
                     "processing_time_ms": response.processing_time_ms,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
                 metadata={
                     "agent_type": request.type.value,

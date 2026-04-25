@@ -5,8 +5,6 @@ Tests all three states: CLOSED, OPEN, HALF_OPEN
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch
-from datetime import datetime, timezone
 
 from backend.utils.circuit_breaker import (
     CircuitBreaker,

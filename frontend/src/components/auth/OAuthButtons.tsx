@@ -21,9 +21,18 @@ const MicrosoftIcon = () => (
   </svg>
 );
 
+const ZoomIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="12" fill="#2D8CFF"/>
+    <path d="M6.5 8.5C6.5 7.94772 6.94772 7.5 7.5 7.5H13.5C14.0523 7.5 14.5 7.94772 14.5 8.5V13.5C14.5 14.0523 14.0523 14.5 13.5 14.5H7.5C6.94772 14.5 6.5 14.0523 6.5 13.5V8.5Z" fill="white"/>
+    <path d="M15.5 9.5L18.5 7.5V14.5L15.5 12.5V9.5Z" fill="white"/>
+  </svg>
+);
+
 const providers = [
   { id: "google", name: "Google", icon: GoogleIcon },
   { id: "microsoft-entra-id", name: "Microsoft", icon: MicrosoftIcon },
+  { id: "zoom", name: "Zoom", icon: ZoomIcon },
 ];
 
 interface OAuthButtonsProps {

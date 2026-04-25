@@ -60,6 +60,15 @@ ALLOWED_REDIRECT_PATHS = {
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Authentication"])
 
+
+def _mask_token(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return None
+    s = str(token)
+    if len(s) <= 8:
+        return s[:2] + "..." + s[-2:]
+    return s[:4] + "..." + s[-4:]
+
 from pydantic import BaseModel
 
 
@@ -104,8 +113,31 @@ async def social_exchange(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
+    # Debug: log incoming headers and a masked view of tokens to help diagnose
+    # sign-in failures without exposing full credentials in logs.
+    try:
+        logger.info(
+            "[social_exchange] Incoming request | Host=%s Origin=%s Referer=%s UA=%s",
+            request.headers.get("host"),
+            request.headers.get("origin"),
+            request.headers.get("referer"),
+            request.headers.get("user-agent"),
+        )
+        logger.info(
+            "[social_exchange] Payload preview | provider=%s provider_account_id=%s email=%s access_token=%s id_token=%s",
+            req.provider,
+            getattr(req, "provider_account_id", None),
+            req.email,
+            _mask_token(getattr(req, "access_token", None)),
+            _mask_token(getattr(req, "id_token", None)),
+        )
+    except Exception:
+        logger.exception("[social_exchange] Failed to log request metadata")
+
     client_ip = get_client_ip(request)
-    await rate_limit(client_ip, api_limits["login"])
+    # Social exchange is part of the OAuth handshake; use the oauth_callback
+    # rate limit (higher allowance) rather than the strict login limit.
+    await rate_limit(client_ip, api_limits["oauth_callback"])
 
     normalized_provider = req.provider.lower()
     if normalized_provider not in ["google", "microsoft", "microsoft-entra-id"]:
@@ -175,6 +207,14 @@ async def social_exchange(
     await upsert_user_token(db, user, backend_provider, token_payload)
     await db.commit()
 
+    # ── Trigger Automatic Sync ───────────────────────────────────────────────
+    try:
+        from backend.tasks.calendar_tasks import sync_all_integrations
+        sync_all_integrations.delay(user.id)
+        logger.info(f"Triggered full background sync for user {user.id}")
+    except Exception as e:
+        logger.error(f"Failed to trigger background sync: {e}")
+
     # ── Issue legacy cookies for backward compatibility ──────────────────
     _set_auth_cookies(response, access_token, refresh_token)
 
@@ -191,6 +231,11 @@ async def social_exchange(
             "tier": user.tier,
             "subscription_status": user.subscription_status,
             "created_at": user.created_at.isoformat() if user.created_at else None,
+            "daily_ai_count": user.daily_ai_count,
+            "daily_ai_limit": user.daily_ai_limit,
+            "total_ai_tokens": user.total_ai_tokens,
+            "total_api_calls": user.total_api_calls,
+            "total_scheduling_count": user.total_scheduling_count,
         },
     }
 
@@ -299,10 +344,13 @@ async def check(
             "email": user.email,
             "full_name": user.full_name,
             "username": user.username,
-            "daily_ai_limit": 10,
-            "daily_sync_limit": 3,
+            "daily_ai_count": user.daily_ai_count,
+            "daily_ai_limit": user.daily_ai_limit,
+            "total_ai_tokens": user.total_ai_tokens,
+            "total_api_calls": user.total_api_calls,
+            "total_scheduling_count": user.total_scheduling_count,
             "trial_days_left": get_trial_days_left(user.created_at),
-            "trial_active": True,
+            "trial_active": user.trial_active,
             "quota_reset_at": get_next_quota_reset().isoformat(),
         },
     }
@@ -326,7 +374,15 @@ async def refresh(
         )
 
     # Check if token is blacklisted (Token Rotation security)
-    is_blacklisted = await cache_exists(f"blacklist:{token_value}")
+    try:
+        is_blacklisted = await cache_exists(f"blacklist:{token_value}")
+    except Exception as exc:
+        logger.warning(
+            "Cache/Redis error checking refresh blacklist; proceeding without blacklist (dev fallback): %s",
+            exc,
+        )
+        is_blacklisted = False
+
     if is_blacklisted:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -353,7 +409,13 @@ async def refresh(
         )
 
     # Add the used refresh token to the blacklist
-    await cache_set(f"blacklist:{token_value}", "used", expire=REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+    try:
+        await cache_set(f"blacklist:{token_value}", "used", expire=REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+    except Exception as exc:
+        logger.warning(
+            "Cache/Redis error setting refresh blacklist for token; continuing without blacklist (dev fallback): %s",
+            exc,
+        )
 
     token_version = getattr(user, "token_version", 0) or 0
     new_access_token = create_access_token(user.id, token_version=token_version)
@@ -418,6 +480,19 @@ async def google_callback(
     state: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
+    # Debug: log callback headers and params to capture provider redirects
+    try:
+        logger.info(
+            "[google_callback] Incoming callback | Host=%s Origin=%s Referer=%s UA=%s Query=%s",
+            request.headers.get("host"),
+            request.headers.get("origin"),
+            request.headers.get("referer"),
+            request.headers.get("user-agent"),
+            dict(request.query_params),
+        )
+    except Exception:
+        logger.exception("[google_callback] Failed to log callback metadata")
+
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["oauth_callback"])
 
@@ -528,6 +603,18 @@ async def sso_callback(
     When fetch=true, returns JSON with token for frontend to handle.
     Otherwise, redirects to frontend with token in URL.
     """
+    try:
+        logger.info(
+            "[sso_callback] Incoming callback | Host=%s Origin=%s Referer=%s UA=%s Query=%s",
+            request.headers.get("host"),
+            request.headers.get("origin"),
+            request.headers.get("referer"),
+            request.headers.get("user-agent"),
+            dict(request.query_params),
+        )
+    except Exception:
+        logger.exception("[sso_callback] Failed to log callback metadata")
+
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["oauth_callback"])
 
@@ -708,6 +795,18 @@ async def microsoft_callback(
     state: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
+    try:
+        logger.info(
+            "[microsoft_callback] Incoming callback | Host=%s Origin=%s Referer=%s UA=%s Query=%s",
+            request.headers.get("host"),
+            request.headers.get("origin"),
+            request.headers.get("referer"),
+            request.headers.get("user-agent"),
+            dict(request.query_params),
+        )
+    except Exception:
+        logger.exception("[microsoft_callback] Failed to log callback metadata")
+
     client_ip = get_client_ip(request)
     await rate_limit(client_ip, api_limits["oauth_callback"])
 
@@ -825,7 +924,7 @@ async def complete_onboarding(
 
     current_user.preferences = prefs
     current_user.onboarding_completed = True
-    current_user.onboarding_completed_at = datetime.utcnow()
+    current_user.onboarding_completed_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(current_user)

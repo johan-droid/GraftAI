@@ -113,13 +113,13 @@ export default function RuleEditor() {
   };
 
   const handleSave = async () => {
-    const token = localStorage.getItem('access_token');
+    // SECURITY FIX: Use credentials:include instead of localStorage token
     const response = await fetch('/api/v1/automation/rules', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      credentials: 'include', // Sends httpOnly cookies automatically
       body: JSON.stringify({
         name,
         description,

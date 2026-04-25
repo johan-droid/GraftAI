@@ -2,13 +2,14 @@ import logging
 import hashlib
 from pathlib import Path
 from typing import Optional
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text, create_engine, inspect, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 logger = logging.getLogger(__name__)
 
 from backend.utils.db import DATABASE_URL
 from backend.models.base import Base
+from backend.models.tables import UserTable, UserTokenTable
 
 
 SCHEMA_MIGRATIONS_TABLE_SQL = """
@@ -130,6 +131,104 @@ def _webhook_tables_have_wrong_id_type(engine) -> bool:
         return False
 
 
+def _get_sqlite_table_columns(engine, table_name: str) -> set[str]:
+    with engine.begin() as conn:
+        result = conn.execute(text(f"PRAGMA table_info({table_name})"))
+        return {row[1] for row in result.fetchall()}
+
+
+def _sqlite_column_declaration(column) -> str:
+    sql_type = "TEXT"
+    default = None
+
+    if isinstance(column.type, Boolean):
+        sql_type = "INTEGER"
+        default = "0"
+    elif isinstance(column.type, Integer):
+        sql_type = "INTEGER"
+        default = "0"
+    elif isinstance(column.type, Float):
+        sql_type = "REAL"
+        default = "0.0"
+    elif isinstance(column.type, DateTime):
+        sql_type = "DATETIME"
+        default = "CURRENT_TIMESTAMP"
+    elif isinstance(column.type, (String, Text, JSON)):
+        sql_type = "TEXT"
+        default = "''"
+
+    decl = f"{column.name} {sql_type}"
+    if not column.nullable:
+        if default is not None:
+            decl += f" DEFAULT {default}"
+        decl += " NOT NULL"
+    return decl
+
+
+def _ensure_sqlite_model_columns(engine) -> None:
+    """Add missing SQLite columns for ORM tables that cannot be created by create_all."""
+    tables = [UserTable, UserTokenTable]
+
+    with engine.begin() as conn:
+        for table_obj in tables:
+            table_name = table_obj.__tablename__
+            existing_columns = _get_sqlite_table_columns(engine, table_name)
+            if not existing_columns:
+                continue
+
+            for column in table_obj.__table__.columns:
+                if column.name in existing_columns:
+                    continue
+
+                decl = _sqlite_column_declaration(column)
+                logger.info(
+                    "Adding missing SQLite column %s to %s: %s",
+                    column.name,
+                    table_name,
+                    decl,
+                )
+                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {decl}"))
+
+
+def _ensure_sqlite_soft_delete_flags(engine) -> None:
+    """Ensure SQLite tables have the soft-delete columns used by the ORM."""
+    table_defs = {
+        "events": [
+            ("deleted_at", "DATETIME", True, None),
+            ("is_deleted", "BOOLEAN", False, "0"),
+        ],
+        "integrations": [
+            ("deleted_at", "DATETIME", True, None),
+            ("is_deleted", "BOOLEAN", False, "0"),
+        ],
+        "webhook_subscriptions": [
+            ("deleted_at", "DATETIME", True, None),
+            ("is_deleted", "BOOLEAN", False, "0"),
+        ],
+    }
+
+    with engine.begin() as conn:
+        for table_name, columns in table_defs.items():
+            existing_columns = _get_sqlite_table_columns(engine, table_name)
+            if not existing_columns:
+                continue
+
+            for column_name, column_type, nullable, default in columns:
+                if column_name not in existing_columns:
+                    sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                    if not nullable:
+                        sql += f" NOT NULL DEFAULT {default}"
+                    conn.execute(text(sql))
+
+            if "is_deleted" in {col[0] for col in columns}:
+                index_name = f"ix_{table_name}_is_deleted"
+                conn.execute(
+                    text(
+                        f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name}(is_deleted)"
+                    )
+                )
+
+
 def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] = None):
     db_url = db_url or DATABASE_URL
     if not db_url:
@@ -168,7 +267,16 @@ def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] =
 
     # SQLite local/test mode: keep a single canonical DB path without Postgres-only SQL scripts.
     if sync_url.startswith("sqlite://"):
-        return {"status": "ok", "results": ["sqlite-create-all"]}
+        _ensure_sqlite_soft_delete_flags(engine)
+        _ensure_sqlite_model_columns(engine)
+        return {
+            "status": "ok",
+            "results": [
+                "sqlite-create-all",
+                "sqlite-soft-delete-fix",
+                "sqlite-model-column-fix",
+            ],
+        }
 
     _ensure_migration_table(engine)
 
@@ -188,7 +296,7 @@ def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] =
 if __name__ == "__main__":
     try:
         run_migrations()
-        print("✅ Database migrations were successfully applied.")
+        logger.info("✅ Database migrations were successfully applied.")
     except Exception as exc:
         logger.error(f"❌ Failed to apply migrations: {type(exc).__name__}")
         raise

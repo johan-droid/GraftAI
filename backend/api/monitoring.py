@@ -6,7 +6,7 @@ Provides endpoints for Prometheus metrics, health checks, and monitoring dashboa
 
 from typing import Dict, Any, Optional
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 from pydantic import BaseModel
@@ -35,10 +35,10 @@ from backend.utils.logger import get_logger
 async def _check_database() -> Dict[str, Any]:
     try:
         session_maker = get_async_session_maker()
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
         async with session_maker() as db:
             await db.execute(text("SELECT 1"))
-        latency_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
+        latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
         return {
             "status": "healthy",
             "latency_ms": latency_ms,
@@ -56,9 +56,9 @@ async def _check_redis() -> Dict[str, Any]:
         if redis_client is None:
             raise RuntimeError("Redis client unavailable")
 
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
         await redis_client.ping()
-        latency_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
+        latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
 
         return {
             "status": "healthy",
@@ -147,7 +147,7 @@ def _stream_event_to_notification(event: Dict[str, Any]) -> Dict[str, Any]:
         "title": title or "Live update",
         "message": message,
         "metadata": metadata,
-        "timestamp": event.get("timestamp") or datetime.utcnow().isoformat(),
+        "timestamp": event.get("timestamp") or datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -263,7 +263,7 @@ async def health_check() -> SystemHealthResponse:
 
         return SystemHealthResponse(
             status=overall_status,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             components=components,
             metrics_summary=metrics_summary,
         )
@@ -272,7 +272,7 @@ async def health_check() -> SystemHealthResponse:
         logger.error(f"Health check failed: {e}")
         return SystemHealthResponse(
             status="unhealthy",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             components={"error": str(e)},
             metrics_summary={},
         )
@@ -359,7 +359,7 @@ async def get_recent_automations(
         return {
             "automations": recent,
             "count": len(recent),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -392,7 +392,7 @@ async def get_error_summary(
             "total_errors": errors["total_errors"],
             "error_breakdown": errors["error_breakdown"],
             "time_window_hours": hours,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -437,7 +437,7 @@ async def get_current_metrics(
                 "successful": 0,
                 "failed": 0,
             },
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     except Exception as e:
@@ -474,7 +474,7 @@ async def get_decision_score_distribution(
                 "91-100": 0,
             },
             "time_window_hours": hours,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -524,7 +524,7 @@ async def get_dashboard_data(
                 "errors_24h": errors["total_errors"],
                 "error_breakdown": errors["error_breakdown"],
             },
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -565,7 +565,7 @@ async def get_tool_stats(
                 },
             },
             "time_window_hours": hours,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -638,13 +638,13 @@ async def monitoring_websocket(websocket: WebSocket):
             else:
                 await asyncio.sleep(0.1)
 
-            now = datetime.utcnow().timestamp()
+            now = datetime.now(timezone.utc).timestamp()
             if now - last_metrics_sent_at >= 5:
                 await websocket.send_json(
                     {
                         "type": "metrics_update",
                         "payload": {
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                             "active_automations": 0,
                             "recent_automations": [],
                         },
@@ -704,7 +704,7 @@ async def reset_metrics(
             # Usually you'd restart the process or use new labels
             pass
 
-        return {"status": "metrics reset", "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "metrics reset", "timestamp": datetime.now(timezone.utc).isoformat()}
 
     except Exception as e:
         logger.error(f"Error resetting metrics: {e}")
@@ -739,7 +739,7 @@ async def get_logs(
             "logs": recent_logs,
             "total_lines": len(logs),
             "returned_lines": len(recent_logs),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:

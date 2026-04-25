@@ -1,8 +1,10 @@
 import os
 import logging
 import inspect
+from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +18,43 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 AsyncSessionLocal = None
 engine = None
 
+
+def _normalize_sqlite_url(url: str) -> str:
+    """Normalize relative SQLite URLs to a path anchored at the repository root."""
+    if not url.startswith("sqlite"):
+        return url
+
+    # Normalize both sqlite:/// and sqlite+aiosqlite:/// forms.
+    prefix = "sqlite+aiosqlite:///"
+    if url.startswith(prefix):
+        path_part = url[len(prefix) :]
+        scheme = prefix
+    else:
+        prefix = "sqlite:///"
+        if url.startswith(prefix):
+            path_part = url[len(prefix) :]
+            scheme = prefix
+        else:
+            return url
+
+    if not path_part:
+        return url
+
+    candidate = Path(path_part)
+    # Windows URIs may produce a leading slash before the drive letter.
+    if candidate.drive and not candidate.root and path_part.startswith("/"):
+        candidate = Path(path_part[1:])
+
+    if not candidate.is_absolute():
+        project_root = Path(__file__).resolve().parents[2]
+        candidate = (project_root / candidate).resolve()
+
+    # Ensure the sqlite URL uses forward slashes for URI compatibility.
+    return f"{scheme}{candidate.as_posix()}"
+
+
 if DATABASE_URL:
+    DATABASE_URL = _normalize_sqlite_url(DATABASE_URL)
     try:
         from sqlalchemy.ext.asyncio import (
             AsyncSession,
@@ -74,20 +112,26 @@ if DATABASE_URL:
             if _needs_ssl:
                 _connect_args["ssl"] = "require" if is_render else True
 
-            pool_size = int(os.getenv("DB_POOL_SIZE", "10"))
-            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "30"))
-            pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "110"))
+            # CRITICAL PRODUCTION SETTINGS FOR POSTGRESQL
+            # Strict Pool Size: Do not allow an infinite spike of connections
+            pool_size = int(os.getenv("DB_POOL_SIZE", "20"))
+            # Max Overflow: Allow 10 extra temporary connections during a spike
+            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+            # Pool Timeout: How long to wait for a connection before failing safely (30s)
+            pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+            # Pool Recycle: Drop connections older than 30 mins to prevent stale drops from the DB
+            pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "1800"))
 
             engine = create_async_engine(
                 _clean_url,
                 echo=False,
                 future=True,
                 connect_args=_connect_args,
-                pool_pre_ping=True,
+                pool_pre_ping=True,  # Verify connection is alive before using it
                 pool_recycle=pool_recycle,
                 pool_size=pool_size,
                 max_overflow=max_overflow,
-                pool_timeout=45,
+                pool_timeout=pool_timeout,
             )
             AsyncSessionLocal = async_sessionmaker(
                 bind=engine,
@@ -126,4 +170,20 @@ async def unwrap_result(value):
     """Return SQLAlchemy results uniformly across sync/async call sites."""
     if inspect.isawaitable(value):
         return await value
-    return value
+
+
+@asynccontextmanager
+async def get_db_context():
+    """Async context manager for database sessions.
+    
+    Useful in background tasks or scripts where FastAPI's Depends() is not available.
+    """
+    if AsyncSessionLocal is None:
+        raise RuntimeError(
+            "Database not configured. Set DATABASE_URL in your .env file."
+        )
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()

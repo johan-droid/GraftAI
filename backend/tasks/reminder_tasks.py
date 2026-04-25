@@ -3,7 +3,7 @@ Reminder notification tasks.
 Sends email/SMS reminders before meetings.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from backend.core.celery_app import celery_app
 from backend.utils.logger import get_logger
 
@@ -16,7 +16,7 @@ def send_pending_reminders(self):
     try:
         logger.info("Processing pending reminders")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Query reminders that should be sent now
 
@@ -56,7 +56,7 @@ def schedule_booking_reminders(
         logger.info(f"Scheduling reminders for booking {booking_id}")
 
         start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Schedule reminders at different intervals
         reminder_times = [

@@ -107,3 +107,14 @@ frontend/public/swe-worker-*.js
 # Tool caches
 .ruff_cache/
 .cache/
+
+# Audit and Implementation reports
+*_AUDIT_REPORT.md
+*_IMPLEMENTATION.md
+*_FIXES_IMPLEMENTED.md
+*_CHECKLIST.md
+*_GUIDE.md
+graftai_fullstack_audit.md
+FINAL_SECURITY_FIXES.md
+NPLUS1_AND_TESTING_FIXES.md
+TASK_QUEUE_AND_INFRASTRUCTURE_HARDENING.md

@@ -2,11 +2,12 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import html
 import re
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, ConfigDict, field_validator, validator
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -37,6 +38,29 @@ class UserProfileUpdateRequest(BaseModel):
     booking_layout: Optional[str] = None
     default_calendar_id: Optional[str] = None
     preferences: Optional[dict] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator(
+        "display_name",
+        "full_name",
+        "username",
+        "bio",
+        "phone",
+        "timezone",
+        "time_format",
+        "theme",
+        "brand_color_light",
+        "brand_color_dark",
+        "booking_layout",
+        "default_calendar_id",
+        mode="before",
+    )
+    @classmethod
+    def sanitize_html(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return html.escape(v.strip())
 
     @validator("username")
     def username_must_be_valid(cls, value: Optional[str]):
@@ -208,10 +232,12 @@ def _serialize_profile(user: UserTable) -> Dict[str, Any]:
         "quota_reset_at": user.quota_reset_at.isoformat()
         if user.quota_reset_at
         else None,
-        "trial_active": user.trial_active,
         "trial_expires_at": user.trial_expires_at.isoformat()
         if user.trial_expires_at
         else None,
+        "total_ai_tokens": user.total_ai_tokens,
+        "total_api_calls": user.total_api_calls,
+        "total_scheduling_count": user.total_scheduling_count,
     }
 
 
@@ -405,7 +431,15 @@ async def get_google_calendar_auth_url(
     state = build_oauth_state(
         current_user.id, redirect_to="/profile/setup/calendar", provider="google"
     )
-    auth_url = await get_google_auth_url(state)
+    try:
+        auth_url = await get_google_auth_url(state)
+    except ValueError as exc:
+        logger.error("Google OAuth configuration error for user %s: %s", current_user.id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        )
+
     return {
         "success": True,
         "message": "Google authorization URL created",

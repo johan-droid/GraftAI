@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, desc
+from sqlalchemy.orm import selectinload
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.tables import UserTable
@@ -541,6 +542,7 @@ async def get_my_resource_bookings(
     stmt = (
         select(ResourceBooking, Resource)
         .join(Resource, ResourceBooking.resource_id == Resource.id)
+        .options(selectinload(ResourceBooking.user))  # Eager load user to prevent N+1
         .where(ResourceBooking.user_id == current_user.id)
         .order_by(desc(ResourceBooking.start_time))
         .limit(limit)

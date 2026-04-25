@@ -39,7 +39,7 @@ Implementation:
 
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import asyncio
 import json
@@ -86,12 +86,12 @@ class MemoryEntry:
         """Check if memory entry has expired"""
         if self.expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     def touch(self):
         """Update access metadata"""
         self.access_count += 1
-        self.last_accessed = datetime.utcnow()
+        self.last_accessed = datetime.now(timezone.utc)
 
 
 @dataclass
@@ -128,7 +128,7 @@ class ShortTermMemory:
         message = {
             "role": role,
             "content": content,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "metadata": metadata or {},
         }
         self.conversation_history.append(message)
@@ -141,7 +141,7 @@ class ShortTermMemory:
         """Store tool output"""
         self.tool_outputs[tool_name] = {
             "output": output,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_recent_context(self, n_messages: int = 5) -> str:
@@ -196,7 +196,7 @@ class MediumTermMemory:
             "type": pattern_type,
             "data": pattern_data,
             "outcome": outcome,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "confidence": 1.0,  # Will be adjusted over time
         }
         self.recent_patterns.append(entry)
@@ -211,7 +211,7 @@ class MediumTermMemory:
             "condition": condition,
             "action": action,
             "confidence": confidence,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "usage_count": 0,
         }
         self.contextual_rules.append(rule)
@@ -230,7 +230,7 @@ class MediumTermMemory:
         self.user_preferences[key] = {
             "value": value,
             "confidence": confidence,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
             "source": "learned",
         }
 
@@ -269,7 +269,7 @@ class LongTermMemory:
 
     async def store_episode(self, episode: Dict):
         """Store an episodic memory"""
-        episode["stored_at"] = datetime.utcnow().isoformat()
+        episode["stored_at"] = datetime.now(timezone.utc).isoformat()
         self.episodic_memories.append(episode)
 
         # Keep size manageable
@@ -343,7 +343,7 @@ class LongTermMemory:
             "situation": situation,
             "solution": solution,
             "effectiveness": effectiveness,
-            "discovered_at": datetime.utcnow().isoformat(),
+            "discovered_at": datetime.now(timezone.utc).isoformat(),
             "usage_count": 0,
             "verified": effectiveness > 0.8,
         }
@@ -355,7 +355,7 @@ class LongTermMemory:
             "scenario": scenario,
             "issue": issue,
             "resolution": resolution,
-            "encountered_at": datetime.utcnow().isoformat(),
+            "encountered_at": datetime.now(timezone.utc).isoformat(),
             "frequency": 1,
         }
         self.edge_cases.append(edge_case)
@@ -422,7 +422,7 @@ class MultiLayerMemoryManager:
 
     def _generate_session_id(self) -> str:
         """Generate unique session ID"""
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
         random_hash = hashlib.md5(f"{self.user_id}{timestamp}".encode()).hexdigest()[:8]
         return f"sess_{timestamp}_{random_hash}"
 
@@ -448,8 +448,8 @@ class MultiLayerMemoryManager:
                 value=value,
                 layer=layer,
                 priority=priority,
-                created_at=datetime.utcnow(),
-                expires_at=datetime.utcnow() + timedelta(seconds=ttl_seconds)
+                created_at=datetime.now(timezone.utc),
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
                 if ttl_seconds
                 else None,
                 tags=tags or [],
@@ -478,7 +478,7 @@ class MultiLayerMemoryManager:
         """Store in medium-term memory (Redis/cache)"""
         if self.redis:
             try:
-                data = {"value": value, "stored_at": datetime.utcnow().isoformat()}
+                data = {"value": value, "stored_at": datetime.now(timezone.utc).isoformat()}
                 await self.redis.setex(
                     f"medium_term:{self.user_id}:{key}",
                     ttl_seconds or 86400,  # Default 1 day
@@ -492,7 +492,7 @@ class MultiLayerMemoryManager:
             # No Redis, store in memory with expiration tracking
             self.medium_term.session_state[key] = {
                 "value": value,
-                "expires_at": datetime.utcnow()
+                "expires_at": datetime.now(timezone.utc)
                 + timedelta(seconds=ttl_seconds or 86400),
             }
 
@@ -510,7 +510,7 @@ class MultiLayerMemoryManager:
                 "priority": entry.priority.value,
                 "tags": entry.tags,
             },
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "importance": self._priority_to_importance(entry.priority),
         }
 
@@ -584,7 +584,7 @@ class MultiLayerMemoryManager:
                     )
                     del self.medium_term.session_state[key]
                     return None
-                if datetime.utcnow() > expires_at:
+                if datetime.now(timezone.utc) > expires_at:
                     del self.medium_term.session_state[key]
                     return None
             return entry["value"]
@@ -841,7 +841,7 @@ class AgentMemoryContext:
                 "outcome": outcome,
                 "confidence": confidence,
                 "user_id": self.memory.user_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "importance": confidence,
             }
             await self.memory.long_term.store_episode(episode)

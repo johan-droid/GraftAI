@@ -4,16 +4,17 @@ Bookings API Routes with AI Automation
 Provides endpoints for creating bookings and triggering AI agent automation.
 """
 
+import html
 import os
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 import json
-from sqlalchemy import select
+from sqlalchemy import select, and_, text
 
 from backend.utils.db import get_db, get_async_session_maker
 from backend.api.deps import get_current_user
@@ -24,6 +25,7 @@ from backend.core.redis import (
     publish_message,
     get_redis,
 )
+from backend.utils.cache import acquire_lock, invalidate_user_calendar_cache
 from backend.models.tables import (
     UserTable,
     BookingTable,
@@ -57,8 +59,8 @@ class BookingCreateRequest(BaseModel):
         example="Discuss roadmap and action items.",
         description="Meeting description",
     )
-    start_time: str = Field(
-        ..., example="2026-05-01T14:00:00Z", description="Start time (ISO format)"
+    start_time: datetime = Field(
+        ..., example="2026-05-01T14:00:00Z", description="Start time (ISO format with timezone)"
     )
     duration_minutes: int = Field(
         30, example=60, description="Duration in minutes"
@@ -77,24 +79,40 @@ class BookingCreateRequest(BaseModel):
     meeting_type: str = Field(
         "consultation", example="strategy", description="Type of meeting"
     )
+
+    model_config = ConfigDict(extra='forbid')
+
+    @field_validator('title', 'description', 'location', 'meeting_type', mode='before')
+    @classmethod
+    def sanitize_html(cls, v: str | None) -> str | None:
+        """Neutralizes malicious script tags into harmless plain text."""
+        if v is None:
+            return v
+        # Converts <script> to &lt;script&gt;
+        return html.escape(v.strip())
+
+    @field_validator('start_time', mode='before')
+    @classmethod
+    def ensure_tz_aware(cls, v: str | datetime) -> datetime:
+        """Forces all incoming times to be timezone-aware UTC."""
+        if isinstance(v, str):
+            try:
+                dt = date_parser.parse(v)
+            except Exception:
+                raise ValueError("Invalid datetime format. Use ISO 8601 format (e.g., 2026-05-01T14:00:00Z)")
+        elif isinstance(v, datetime):
+            dt = v
+        else:
+            raise ValueError("Invalid datetime type")
+        
+        if dt.tzinfo is None:
+            raise ValueError("All datetimes must include timezone information (e.g., ending in 'Z' or '+00:00').")
+        
+        # Normalize to UTC for database storage
+        return dt.astimezone(timezone.utc)
+    
     estimated_value: Optional[float] = Field(
         None, example=2500.0, description="Estimated business value"
-    )
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "title": "Quarterly business review",
-                "description": "Discuss roadmap and action items.",
-                "start_time": "2026-05-01T14:00:00Z",
-                "duration_minutes": 60,
-                "attendees": ["alice@example.com", "bob@example.com"],
-                "organizer_id": "user_1234",
-                "location": "Conference Room A",
-                "meeting_type": "strategy",
-                "estimated_value": 2500.0,
-            }
-        }
     )
 
 
@@ -141,7 +159,8 @@ class AutomationResultResponse(BaseModel):
 # AUTOMATION STATE TRACKING
 # ═══════════════════════════════════════════════════════════════════
 
-_automation_tasks: Dict[str, Dict[str, Any]] = {}
+# NOTE: All automation state is stored in Redis for multi-replica consistency
+# Removed in-memory _automation_tasks dict to prevent state desync across workers
 
 
 def _automation_state_key(booking_id: str) -> str:
@@ -199,17 +218,17 @@ def _serialize_automation_result(result: AutomationResult) -> dict:
 
 
 async def _track_automation_start(
-    booking_id: str, task: asyncio.Task, automation_id: Optional[str] = None
+    booking_id: str, task: Optional[asyncio.Task] = None, automation_id: Optional[str] = None
 ) -> str:
-    """Track the start of an automation task"""
+    """Track the start of an automation task (Celery or asyncio)."""
     automation_id = (
-        automation_id or f"auto_{booking_id}_{datetime.utcnow().timestamp()}"
+        automation_id or f"auto_{booking_id}_{datetime.now(timezone.utc).timestamp()}"
     )
 
     state = {
         "automation_id": automation_id,
         "status": "in_progress",
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "completed_at": None,
         "result": None,
         "decision_score": 0,
@@ -220,11 +239,8 @@ async def _track_automation_start(
         "error": None,
     }
 
-    _automation_tasks[booking_id] = {
-        **state,
-        "task": task,
-    }
-
+    # Always use Redis for automation state - no in-memory storage
+    # This ensures consistency across multiple backend replicas
     await _store_automation_state(booking_id, state)
     await _publish_automation_update(booking_id, state)
     return automation_id
@@ -260,7 +276,7 @@ async def _persist_automation_result(
             )
             booking = booking_result.scalar_one_or_none()
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             if booking:
                 booking.automation_status = (
                     result.automation_status if result else "failed"
@@ -357,27 +373,11 @@ async def _update_automation_result(
         trigger_source=trigger_source,
     )
 
-    if booking_id in _automation_tasks:
-        _automation_tasks[booking_id].update(
-            {
-                "status": result.automation_status,
-                "completed_at": datetime.utcnow().isoformat(),
-                "result": _serialize_automation_result(result),
-                "decision_score": result.decision_score,
-                "risk_assessment": result.risk_assessment,
-                "actions_completed": len(result.actions_executed),
-                "actions_total": len(result.actions_executed),
-                "current_action": None,
-                "error": None,
-                "done": True,
-            }
-        )
-
+    # Build state payload from result (all data comes from result, not in-memory dict)
     state_payload = {
-        "automation_id": _automation_tasks.get(booking_id, {}).get("automation_id"),
+        "automation_id": automation_id,
         "status": result.automation_status,
-        "started_at": _automation_tasks.get(booking_id, {}).get("started_at"),
-        "completed_at": datetime.utcnow().isoformat(),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
         "result": _serialize_automation_result(result),
         "decision_score": result.decision_score,
         "risk_assessment": result.risk_assessment,
@@ -410,21 +410,11 @@ async def _update_automation_error(
         trigger_source=trigger_source,
     )
 
-    if booking_id in _automation_tasks:
-        _automation_tasks[booking_id].update(
-            {
-                "status": "failed",
-                "completed_at": datetime.utcnow().isoformat(),
-                "error": error,
-                "done": True,
-            }
-        )
-
+    # Build error state payload (no in-memory dict references)
     state_payload = {
-        "automation_id": _automation_tasks.get(booking_id, {}).get("automation_id"),
+        "automation_id": automation_id,
         "status": "failed",
-        "started_at": _automation_tasks.get(booking_id, {}).get("started_at"),
-        "completed_at": datetime.utcnow().isoformat(),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
         "result": None,
         "decision_score": 0,
         "risk_assessment": "unknown",
@@ -487,7 +477,7 @@ async def create_booking(
         )
 
         # Parse start_time and calculate end_time
-        start_time = date_parser.parse(booking_data.start_time)
+        start_time = booking_data.start_time
         if start_time.tzinfo is None:
             start_time = start_time.replace(tzinfo=timezone.utc)
         end_time = start_time + timedelta(minutes=booking_data.duration_minutes)
@@ -499,170 +489,156 @@ async def create_booking(
         attendee_name = attendee_email.split("@")[
             0
         ]  # Use email prefix as name fallback
+        organizer_id = booking_data.organizer_id or current_user.id
 
-        # Create booking in database with proper persistence
-        booking = BookingTable(
-            id=generate_uuid(),
-            user_id=booking_data.organizer_id or current_user.id,
-            full_name=attendee_name,
-            email=attendee_email,
-            time_zone="UTC",  # Default, could be enhanced to detect from user prefs
-            start_time=start_time,
-            end_time=end_time,
-            status="confirmed",
-            is_reminder_sent=False,
-            metadata_payload={
-                "title": booking_data.title,
-                "description": booking_data.description,
-                "attendees": booking_data.attendees,
-                "location": booking_data.location,
-                "meeting_type": booking_data.meeting_type,
-                "estimated_value": booking_data.estimated_value,
-                "duration_minutes": booking_data.duration_minutes,
-            },
+        lock_key = (
+            f"booking_slot:{organizer_id}:"
+            f"{start_time.isoformat()}:{end_time.isoformat()}"
         )
-
-        # Check idempotency key for duplicate request prevention
-        if idempotency_key:
-            cached_response = await check_idempotency_key(
-                db, idempotency_key, current_user.id, booking_data.model_dump()
+        if not await acquire_lock(lock_key, ttl_seconds=30):
+            raise HTTPException(
+                status_code=409,
+                detail="Requested slot is currently being claimed. Please retry.",
             )
-            if cached_response:
-                logger.info(
-                    f"🔄 Returning cached response for idempotency key: {idempotency_key[:16]}..."
+
+        # Use a single atomic transaction for booking creation + automation tracking.
+        async with db.begin():
+            bind = db.get_bind()
+            if bind is not None and bind.dialect.name == "postgresql":
+                await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
+
+            await db.execute(
+                select(UserTable).where(UserTable.id == organizer_id).with_for_update()
+            )
+
+            conflict_stmt = (
+                select(BookingTable)
+                .where(
+                    and_(
+                        BookingTable.user_id == organizer_id,
+                        BookingTable.start_time < end_time,
+                        BookingTable.end_time > start_time,
+                    )
                 )
-                return BookingCreateResponse(**cached_response)
+                .with_for_update()
+            )
+            existing_conflict = (await db.execute(conflict_stmt)).scalars().first()
+            if existing_conflict:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Requested slot is already booked or no longer available.",
+                )
 
-        # Persist to database
-        db.add(booking)
-        await db.commit()
+            # Check idempotency key for duplicate request prevention.
+            if idempotency_key:
+                cached_response = await check_idempotency_key(
+                    db, idempotency_key, current_user.id, booking_data.model_dump()
+                )
+                if cached_response:
+                    logger.info(
+                        f"🔄 Returning cached response for idempotency key: {idempotency_key[:16]}..."
+                    )
+                    return BookingCreateResponse(**cached_response)
+
+            booking = BookingTable(
+                id=generate_uuid(),
+                user_id=organizer_id,
+                full_name=attendee_name,
+                email=attendee_email,
+                time_zone="UTC",  # Default, could be enhanced to detect from user prefs
+                start_time=start_time,
+                end_time=end_time,
+                status="confirmed",
+                is_reminder_sent=False,
+                metadata_payload={
+                    "title": booking_data.title,
+                    "description": booking_data.description,
+                    "attendees": booking_data.attendees,
+                    "location": booking_data.location,
+                    "meeting_type": booking_data.meeting_type,
+                    "estimated_value": booking_data.estimated_value,
+                    "duration_minutes": booking_data.duration_minutes,
+                },
+            )
+            db.add(booking)
+            await db.flush()
+
+            # Track scheduling usage
+            from backend.services.usage import increment_usage
+            await increment_usage(db, organizer_id, "scheduling")
+
+            automation_owner_id = organizer_id
+            automation_record = AIAutomationTable(
+                booking_id=booking.id,
+                user_id=automation_owner_id,
+                status="in_progress",
+                started_at=datetime.now(timezone.utc),
+                trigger_source="api",
+            )
+            db.add(automation_record)
+            await db.flush()
+
+            if idempotency_key:
+                await store_idempotency_key(
+                    db,
+                    idempotency_key,
+                    current_user.id,
+                    booking_data.model_dump(),
+                    {
+                        "status": "created",
+                        "booking_id": booking.id,
+                        "automation": "in_progress",
+                        "message": "Booking created successfully. AI automation is running in the background.",
+                    },
+                    201,
+                )
+
         await db.refresh(booking)
-
-        automation_owner_id = booking.user_id
-
-        automation_record = AIAutomationTable(
-            booking_id=booking.id,
-            user_id=automation_owner_id,
-            status="in_progress",
-            started_at=datetime.utcnow(),
-            trigger_source="api",
-        )
-        db.add(automation_record)
-        await db.commit()
         await db.refresh(automation_record)
         automation_id = automation_record.id
 
         logger.info(f"✅ API: Booking created with ID: {booking.id}")
 
-        # Trigger AI automation asynchronously with fallback
-        # This runs in the background and doesn't block the response
-        async def run_automation():
-            """Background task for automation with intelligent fallback"""
-            try:
-                from backend.ai.fallback import automate_booking_with_fallback
-                from backend.services.booking_automation import AutomationResult
-                from backend.services.workflow_engine import trigger_booking_workflows
+        # CRITICAL FIX: Invalidate calendar cache to prevent stale data
+        # This ensures newly created booking appears in subsequent queries
+        await invalidate_user_calendar_cache(organizer_id)
+        logger.info(f"🗑️ Cache invalidated for user {organizer_id[:8]}...")
 
-                # Build attendee data from booking metadata
-                attendee_data = None
-                if booking.metadata_payload and booking.metadata_payload.get(
-                    "attendees"
-                ):
-                    attendees = booking.metadata_payload["attendees"]
-                    attendee_data = {
-                        "email": attendees[0] if attendees else booking.email,
-                        "name": booking.full_name,
-                    }
-
-                # Run with full fallback support:
-                # Level 1: AI Agent → Level 2: Rule-based → Level 3: Manual review
-                fallback_result = await automate_booking_with_fallback(
-                    booking=booking, attendee=attendee_data
-                )
-
-                # Convert FallbackResult to AutomationResult for tracking
-                result = AutomationResult(
-                    booking_id=booking.id,
-                    automation_status=fallback_result.status,
-                    actions_executed=fallback_result.actions,
-                    agent_decisions={"mode": fallback_result.mode.value},
-                    external_results={},
-                    risk_assessment="unknown",
-                    decision_score=70
-                    if fallback_result.mode.value == "rule_based"
-                    else 85,
-                    execution_time_ms=fallback_result.execution_time_ms,
-                    timestamp=fallback_result.timestamp,
-                )
-
-                # Update tracking with result
-                await _update_automation_result(
-                    booking.id,
-                    result,
-                    automation_id=automation_id,
-                    user_id=automation_owner_id,
-                    trigger_source="api",
-                )
-
-                logger.info(
-                    f"✅ Automation completed for {booking.id}: "
-                    f"Mode={fallback_result.mode.value}, Status={fallback_result.status}"
-                )
-                
-                # Trigger user-defined workflows (confirmation emails, slack, etc.)
-                try:
-                    await trigger_booking_workflows(
-                        trigger_type="BOOKING_CREATED",
-                        booking_id=booking.id,
-                        user_id=automation_owner_id,
-                        attendee_email=attendee_data.get("email") if attendee_data else booking.email,
-                        attendee_name=attendee_data.get("name") if attendee_data else booking.full_name,
-                        booking_title=booking_data.title,
-                        booking_time=booking.start_time.isoformat(),
-                        booking_id_str=booking.id,
-                    )
-                    logger.info(f"🔄 Workflows triggered for booking {booking.id}")
-                except Exception as wf_error:
-                    logger.error(f"Workflow trigger failed (non-blocking): {wf_error}")
-
-            except Exception as e:
-                logger.error(f"❌ Automation failed for {booking.id}: {e}")
-                await _update_automation_error(
-                    booking.id,
-                    str(e),
-                    automation_id=automation_id,
-                    user_id=automation_owner_id,
-                    trigger_source="api",
-                )
-
-        # Create background task
-        task = asyncio.create_task(run_automation())
-
-        # Track the automation
-        automation_id = await _track_automation_start(
-            booking.id, task, automation_id=automation_id
+        # Trigger AI automation asynchronously with fallback via Celery
+        # Celery provides distributed execution, retry capability, and durability
+        from backend.tasks.automation_tasks import run_booking_automation_task
+        
+        # Build attendee data from booking metadata
+        attendee_data = None
+        if booking.metadata_payload and booking.metadata_payload.get("attendees"):
+            attendees = booking.metadata_payload["attendees"]
+            attendee_data = {
+                "email": attendees[0] if attendees else booking.email,
+                "name": booking.full_name,
+            }
+        
+        run_booking_automation_task.delay(
+            booking_id=booking.id,
+            automation_id=automation_id,
+            user_id=automation_owner_id,
+            attendee_data=attendee_data,
+            booking_data=booking_data.model_dump(),
         )
 
-        logger.info(f"🤖 API: Automation triggered (ID: {automation_id})")
+        # Track automation start in Redis (no task object needed)
+        automation_id = await _track_automation_start(
+            booking.id, None, automation_id=automation_id
+        )
 
-        # Return immediately - automation runs in background
+        logger.info(f"🤖 API: Automation queued via Celery (ID: {automation_id})")
+
+        # Return immediately - automation runs via Celery worker
         response_data = {
             "status": "created",
             "booking_id": booking.id,
             "automation": "in_progress",
             "message": "Booking created successfully. AI automation is running in the background.",
         }
-
-        # Store idempotency key with response for future deduplication
-        if idempotency_key:
-            await store_idempotency_key(
-                db,
-                idempotency_key,
-                current_user.id,
-                booking_data.model_dump(),
-                response_data,
-                201,
-            )
 
         return BookingCreateResponse(**response_data)
 
@@ -705,9 +681,8 @@ async def get_automation_status(
         Current automation status and progress
     """
     try:
-        auto = _automation_tasks.get(booking_id)
-        if not auto:
-            auto = await _load_automation_state(booking_id)
+        # Always load from Redis for multi-replica consistency
+        auto = await _load_automation_state(booking_id)
 
         if auto:
             result = auto.get("result") or {}
@@ -805,9 +780,8 @@ async def get_automation_result(
         Complete automation result
     """
     try:
-        auto = _automation_tasks.get(booking_id)
-        if not auto:
-            auto = await _load_automation_state(booking_id)
+        # Always load from Redis for multi-replica consistency
+        auto = await _load_automation_state(booking_id)
         result = auto.get("result") if auto else None
 
         if result:
@@ -824,7 +798,7 @@ async def get_automation_result(
                 decision_score=result_data.get("decision_score", 0),
                 risk_assessment=result_data.get("risk_assessment", "unknown"),
                 execution_time_ms=result_data.get("execution_time_ms", 0),
-                timestamp=result_data.get("timestamp", auto.get("completed_at") or auto.get("started_at") or datetime.utcnow().isoformat()),
+                timestamp=result_data.get("timestamp", auto.get("completed_at") or auto.get("started_at") or datetime.now(timezone.utc).isoformat()),
                 agent_decisions=result_data.get("agent_decisions", {}),
                 actions_executed=result_data.get("actions_executed", []),
                 external_ids=result_data.get("external_results", {}),
@@ -902,9 +876,7 @@ async def stream_automation_status(
             }
 
         async def load_latest_state() -> Optional[dict]:
-            state = _automation_tasks.get(booking_id)
-            if not state:
-                state = await _load_automation_state(booking_id)
+            state = await _load_automation_state(booking_id)
             if state:
                 return await build_state_payload(state)
 
@@ -1073,7 +1045,7 @@ async def get_automation_queue(
             "completed": completed,
             "failed": failed,
             "recent_tasks": recent_tasks,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -1162,7 +1134,7 @@ async def automation_webhook(
     automation_record.execution_time_ms = payload.get(
         "execution_time_ms", automation_record.execution_time_ms
     )
-    automation_record.completed_at = datetime.utcnow()
+    automation_record.completed_at = datetime.now(timezone.utc)
     automation_record.error_message = payload.get(
         "error", automation_record.error_message
     )

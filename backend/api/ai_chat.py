@@ -6,13 +6,15 @@ Agent = LLM + Memory + Tools + Loop
 
 import json
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, model_validator
-from sqlalchemy import select, and_, func, desc
+from sqlalchemy import select, func, and_, desc
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.utils.db import get_db
+from backend.utils.pagination import PaginatedResponse, paginate
 from backend.api.deps import get_current_user
 from backend.models.tables import UserTable, ChatMessageTable
 from backend.ai.llm_core import get_llm_core
@@ -271,7 +273,7 @@ async def generate_ai_response(
 
             # Create agent request with timezone and full context
             request = AgentRequest(
-                id=f"chat_{datetime.utcnow().timestamp()}",
+                id=f"chat_{datetime.now(timezone.utc).timestamp()}",
                 type=agent_type,
                 user_id=user_id,
                 context={
@@ -424,7 +426,7 @@ async def _build_user_context(user_id: str, db: AsyncSession) -> Dict[str, Any]:
             .where(
                 and_(
                     EventTable.user_id == user_id,
-                    EventTable.start_time >= datetime.utcnow(),
+                    EventTable.start_time >= datetime.now(timezone.utc),
                 )
             )
             .limit(5)
@@ -471,7 +473,7 @@ async def send_chat_message(
         conversation_id=conversation_id,
         role="user",
         content=user_message_text,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
 
     # Load conversation history for context without the pending current message
@@ -506,9 +508,17 @@ async def send_chat_message(
         conversation_id=conversation_id,
         role="assistant",
         content=ai_content,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
     db.add(ai_message)
+
+    # Track usage: AI tokens and message count
+    from backend.services.usage import increment_usage
+    # Roughly estimate tokens: (input length + output length) / 4 * 1.3
+    estimated_tokens = int((len(user_message_text) + len(ai_content)) / 3) + 10
+    await increment_usage(db, str(current_user.id), "ai_tokens", amount=estimated_tokens)
+    await increment_usage(db, str(current_user.id), "ai_messages")
+    await increment_usage(db, str(current_user.id), "api_calls")
 
     await db.commit()
 
@@ -607,27 +617,29 @@ async def list_conversations(
 
 
 @router.get(
-    "/conversations/{conversation_id}/messages", response_model=Any
+    "/conversations/{conversation_id}/messages",
+    response_model=PaginatedResponse[ChatMessageSchema],
 )
 async def get_conversation_messages(
     conversation_id: str,
-    limit: int = Query(50, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),  # NEVER allow more than 100
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Get all messages for a specific conversation with pagination.
     """
-    # Count total messages
-    count_stmt = select(func.count(ChatMessageTable.id)).where(
+    # 1. Get total count efficiently
+    count_stmt = select(func.count()).where(
         and_(
             ChatMessageTable.conversation_id == conversation_id,
             ChatMessageTable.user_id == current_user.id,
         )
     )
-    total_count = (await db.execute(count_stmt)).scalar() or 0
+    total = (await db.execute(count_stmt)).scalar() or 0
 
+    # 2. Fetch paginated data with EAGER LOADING (Prevents N+1)
     stmt = (
         select(ChatMessageTable)
         .where(
@@ -636,25 +648,16 @@ async def get_conversation_messages(
                 ChatMessageTable.user_id == current_user.id,
             )
         )
-        .order_by(ChatMessageTable.timestamp.asc())
-        .limit(limit)
-        .offset(offset)
+        .options(selectinload(ChatMessageTable.user))  # Eager load user to prevent N+1
+        .order_by(ChatMessageTable.timestamp.desc())  # Newest first
+        .offset((page - 1) * size)
+        .limit(size)
     )
 
     result = await db.execute(stmt)
     messages = result.scalars().all()
 
-    return {
-        "items": [
-            ChatMessageSchema(
-                id=msg.id, role=msg.role, content=msg.content, timestamp=msg.timestamp
-            ).model_dump()
-            for msg in messages
-        ],
-        "total": total_count,
-        "has_more": offset + len(messages) < total_count,
-        "next_cursor": offset + len(messages) if offset + len(messages) < total_count else None,
-    }
+    return paginate(messages, total, page, size)
 
 
 @router.delete("/conversations/{conversation_id}")

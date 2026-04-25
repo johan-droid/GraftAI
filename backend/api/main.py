@@ -6,20 +6,23 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
-import httpx
-import sentry_sdk
-from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from dotenv import load_dotenv
-
 # Ensure absolute imports like `backend.*` resolve even when launched from `backend/`.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+import httpx
+import sentry_sdk
+from fastapi import FastAPI, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
+from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from dotenv import load_dotenv
+
+from backend.ai.agents.base import AgentTimeoutError
 
 from backend.utils import db as db_utils
 from backend.utils.error_handlers import (
@@ -32,7 +35,23 @@ from backend.services.migrations import run_migrations
 
 configure_logging()
 
-# Load environment variables
+# Load environment variables from common files in both repo root and backend.
+# This ensures backend startup sees credentials even when the process runs from
+# the workspace root or when secrets are stored in backend/.env or .env.local.
+for dotenv_path in [
+    PROJECT_ROOT / ".env",
+    PROJECT_ROOT / ".env.local",
+    PROJECT_ROOT / ".env.development",
+    PROJECT_ROOT / ".env.development.local",
+    PROJECT_ROOT / "backend" / ".env",
+    PROJECT_ROOT / "backend" / ".env.local",
+    PROJECT_ROOT / "backend" / ".env.development",
+    PROJECT_ROOT / "backend" / ".env.development.local",
+]:
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path=dotenv_path, override=False)
+
+# Also load from the current working directory as a fallback.
 load_dotenv()
 
 
@@ -349,6 +368,30 @@ def create_app() -> FastAPI:
 
     app.add_middleware(SecurityHeadersMiddleware)
 
+    class LimitUploadSizeMiddleware(BaseHTTPMiddleware):
+        """Reject requests with bodies larger than the configured byte limit."""
+
+        def __init__(self, app, max_body_size: int = 2 * 1024 * 1024):
+            super().__init__(app)
+            self.max_body_size = max_body_size
+
+        async def dispatch(self, request, call_next):
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    if int(content_length) > self.max_body_size:
+                        return JSONResponse(
+                            {"detail": "Request body too large."},
+                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        )
+                except ValueError:
+                    pass
+
+            response = await call_next(request)
+            return response
+
+    app.add_middleware(LimitUploadSizeMiddleware)
+
     # Additional security middleware from utils.security_middleware
     from backend.utils.security_middleware import (
         InputValidationMiddleware,
@@ -414,6 +457,17 @@ def create_app() -> FastAPI:
         expose_headers=["x-xsrf-token", "Location"],
     )
 
+    async def agent_timeout_handler(request, exc: AgentTimeoutError):
+        return JSONResponse(
+            status_code=504,
+            content={
+                "error": "AI operation timed out.",
+                "code": "agent_timeout",
+                "detail": str(exc),
+            },
+        )
+
+    app.add_exception_handler(AgentTimeoutError, agent_timeout_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
@@ -445,6 +499,7 @@ def create_app() -> FastAPI:
     )
     from backend.api.automation_routes import router as automation_router
     from backend.api.monitoring import router as monitoring_router
+    from backend.api.v1.audit import router as audit_router
 
     # Registering the new unified Authentication router
     app.include_router(auth_router, prefix="/api/v1/auth")
@@ -499,6 +554,7 @@ def create_app() -> FastAPI:
     app.include_router(ai_router, prefix="/api/v1")
     app.include_router(billing_router, prefix="/api/v1")
     app.include_router(monitoring_router, prefix="/api/v1")
+    app.include_router(audit_router, prefix="/api/v1/audit")
 
     @app.get("/health")
     async def health_check():

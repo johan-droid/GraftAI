@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { AlertCircle, CalendarCheck, Mail } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { toast } from '@/components/ui/Toast';
 
+// Export the existing interface for backward compatibility
 export interface SmartAction {
   id: string;
   action_type: string;
@@ -18,6 +22,7 @@ interface SmartActionsProps {
   onExecute: (action: SmartAction, overridePayload?: any) => void;
 }
 
+// Keep the original SmartActions component for backward compatibility
 export function SmartActions({ actions, onExecute }: SmartActionsProps) {
   const [selectedAction, setSelectedAction] = useState<SmartAction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,24 +105,98 @@ export function SmartActions({ actions, onExecute }: SmartActionsProps) {
             </div>
 
             <div className="p-6 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50">
-              <button
-                type="button"
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              <Button
+                variant="outline"
                 onClick={() => setIsModalOpen(false)}
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm transition-colors"
+              </Button>
+              <Button
                 onClick={handleConfirm}
               >
                 Execute Action
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// New SmartActionsDashboard component with AsyncButton integration
+type SmartActionDashboard = {
+  id: string;
+  booking_id: string;
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  actionType: 'send_reminder' | 'reschedule_prompt' | 'agenda_request';
+};
+
+export function SmartActionsDashboard({ actions }: { actions: SmartActionDashboard[] }) {
+  
+  const handleResolveAction = async (actionId: string, actionType: string, bookingId: string) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/automation/resolve-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actionId, actionType, bookingId })
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Failed to execute AI resolution.");
+      }
+
+      toast.success("Resolution executed successfully.");
+      // Trigger a state update or router.refresh() here to remove the item from the list
+    } catch (error) {
+      console.error("Failed to resolve action:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Unable to execute action. Please try again."
+      );
+    }
+  };
+
+  if (!actions || actions.length === 0) {
+    return (
+      <div className="p-6 border border-gray-100 rounded-lg bg-gray-50 flex items-center gap-3 text-gray-500">
+        <CalendarCheck className="w-5 h-5 text-green-500" />
+        <span className="text-sm">Your schedule is optimized. No urgent actions required.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+        <AlertCircle className="w-4 h-4 text-orange-500" />
+        Requires Attention
+      </h3>
+      
+      <div className="grid gap-3">
+        {actions.map((action) => (
+          <div key={action.id} className="p-4 border border-gray-200 rounded-lg bg-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-l-orange-500">
+            <div>
+              <h4 className="font-medium text-gray-900 text-sm">{action.title}</h4>
+              <p className="text-xs text-gray-500 mt-1">{action.description}</p>
+            </div>
+            
+            {/* The AsyncButton takes over here. Click it once, it spins and locks. */}
+            <Button 
+              variant="outline" 
+              size="sm"
+              loadingText="Resolving..."
+              onClick={() => handleResolveAction(action.id, action.actionType, action.booking_id)}
+              className="whitespace-nowrap flex items-center gap-2 text-xs"
+            >
+              <Mail className="w-3 h-3" />
+              {action.actionType === 'send_reminder' ? 'Send Manual Reminder' : 'Auto-Resolve'}
+            </Button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

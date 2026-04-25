@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
 import { googleOverlayStyles } from "@/components/ui/googleOverlayStyles";
+import { Button } from "@/components/ui/Button";
 
 interface CancellationModalProps {
   isOpen: boolean;
@@ -139,21 +140,24 @@ export default function CancellationModal({ isOpen, isSubmitting, onClose, onCon
         ) : null}
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={onClose}
             disabled={isSubmitting}
-            className="inline-flex w-full items-center justify-center rounded-xl border border-[#DADCE0] bg-white px-4 py-3 text-sm font-semibold text-[#202124] transition hover:bg-[#F1F3F4] disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full"
           >
             Keep booking
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            variant="destructive"
+            loadingText="Cancelling..."
             disabled={isSubmitting}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-[#D93025] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#B3261E] disabled:cursor-not-allowed disabled:bg-[#FDE7E9] disabled:text-[#D93025]"
+            className="w-full"
           >
-            {isSubmitting ? "Cancelling..." : "Confirm cancellation"}
-          </button>
+            Confirm cancellation
+          </Button>
         </div>
       </form>
     </div>

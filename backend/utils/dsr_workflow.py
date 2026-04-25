@@ -2,7 +2,7 @@
 
 import secrets
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,7 +54,7 @@ class DSRWorkflow:
             raise ValueError("Either user_id or requester_email must be provided")
 
         # Calculate deadline
-        deadline = datetime.utcnow() + timedelta(days=self.GDPR_DEADLINE_DAYS)
+        deadline = datetime.now(timezone.utc) + timedelta(days=self.GDPR_DEADLINE_DAYS)
 
         # Create request record
         dsr = DSRRecord(
@@ -95,7 +95,7 @@ class DSRWorkflow:
             # Auto-verify authenticated users
             dsr.status = DSRStatus.IDENTITY_VERIFIED
             dsr.identity_verified = True
-            dsr.identity_verified_at = datetime.utcnow()
+            dsr.identity_verified_at = datetime.now(timezone.utc)
             dsr.verification_method = "authenticated"
             await db.commit()
 
@@ -130,7 +130,7 @@ class DSRWorkflow:
 
         # Verify identity
         dsr.identity_verified = True
-        dsr.identity_verified_at = datetime.utcnow()
+        dsr.identity_verified_at = datetime.now(timezone.utc)
         dsr.verification_method = "email_code"
         dsr.status = DSRStatus.IDENTITY_VERIFIED
 
@@ -179,7 +179,7 @@ class DSRWorkflow:
 
             # Update status
             dsr.status = DSRStatus.COMPLETED
-            dsr.completed_at = datetime.utcnow()
+            dsr.completed_at = datetime.now(timezone.utc)
 
             await self._log_audit(db, dsr.id, "request_completed", result)
             await db.commit()
@@ -258,7 +258,7 @@ class DSRWorkflow:
             "data_locations_processed": len(deletion_results),
             "retained_due_to_legal_obligation": len(retention_required),
             "third_parties_notified": len(third_parties),
-            "completion_date": datetime.utcnow().isoformat(),
+            "completion_date": datetime.now(timezone.utc).isoformat(),
         }
 
     async def _handle_rectification_request(
@@ -333,7 +333,7 @@ class DSRWorkflow:
         """Generate comprehensive data access package."""
         package = {
             "metadata": {
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
                 "governance": "GDPR Article 15",
                 "data_controller": "GraftAI Inc.",
             },
@@ -515,7 +515,7 @@ class DSRWorkflow:
             dsr_id=dsr_id,
             action=action,
             action_details=details or {},
-            performed_at=datetime.utcnow(),
+            performed_at=datetime.now(timezone.utc),
         )
         db.add(log)
 

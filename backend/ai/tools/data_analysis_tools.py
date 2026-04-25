@@ -5,7 +5,7 @@ Tools for analyzing patterns, predicting outcomes, and finding insights.
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from backend.utils.logger import get_logger
 from .registry import register_tool, ToolCategory, ToolPriority
 
@@ -31,7 +31,7 @@ async def analyze_booking_pattern(user_id: str, timeframe_days: int = 90) -> dic
         Dict with pattern analysis
     """
     try:
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=timeframe_days)
 
         logger.info(f"Analyzing patterns for user {user_id} ({timeframe_days} days)")
@@ -68,7 +68,7 @@ async def analyze_booking_pattern(user_id: str, timeframe_days: int = 90) -> dic
             "success": True,
             "user_id": user_id,
             "patterns": patterns,
-            "analyzed_at": datetime.utcnow().isoformat(),
+            "analyzed_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -126,7 +126,7 @@ async def predict_no_show_risk(
             "recommendation": "Standard reminder schedule"
             if risk_score < 0.3
             else "Additional confirmation recommended",
-            "predicted_at": datetime.utcnow().isoformat(),
+            "predicted_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -220,7 +220,7 @@ async def find_best_time_slot(
             "optimal_slots": optimal_slots,
             "recommended_slot": optimal_slots[0] if optimal_slots else None,
             "analysis_time_ms": 150,
-            "analyzed_at": datetime.utcnow().isoformat(),
+            "analyzed_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -294,7 +294,7 @@ async def estimate_booking_value(booking: Dict[str, Any]) -> dict:
             else "medium"
             if estimated_value > 500
             else "low",
-            "estimated_at": datetime.utcnow().isoformat(),
+            "estimated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -347,7 +347,7 @@ async def get_attendee_preferences(attendee_id: str) -> dict:
             "attendee_id": attendee_id,
             "preferences": preferences,
             "confidence_score": 0.85,
-            "last_updated": datetime.utcnow().isoformat(),
+            "last_updated": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:

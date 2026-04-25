@@ -19,7 +19,8 @@ import uuid
 
 # FastAPI and SQLAlchemy helpers
 from fastapi import Depends, HTTPException, Request, Query
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # External SDKs
@@ -40,6 +41,7 @@ from backend.models.tables import (
     UserTable,
     ManualActivationRequestTable,
     AuditLogTable,
+    WebhookLogTable,
 )
 
 class PlanInfo(BaseModel):
@@ -441,7 +443,7 @@ async def razorpay_webhook(request: Request, db: AsyncSession = Depends(get_db))
             pass
 
     except Exception as e:
-        print(f"Webhook error: {e}")
+        logger.error(f"Webhook error: {e}", exc_info=True)
 
     return {"status": "processed"}
 
@@ -664,7 +666,7 @@ async def create_stripe_portal_session(
 @router.post("/stripe/webhook")
 async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """
-    Handle Stripe webhooks for subscription events.
+    Handle Stripe webhooks for subscription events with idempotency check.
     """
     if not STRIPE_WEBHOOK_SECRET:
         raise HTTPException(
@@ -683,7 +685,34 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     except stripe.error.SignatureVerificationError:  # type: ignore[attr-defined]
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    # Handle the event
+    # 1. CHECK FOR DUPLICATES - Stripe guarantees at-least-once delivery
+    stripe_event_id = event.get("id")
+    if stripe_event_id:
+        existing_event = await db.scalar(
+            select(WebhookLogTable).where(WebhookLogTable.event_id == stripe_event_id)
+        )
+
+        if existing_event:
+            logger.info(f"Stripe webhook {stripe_event_id} already processed, skipping")
+            return {"status": "already_processed"}
+
+    # 2. LOG IT SO IT CAN'T BE PROCESSED AGAIN
+    try:
+        async with db.begin():
+            await db.execute(
+                insert(WebhookLogTable).values(
+                    webhook_id="",
+                    event_id=stripe_event_id,
+                    event=event["type"],
+                    payload=event.to_dict(),
+                    request_status=200,
+                )
+            )
+    except IntegrityError:
+        logger.info(f"Stripe webhook {stripe_event_id} already processed via unique claim")
+        return {"status": "already_processed"}
+
+    # 3. PROCESS THE UPGRADE
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = session.get("metadata", {}).get("user_id")

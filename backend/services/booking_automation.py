@@ -9,8 +9,9 @@ Action → Reflection → Results Stored → User Sees Results
 This file demonstrates the full agent lifecycle in practice.
 """
 
+import json
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 import asyncio
 import time
@@ -42,6 +43,30 @@ from backend.models.tables import BookingTable, AIAutomationTable
 
 logger = get_logger(__name__)
 agent_logger = get_agent_logger()
+
+
+def sanitize_ai_memory(payload: dict, max_kb: int = 10) -> dict:
+    """Prevent DB bloat by truncating oversized AI result payloads."""
+    if not isinstance(payload, dict):
+        return {"error": "Invalid payload type for sanitization"}
+
+    try:
+        json_str = json.dumps(payload, default=str)
+        size_kb = len(json_str.encode("utf-8")) / 1024
+
+        if size_kb > max_kb:
+            core_decisions = payload.get("agent_decisions") or payload.get("decision") or {}
+            return {
+                "status": "truncated_due_to_size",
+                "original_size_kb": round(size_kb, 2),
+                "core_decisions": core_decisions,
+                "error": "Full external results stripped to prevent DB bloat.",
+            }
+
+        return payload
+    except Exception as e:
+        logger.warning("Failed to sanitize AI memory payload: %s", e)
+        return {"error": "Failed to serialize AI memory payload"}
 
 
 @dataclass
@@ -107,9 +132,9 @@ class BookingAutomationService:
                 "attendee_email": attendee_email,
                 "organizer_id": organizer_id,
                 "booking_id": booking_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "importance": 0.8 if success else 0.5,
             "tags": ["booking", "automation", "outcome"],
         }
@@ -148,30 +173,63 @@ class BookingAutomationService:
         """Transaction wrapper for booking automation."""
         session_factory = get_async_session_maker()
         async with session_factory() as db:
-            async with db.begin():
-                # Lock the booking first
-                try:
-                    booking_lookup = await db.execute(
-                        select(BookingTable)
-                        .where(BookingTable.id == booking_id)
-                        .with_for_update(nowait=True)
+            try:
+                async with db.begin():
+                    # Lock the booking first
+                    try:
+                        booking_lookup = await db.execute(
+                            select(BookingTable)
+                            .where(BookingTable.id == booking_id)
+                            .with_for_update(nowait=True)
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Booking {booking_id} locked by another worker: {e}"
+                        )
+                        return AutomationResult(
+                            booking_id=booking_id,
+                            automation_status="failed",
+                            actions_executed=[],
+                            agent_decisions={"error": "locked"},
+                            external_results={},
+                            risk_assessment="unknown",
+                            decision_score=0,
+                            execution_time_ms=0,
+                            timestamp=datetime.now(timezone.utc).isoformat(),
+                        )
+
+                    if not booking_lookup.scalar_one_or_none():
+                        return AutomationResult(
+                            booking_id=booking_id,
+                            automation_status="failed",
+                            actions_executed=[],
+                            agent_decisions={"error": "not found"},
+                            external_results={},
+                            risk_assessment="unknown",
+                            decision_score=0,
+                            execution_time_ms=0,
+                            timestamp=datetime.now(timezone.utc).isoformat(),
+                        )
+
+                    return await self._execute_booking_automation_core(
+                        db, booking_id, user_id, trigger_source
                     )
-                except Exception as e:
-                    logger.warning(f"Booking {booking_id} locked by another worker: {e}")
-                    return AutomationResult(
-                        booking_id=booking_id, automation_status="failed", actions_executed=[],
-                        agent_decisions={"error": "locked"}, external_results={}, risk_assessment="unknown",
-                        decision_score=0, execution_time_ms=0, timestamp=datetime.utcnow().isoformat()
-                    )
-                
-                if not booking_lookup.scalar_one_or_none():
-                    return AutomationResult(
-                        booking_id=booking_id, automation_status="failed", actions_executed=[],
-                        agent_decisions={"error": "not found"}, external_results={}, risk_assessment="unknown",
-                        decision_score=0, execution_time_ms=0, timestamp=datetime.utcnow().isoformat()
-                    )
-                
-                return await self._execute_booking_automation_core(db, booking_id, user_id, trigger_source)
+            except Exception as e:
+                logger.error(
+                    f"Booking {booking_id} failed during automation: {e}. Rolled back.",
+                    exc_info=True,
+                )
+                return AutomationResult(
+                    booking_id=booking_id,
+                    automation_status="failed",
+                    actions_executed=[],
+                    agent_decisions={"error": str(e)},
+                    external_results={},
+                    risk_assessment="unknown",
+                    decision_score=0,
+                    execution_time_ms=0,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                )
 
     async def _execute_booking_automation_core(
         self, db, booking_id: str, user_id: str, trigger_source: str = "scheduler"
@@ -188,7 +246,7 @@ class BookingAutomationService:
         6. Results Stored in Database
         7. Return results to user
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         metrics = get_agent_metrics()
 
         # Record automation start
@@ -259,7 +317,7 @@ class BookingAutomationService:
                 "attendees": [perception_data["attendee_email"]],
                 "organizer": user_id,
                 "type": perception_data.get("booking_type", "consultation"),
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
 
             # Measure decision latency
@@ -314,6 +372,7 @@ class BookingAutomationService:
                 booking_id=booking_id,
                 decision=decision,
                 perception_data=perception_data,
+                db=db,
             )
             phase_duration = (time.time() - phase_start) * 1000
 
@@ -404,7 +463,7 @@ class BookingAutomationService:
             }
 
             # Calculate execution time
-            execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             # Store results in database inside current transaction
             await self._store_results_with_transaction(
@@ -413,7 +472,7 @@ class BookingAutomationService:
                 user_id=user_id,
                 decision=decision,
                 action_results=action_results,
-                external_results=external_results,
+                external_results=sanitize_ai_memory(external_results),
                 reflection_data=reflection_data,
                 execution_time_ms=execution_time,
                 fallback_mode=None,
@@ -466,7 +525,7 @@ class BookingAutomationService:
                 risk_assessment=decision.risk_analysis.level.value,
                 decision_score=decision_score,
                 execution_time_ms=execution_time,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
             logger.info(f"✅ Booking Automation Complete: {booking_id}")
@@ -498,23 +557,12 @@ class BookingAutomationService:
                 decision_score=0,
                 risk_assessment="unknown",
                 actions_executed=0,
-                execution_time_ms=(datetime.utcnow() - start_time).total_seconds()
+                execution_time_ms=(datetime.now(timezone.utc) - start_time).total_seconds()
                 * 1000,
                 error=str(e),
             )
 
-            # Return failure result
-            return AutomationResult(
-                booking_id=booking_id,
-                automation_status="failed",
-                actions_executed=[],
-                agent_decisions={"error": str(e)},
-                external_results={},
-                risk_assessment="unknown",
-                decision_score=0,
-                execution_time_ms=0,
-                timestamp=datetime.utcnow().isoformat(),
-            )
+            raise
 
     # ═════════════════════════════════════════════════════════════════
     # PHASE IMPLEMENTATIONS
@@ -655,7 +703,11 @@ class BookingAutomationService:
             }
 
     async def _action_phase(
-        self, booking_id: str, decision: AgentDecision, perception_data: Dict[str, Any]
+        self,
+        booking_id: str,
+        decision: AgentDecision,
+        perception_data: Dict[str, Any],
+        db: AsyncSession,
     ) -> List[Dict[str, Any]]:
         """
         ACTION EXECUTION PHASE
@@ -687,21 +739,31 @@ class BookingAutomationService:
                             "success": result.get("success", False),
                             "email_id": result.get("email_id"),
                             "status": "sent" if result.get("success") else "failed",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     )
+                    if not result.get("success", False):
+                        raise RuntimeError(
+                            f"Critical action send_email failed: {result.get('error') or result.get('status')}"
+                        )
 
                 elif action.tool_name == "create_calendar_event":
-                    result = await create_calendar_event(**action.parameters)
+                    result = await create_calendar_event(
+                        **action.parameters, db=db
+                    )
                     results.append(
                         {
                             "tool_name": "create_calendar_event",
                             "success": result.get("success", False),
                             "event_id": result.get("event_id"),
                             "status": "created" if result.get("success") else "failed",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     )
+                    if not result.get("success", False):
+                        raise RuntimeError(
+                            f"Critical action create_calendar_event failed: {result.get('error') or result.get('status')}"
+                        )
 
                 elif action.tool_name == "create_task":
                     result = await create_task(**action.parameters)
@@ -711,7 +773,7 @@ class BookingAutomationService:
                             "success": result.get("success", False),
                             "task_id": result.get("task_id"),
                             "status": "created" if result.get("success") else "failed",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     )
 
@@ -727,7 +789,7 @@ class BookingAutomationService:
                         "tool_name": action.tool_name,
                         "success": False,
                         "error": str(e),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
                 )
 
@@ -803,7 +865,7 @@ class BookingAutomationService:
                     "strategy": "standard_confirmation_flow",
                     "outcome": "success",
                     "confidence": decision.confidence.value,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "importance": 0.8,
                 }
             )
@@ -860,7 +922,10 @@ class BookingAutomationService:
             # 1. Fetch and lock booking record
             result = await db.execute(
                 select(BookingTable)
-                .where(BookingTable.id == booking_id)
+                .where(
+                    BookingTable.id == booking_id,
+                    BookingTable.is_deleted == False,
+                )
                 .with_for_update()  # Pessimistic locking
             )
             booking = result.scalar_one_or_none()
@@ -871,7 +936,7 @@ class BookingAutomationService:
                     if all(r.get("success") for r in action_results)
                     else "partial"
                 )
-                booking.automation_run_at = datetime.utcnow()
+                booking.automation_run_at = datetime.now(timezone.utc)
                 booking.decision_score = self._calculate_decision_score(
                     decision, action_results
                 )
@@ -884,7 +949,7 @@ class BookingAutomationService:
                 else "partial"
             )
             decision_score = self._calculate_decision_score(decision, action_results)
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             automation_lookup = await db.execute(
                 select(AIAutomationTable)
@@ -991,7 +1056,7 @@ class BookingAutomationService:
     def _calculate_lead_time(self, start_time: str) -> float:
         """Calculate hours until booking"""
         start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-        return (start - datetime.utcnow()).total_seconds() / 3600
+        return (start - datetime.now(timezone.utc)).total_seconds() / 3600
 
     def _calculate_decision_score(
         self, decision: AgentDecision, action_results: List[Dict[str, Any]]

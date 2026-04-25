@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Clock, Copy, MoreVertical, Plus, Video, Phone, Users, Check } from "lucide-react";
+import { useAuth } from "@/app/providers/auth-provider";
 import { toast } from "@/components/ui/Toast";
+import { Clock, Copy, MoreVertical, Plus, Video, Phone, Users, Check } from "lucide-react";
 import { listEventTypes, updateEventType, EventTypeResponse } from "@/lib/api";
+import { ShareEventButton } from "@/components/dashboard/ShareEventButton";
+import { TimeRangeEditor, TimeRange } from "@/components/dashboard/availability/TimeRangeEditor";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -28,8 +31,18 @@ type EventTypeItem = EventTypeResponse;
 export default function EventTypesPage() {
   const [events, setEvents] = useState<EventTypeItem[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<Record<string, TimeRange[]>>({
+    Monday: [{ start: "09:00", end: "17:00" }],
+    Tuesday: [{ start: "09:00", end: "17:00" }],
+    Wednesday: [{ start: "09:00", end: "17:00" }],
+    Thursday: [{ start: "09:00", end: "17:00" }],
+    Friday: [{ start: "09:00", end: "17:00" }],
+    Saturday: [],
+    Sunday: [],
+  });
 
   useEffect(() => {
     void loadEventTypes();
@@ -42,10 +55,72 @@ export default function EventTypesPage() {
     try {
       const data = await listEventTypes();
       setEvents(data || []);
+
+      // Load availability from the first event type if it exists
+      if (data && data.length > 0 && data[0].availability) {
+        setAvailability(parseAvailabilityFromApi(data[0].availability));
+      } else if (data && data.length === 0) {
+        // Reset to empty state if no event types exist
+        setAvailability({
+          Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: []
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load event types");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function normalizeAvailabilityForApi(value: Record<string, TimeRange[]>) {
+    return Object.fromEntries(
+      Object.entries(value).map(([day, ranges]) => [
+        day.toLowerCase(),
+        ranges.map((range) => `${range.start}-${range.end}`),
+      ])
+    );
+  }
+
+  function parseAvailabilityFromApi(apiValue: Record<string, string[]>): Record<string, TimeRange[]> {
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const result: Record<string, TimeRange[]> = {};
+
+    days.forEach((day) => {
+      const apiRanges = apiValue[day] || apiValue[day.toLowerCase()] || [];
+      result[day] = apiRanges.map((rangeStr) => {
+        const [start, end] = rangeStr.split("-");
+        return { start: start || "09:00", end: end || "17:00" };
+      });
+    });
+
+    return result;
+  }
+
+  async function saveAvailability(day: string, ranges: TimeRange[]) {
+    const currentUsername = user?.username;
+    const targetEvent = events[0];
+
+    if (!currentUsername) {
+      toast.warning("Unable to save availability before authentication completes.");
+      return;
+    }
+
+    if (!targetEvent) {
+      toast.error("No event type selected to persist availability.");
+      return;
+    }
+
+    const updatedAvailability = { ...availability, [day]: ranges };
+    setAvailability(updatedAvailability);
+
+    try {
+      await updateEventType(targetEvent.id, {
+        availability: normalizeAvailabilityForApi(updatedAvailability),
+      });
+      toast.success("Availability saved.");
+    } catch (err) {
+      console.error("Failed to save availability:", err);
+      toast.error("Could not save availability. Please try again.");
     }
   }
 
@@ -170,18 +245,7 @@ export default function EventTypesPage() {
               </div>
 
               <div className="pt-6 mt-6 border-t border-[#F1F3F4] flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => copyLink(event.id, event.slug)}
-                  disabled={!active}
-                  className="flex items-center gap-2 text-sm font-medium text-[#1A73E8] hover:bg-[#E8F0FE] px-4 py-2 rounded-full transition-colors disabled:opacity-50 disabled:hover:bg-transparent"
-                >
-                  {copiedId === event.id ? (
-                    <><Check size={16} className="text-[#137333]" /> Copied!</>
-                  ) : (
-                    <><Copy size={16} /> Copy Link</>
-                  )}
-                </button>
+                <ShareEventButton username={user?.username ?? "current-user"} eventSlug={event.slug} />
 
                 <button type="button" title="More options" className="p-2 text-[#5F6368] hover:bg-[#F1F3F4] rounded-full transition-colors">
                   <MoreVertical size={20} />
@@ -191,6 +255,23 @@ export default function EventTypesPage() {
           );
         })}
       </motion.div>
+
+      {/* Weekly Availability Section - Only show if events exist */}
+      {events.length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-2xl font-semibold text-[#202124] mb-6">Weekly Availability</h2>
+          <div className="bg-white border border-[#DADCE0] rounded-2xl p-6 shadow-sm">
+            {Object.keys(availability).map((day) => (
+              <TimeRangeEditor
+                key={day}
+                dayName={day}
+                initialRanges={availability[day]}
+                onChange={(ranges) => saveAvailability(day, ranges)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

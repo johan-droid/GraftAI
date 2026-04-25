@@ -18,14 +18,18 @@ interface RequestOptions extends RequestInit {
 }
 
 class ApiClient {
-  private parseJsonSafe(text: string): Record<string, unknown> {
-    if (!text) {
+  private parseJsonSafe(text: string, status?: number): Record<string, unknown> {
+    if (!text || text.trim() === "") {
       return {};
     }
 
     try {
       return JSON.parse(text) as Record<string, unknown>;
-    } catch {
+    } catch (e) {
+      console.warn(`[API] Failed to parse JSON response (Status: ${status || "unknown"}):`, {
+        error: e instanceof Error ? e.message : String(e),
+        preview: text.substring(0, 200) + (text.length > 200 ? "..." : "")
+      });
       return {};
     }
   }
@@ -98,7 +102,7 @@ class ApiClient {
         }
 
         const responseText = await response.text();
-        const responseData = this.parseJsonSafe(responseText);
+        const responseData = this.parseJsonSafe(responseText, response.status);
 
         if (!response.ok) {
           if (response.status === 429) {
@@ -133,7 +137,10 @@ class ApiClient {
           }
 
           const finalMsg = error || detailMsg || message || statusText;
-          console.error("[API] Bad response body:", responseData);
+          console.error(`[API Error] ${response.status} ${endpoint}:`, {
+            data: responseData,
+            text: responseText.substring(0, 500)
+          });
           throw new Error(String(finalMsg));
         }
 
@@ -238,7 +245,7 @@ class ApiClient {
         }
 
         const text = await response.text();
-        const data = this.parseJsonSafe(text);
+        const data = this.parseJsonSafe(text, response.status);
 
         if (!response.ok) {
           const error = typeof data.error === "string" ? data.error : undefined;
@@ -266,7 +273,10 @@ class ApiClient {
           }
 
           const finalMsg = error || detailMsg || message || statusText;
-          console.error("[API] Bad response body:", data);
+          console.error(`[API Fetch Error] ${response.status} ${endpoint}:`, {
+            data,
+            text: text.substring(0, 500)
+          });
           throw new Error(String(finalMsg));
         }
 

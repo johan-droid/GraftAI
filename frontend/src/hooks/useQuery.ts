@@ -17,23 +17,19 @@ export class ApiError extends Error {
 }
 
 async function fetcher<T>(url: string, options?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined" 
-    ? (localStorage.getItem("token") || localStorage.getItem("graftai_access_token")) 
-    : null;
-    
-  const headers: Record<string, string> = { 
-    "Content-Type": "application/json", 
-    ...(options?.headers as Record<string, string> ?? {}) 
+  // SECURITY FIX: Never use localStorage for tokens - vulnerable to XSS
+  // Use httpOnly cookies via credentials:include or session-based auth
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options?.headers as Record<string, string> ?? {})
   };
-  
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
+  // Cookies are automatically sent with credentials:include
+  // No need to manually add Authorization header from localStorage
   const res = await fetch(url, {
     ...options,
     headers,
-    credentials: "include",
+    credentials: "include", // Sends httpOnly cookies automatically
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { detail?: string };

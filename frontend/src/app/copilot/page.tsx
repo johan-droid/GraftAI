@@ -2,18 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Box,
-  Container,
-  Paper,
-  Typography,
-  TextField,
-  IconButton,
-  Avatar,
-  Chip,
-  Button,
-  Collapse,
-} from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send,
@@ -27,22 +15,21 @@ import {
   Copy,
   Check,
   Trash2,
-  ChevronDown,
-  ChevronUp,
-  Eye,
-  Brain,
-  Zap,
-  CheckCircle,
   Activity,
+  ArrowUp,
+  RefreshCw,
+  MoreVertical,
+  Plus,
 } from "lucide-react";
-import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/app/providers/auth-provider";
 import { MobileSidebar } from "@/components/dashboard/MobileSidebar";
 import { BottomNav } from "@/components/dashboard/BottomNav";
 import { Header } from "@/components/dashboard/Header";
 import { AgentExecutionTimeline } from "@/components/ui/Timeline";
-import { aiAutomationApi, AIChatResponse } from "@/lib/ai-api";
+import { aiAutomationApi } from "@/lib/ai-api";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import styles from "./copilot.module.css";
 
 interface AgentPhase {
   name: string;
@@ -62,32 +49,33 @@ interface Message {
 }
 
 const suggestedPrompts = [
-  { icon: Calendar, label: "Schedule a meeting", prompt: "Help me schedule a meeting with my team for next Tuesday at 2 PM" },
-  { icon: Clock, label: "Find free time", prompt: "When am I free this week for a 2-hour deep work session?" },
-  { icon: Lightbulb, label: "Meeting insights", prompt: "Analyze my meeting patterns and suggest improvements" },
-  { icon: Wand2, label: "Optimize schedule", prompt: "Optimize my schedule to reduce context switching" },
+  { icon: Calendar, label: "Schedule a meeting", prompt: "Schedule a team sync for next Tuesday at 2 PM", color: "text-blue-500", bg: "bg-blue-50" },
+  { icon: Clock, label: "Find free time", prompt: "When am I free this week for deep work?", color: "text-purple-500", bg: "bg-purple-50" },
+  { icon: Lightbulb, label: "Meeting insights", prompt: "Analyze my meeting patterns", color: "text-amber-500", bg: "bg-amber-50" },
+  { icon: Wand2, label: "Optimize schedule", prompt: "Optimize my schedule to reduce context switching", color: "text-emerald-500", bg: "bg-emerald-50" },
 ];
-
-// No mock conversation - all messages come from real API
 
 export default function CopilotPage() {
   const router = useRouter();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
-  const { isDark } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedAgentId, setExpandedAgentId] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Auto-scroll to bottom
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -95,19 +83,13 @@ export default function CopilotPage() {
 
   if (authLoading) {
     return (
-      <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: "50%",
-            border: "3px solid hsla(239, 84%, 67%, 0.2)",
-            borderTopColor: "hsl(239, 84%, 67%)",
-          }}
+          className="w-10 h-10 rounded-full border-4 border-blue-100 border-t-blue-600"
         />
-      </Box>
+      </div>
     );
   }
 
@@ -116,28 +98,27 @@ export default function CopilotPage() {
     return null;
   }
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
+  const handleSendMessage = async (text?: string) => {
+    const finalContent = text || inputValue.trim();
+    if (!finalContent || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: inputValue.trim(),
+      content: finalContent,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
     setIsLoading(true);
-    setError(null);
 
     try {
       const response = await aiAutomationApi.sendChatMessage({
-        message: userMessage.content,
+        message: finalContent,
         conversation_id: conversationId || undefined,
       });
       
-      // Convert phases object to array for display
       const phasesArray: AgentPhase[] = response.phases
         ? Object.entries(response.phases).map(([name, phase]) => ({
             name: name.charAt(0).toUpperCase() + name.slice(1),
@@ -159,26 +140,18 @@ export default function CopilotPage() {
       
       setMessages((prev) => [...prev, aiResponse]);
       
-      // Store conversation ID for this session
       if (!conversationId && response.conversation_id) {
         setConversationId(response.conversation_id);
       }
       
-      // Auto-expand agent execution details if agent was executed
       if (response.agent_executed) {
         setExpandedAgentId(aiResponse.id);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to get response");
-      toast.error("Failed to get AI response. Please try again.");
+      toast.error("I'm having trouble responding right now. Please try again.");
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleSuggestedPrompt = (prompt: string) => {
-    setInputValue(prompt);
-    inputRef.current?.focus();
   };
 
   const copyMessage = (id: string, content: string) => {
@@ -189,402 +162,253 @@ export default function CopilotPage() {
 
   const clearChat = () => {
     setMessages([]);
+    setConversationId(null);
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        background: "var(--bg-surface)",
-        display: "flex",
-        flexDirection: "column",
-        pb: { xs: "80px", md: 0 }
-      }}
-    >
+    <div className="flex flex-col h-screen bg-[#F8F9FA] overflow-hidden selection:bg-blue-100">
       <MobileSidebar />
-
-      <Box sx={{ px: { xs: 2.5, md: 4 }, pt: { xs: 2.5, md: 4 } }}>
+      
+      {/* HEADER SECTION */}
+      <div className="px-4 pt-4 md:px-8 md:pt-6 shrink-0">
         <Header
           userName={(user as any)?.name}
           userEmail={user?.email}
           userAvatar={(user as any)?.avatar}
           notificationCount={0}
         />
-      </Box>
+      </div>
 
-      <Container
-        maxWidth="lg"
-        sx={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          px: { xs: 2.5, md: 4 },
-          py: { xs: 2, md: 4 },
-          overflow: "hidden",
-        }}
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}
-        >
-          <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Box>
-              <Typography
-                variant="h4"
-                sx={{
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                  fontFamily: "var(--font-outfit)",
-                  letterSpacing: "-0.02em",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1.5,
-                }}
+      {/* MAIN CHAT AREA */}
+      <div className={cn("flex-1 overflow-y-auto px-4 md:px-6 py-4 chat-scroll", styles["chat-scroll"])}>
+        <div className="max-w-4xl mx-auto min-h-full flex flex-col">
+          {messages.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center">
+              <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="mb-8"
               >
-                <Sparkles size={28} className="text-[#1a73e8]" />
-                AI Copilot
-              </Typography>
-              <Typography sx={{ color: "var(--text-secondary)", fontSize: "0.95rem", mt: 0.5 }}>
-                Your intelligent scheduling assistant
-              </Typography>
-            </Box>
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600">
+                  <Sparkles size={32} />
+                </div>
+              </motion.div>
 
-            <Button
-              startIcon={<Trash2 size={16} />}
-              variant="outlined"
-              onClick={clearChat}
-              disabled={messages.length === 0}
-              sx={{
-                borderColor: "var(--border-subtle)",
-                color: "var(--text-secondary)",
-                textTransform: "none",
-                borderRadius: 2,
-                display: { xs: "none", sm: "flex" },
-                "&:hover": {
-                  borderColor: "var(--danger)",
-                  color: "var(--danger)",
-                  bgcolor: "transparent"
-                }
-              }}
-            >
-              Clear
-            </Button>
-          </Box>
-
-          <Paper
-            elevation={0}
-            sx={{
-              flex: 1,
-              background: "var(--bg-card)",
-              border: "1px solid var(--border-subtle)",
-              borderRadius: 3,
-              overflow: "auto",
-              mb: 2,
-              display: "flex",
-              flexDirection: "column",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
-            }}
-          >
-            {messages.length === 0 ? (
-              <Box
-                sx={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  p: 4,
-                  textAlign: "center",
-                }}
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.1 }}
               >
-                <Box
-                  sx={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 3,
-                    background: "rgba(26, 115, 232, 0.1)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    mb: 3,
-                  }}
-                >
-                  <Bot size={32} className="text-[#1a73e8]" />
-                </Box>
-                <Typography
-                  variant="h5"
-                  sx={{
-                    fontWeight: 600,
-                    color: "var(--text-primary)",
-                    mb: 1,
-                  }}
-                >
+                <h1 className="text-3xl md:text-4xl font-normal text-slate-900 tracking-tight mb-3">
                   How can I help you today?
-                </Typography>
-                <Typography
-                  sx={{
-                    color: "var(--text-secondary)",
-                    mb: 4,
-                    maxWidth: 500,
-                    fontSize: "0.9rem"
-                  }}
-                >
-                  I can help schedule meetings, find free time, analyze your calendar, and optimize your schedule.
-                </Typography>
+                </h1>
+                <p className="text-slate-500 text-lg max-w-lg mx-auto mb-10">
+                  I can manage your calendar, find optimal meeting times, and help you stay productive.
+                </p>
+              </motion.div>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2, width: "100%", maxWidth: 600 }}>
-                  {suggestedPrompts.map((item, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <Paper
-                        onClick={() => handleSuggestedPrompt(item.prompt)}
-                        sx={{
-                          p: 2,
-                          background: "var(--bg-surface)",
-                          border: "1px solid var(--border-subtle)",
-                          borderRadius: 2,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: 1.5,
-                          transition: "all 0.2s ease",
-                          boxShadow: "none",
-                          "&:hover": {
-                            background: "var(--bg-hover)",
-                            borderColor: "#1a73e8",
-                          },
-                        }}
-                      >
-                        <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: "rgba(26, 115, 232, 0.1)", color: "#1a73e8", flexShrink: 0 }}>
-                           <item.icon size={16} />
-                        </Box>
-                        <Box sx={{ textAlign: "left" }}>
-                          <Typography sx={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "0.85rem", mb: 0.5 }}>
-                            {item.label}
-                          </Typography>
-                          <Typography sx={{ color: "var(--text-secondary)", fontSize: "0.8rem", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                            {item.prompt}
-                          </Typography>
-                        </Box>
-                      </Paper>
-                    </motion.div>
-                  ))}
-                </Box>
-              </Box>
-            ) : (
-              <Box sx={{ p: { xs: 2.5, md: 4 }, display: "flex", flexDirection: "column", gap: 3 }}>
-                <AnimatePresence>
-                  {messages.map((message) => (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Box
-                        sx={{
-                          display: "flex",
-                          gap: 2,
-                          flexDirection: message.role === "user" ? "row-reverse" : "row",
-                        }}
-                      >
-                        <Avatar
-                          sx={{
-                            width: 32,
-                            height: 32,
-                            background: message.role === "user" ? "#1a73e8" : "rgba(26, 115, 232, 0.1)",
-                            color: message.role === "user" ? "#fff" : "#1a73e8"
-                          }}
-                        >
-                          {message.role === "user" ? <User size={16} /> : <Bot size={16} />}
-                        </Avatar>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
+                {suggestedPrompts.map((item, index) => (
+                  <motion.button
+                    key={index}
+                    initial={{ y: 10, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.2 + index * 0.05 }}
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleSendMessage(item.prompt)}
+                    className="flex items-start gap-4 p-5 text-left bg-white border border-slate-200 rounded-2xl hover:border-blue-400 hover:shadow-sm transition-all group"
+                  >
+                    <div className={cn("shrink-0 p-3 rounded-xl transition-colors", item.bg, item.color)}>
+                      <item.icon size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-800 text-sm mb-1">{item.label}</h3>
+                      <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed">{item.prompt}</p>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-8 pb-32 pt-4">
+              <AnimatePresence initial={false}>
+                {messages.map((msg, idx) => (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className={cn(
+                      "flex group",
+                      msg.role === "user" ? "justify-end" : "justify-start"
+                    )}
+                  >
+                    <div className={cn(
+                      "flex max-w-[85%] md:max-w-[75%]",
+                      msg.role === "user" ? "flex-row-reverse" : "flex-row"
+                    )}>
+                      {/* Avatar */}
+                      <div className={cn(
+                        "shrink-0 mt-1",
+                        msg.role === "user" ? "ml-3" : "mr-3"
+                      )}>
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold",
+                          msg.role === "user" ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "bg-white border border-slate-200 text-blue-600"
+                        )}>
+                          {msg.role === "user" ? <User size={14} /> : <Bot size={14} />}
+                        </div>
+                      </div>
 
-                        <Box sx={{ maxWidth: "80%" }}>
-                          <Paper
-                            elevation={0}
-                            sx={{
-                              p: 2,
-                              background: message.role === "user" ? "#1a73e8" : "var(--bg-surface)",
-                              border: message.role === "assistant" ? "1px solid var(--border-subtle)" : "none",
-                              borderRadius: message.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                              color: message.role === "user" ? "#fff" : "var(--text-primary)"
-                            }}
-                          >
-                            <Typography sx={{ lineHeight: 1.6, whiteSpace: "pre-wrap", fontSize: "0.95rem" }}>
-                              {message.content}
-                            </Typography>
-                          </Paper>
+                      {/* Content */}
+                      <div className="flex flex-col items-start gap-2">
+                        <div className={cn(
+                          "px-5 py-4 text-[15px] leading-relaxed shadow-sm transition-shadow",
+                          msg.role === "user" 
+                            ? "bg-blue-600 text-white rounded-[24px] rounded-tr-sm" 
+                            : "bg-white border border-slate-200 text-slate-800 rounded-[24px] rounded-tl-sm hover:shadow-md",
+                          styles["message-bubble"]
+                        )}>
+                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                        </div>
 
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 1.5,
-                              mt: 1,
-                              justifyContent: message.role === "user" ? "flex-end" : "flex-start",
-                            }}
-                          >
-                            <Typography sx={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                              {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </Typography>
-                            
-                            {/* Agent executed badge */}
-                            {message.agentExecuted && (
-                              <Chip
-                                size="small"
-                                icon={<Activity size={12} />}
-                                label={message.agentType || "Agent"}
-                                onClick={() => setExpandedAgentId(expandedAgentId === message.id ? null : message.id)}
-                                sx={{
-                                  height: "22px",
-                                  fontSize: "0.7rem",
-                                  fontWeight: 500,
-                                  background: "rgba(26, 115, 232, 0.1)",
-                                  color: "#1a73e8",
-                                  cursor: "pointer",
-                                  "& .MuiChip-icon": { color: "#1a73e8" },
-                                  "&:hover": { background: "rgba(26, 115, 232, 0.15)" },
-                                }}
-                              />
-                            )}
-                            
-                            {message.role === "assistant" && (
-                              <IconButton
-                                size="small"
-                                onClick={() => copyMessage(message.id, message.content)}
-                                sx={{ width: 24, height: 24, color: copiedId === message.id ? "var(--success)" : "var(--text-secondary)" }}
-                              >
-                                {copiedId === message.id ? <Check size={14} /> : <Copy size={14} />}
-                              </IconButton>
-                            )}
-                          </Box>
-                          
-                          {/* Agent Execution Timeline */}
-                          {message.agentExecuted && (
-                            <Collapse in={expandedAgentId === message.id} timeout="auto" unmountOnExit>
-                              <Box sx={{ mt: 2, p: 2, backgroundColor: "var(--bg-surface)", borderRadius: 2, border: "1px solid var(--border-subtle)" }}>
-                                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 0.5 }}>
-                                    <Zap size={14} className="text-[#1a73e8]" /> Agent Execution Details
-                                  </Typography>
-                                </Box>
-                                
-                                <AgentExecutionTimeline
-                                  size="small"
-                                  perception={{
-                                    status: message.phases?.find(p => p.name.toLowerCase().includes("percep"))?.status === "completed" ? "completed" : "pending",
-                                    duration_ms: message.phases?.find(p => p.name.toLowerCase().includes("percep"))?.timeMs,
-                                  }}
-                                  cognition={{
-                                    status: message.phases?.find(p => p.name.toLowerCase().includes("cogn") || p.name.toLowerCase().includes("decis"))?.status === "completed" ? "completed" : "pending",
-                                    duration_ms: message.phases?.find(p => p.name.toLowerCase().includes("cogn") || p.name.toLowerCase().includes("decis"))?.timeMs,
-                                    decision: message.intent,
-                                    confidence: message.phases?.find(p => p.name.toLowerCase().includes("cogn"))?.status === "completed" ? "High" : undefined,
-                                  }}
-                                  action={{
-                                    status: message.phases?.find(p => p.name.toLowerCase().includes("action"))?.status === "completed" ? "completed" : "pending",
-                                    duration_ms: message.phases?.find(p => p.name.toLowerCase().includes("action"))?.timeMs,
-                                  }}
-                                  reflection={{
-                                    status: message.phases?.find(p => p.name.toLowerCase().includes("reflect"))?.status === "completed" ? "completed" : "pending",
-                                    duration_ms: message.phases?.find(p => p.name.toLowerCase().includes("reflect"))?.timeMs,
-                                  }}
-                                />
-                              </Box>
-                            </Collapse>
+                        {/* Message Footer */}
+                        <div className={cn(
+                          "flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity px-2",
+                          msg.role === "user" ? "flex-row-reverse" : "flex-row"
+                        )}>
+                          <span className="text-[11px] font-medium text-slate-400">
+                            {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+
+                          {msg.agentExecuted && (
+                            <button
+                              onClick={() => setExpandedAgentId(expandedAgentId === msg.id ? null : msg.id)}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-wider hover:bg-blue-100 transition-colors"
+                            >
+                              <Activity size={10} />
+                              {msg.agentType || "Agent"}
+                              {expandedAgentId === msg.id ? <RefreshCw size={10} className="animate-spin-slow" /> : <Plus size={10} />}
+                            </button>
                           )}
-                        </Box>
-                      </Box>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+
+                          {msg.role === "assistant" && (
+                            <button
+                              onClick={() => copyMessage(msg.id, msg.content)}
+                              className="text-slate-400 hover:text-blue-600 transition-colors"
+                            >
+                              {copiedId === msg.id ? <Check size={14} /> : <Copy size={14} />}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Expanded Timeline */}
+                        {msg.agentExecuted && expandedAgentId === msg.id && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="w-full mt-4 p-5 bg-white border border-blue-100 rounded-3xl shadow-sm overflow-hidden"
+                          >
+                            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50">
+                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <Zap size={12} className="text-blue-500" /> Trace Execution
+                              </h4>
+                              {msg.intent && (
+                                <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                                  {msg.intent}
+                                </span>
+                              )}
+                            </div>
+                            
+                            <AgentExecutionTimeline
+                              size="small"
+                              perception={{
+                                status: msg.phases?.find(p => p.name.toLowerCase().includes("percep"))?.status === "completed" ? "completed" : "pending",
+                                duration_ms: msg.phases?.find(p => p.name.toLowerCase().includes("percep"))?.timeMs,
+                              }}
+                              cognition={{
+                                status: msg.phases?.find(p => p.name.toLowerCase().includes("cogn") || p.name.toLowerCase().includes("decis"))?.status === "completed" ? "completed" : "pending",
+                                duration_ms: msg.phases?.find(p => p.name.toLowerCase().includes("cogn") || p.name.toLowerCase().includes("decis"))?.timeMs,
+                                decision: msg.intent,
+                              }}
+                              action={{
+                                status: msg.phases?.find(p => p.name.toLowerCase().includes("action"))?.status === "completed" ? "completed" : "pending",
+                                duration_ms: msg.phases?.find(p => p.name.toLowerCase().includes("action"))?.timeMs,
+                              }}
+                              reflection={{
+                                status: msg.phases?.find(p => p.name.toLowerCase().includes("reflect"))?.status === "completed" ? "completed" : "pending",
+                                duration_ms: msg.phases?.find(p => p.name.toLowerCase().includes("reflect"))?.timeMs,
+                              }}
+                            />
+                          </motion.div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
 
                 {isLoading && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <Box sx={{ display: "flex", gap: 2 }}>
-                      <Avatar
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          background: "rgba(26, 115, 232, 0.1)",
-                          color: "#1a73e8"
-                        }}
-                      >
-                        <Sparkles size={16} />
-                      </Avatar>
-                      <Paper
-                        elevation={0}
-                        sx={{
-                          p: 2,
-                          px: 3,
-                          background: "var(--bg-surface)",
-                          border: "1px solid var(--border-subtle)",
-                          borderRadius: "16px 16px 16px 4px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 1,
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            display: "flex",
-                            gap: 0.5,
-                            "& span": {
-                              width: 6,
-                              height: 6,
-                              borderRadius: "50%",
-                              background: "rgba(26, 115, 232, 0.6)",
-                              animation: "pulse 1.4s ease-in-out infinite",
-                              "&:nth-of-type(2)": { animationDelay: "0.2s" },
-                              "&:nth-of-type(3)": { animationDelay: "0.4s" },
-                            },
-                            "@keyframes pulse": {
-                              "0%, 80%, 100%": { transform: "scale(0.6)", opacity: 0.5 },
-                              "40%": { transform: "scale(1)", opacity: 1 },
-                            },
-                          }}
-                        >
-                          <span />
-                          <span />
-                          <span />
-                        </Box>
-                      </Paper>
-                    </Box>
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex justify-start"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0 mt-1">
+                        <Sparkles size={14} className="animate-pulse" />
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-[24px] rounded-tl-sm px-6 py-4 flex items-center gap-2 h-[52px]">
+                         <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce [animation-delay:-0.3s]" />
+                         <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce [animation-delay:-0.15s]" />
+                         <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" />
+                      </div>
+                    </div>
                   </motion.div>
                 )}
+              </AnimatePresence>
+              <div ref={messagesEndRef} className="h-10" />
+            </div>
+          )}
+        </div>
+      </div>
 
-                <div ref={messagesEndRef} />
-              </Box>
-            )}
-          </Paper>
+      {/* COMPOSER SECTION */}
+      <div className="relative z-20 shrink-0 px-4 pb-6 md:pb-10 pt-4 bg-gradient-to-t from-[#F8F9FA] via-[#F8F9FA] to-transparent">
+        <div className="max-w-3xl mx-auto">
+          {/* Quick Actions (Floating) */}
+          <AnimatePresence>
+             {messages.length > 0 && !isLoading && (
+               <motion.div 
+                 initial={{ opacity: 0, y: 10 }}
+                 animate={{ opacity: 1, y: 0 }}
+                 exit={{ opacity: 0, y: 10 }}
+                 className="flex justify-center gap-2 mb-4"
+               >
+                 <button 
+                   onClick={clearChat}
+                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-500 text-xs font-medium hover:bg-slate-50 transition-colors shadow-sm"
+                 >
+                   <RefreshCw size={12} /> New Chat
+                 </button>
+                 <button 
+                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-500 text-xs font-medium hover:bg-slate-50 transition-colors shadow-sm"
+                 >
+                   <MoreVertical size={12} /> Feedback
+                 </button>
+               </motion.div>
+             )}
+          </AnimatePresence>
 
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              background: "var(--bg-card)",
-              border: "1px solid var(--border-subtle)",
-              borderRadius: 3,
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-              mb: 1,
-              boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
-            }}
-          >
-            <TextField
-              inputRef={inputRef}
-              fullWidth
-              placeholder="Ask me to schedule a meeting, find free time, or optimize your calendar..."
+          {/* Input Bar */}
+          <div className={cn(
+            "relative flex items-end gap-2 p-2 pl-6 bg-white border border-slate-200 rounded-[32px] shadow-lg focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-100 transition-all",
+            styles["glass-composer"]
+          )}>
+            <textarea
+              ref={inputRef}
+              rows={1}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => {
@@ -593,68 +417,35 @@ export default function CopilotPage() {
                   handleSendMessage();
                 }
               }}
-              multiline
-              maxRows={4}
-              variant="outlined"
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  background: "transparent",
-                  borderRadius: "12px",
-                  color: "var(--text-primary)",
-                  "& fieldset": { border: "none" },
-                  "& textarea": {
-                    padding: "8px 0",
-                    "&::placeholder": {
-                      color: "var(--text-muted)",
-                    },
-                  },
-                },
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = `${Math.min(target.scrollHeight, 200)}px`;
               }}
+              placeholder="Ask me to schedule or organize..."
+              className="flex-1 max-h-[200px] py-3 bg-transparent border-0 focus:ring-0 text-[15px] text-slate-800 placeholder:text-slate-400 resize-none outline-none"
             />
-
-            <Box sx={{ display: "flex", gap: 1 }}>
-              {messages.length > 0 && (
-                <IconButton
-                  onClick={clearChat}
-                  sx={{
-                    color: "var(--text-secondary)",
-                    display: { xs: "flex", sm: "none" },
-                    "&:hover": { color: "var(--danger)" },
-                  }}
-                >
-                  <Trash2 size={20} />
-                </IconButton>
+            
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleSendMessage()}
+              disabled={!inputValue.trim() || isLoading}
+              className={cn(
+                "mb-1 flex h-11 w-11 items-center justify-center rounded-full transition-all shadow-md",
+                inputValue.trim() ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400"
               )}
-
-              <IconButton
-                onClick={handleSendMessage}
-                disabled={!inputValue.trim() || isLoading}
-                sx={{
-                  width: 44,
-                  height: 44,
-                  background: inputValue.trim() ? "var(--primary)" : "var(--bg-hover)",
-                  color: inputValue.trim() ? "#fff" : "var(--text-muted)",
-                  borderRadius: 2,
-                  transition: "all 0.2s ease",
-                  "&:hover": inputValue.trim()
-                    ? {
-                        background: "var(--primary-hover)",
-                        transform: "scale(1.05)",
-                      }
-                    : {},
-                  "&:disabled": {
-                    opacity: 0.5,
-                  },
-                }}
-              >
-                <Send size={18} />
-              </IconButton>
-            </Box>
-          </Paper>
-        </motion.div>
-      </Container>
+            >
+              {isLoading ? <RefreshCw size={18} className="animate-spin" /> : <ArrowUp size={20} />}
+            </motion.button>
+          </div>
+          <p className="text-center mt-3 text-[10px] text-slate-400 font-medium uppercase tracking-widest">
+            AI Assistant may make mistakes. Verify important schedules.
+          </p>
+        </div>
+      </div>
 
       <BottomNav />
-    </Box>
+    </div>
   );
 }

@@ -12,7 +12,7 @@ The 4-Phase Agent Loop:
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import json
 from typing import TYPE_CHECKING
@@ -58,9 +58,9 @@ class AgentPhase(Enum):
 
 # Phase timeout configuration (in seconds)
 PHASE_TIMEOUTS = {
-    AgentPhase.PERCEPTION: 10.0,  # 10 seconds for perception
-    AgentPhase.COGNITION: 30.0,  # 30 seconds for LLM reasoning
-    AgentPhase.ACTION: 60.0,  # 60 seconds for external API calls
+    AgentPhase.PERCEPTION: 15.0,  # 15 seconds for perception
+    AgentPhase.COGNITION: 15.0,  # 15 seconds for LLM reasoning
+    AgentPhase.ACTION: 15.0,  # 15 seconds for external API calls
     AgentPhase.REFLECTION: 15.0,  # 15 seconds for reflection
 }
 
@@ -136,6 +136,7 @@ class BaseAgent:
         self.metrics = AgentMetrics()
         self.controller: Optional[Any] = None
         self.memory: Dict[str, Any] = {}
+        self.logger = logger
         self._lock = asyncio.Lock()
 
         # Tool registry
@@ -192,7 +193,7 @@ class BaseAgent:
                 )
 
             self.metrics.total_requests += 1
-            loop_start = datetime.utcnow()
+            loop_start = datetime.now(timezone.utc)
 
             # Initialize context with memory
             context = AgentContext(
@@ -218,20 +219,20 @@ class BaseAgent:
                 # ║ Receive trigger → Read memory → Get context → Understand state ║
                 # ╚═══════════════════════════════════════════════════════════════╝
                 self.state = AgentState.PERCEIVING
-                phase_start = datetime.utcnow()
+                phase_start = datetime.now(timezone.utc)
 
                 perception = await self._execute_phase_with_timeout(
+                    "perception",
                     self._phase_perception,
                     context,
-                    PHASE_TIMEOUTS[AgentPhase.PERCEPTION],
-                    "perception",
+                    timeout_sec=PHASE_TIMEOUTS[AgentPhase.PERCEPTION],
                 )
                 context.phase_results["perception"] = perception
                 context.memory.short_term["perception"] = perception
 
                 result["phases"]["perception"] = {
                     "status": "completed",
-                    "time_ms": (datetime.utcnow() - phase_start).total_seconds() * 1000,
+                    "time_ms": (datetime.now(timezone.utc) - phase_start).total_seconds() * 1000,
                     "understanding": perception.get("understanding"),
                     "trigger": perception.get("trigger"),
                 }
@@ -241,13 +242,13 @@ class BaseAgent:
                 # ║ Think goal → Consider options → Plan steps → Decide actions    ║
                 # ╚═══════════════════════════════════════════════════════════════╝
                 self.state = AgentState.COGNIZING
-                phase_start = datetime.utcnow()
+                phase_start = datetime.now(timezone.utc)
 
                 cognition = await self._execute_phase_with_timeout(
+                    "cognition",
                     self._phase_cognition,
                     context,
-                    PHASE_TIMEOUTS[AgentPhase.COGNITION],
-                    "cognition",
+                    timeout_sec=PHASE_TIMEOUTS[AgentPhase.COGNITION],
                 )
                 context.phase_results["cognition"] = cognition
                 context.memory.short_term["plan"] = cognition.get("plan")
@@ -255,7 +256,7 @@ class BaseAgent:
 
                 result["phases"]["cognition"] = {
                     "status": "completed",
-                    "time_ms": (datetime.utcnow() - phase_start).total_seconds() * 1000,
+                    "time_ms": (datetime.now(timezone.utc) - phase_start).total_seconds() * 1000,
                     "goal": cognition.get("goal"),
                     "plan": cognition.get("plan"),
                     "decision": cognition.get("decision"),
@@ -266,20 +267,20 @@ class BaseAgent:
                 # ║ Call tools → Execute functions → Update systems → Record      ║
                 # ╚═══════════════════════════════════════════════════════════════╝
                 self.state = AgentState.ACTING
-                phase_start = datetime.utcnow()
+                phase_start = datetime.now(timezone.utc)
 
                 action = await self._execute_phase_with_timeout(
+                    "action",
                     self._phase_action,
                     context,
-                    PHASE_TIMEOUTS[AgentPhase.ACTION],
-                    "action",
+                    timeout_sec=PHASE_TIMEOUTS[AgentPhase.ACTION],
                 )
                 context.phase_results["action"] = action
                 context.memory.short_term["results"] = action.get("results")
 
                 result["phases"]["action"] = {
                     "status": "completed",
-                    "time_ms": (datetime.utcnow() - phase_start).total_seconds() * 1000,
+                    "time_ms": (datetime.now(timezone.utc) - phase_start).total_seconds() * 1000,
                     "tools_called": action.get("tools_called", []),
                     "results": action.get("results"),
                     "systems_updated": action.get("systems_updated", []),
@@ -290,26 +291,26 @@ class BaseAgent:
                 # ║ Check outcomes → Learn → Update memory → Improve              ║
                 # ╚═══════════════════════════════════════════════════════════════╝
                 self.state = AgentState.REFLECTING
-                phase_start = datetime.utcnow()
+                phase_start = datetime.now(timezone.utc)
 
                 reflection = await self._execute_phase_with_timeout(
+                    "reflection",
                     lambda ctx: self._phase_reflection(ctx, result),
                     context,
-                    PHASE_TIMEOUTS[AgentPhase.REFLECTION],
-                    "reflection",
+                    timeout_sec=PHASE_TIMEOUTS[AgentPhase.REFLECTION],
                 )
                 context.phase_results["reflection"] = reflection
 
                 result["phases"]["reflection"] = {
                     "status": "completed",
-                    "time_ms": (datetime.utcnow() - phase_start).total_seconds() * 1000,
+                    "time_ms": (datetime.now(timezone.utc) - phase_start).total_seconds() * 1000,
                     "outcome": reflection.get("outcome"),
                     "learnings": reflection.get("learnings", []),
                     "improvements": reflection.get("improvements", []),
                 }
 
                 # Update final metrics
-                total_time = (datetime.utcnow() - loop_start).total_seconds() * 1000
+                total_time = (datetime.now(timezone.utc) - loop_start).total_seconds() * 1000
                 self.metrics.successful_requests += 1
                 self._update_average_time(total_time)
 
@@ -327,7 +328,7 @@ class BaseAgent:
                 self.metrics.failed_requests += 1
                 self.metrics.errors.append(
                     {
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                         "error": str(e),
                         "request_id": request.id,
                         "phase": self.state.value,
@@ -351,50 +352,22 @@ class BaseAgent:
     # ╚══════════════════════════════════════════════════════════════════╝
 
     async def _execute_phase_with_timeout(
-        self, phase_func, context: AgentContext, timeout: float, phase_name: str
+        self,
+        phase_name: str,
+        phase_func,
+        context: AgentContext,
+        timeout_sec: float = 25.0,
     ) -> Dict[str, Any]:
-        """
-        Execute a phase with timeout protection.
-
-        Args:
-            phase_func: The phase function to execute
-            context: AgentContext for the phase
-            timeout: Maximum time allowed for the phase (seconds)
-            phase_name: Name of the phase for error reporting
-
-        Returns:
-            Phase result dictionary
-
-        Raises:
-            AgentTimeoutError: If phase exceeds timeout limit
-        """
-        import asyncio
-
+        """Forces a hard timeout on AI operations to prevent server DoS."""
         try:
-            # Execute phase with timeout
-            result = await asyncio.wait_for(phase_func(context), timeout=timeout)
-            return result
-
+            return await asyncio.wait_for(phase_func(context), timeout=timeout_sec)
         except asyncio.TimeoutError:
-            logger.error(
-                f"[{self.name}] Phase '{phase_name}' timed out after {timeout}s "
-                f"(request: {context.request_id})"
+            self.logger.critical(
+                f"CRITICAL: Agent phase '{phase_name}' timed out after {timeout_sec}s."
             )
-
-            # Update metrics
-            self.metrics.errors.append(
-                {
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "error": f"Phase timeout: {phase_name}",
-                    "request_id": context.request_id,
-                    "phase": phase_name,
-                    "timeout_seconds": timeout,
-                }
-            )
-
-            # Raise timeout error
+            self.state = AgentState.ERROR
             raise AgentTimeoutError(
-                f"Phase '{phase_name}' exceeded {timeout} second limit"
+                f"AI Provider timeout during {phase_name} phase after {timeout_sec}s."
             )
 
     # ╔══════════════════════════════════════════════════════════════════╗
@@ -664,7 +637,7 @@ class BaseAgent:
             "episodic_memory": {
                 "request": context.data,
                 "result": result,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "importance": 0.8 if result.get("success") else 0.5,
             },
         }
@@ -870,7 +843,7 @@ class BaseAgent:
                 "user_id": context.user_id,
                 "result": result,
                 "learnings": learnings,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
         updates.append(f"short_term:episodic_{context.request_id}")
@@ -941,7 +914,7 @@ class BaseAgent:
             "error": str(error),
             "phase": self.state.value,
             "request": context.data,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "confidence": 0.9,
         }
 

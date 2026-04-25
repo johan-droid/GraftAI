@@ -12,7 +12,7 @@ Implements 6 key booking scenarios with specific agent behaviors:
 """
 
 from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 import pytz
 
@@ -568,7 +568,7 @@ Please choose an alternative time or resolve the conflict manually.
                 tool_name="create_task",
                 parameters={
                     "title": f"Resolve booking conflict: {booking['title']}",
-                    "due_date": datetime.utcnow().isoformat(),
+                    "due_date": datetime.now(timezone.utc).isoformat(),
                     "owner": booking["organizer"],
                     "priority": "critical",
                     "description": "Calendar conflict requires human intervention",

@@ -283,6 +283,7 @@ async def get_free_slots(
     stmt = select(EventTable).where(
         and_(
             EventTable.user_id == current_user.id,
+            EventTable.is_deleted == False,
             EventTable.start_time <= day_end,
             EventTable.end_time >= day_start,
             EventTable.source != "deleted",

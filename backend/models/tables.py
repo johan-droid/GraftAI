@@ -16,7 +16,8 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
-from .base import Base  # Re-using central Base for consistency
+from .base import Base
+from backend.utils.soft_delete import SoftDeleteMixin
 
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,11 @@ class UserTable(Base):
     trial_expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    
+    # Meter Reading Tracking
+    total_ai_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_api_calls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_scheduling_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     onboarding_completed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
@@ -212,7 +218,7 @@ class NotificationTable(Base):
     )
 
 
-class EventTable(Base):
+class EventTable(Base, SoftDeleteMixin):
     """Unified table for both local schedule blocks and external synced events."""
 
     __tablename__ = "events"
@@ -258,7 +264,7 @@ class EventTable(Base):
     )
 
 
-class BookingTable(Base):
+class BookingTable(Base, SoftDeleteMixin):
     __tablename__ = "bookings"
     __table_args__ = (
         UniqueConstraint(
@@ -325,7 +331,7 @@ class BookingTable(Base):
     )
 
 
-class WebhookSubscriptionTable(Base):
+class WebhookSubscriptionTable(Base, SoftDeleteMixin):
     __tablename__ = "webhook_subscriptions"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
@@ -371,6 +377,9 @@ class WebhookLogTable(Base):
         index=True,
     )
     event: Mapped[str] = mapped_column(String, nullable=False)
+    event_id: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True, index=True, unique=True
+    )  # Stripe/Razorpay event ID for idempotency
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     request_status: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     request_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -387,7 +396,7 @@ class WebhookLogTable(Base):
     )
 
 
-class EventTypeTable(Base):
+class EventTypeTable(Base, SoftDeleteMixin):
     __tablename__ = "event_types"
     __table_args__ = (
         UniqueConstraint("user_id", "slug", name="uq_user_event_type_slug"),
@@ -539,7 +548,7 @@ class UserMFATable(Base):
 
 
 class AuditLogTable(Base):
-    """Audit log for security and compliance events (SOC 2)."""
+    """SaaS Audit Log for security, compliance and usage tracking (SOC 2)."""
 
     __tablename__ = "audit_logs"
 
@@ -555,34 +564,40 @@ class AuditLogTable(Base):
     event_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     event_category: Mapped[str] = mapped_column(
         String(30), nullable=False
-    )  # 'authentication', 'authorization', 'data_access', 'system'
+    )  # 'authentication', 'authorization', 'data_access', 'system', 'billing', 'ai'
     severity: Mapped[str] = mapped_column(
         String(10), nullable=False, default="info"
     )  # 'info', 'warning', 'error', 'critical'
 
     # Actor information
     user_id: Mapped[Optional[str]] = mapped_column(
-        String(100), ForeignKey("users.id"), nullable=True, index=True
+        String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    team_id: Mapped[Optional[str]] = mapped_column(
+        String(100), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True
     )
     user_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     ip_address: Mapped[Optional[str]] = mapped_column(
         String(45), nullable=True, index=True
     )
-    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     # Action details
     action: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # 'login', 'logout', 'create', 'update', 'delete', 'view'
-    resource_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # 'user', 'calendar', 'event', 'booking'
+        String(50), nullable=False, index=True
+    )  # 'login', 'logout', 'create', 'update', 'delete', 'view', 'ai.chat', 'billing.upgrade'
+    resource_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # 'user', 'calendar', 'event', 'booking', 'automation'
     resource_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    # Result
+    # Result/Status
     result: Mapped[str] = mapped_column(
         String(10), nullable=False, default="success"
     )  # 'success', 'failure', 'denied'
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="success"
+    ) # success, failure, denied (Redundant but useful for SaaS dashboards)
     failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Additional context (JSON)
@@ -604,7 +619,12 @@ class AuditLogTable(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
+        index=True,
     )
+
+    # Relationships
+    user: Mapped[Optional["UserTable"]] = relationship("UserTable", foreign_keys=[user_id])
+    team: Mapped[Optional["Team"]] = relationship("Team")
 
 
 class ManualActivationRequestTable(Base):
@@ -729,7 +749,7 @@ class TeamMembershipTable(Base):
     )
 
 
-class WorkflowTable(Base):
+class WorkflowTable(Base, SoftDeleteMixin):
     """Workflows for automated sequences."""
 
     __tablename__ = "workflows"

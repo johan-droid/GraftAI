@@ -4,7 +4,7 @@ Handles conflict detection, availability checking, and workflow routing
 """
 
 from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from backend.ai.agents.base import AgentState, BaseAgent, AgentContext
 from backend.utils.logger import get_logger
 from backend.tasks.email_tasks import send_booking_confirmation
@@ -439,7 +439,7 @@ class BookingAgent(BaseAgent):
             "requires_confirmation": additional_data.get(
                 "requires_confirmation", False
             ),
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "booking_agent_version": "1.0",
         }
 
@@ -478,7 +478,7 @@ class BookingAgent(BaseAgent):
 
         # Create booking record
         # Placeholder: Actual implementation would insert into database
-        booking_id = f"booking_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        booking_id = f"booking_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         return {"success": True, "workflow_id": workflow_id, "booking_id": booking_id}
 

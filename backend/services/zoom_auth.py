@@ -1,8 +1,8 @@
 import os
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 
-ZOOM_CLIENT_ID = os.getenv("ZOOM_CLIENT_ID")
-ZOOM_CLIENT_SECRET = os.getenv("ZOOM_CLIENT_SECRET")
+ZOOM_CLIENT_ID = os.getenv("ZOOM_CLIENT_ID") or os.getenv("ZOOM_ID")
+ZOOM_CLIENT_SECRET = os.getenv("ZOOM_CLIENT_SECRET") or os.getenv("ZOOM_SECRET")
 
 # Use the backend base URL provided through environment variables.
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")

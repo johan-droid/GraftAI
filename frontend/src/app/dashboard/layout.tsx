@@ -9,6 +9,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { AppLoadingScreen } from "@/components/ui/AppLoadingScreen";
 import { getProfileSetupStatus } from "@/lib/api";
+import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
 
 export default function DashboardLayout({
   children,
@@ -72,6 +73,7 @@ export default function DashboardLayout({
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 bg-[#F8F9FA]">
           <Topbar />
+          <SyncStatusIndicator />
           <main className="flex-1 overflow-y-auto relative pb-20 md:pb-0">
             {children}
           </main>

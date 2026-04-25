@@ -1,7 +1,7 @@
 """Apple iCloud Calendar integration via CalDAV."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
 import caldav
@@ -293,8 +293,8 @@ class AppleCalendarClient:
         attendees: Optional[List[str]] = None,
     ) -> str:
         """Build iCalendar VEVENT string."""
-        uid = f"graftai-{datetime.utcnow().timestamp()}-{title[:20]}"
-        dtstamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        uid = f"graftai-{datetime.now(timezone.utc).timestamp()}-{title[:20]}"
+        dtstamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
         lines = [
             "BEGIN:VCALENDAR",

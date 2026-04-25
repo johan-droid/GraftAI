@@ -9,7 +9,7 @@ from alembic import context
 from urllib.parse import urlparse, urlunparse
 
 # Import your models here
-from backend.models.tables import Base
+from backend.models import *
 from backend.utils.db import DATABASE_URL
 
 logger = logging.getLogger("alembic.env")
@@ -25,13 +25,16 @@ def get_url():
     if not url:
         return url
 
+    # Preserve SQLite file URLs exactly (avoid urlunparse removing a slash)
+    if url.startswith("sqlite"):
+        return url
+
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-    # asyncpg is extremely picky about query params.
-    # Standard practice for asyncpg is to strip them from the URL and pass them in connect_args.
+    # asyncpg is picky about query params. Strip them from the URL and return
+    # a cleaned URL without query parameters for engine creation.
     parsed = urlparse(url)
-    # Return URL WITHOUT any query parameters to avoid 'unexpected keyword argument' errors
     return urlunparse(parsed._replace(query=""))
 
 
@@ -41,7 +44,9 @@ target_metadata = Base.metadata
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection, target_metadata=target_metadata, render_as_batch=True
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -53,8 +58,15 @@ async def run_async_migrations() -> None:
     if is_render:
         connect_args["ssl"] = "require"
 
-    # Add any other required asyncpg params here
-    connect_args["command_timeout"] = 60
+    # Add any other required asyncpg params here. For sqlite, use the
+    # DB driver's supported timeout option instead of asyncpg's
+    # `command_timeout` which is invalid for sqlite connections.
+    is_sqlite = (DATABASE_URL or "").startswith("sqlite")
+    if is_sqlite:
+        # `timeout` is accepted by sqlite3.connect
+        connect_args["timeout"] = int(os.getenv("DB_CONNECT_TIMEOUT", "30"))
+    else:
+        connect_args["command_timeout"] = 60
 
     async_config = config.get_section(config.config_ini_section, {})
 

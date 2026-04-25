@@ -1,12 +1,14 @@
 import type { NextAuthConfig } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
-import { getGoogleOAuthCredentials, getMicrosoftOAuthCredentials } from "@/lib/oauth-env";
+import ZoomProvider from "next-auth/providers/zoom";
+import { getGoogleOAuthCredentials, getMicrosoftOAuthCredentials, getZoomOAuthCredentials } from "@/lib/oauth-env";
 
 // ─── Environment Bridging ──────────────────────────────────────────────────
 // Resolve legacy and Auth.js v5 env names so either deployment convention works.
 const googleOAuth = getGoogleOAuthCredentials();
 const microsoftOAuth = getMicrosoftOAuthCredentials();
+const zoomOAuth = getZoomOAuthCredentials();
 
 if (!googleOAuth.clientId || !googleOAuth.clientSecret) {
   console.warn(
@@ -25,6 +27,12 @@ if (microsoftOAuth.clientId && !process.env.AUTH_MICROSOFT_ENTRA_ID_ID) {
 }
 if (microsoftOAuth.clientSecret && !process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET) {
   process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET = microsoftOAuth.clientSecret;
+}
+if (zoomOAuth.clientId && !process.env.AUTH_ZOOM_ID) {
+  process.env.AUTH_ZOOM_ID = zoomOAuth.clientId;
+}
+if (zoomOAuth.clientSecret && !process.env.AUTH_ZOOM_SECRET) {
+  process.env.AUTH_ZOOM_SECRET = zoomOAuth.clientSecret;
 }
 
 // ─── NextAuth Configuration (Edge Compatible) ────────────────────────────────
@@ -78,6 +86,22 @@ if (microsoftOAuth.clientId && microsoftOAuth.clientSecret) {
   );
 } else {
   console.warn("[NextAuth] Microsoft Entra provider not registered due to missing credentials.");
+}
+
+if (zoomOAuth.clientId && zoomOAuth.clientSecret) {
+  providers.push(
+    ZoomProvider({
+      clientId: zoomOAuth.clientId,
+      clientSecret: zoomOAuth.clientSecret,
+      authorization: {
+        params: {
+          scope: "meeting:write user:read",
+        },
+      },
+    })
+  );
+} else {
+  console.warn("[NextAuth] Zoom provider not registered due to missing credentials.");
 }
 
 export const authConfig = {

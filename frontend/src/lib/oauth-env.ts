@@ -27,3 +27,10 @@ export function getMicrosoftOAuthCredentials(): OAuthCredentialPair {
     clientSecret: resolveFirstEnvValue("MICROSOFT_CLIENT_SECRET", "AUTH_MICROSOFT_ENTRA_ID_SECRET"),
   };
 }
+
+export function getZoomOAuthCredentials(): OAuthCredentialPair {
+  return {
+    clientId: resolveFirstEnvValue("ZOOM_CLIENT_ID", "AUTH_ZOOM_ID"),
+    clientSecret: resolveFirstEnvValue("ZOOM_CLIENT_SECRET", "AUTH_ZOOM_SECRET"),
+  };
+}

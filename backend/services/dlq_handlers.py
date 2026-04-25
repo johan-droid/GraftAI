@@ -73,7 +73,7 @@ try:
     from backend.ai.tools.communication_tools_real import (
         send_email as real_send_email,
         send_sms as real_send_sms,
-        send_slack_message as real_send_slack,
+        post_to_slack as real_send_slack,
     )
     TOOLS_AVAILABLE = True
 except ImportError:
@@ -94,10 +94,15 @@ async def handle_send_email(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         to = payload.get("to")
         subject = payload.get("subject")
-        body = payload.get("body")
-        html = payload.get("html")
+        body = payload.get("body") or payload.get("html")
+        cc = payload.get("cc")
+        bcc = payload.get("bcc")
+        template = payload.get("template")
+        template_context = payload.get("template_context")
+        from_address = payload.get("from_address")
+        attachments = payload.get("attachments")
         
-        if not all([to, subject, body or html]):
+        if not all([to, subject, body]):
             return {
                 "success": False,
                 "error": "Missing required fields: to, subject, body/html"
@@ -107,10 +112,24 @@ async def handle_send_email(payload: Dict[str, Any]) -> Dict[str, Any]:
             # Use real implementation with circuit breaker
             @SENDGRID_BREAKER
             async def _send():
-                return await real_send_email(to=to, subject=subject, body=body, html=html)
+                return await real_send_email(
+                    to=to,
+                    subject=subject,
+                    body=body,
+                    cc=cc,
+                    bcc=bcc,
+                    template=template,
+                    template_context=template_context,
+                    from_address=from_address,
+                    attachments=attachments,
+                )
             
             result = await _send()
-            return {"success": True, "message_id": result.get("message_id")}
+            return {
+                "success": bool(result.get("success")),
+                "message_id": result.get("email_id"),
+                "result": result,
+            }
         else:
             # Mock implementation for testing
             logger.info(
@@ -139,6 +158,8 @@ async def handle_send_sms(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         to = payload.get("to")
         body = payload.get("body")
+        from_number = payload.get("from_number")
+        media_urls = payload.get("media_urls")
         
         if not all([to, body]):
             return {
@@ -150,10 +171,19 @@ async def handle_send_sms(payload: Dict[str, Any]) -> Dict[str, Any]:
             # Use real implementation with circuit breaker
             @TWILIO_BREAKER
             async def _send():
-                return await real_send_sms(to=to, body=body)
+                return await real_send_sms(
+                    to=to,
+                    message=body,
+                    from_number=from_number,
+                    media_urls=media_urls,
+                )
             
             result = await _send()
-            return {"success": True, "message_sid": result.get("message_sid")}
+            return {
+                "success": bool(result.get("success")),
+                "message_sid": result.get("sms_id"),
+                "result": result,
+            }
         else:
             # Mock implementation
             logger.info(
@@ -284,10 +314,10 @@ async def handle_calendar_sync(payload: Dict[str, Any]) -> Dict[str, Any]:
         event_id = payload.get("event_id")
         calendar_id = payload.get("calendar_id", "primary")
         
-        if not all([action, event_id]):
+        if not action or (action != "create" and not event_id):
             return {
                 "success": False,
-                "error": "Missing required fields: action, event_id"
+                "error": "Missing required fields: action and event_id for update/delete"
             }
         
         if TOOLS_AVAILABLE:
@@ -300,11 +330,17 @@ async def handle_calendar_sync(payload: Dict[str, Any]) -> Dict[str, Any]:
                     action=action,
                     event_id=event_id,
                     calendar_id=calendar_id,
-                    details=payload.get("details", {})
+                    details=payload.get("details", {}),
                 )
             
             result = await _sync()
-            return {"success": True, "calendar_event_id": result.get("event_id")}
+            success = bool(result.get("success"))
+            response = {"success": success, "result": result}
+            if result.get("event_id"):
+                response["calendar_event_id"] = result.get("event_id")
+            if not success:
+                response["error"] = result.get("error")
+            return response
         else:
             # Mock implementation
             logger.info(f"[DLQ MOCK] Would sync calendar: {action} {event_id}")

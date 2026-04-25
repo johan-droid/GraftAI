@@ -6,12 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 import pytz
 
-from backend.models.tables import EventTable, UserTable, UserTokenTable
+from backend.models.tables import BookingTable, EventTable, UserTable, UserTokenTable
 from backend.services.notifications import (
     notify_event_created,
     notify_event_updated,
     notify_event_deleted,
 )
+from backend.services.usage import increment_usage
 from backend.services.integrations.google_calendar import (
     create_google_event,
     update_google_event,
@@ -190,12 +191,22 @@ async def _safe_notify(db: AsyncSession, action: str, user_id: str, event: Event
             return
 
         recipients = [user.email]
+        if event.attendees and isinstance(event.attendees, list):
+            for attendee in event.attendees:
+                if isinstance(attendee, dict) and attendee.get("email"):
+                    recipients.append(attendee["email"])
+                elif isinstance(attendee, str) and "@" in attendee:
+                    recipients.append(attendee)
+
+        # De-duplicate recipients
+        recipients = list(set(recipients))
+
         event_dict = {
             "id": event.id,
             "title": _normalize_event_title(event.title),
             "start_time": event.start_time.strftime("%A, %B %d at %I:%M %p"),
             "end_time": event.end_time.strftime("%A, %B %d at %I:%M %p"),
-            "meeting_link": event.meeting_url,
+            "meeting_link": event.meeting_url or "Local Event (No link)",
             "is_meeting": event.is_meeting,
         }
 
@@ -252,6 +263,7 @@ async def get_events_for_range(
         .where(
             and_(
                 EventTable.user_id == user_id,
+                EventTable.is_deleted == False,
                 EventTable.start_time < end,
                 EventTable.end_time > start,
             )
@@ -292,15 +304,31 @@ async def create_event(
     st = to_utc(start_time)
     et = to_utc(end_time)
 
+    # Check for conflicts in internal events
     conflict_stmt = select(EventTable).where(
         and_(
             EventTable.user_id == user_id,
+            EventTable.is_deleted == False,
             EventTable.start_time < et,
             EventTable.end_time > st,
         )
     )
     if (await db.execute(conflict_stmt)).scalars().first():
-        logger.warning(f"Conflict detected for user {user_id}")
+        logger.warning(f"Conflict detected in EventTable for user {user_id}")
+        raise ValueError("Schedule conflict: You already have an event at this time.")
+
+    # Check for conflicts in public bookings
+    booking_conflict_stmt = select(BookingTable).where(
+        and_(
+            BookingTable.user_id == user_id,
+            BookingTable.status == "confirmed",
+            BookingTable.start_time < et,
+            BookingTable.end_time > st,
+        )
+    )
+    if (await db.execute(booking_conflict_stmt)).scalars().first():
+        logger.warning(f"Conflict detected in BookingTable for user {user_id}")
+        raise ValueError("Schedule conflict: A public booking already exists at this time.")
 
     db_event_data = {
         k: v for k, v in event_data.items() if k in EventTable.__table__.columns.keys()
@@ -346,6 +374,13 @@ async def create_event(
             background_tasks.add_task(_safe_notify, db, "created", user_id, new_event)
         else:
             await _safe_notify(db, "created", user_id, new_event)
+
+    # Track Usage
+    try:
+        await increment_usage(db, user_id, "scheduling")
+        await increment_usage(db, user_id, "api_calls")
+    except Exception as e:
+        logger.warning(f"Failed to increment usage for scheduling: {e}")
 
     if commit:
         await db.commit()
@@ -436,6 +471,11 @@ async def delete_event(
         await _delete_external_event(db, user_id, event.source, event.external_id)
 
     await _safe_notify(db, "deleted", user_id, event)
-    await db.delete(event)
-    await db.commit()
+
+    if hasattr(event, "soft_delete"):
+        await event.soft_delete(db, deleted_by=user_id)
+    else:
+        await db.delete(event)
+        await db.commit()
+
     return True

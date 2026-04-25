@@ -4,8 +4,12 @@ from starlette import status
 
 PROVIDERS = {
     "google": {
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+        "client_id": os.getenv("GOOGLE_CLIENT_ID")
+        or os.getenv("GOOGLE_ID")
+        or os.getenv("AUTH_GOOGLE_ID"),
+        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET")
+        or os.getenv("GOOGLE_SECRET")
+        or os.getenv("AUTH_GOOGLE_SECRET"),
         "token_url": "https://oauth2.googleapis.com/token",
         "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
     },

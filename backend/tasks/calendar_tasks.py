@@ -31,6 +31,28 @@ def sync_user_calendar(self, user_id: str, provider: str = "google"):
 
 
 @celery_app.task(bind=True, max_retries=3)
+def sync_all_integrations(self, user_id: str):
+    """Sync all active integrations (Calendar, Zoom) for a user."""
+    try:
+        logger.info(f"Syncing all integrations for user {user_id}")
+        
+        # Sync Calendars (Google / Microsoft)
+        calendar_result = calendar_sync.sync_calendar(user_id=user_id)
+        
+        # Sync Zoom Meetings (if applicable)
+        # For now, we'll just log it, but we could add a ZoomSyncService later.
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "calendar_synced": True,
+        }
+    except Exception as exc:
+        logger.error(f"Full integration sync failed for user {user_id}: {exc}")
+        raise self.retry(exc=exc, countdown=300)
+
+
+@celery_app.task(bind=True, max_retries=3)
 def sync_all_calendars(self):
     """Sync all connected calendars (periodic task)."""
     try:

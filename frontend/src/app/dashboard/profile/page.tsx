@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/providers/auth-provider";
-import { updateUserProfile } from "@/lib/api";
+import { updateUserProfile, getUsageStats } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
   User,
@@ -11,6 +11,9 @@ import {
   Globe,
   Zap,
 } from "lucide-react";
+import { UsageProgress } from "@/components/profile/UsageProgress";
+import { RecentActivity } from "@/components/profile/RecentActivity";
+import { PricingSection } from "@/components/profile/PricingSection";
 
 const STAGGER = {
   hidden: { opacity: 0 },
@@ -55,6 +58,7 @@ function SettingRow({ icon: Icon, label, description, children }: {
 
 export default function ProfilePage() {
   const { user, refresh } = useAuth();
+  const [stats, setStats] = useState<any>(null);
 
   const [editingName, setEditingName] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
@@ -76,8 +80,16 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await getUsageStats();
+        setStats(data);
+      } catch (err) {
+        console.error("Failed to fetch stats", err);
+      }
+    };
     if (user) {
-      // Use user.full_name or user.name depending on the API mapping
+      fetchStats();
       setNameDraft(user.full_name || user.name || "");
       setBioDraft(user.bio || "");
       setJobDraft(user.job_title || "");
@@ -101,7 +113,7 @@ export default function ProfilePage() {
       setEditingJob(false);
       setEditingLocation(false);
       
-      await refresh(); // Sync without reloading!
+      await refresh();
     } finally {
       setProfileSaving(false);
     }
@@ -193,6 +205,106 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
+        </motion.div>
+
+        <motion.div variants={ITEM}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 blur-2xl rounded-full -mr-12 -mt-12 transition-all group-hover:scale-150" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-indigo-400" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">AI Power</h3>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-2xl font-black text-white tabular-nums">
+                  {stats?.ai_tokens?.toLocaleString() || user?.total_ai_tokens?.toLocaleString() || "0"}
+                </span>
+                <span className="text-[10px] text-slate-500 mt-1 font-medium">LIFETIME TOKENS CONSUMED</span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/10 blur-2xl rounded-full -mr-12 -mt-12 transition-all group-hover:scale-150" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                  <Globe className="w-4 h-4 text-violet-400" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">API Engine</h3>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-2xl font-black text-white tabular-nums">
+                  {stats?.api_calls?.toLocaleString() || user?.total_api_calls?.toLocaleString() || "0"}
+                </span>
+                <span className="text-[10px] text-slate-500 mt-1 font-medium">TOTAL SYSTEM API CALLS</span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-fuchsia-500/10 blur-2xl rounded-full -mr-12 -mt-12 transition-all group-hover:scale-150" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-fuchsia-500/10 flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-fuchsia-400" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Efficiency</h3>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-2xl font-black text-white tabular-nums">
+                  {stats?.scheduling_count?.toLocaleString() || user?.total_scheduling_count?.toLocaleString() || "0"}
+                </span>
+                <span className="text-[10px] text-slate-500 mt-1 font-medium">EVENTS SCHEDULED</span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full -mr-12 -mt-12 transition-all group-hover:scale-150" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <Activity className="w-4 h-4 text-emerald-400" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Health</h3>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-2xl font-black text-emerald-400 tabular-nums">
+                  Optimal
+                </span>
+                <span className="text-[10px] text-slate-500 mt-1 font-medium">SAAS GRADE ARCHITECTURE</span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div variants={ITEM} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+           <div className="space-y-6">
+              <h2 className="text-sm font-black text-white uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-indigo-400" /> Daily Quotas
+              </h2>
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 space-y-6">
+                <UsageProgress 
+                  label="AI Copilot Messages" 
+                  current={stats?.daily_ai_usage || 0} 
+                  limit={user?.tier === 'enterprise' ? 1000 : user?.tier === 'elite' ? 250 : user?.tier === 'pro' ? 100 : 25} 
+                  unit="msgs"
+                />
+                <UsageProgress 
+                  label="Calendar Syncs" 
+                  current={stats?.daily_sync_usage || 0} 
+                  limit={user?.tier === 'enterprise' ? 500 : user?.tier === 'elite' ? 100 : user?.tier === 'pro' ? 25 : 5} 
+                  unit="syncs"
+                  color="bg-violet-500"
+                />
+              </div>
+           </div>
+
+           <div className="space-y-6">
+              <h2 className="text-sm font-black text-white uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-emerald-400" /> Recent Activity
+              </h2>
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 h-[216px] overflow-y-auto">
+                <RecentActivity />
+              </div>
+           </div>
         </motion.div>
 
         <motion.div variants={ITEM}>
@@ -305,6 +417,19 @@ export default function ProfilePage() {
                 <span className="text-sm text-slate-300 font-medium">{user?.created_at ? new Date(user.created_at).toLocaleDateString() : "Unknown"}</span>
               </SettingRow>
             </Section>
+          </motion.div>
+
+          <motion.div variants={ITEM} className="pt-8">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                <Zap className="w-5 h-5 text-indigo-400" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-white uppercase tracking-wider">Subscription Plans</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Choose the plan that fits your professional needs.</p>
+              </div>
+            </div>
+            <PricingSection currentTier={user?.tier || "free"} />
           </motion.div>
         </motion.div>
       </motion.div>

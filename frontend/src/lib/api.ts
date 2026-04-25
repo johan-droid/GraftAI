@@ -21,25 +21,25 @@ export async function refreshSession() {
 // ──────────────────────────────────────
 // Auth: DID & Identity
 // ──────────────────────────────────────
-export async function didIssue() {
-  return enhancedApiClient.post<{ did: string }>("/auth/did/issue");
-}
-
-export async function didVerify(did: string) {
-  return enhancedApiClient.post<{ status: string }>("/auth/did/verify", { did });
-}
+// export async function didIssue() {
+//   return enhancedApiClient.post<{ did: string }>("/auth/did/issue");
+// }
+// 
+// export async function didVerify(did: string) {
+//   return enhancedApiClient.post<{ status: string }>("/auth/did/verify", { did });
+// }
 
 export async function syncUserTimezone(timezone: string) {
   return updateUserProfile({ timezone });
 }
 
-export async function syncUserConsent(consents: { 
-  consent_analytics?: boolean; 
-  consent_notifications?: boolean; 
-  consent_ai_training?: boolean 
-}) {
-  return enhancedApiClient.post<{ status: string }>("/auth/sync-consent", consents);
-}
+// export async function syncUserConsent(consents: { 
+//   consent_analytics?: boolean; 
+//   consent_notifications?: boolean; 
+//   consent_ai_training?: boolean 
+// }) {
+//   return enhancedApiClient.post<{ status: string }>("/auth/sync-consent", consents);
+// }
 
 // ──────────────────────────────────────
 // Auth: Account Deletion
@@ -48,29 +48,29 @@ export async function deleteAccount(payload?: { reason?: string; details?: strin
   return enhancedApiClient.fetchWithOfflineSupport<{ message: string }>("/auth/account", { method: "DELETE", json: payload });
 }
 
-export async function submitLogoutFeedback(payload: { reason: string; details?: string }) {
-  return enhancedApiClient.post<{ status: string }>("/auth/logout-feedback", payload);
-}
+// export async function submitLogoutFeedback(payload: { reason: string; details?: string }) {
+//   return enhancedApiClient.post<{ status: string }>("/auth/logout-feedback", payload);
+// }
 
 export async function submitDeletionFeedback(payload: { reason: string; details?: string }) {
   return enhancedApiClient.fetchWithOfflineSupport<{ message: string }>("/auth/account", { method: "DELETE", json: payload });
 }
 
-export async function requestMagicLink(email: string) {
-  return enhancedApiClient.post<{ email: string; code?: string; expires_at?: string; message: string }>(
-    "/auth/passwordless/request",
-    null,
-    { params: { email } }
-  );
-}
-
-export async function verifyMagicLink(email: string, code: string) {
-  return enhancedApiClient.post<{ access_token: string; refresh_token: string; token_type: string; expires_in: number }>(
-    "/auth/passwordless/verify",
-    null,
-    { params: { email, code } }
-  );
-}
+// export async function requestMagicLink(email: string) {
+//   return enhancedApiClient.post<{ email: string; code?: string; expires_at?: string; message: string }>(
+//     "/auth/passwordless/request",
+//     null,
+//     { params: { email } }
+//   );
+// }
+// 
+// export async function verifyMagicLink(email: string, code: string) {
+//   return enhancedApiClient.post<{ access_token: string; refresh_token: string; token_type: string; expires_in: number }>(
+//     "/auth/passwordless/verify",
+//     null,
+//     { params: { email, code } }
+//   );
+// }
 
 function unwrapApiData<T>(response: T | { data?: T }): T {
   if (response && typeof response === "object" && "data" in response && (response as { data?: T }).data !== undefined) {
@@ -297,15 +297,15 @@ export async function ssoStart(provider: string = "microsoft", redirectTo: strin
 // ──────────────────────────────────────
 // Auth: Access Control
 // ──────────────────────────────────────
-export async function checkRole(role: string) {
-  return enhancedApiClient.get<{ allowed: boolean }>("/auth/access-control/check-role", { params: { role } });
-}
-
-export async function checkAttribute(attribute: string, value: string) {
-  return enhancedApiClient.get<{ allowed: boolean }>("/auth/access-control/check-attribute", { 
-    params: { attribute, value } 
-  });
-}
+// export async function checkRole(role: string) {
+//   return enhancedApiClient.get<{ allowed: boolean }>("/auth/access-control/check-role", { params: { role } });
+// }
+// 
+// export async function checkAttribute(attribute: string, value: string) {
+//   return enhancedApiClient.get<{ allowed: boolean }>("/auth/access-control/check-attribute", { 
+//     params: { attribute, value } 
+//   });
+// }
 
 // ──────────────────────────────────────
 // Services: Analytics
@@ -587,9 +587,9 @@ export interface AuthIntegrationStatusResponse {
   providers: IntegrationProviderStatus[];
 }
 
-export async function getAuthIntegrationStatus() {
-  return enhancedApiClient.get<AuthIntegrationStatusResponse>("/auth/integrations/status");
-}
+// export async function getAuthIntegrationStatus() {
+//   return enhancedApiClient.get<AuthIntegrationStatusResponse>("/auth/integrations/status");
+// }
 
 // ──────────────────────────────────────
 // Notifications
@@ -624,15 +624,34 @@ export async function deleteNotification(id: number) {
 // ──────────────────────────────────────
 // Services: Consent
 // ──────────────────────────────────────
-export async function setConsent(consentType: string, granted: boolean) {
-  return enhancedApiClient.post<{ status: string }>("/consent/set", { consent_type: consentType, granted });
-}
+// export async function setConsent(consentType: string, granted: boolean) {
+//   return enhancedApiClient.post<{ status: string }>("/consent/set", { consent_type: consentType, granted });
+// }
 
 // ──────────────────────────────────────
 // Services: LLM Upgrade
 // ──────────────────────────────────────
-export async function upgradeLLM(modelName: string, version?: string) {
-  return enhancedApiClient.post<{ status: string; details?: string }>("/upgrade/llm", { model_name: modelName, version });
+// export async function upgradeLLM(modelName: string, version?: string) {
+//   return enhancedApiClient.post<{ status: string; details?: string }>("/upgrade/llm", { model_name: modelName, version });
+// }
+
+// ──────────────────────────────────────
+// SaaS: Audit & Usage
+// ──────────────────────────────────────
+export async function getAuditLogs(limit: number = 20, category?: string) {
+  return enhancedApiClient.get<any[]>("/audit/me", { params: { limit, category } });
+}
+
+export async function getUsageStats() {
+  return enhancedApiClient.get<{
+    ai_tokens: number;
+    api_calls: number;
+    scheduling_count: number;
+    daily_ai_usage: number;
+    daily_sync_usage: number;
+    tier: string;
+    subscription_status: string;
+  }>("/audit/stats");
 }
 
 // ──────────────────────────────────────
@@ -1009,18 +1028,18 @@ export async function getIntegrationStatus() {
   return enhancedApiClient.get<IntegrationsStatusResponse>("/users/me/integrations");
 }
 
-export async function getEmailDiagnostic() {
-  return enhancedApiClient.get<{
-    status: string;
-    message: string;
-    error_type?: string;
-    hint?: string;
-    config_preview?: Record<string, unknown>;
-  }>("/admin/email/diagnostic");
-}
-
-export async function sendTestEmail(email: string) {
-  return enhancedApiClient.post<{ status: string; message: string }>("/admin/email/test", null, {
-    params: { email }
-  });
-}
+// export async function getEmailDiagnostic() {
+//   return enhancedApiClient.get<{
+//     status: string;
+//     message: string;
+//     error_type?: string;
+//     hint?: string;
+//     config_preview?: Record<string, unknown>;
+//   }>("/admin/email/diagnostic");
+// }
+// 
+// export async function sendTestEmail(email: string) {
+//   return enhancedApiClient.post<{ status: string; message: string }>("/admin/email/test", null, {
+//     params: { email }
+//   });
+// }

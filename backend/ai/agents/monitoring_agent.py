@@ -4,7 +4,7 @@ Provides observability and analytics for the scheduling system
 """
 
 from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from backend.ai.agents.base import BaseAgent, AgentContext
 from backend.utils.logger import get_logger
 
@@ -110,7 +110,7 @@ class MonitoringAgent(BaseAgent):
             "event_id": data.get("event_id"),
             "status": data.get("status"),  # success, failure, partial
             "details": data.get("details", {}),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         # Store in vector store for analysis
@@ -154,7 +154,7 @@ class MonitoringAgent(BaseAgent):
             "rating": data.get("rating"),  # 1-5 or similar
             "comments": data.get("comments"),
             "categories": data.get("categories", []),  # ease_of_use, accuracy, etc.
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         # Analyze sentiment if comments provided
@@ -198,7 +198,7 @@ class MonitoringAgent(BaseAgent):
         timeframe = data.get("timeframe", "7d")
 
         # Calculate date range
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         if timeframe == "24h":
             start_date = end_date - timedelta(days=1)
         elif timeframe == "7d":
@@ -211,7 +211,7 @@ class MonitoringAgent(BaseAgent):
         report = {
             "report_type": report_type,
             "timeframe": timeframe,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "date_range": {
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
@@ -255,7 +255,7 @@ class MonitoringAgent(BaseAgent):
             "success": True,
             "overall_status": "healthy" if all_healthy else "degraded",
             "checks": health_checks,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         # Alert if not healthy
@@ -281,7 +281,7 @@ class MonitoringAgent(BaseAgent):
             "source": data.get("source"),
             "user_id": user_id,
             "details": data.get("details", {}),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "acknowledged": False,
         }
 
@@ -308,7 +308,7 @@ class MonitoringAgent(BaseAgent):
             "current_step": data.get("current_step"),
             "progress": data.get("progress", 0),
             "started_at": data.get("started_at"),
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Check for issues
@@ -328,7 +328,7 @@ class MonitoringAgent(BaseAgent):
             if started_raw:
                 try:
                     started = datetime.fromisoformat(started_raw)
-                    duration = (datetime.utcnow() - started).total_seconds()
+                    duration = (datetime.now(timezone.utc) - started).total_seconds()
                 except (TypeError, ValueError):
                     logger.warning(f"Invalid workflow started_at value: {started_raw}")
 
@@ -391,7 +391,7 @@ class MonitoringAgent(BaseAgent):
             "message": message,
             "details": details or {},
             "user_id": user_id,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "acknowledged": False,
         }
 

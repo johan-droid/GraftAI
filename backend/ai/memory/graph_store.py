@@ -5,7 +5,7 @@ Handles knowledge graph and relationship mapping
 
 from typing import Dict, Any, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from backend.utils.logger import get_logger
 
@@ -512,7 +512,7 @@ class GraphStore:
         Returns:
             Insights about meeting habits, collaborations, etc.
         """
-        insights = {"user_id": user_id, "analysis_date": datetime.utcnow().isoformat()}
+        insights = {"user_id": user_id, "analysis_date": datetime.now(timezone.utc).isoformat()}
 
         # Get all meetings for user
         meetings = await self.get_neighbors(user_id, EdgeType.ATTENDS)

@@ -11,8 +11,10 @@ Integrates with:
 
 import os
 import base64
+import asyncio
+import httpx
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from backend.utils.logger import get_logger
 
@@ -25,22 +27,49 @@ try:
         retry_if_exception_type,
         before_sleep_log,
     )
-
     TENACITY_AVAILABLE = True
 except ImportError:
     TENACITY_AVAILABLE = False
 
-    # Define no-op decorator if tenacity not available
     def retry(*args, **kwargs):
         def decorator(func):
             return func
-
         return decorator
+
+    def stop_after_attempt(*args, **kwargs):
+        return None
+
+    def wait_exponential(*args, **kwargs):
+        return None
+
+    def retry_if_exception_type(*args, **kwargs):
+        return None
+
+    def before_sleep_log(*args, **kwargs):
+        return None
+
+RETRYABLE_EXCEPTIONS = (httpx.RequestError, httpx.TimeoutException)
+
+
+@retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(Exception),
+    reraise=True,
+)
+async def _execute_with_retry(func, *args, **kwargs):
+    """Wrapper for retrying synchronous and asynchronous external API calls."""
+    if asyncio.iscoroutinefunction(func):
+        return await func(*args, **kwargs)
+
+    # Offload blocking synchronous SDK calls to a thread to avoid
+    # blocking the event loop (e.g., SendGrid, Twilio, Slack sync clients).
+    return await asyncio.to_thread(func, *args, **kwargs)
 
 
 # Circuit breaker for external service protection
 try:
-    from backend.utils.circuit_breaker import SENDGRID_BREAKER
+    from backend.utils.circuit_breaker import SENDGRID_BREAKER, TWILIO_BREAKER
 
     CIRCUIT_BREAKER_AVAILABLE = True
 except ImportError:
@@ -222,48 +251,46 @@ def render_template(template_name: str, context: Dict[str, Any]) -> str:
 # ═══════════════════════════════════════════════════════════════════
 
 # Retry configuration for external APIs
-EMAIL_RETRY = {
-    "stop": stop_after_attempt(3) if TENACITY_AVAILABLE else None,
-    "wait": wait_exponential(multiplier=1, min=2, max=10)
+EXTERNAL_API_RETRY = {
+    "stop": stop_after_attempt(4) if TENACITY_AVAILABLE else None,
+    "wait": wait_exponential(multiplier=1, min=2, max=15)
     if TENACITY_AVAILABLE
     else None,
-    "retry": (retry_if_exception_type((Exception,)) if TENACITY_AVAILABLE else None),
+    "retry": retry_if_exception_type(RETRYABLE_EXCEPTIONS)
+    if TENACITY_AVAILABLE
+    else None,
     "before_sleep": before_sleep_log(logger, "warning") if TENACITY_AVAILABLE else None,
 }
 
 if TENACITY_AVAILABLE:
 
-    @retry(**EMAIL_RETRY)
+    @retry(**EXTERNAL_API_RETRY)
     async def _send_email_with_retry(*args, **kwargs):
         """Internal email sending with retry logic."""
         return await _send_email_impl(*args, **kwargs)
+
+    @retry(**EXTERNAL_API_RETRY)
+    async def _send_sms_with_retry(*args, **kwargs):
+        """Internal SMS sending with retry logic."""
+        return await _send_sms_impl(*args, **kwargs)
+
+    @retry(**EXTERNAL_API_RETRY)
+    async def _post_to_slack_with_retry(*args, **kwargs):
+        """Internal Slack posting with retry logic."""
+        return await _post_to_slack_impl(*args, **kwargs)
 else:
 
     async def _send_email_with_retry(*args, **kwargs):
         """Internal email sending without retry (tenacity not available)."""
         return await _send_email_impl(*args, **kwargs)
 
-# SMS Retry logic
-SMS_RETRY = {
-    "stop": stop_after_attempt(3) if TENACITY_AVAILABLE else None,
-    "wait": wait_exponential(multiplier=1, min=2, max=10)
-    if TENACITY_AVAILABLE
-    else None,
-    "retry": (retry_if_exception_type((Exception,)) if TENACITY_AVAILABLE else None),
-    "before_sleep": before_sleep_log(logger, "warning") if TENACITY_AVAILABLE else None,
-}
-
-if TENACITY_AVAILABLE:
-
-    @retry(**SMS_RETRY)
-    async def _send_sms_with_retry(*args, **kwargs):
-        """Internal SMS sending with retry logic."""
-        return await _send_sms_impl(*args, **kwargs)
-else:
-
     async def _send_sms_with_retry(*args, **kwargs):
         """Internal SMS sending without retry (tenacity not available)."""
         return await _send_sms_impl(*args, **kwargs)
+
+    async def _post_to_slack_with_retry(*args, **kwargs):
+        """Internal Slack posting without retry (tenacity not available)."""
+        return await _post_to_slack_impl(*args, **kwargs)
 
 
 @register_tool(
@@ -324,7 +351,7 @@ async def _send_email_impl(
         logger.warning("SendGrid not configured - logging email only")
         return {
             "success": True,  # Return success for development
-            "email_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+            "email_id": f"dev_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
             "to": to,
             "subject": subject,
             "status": "logged",
@@ -384,10 +411,10 @@ async def _send_email_impl(
             attachment.disposition = Disposition("attachment")
             mail.add_attachment(attachment)
 
-    response = sg.send(mail)
+    response = await _execute_with_retry(sg.send, mail)
 
     email_id = response.headers.get(
-        "X-Message-Id", f"sg_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        "X-Message-Id", f"sg_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
     )
 
     logger.info(f"Email sent via SendGrid to {to}: {subject} (ID: {email_id})")
@@ -397,10 +424,59 @@ async def _send_email_impl(
         "email_id": email_id,
         "to": to,
         "subject": subject,
-        "sent_at": datetime.utcnow().isoformat(),
+        "sent_at": datetime.now(timezone.utc).isoformat(),
         "status": "sent" if response.status_code == 202 else "failed",
         "provider": "sendgrid",
         "status_code": response.status_code,
+    }
+
+
+async def _send_sms_impl(
+    to: str,
+    message: str,
+    from_number: Optional[str] = None,
+    media_urls: Optional[List[str]] = None,
+) -> dict:
+    """
+    Send SMS using Twilio API.
+    """
+    if len(message) > 1600:
+        raise ValueError("Message exceeds 1600 character limit")
+
+    if not APIConfig.is_twilio_configured():
+        logger.warning("Twilio not configured - logging SMS only")
+        return {
+            "success": True,
+            "sms_id": f"dev_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
+            "to": to,
+            "status": "logged",
+            "mode": "development",
+            "message": f"[DEV MODE] SMS to {to}: {message[:50]}...",
+        }
+
+    from twilio.rest import Client
+
+    client = Client(APIConfig.TWILIO_ACCOUNT_SID, APIConfig.TWILIO_AUTH_TOKEN)
+
+    twilio_message = await _execute_with_retry(
+        client.messages.create,
+        body=message,
+        from_=from_number or APIConfig.TWILIO_PHONE_NUMBER,
+        to=to,
+        media_url=media_urls,
+    )
+
+    logger.info(f"SMS sent via Twilio to {to}: {twilio_message.sid}")
+
+    return {
+        "success": twilio_message.status in ["queued", "sent", "delivered"],
+        "sms_id": twilio_message.sid,
+        "to": to,
+        "message": message,
+        "status": twilio_message.status,
+        "sent_at": datetime.now(timezone.utc).isoformat(),
+        "provider": "twilio",
+        "segments": (len(message) // 160) + 1,
     }
 
 
@@ -446,7 +522,6 @@ async def send_email(
             attachments,
         )
 
-        # Record success with circuit breaker
         if CIRCUIT_BREAKER_AVAILABLE and SENDGRID_BREAKER:
             if result.get("success"):
                 SENDGRID_BREAKER.record_success()
@@ -458,11 +533,10 @@ async def send_email(
     except Exception as e:
         logger.error(f"Failed to send email via SendGrid after retries: {e}")
 
-        # Record failure with circuit breaker
         if CIRCUIT_BREAKER_AVAILABLE and SENDGRID_BREAKER:
             SENDGRID_BREAKER.record_failure()
 
-        # Enqueue to Dead Letter Queue for later retry
+        queued_for_retry = False
         try:
             from backend.utils.dead_letter_queue import get_dlq
 
@@ -484,6 +558,7 @@ async def send_email(
                 max_retries=3,
                 context={"provider": "sendgrid"},
             )
+            queued_for_retry = True
         except Exception as dlq_error:
             logger.error(f"Failed to enqueue to DLQ: {dlq_error}")
 
@@ -494,78 +569,9 @@ async def send_email(
             "subject": subject,
             "status": "failed",
             "provider": "sendgrid",
+            "queued_for_retry": queued_for_retry,
         }
 
-
-@register_tool(
-    name="send_sms",
-    description="Send SMS using Twilio API",
-    category=ToolCategory.COMMUNICATION,
-    priority=ToolPriority.HIGH,
-)
-async def _send_sms_impl(
-    to: str,
-    message: str,
-    from_number: Optional[str] = None,
-    media_urls: Optional[List[str]] = None,
-) -> dict:
-    """
-    Send SMS using Twilio API
-
-    Args:
-        to: Recipient phone number (with country code, e.g., +1234567890)
-        message: SMS message content
-        from_number: Sender phone number (uses default if not specified)
-        media_urls: Optional list of media URLs (MMS)
-
-    Returns:
-        SMS send result
-    """
-    try:
-        if len(message) > 1600:
-            raise ValueError("Message exceeds 1600 character limit")
-
-        # Check if Twilio is configured
-        if not APIConfig.is_twilio_configured():
-            logger.warning("Twilio not configured - logging SMS only")
-            return {
-                "success": True,
-                "sms_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
-                "to": to,
-                "status": "logged",
-                "mode": "development",
-                "message": f"[DEV MODE] SMS to {to}: {message[:50]}...",
-            }
-
-        # Send via Twilio
-        from twilio.rest import Client
-
-        client = Client(APIConfig.TWILIO_ACCOUNT_SID, APIConfig.TWILIO_AUTH_TOKEN)
-
-        twilio_message = client.messages.create(
-            body=message,
-            from_=from_number or APIConfig.TWILIO_PHONE_NUMBER,
-            to=to,
-            media_url=media_urls,
-        )
-
-        logger.info(f"SMS sent via Twilio to {to}: {twilio_message.sid}")
-
-        return {
-            "success": twilio_message.status in ["queued", "sent", "delivered"],
-            "sms_id": twilio_message.sid,
-            "to": to,
-            "message": message,
-            "status": twilio_message.status,
-            "sent_at": datetime.utcnow().isoformat(),
-            "provider": "twilio",
-            "segments": (len(message) // 160) + 1,
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to send SMS via Twilio: {e}")
-        # Re-raise to trigger tenacity retry
-        raise
 
 async def send_sms(
     to: str,
@@ -577,12 +583,107 @@ async def send_sms(
     Send SMS using Twilio API with retry logic.
     """
     try:
-        return await _send_sms_with_retry(
+        result = await _send_sms_with_retry(
             to, message, from_number, media_urls
         )
+
+        if CIRCUIT_BREAKER_AVAILABLE and TWILIO_BREAKER:
+            if result.get("success"):
+                TWILIO_BREAKER.record_success()
+            else:
+                TWILIO_BREAKER.record_failure()
+
+        return result
+
     except Exception as e:
         logger.error(f"Failed to send SMS via Twilio after retries: {e}")
-        return {"success": False, "error": str(e), "to": to, "status": "failed"}
+
+        if CIRCUIT_BREAKER_AVAILABLE and TWILIO_BREAKER:
+            TWILIO_BREAKER.record_failure()
+
+        queued_for_retry = False
+        try:
+            from backend.utils.dead_letter_queue import get_dlq
+
+            dlq = get_dlq()
+            await dlq.enqueue(
+                action_type="send_sms",
+                payload={
+                    "to": to,
+                    "message": message,
+                    "from_number": from_number,
+                    "media_urls": media_urls,
+                },
+                error=str(e),
+                max_retries=3,
+                context={"provider": "twilio"},
+            )
+            queued_for_retry = True
+        except Exception as dlq_error:
+            logger.error(f"Failed to enqueue SMS to DLQ: {dlq_error}")
+
+        return {
+            "success": False,
+            "error": str(e),
+            "to": to,
+            "status": "failed",
+            "provider": "twilio",
+            "queued_for_retry": queued_for_retry,
+        }
+
+
+async def _post_to_slack_impl(
+    channel: str,
+    message: str,
+    blocks: Optional[List[dict]] = None,
+    thread_ts: Optional[str] = None,
+    username: Optional[str] = "GraftAI Bot",
+    icon_emoji: Optional[str] = ":robot_face:",
+) -> dict:
+    """
+    Internal Slack posting implementation. The public wrapper handles retries and DLQ enqueueing.
+    """
+    if not APIConfig.is_slack_configured():
+        logger.warning("Slack not configured - logging message only")
+        return {
+            "success": True,
+            "message_id": f"dev_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
+            "channel": channel,
+            "status": "logged",
+            "mode": "development",
+            "message": f"[DEV MODE] Slack to {channel}: {message[:100]}...",
+        }
+
+    from slack_sdk import WebClient
+
+    client = WebClient(token=APIConfig.SLACK_BOT_TOKEN)
+
+    if not channel.startswith("#") and not channel.startswith("C"):
+        channel = f"#{channel}"
+
+    kwargs = {
+        "channel": channel,
+        "text": message,
+        "username": username,
+        "icon_emoji": icon_emoji,
+    }
+
+    if blocks:
+        kwargs["blocks"] = blocks
+    if thread_ts:
+        kwargs["thread_ts"] = thread_ts
+
+    response = await _execute_with_retry(client.chat_postMessage, **kwargs)
+
+    logger.info(f"Message posted to Slack channel {channel}: {response['ts']}")
+    return {
+        "success": response["ok"],
+        "message_id": response["ts"],
+        "channel": channel,
+        "status": "posted",
+        "posted_at": datetime.now(timezone.utc).isoformat(),
+        "provider": "slack",
+    }
 
 
 @register_tool(
@@ -614,60 +715,48 @@ async def post_to_slack(
         Slack post result
     """
     try:
-        # Check if Slack is configured
-        if not APIConfig.is_slack_configured():
-            logger.warning("Slack not configured - logging message only")
-            return {
-                "success": True,
-                "message_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
-                "channel": channel,
-                "status": "logged",
-                "mode": "development",
-                "message": f"[DEV MODE] Slack to {channel}: {message[:100]}...",
-            }
-
-        # Post via Slack API
-        from slack_sdk import WebClient
-
-        client = WebClient(token=APIConfig.SLACK_BOT_TOKEN)
-
-        # Normalize channel name
-        if not channel.startswith("#") and not channel.startswith("C"):
-            channel = f"#{channel}"
-
-        kwargs = {
-            "channel": channel,
-            "text": message,
-            "username": username,
-            "icon_emoji": icon_emoji,
-        }
-
-        if blocks:
-            kwargs["blocks"] = blocks
-
-        if thread_ts:
-            kwargs["thread_ts"] = thread_ts
-
-        response = client.chat_postMessage(**kwargs)
-
-        logger.info(f"Message posted to Slack channel {channel}: {response['ts']}")
-
-        return {
-            "success": response["ok"],
-            "message_id": response["ts"],
-            "channel": channel,
-            "status": "posted",
-            "posted_at": datetime.utcnow().isoformat(),
-            "provider": "slack",
-        }
+        result = await _post_to_slack_with_retry(
+            channel,
+            message,
+            blocks=blocks,
+            thread_ts=thread_ts,
+            username=username,
+            icon_emoji=icon_emoji,
+        )
+        return result
 
     except Exception as e:
-        logger.error(f"Failed to post to Slack: {e}")
+        logger.error(f"Failed to post to Slack after retries: {e}")
+
+        queued_for_retry = False
+        try:
+            from backend.utils.dead_letter_queue import get_dlq
+
+            dlq = get_dlq()
+            await dlq.enqueue(
+                action_type="post_to_slack",
+                payload={
+                    "channel": channel,
+                    "message": message,
+                    "blocks": blocks,
+                    "thread_ts": thread_ts,
+                    "username": username,
+                    "icon_emoji": icon_emoji,
+                },
+                error=str(e),
+                max_retries=3,
+                context={"provider": "slack"},
+            )
+            queued_for_retry = True
+        except Exception as dlq_error:
+            logger.error(f"Failed to enqueue Slack to DLQ: {dlq_error}")
+
         return {
             "success": False,
             "error": str(e),
             "channel": channel,
             "status": "failed",
+            "queued_for_retry": queued_for_retry,
         }
 
 
@@ -704,7 +793,7 @@ async def send_teams_message(
             logger.warning("Teams not configured - logging message only")
             return {
                 "success": True,
-                "message_id": f"dev_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                "message_id": f"dev_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
                 "recipient": user or channel,
                 "status": "logged",
                 "mode": "development",
@@ -808,7 +897,7 @@ async def send_calendar_invite(
             attachments=[attachment],
         )
 
-        invite_id = f"invite_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        invite_id = f"invite_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         return {
             "success": result["success"],
@@ -819,7 +908,7 @@ async def send_calendar_invite(
             "end_time": end.isoformat(),
             "duration_minutes": duration_minutes,
             "location": location,
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": datetime.now(timezone.utc).isoformat(),
             "status": result["status"],
             "email_result": result,
         }
@@ -845,7 +934,7 @@ def generate_ics_invite(
 
     This is compatible with Google Calendar, Outlook, Apple Calendar
     """
-    uid = uid or f"{datetime.utcnow().timestamp()}@graftai.com"
+    uid = uid or f"{datetime.now(timezone.utc).timestamp()}@graftai.com"
 
     ics_lines = [
         "BEGIN:VCALENDAR",
@@ -856,7 +945,7 @@ def generate_ics_invite(
         "BEGIN:VEVENT",
         f"DTSTART;TZID={timezone}:{start.strftime('%Y%m%dT%H%M%S')}",
         f"DTEND;TZID={timezone}:{end.strftime('%Y%m%dT%H%M%S')}",
-        f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%S')}Z",
+        f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}Z",
         f"UID:{uid}",
         f"SUMMARY:{title}",
     ]

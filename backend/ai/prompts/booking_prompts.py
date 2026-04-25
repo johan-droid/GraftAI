@@ -6,7 +6,7 @@ booking automation based on context, attendee history, and preferences.
 """
 
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ═════════════════════════════════════════════════════════════════
 # SYSTEM PROMPTS
@@ -196,14 +196,14 @@ def format_booking_decision_prompt(
         "department": "Unknown",
         "booking_value": 0,
         "duration": 30,
-        "current_time": datetime.utcnow().isoformat(),
+        "current_time": datetime.now(timezone.utc).isoformat(),
         "lead_time": 24,
         "conflicts": "None",
         "attendee_count": 1,
-        "day_of_week": datetime.utcnow().strftime("%A"),
-        "time_of_day": datetime.utcnow().strftime("%H:%M"),
+        "day_of_week": datetime.now(timezone.utc).strftime("%A"),
+        "time_of_day": datetime.now(timezone.utc).strftime("%H:%M"),
         "is_holiday": "false",
-        "is_weekend": "false" if datetime.utcnow().weekday() < 5 else "true",
+        "is_weekend": "false" if datetime.now(timezone.utc).weekday() < 5 else "true",
         "business_hours_aligned": "true",
         "timezone_difference": 0,
         "last_booking_date": "Never",
@@ -299,7 +299,7 @@ def format_prompt_from_booking_data(
         "department": booking.get("department", "Unknown"),
         "booking_value": booking.get("estimated_value", 0),
         "duration": booking.get("duration_minutes", 30),
-        "current_time": datetime.utcnow().isoformat(),
+        "current_time": datetime.now(timezone.utc).isoformat(),
         "lead_time": booking.get("lead_time_hours", 24),
         "conflicts": booking.get("conflicts", "None"),
         "attendee_count": len(booking.get("attendees", [])),
@@ -307,12 +307,12 @@ def format_prompt_from_booking_data(
             scheduled_time.replace("Z", "+00:00")
         ).strftime("%A")
         if scheduled_time
-        else datetime.utcnow().strftime("%A"),
+        else datetime.now(timezone.utc).strftime("%A"),
         "time_of_day": datetime.fromisoformat(
             scheduled_time.replace("Z", "+00:00")
         ).strftime("%H:%M")
         if scheduled_time
-        else datetime.utcnow().strftime("%H:%M"),
+        else datetime.now(timezone.utc).strftime("%H:%M"),
         "is_holiday": str(booking.get("is_holiday", False)).lower(),
         "is_weekend": str(booking.get("is_weekend", False)).lower(),
         "business_hours_aligned": str(

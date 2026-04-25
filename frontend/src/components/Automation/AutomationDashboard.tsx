@@ -47,14 +47,14 @@ export default function AutomationDashboard() {
 
   const loadData = async () => {
     try {
-      const token = localStorage.getItem('access_token');
-      
+      // SECURITY FIX: Use credentials:include instead of localStorage token
+      // httpOnly cookies are sent automatically, no need to manually set Authorization
       const [rulesRes, executionsRes] = await Promise.all([
         fetch('/api/v1/automation/rules', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          credentials: 'include' // Sends httpOnly cookies automatically
         }),
         fetch('/api/v1/automation/executions?limit=20', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          credentials: 'include' // Sends httpOnly cookies automatically
         })
       ]);
 
@@ -76,13 +76,13 @@ export default function AutomationDashboard() {
 
   const toggleRule = async (ruleId: string, enabled: boolean) => {
     try {
-      const token = localStorage.getItem('access_token');
+      // SECURITY FIX: Use credentials:include instead of localStorage token
       const response = await fetch(`/api/v1/automation/rules/${ruleId}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Sends httpOnly cookies automatically
         body: JSON.stringify({ is_enabled: enabled }),
       });
 
@@ -98,10 +98,10 @@ export default function AutomationDashboard() {
     if (!confirm('Are you sure you want to delete this automation rule?')) return;
 
     try {
-      const token = localStorage.getItem('access_token');
+      // SECURITY FIX: Use credentials:include instead of localStorage token
       const response = await fetch(`/api/v1/automation/rules/${ruleId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include', // Sends httpOnly cookies automatically
       });
 
       if (response.ok) {

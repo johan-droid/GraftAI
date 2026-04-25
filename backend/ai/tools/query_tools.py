@@ -102,7 +102,7 @@ async def query_database(
             "rows": rows,
             "row_count": len(rows),
             "truncated": len(rows) >= max_rows,
-            "executed_at": datetime.utcnow().isoformat(),
+            "executed_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -156,7 +156,7 @@ async def get_booking_history(
                 "start_date": start_date,
                 "end_date": end_date,
             },
-            "retrieved_at": datetime.utcnow().isoformat(),
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -203,7 +203,7 @@ async def get_attendee_info(email: str) -> dict:
         return {
             "success": True,
             "attendee": info,
-            "retrieved_at": datetime.utcnow().isoformat(),
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -308,7 +308,7 @@ async def check_business_rules(booking: Dict[str, Any]) -> dict:
             "violations": violations,
             "warnings": warnings,
             "compliance_score": 1.0 - (len(violations) * 0.2 + len(warnings) * 0.1),
-            "checked_at": datetime.utcnow().isoformat(),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:

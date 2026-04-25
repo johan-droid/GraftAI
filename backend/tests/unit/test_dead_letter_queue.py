@@ -4,19 +4,15 @@ Tests enqueue, dequeue, retry logic, and cleanup.
 """
 
 import pytest
-import pytest_asyncio
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from backend.utils.dead_letter_queue import (
     DeadLetterQueue,
-    DeadLetterQueueItem,
-    DLQStatus,
     DLQItem,
     get_dlq,
 )
-from backend.models.base import Base
 
 
 def _make_mock_db_session(mock_get_db, execute_result=None):

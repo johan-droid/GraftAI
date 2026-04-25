@@ -1,6 +1,6 @@
 """Apple Calendar sync provider for the calendar sync system."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
 from backend.services.integrations.calendar_provider import CalendarSyncProvider
@@ -42,11 +42,11 @@ class AppleCalendarSyncProvider(CalendarSyncProvider):
             try:
                 last_sync = datetime.fromisoformat(sync_token)
             except ValueError:
-                last_sync = datetime.utcnow() - timedelta(days=30)
+                last_sync = datetime.now(timezone.utc) - timedelta(days=30)
         else:
-            last_sync = datetime.utcnow() - timedelta(days=30)
+            last_sync = datetime.now(timezone.utc) - timedelta(days=30)
 
-        end = datetime.utcnow() + timedelta(days=365)
+        end = datetime.now(timezone.utc) + timedelta(days=365)
 
         # Get all calendars
         calendars = await client.list_calendars()
@@ -59,7 +59,7 @@ class AppleCalendarSyncProvider(CalendarSyncProvider):
                 all_events.append(event)
 
         # Return new sync token (current timestamp)
-        new_sync_token = datetime.utcnow().isoformat()
+        new_sync_token = datetime.now(timezone.utc).isoformat()
 
         return all_events, new_sync_token
 

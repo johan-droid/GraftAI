@@ -57,6 +57,10 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Track API call count
+    from backend.services.usage import increment_usage
+    await increment_usage(db, user.id, "api_calls")
+
     return user
 
 

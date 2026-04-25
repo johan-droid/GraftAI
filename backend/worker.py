@@ -461,10 +461,22 @@ async def _worker_startup(ctx):
 
 
 class WorkerSettings:
-    """Standard Arq configuration."""
+    """Standard Arq configuration with bulletproof task handling."""
 
     functions = REGISTERED_TASKS
     on_startup = _worker_startup
+    
+    # CRITICAL: Do not drop the task if the worker is killed mid-execution
+    allow_abort_jobs = False
+    
+    # Re-queue tasks if the worker crashes (Late ACK)
+    job_timeout = 60  # Force timeout if it hangs
+    keep_result_forever = False
+    keep_result = 3600  # Keep success logs for 1 hour
+    
+    # Maximum retries at the worker level before moving to Dead Letter Queue
+    max_tries = 3
+    
     # Arq cron jobs using proper cron() function calls (not dict literals)
     cron_jobs = [
         cron(task_sync_all_users, minute={0, 30}),  # Every hour at :00 and :30

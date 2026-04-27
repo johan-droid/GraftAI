@@ -38,7 +38,7 @@ async def get_user_quota(db: AsyncSession, user_id: str) -> UserTable:
         ) + timedelta(days=1)
         user.quota_reset_at = next_midnight
 
-        await db.commit()
+        await db.flush()
         await db.refresh(user)
 
     return user
@@ -132,10 +132,10 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
             db, 
             action=f"usage.{feature}", 
             user_id=user_id, 
-            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature.split('_')[1]}_count", None)}
+            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature.split('_')[1]}_count", None) if "_" in feature else None}
         )
 
-    await db.commit()
+    await db.flush()
 
 
 async def get_usage_counts(db: AsyncSession, user_id: str) -> dict:

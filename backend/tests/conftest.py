@@ -92,8 +92,8 @@ def test_user_data():
     """Return standard test user data."""
     return {
         "id": str(uuid.uuid4()),
-        "email": "test@example.com",
-        "username": "testuser",
+        "email": f"test_{uuid.uuid4().hex[:8]}@example.com",
+        "username": f"testuser_{uuid.uuid4().hex[:8]}",
         "full_name": "Test User",
         "hashed_password": "$2b$12$test_hash",  # Pre-hashed for tests
         "timezone": "UTC",
@@ -119,8 +119,8 @@ async def other_test_user(db_session: AsyncSession, test_user_data) -> UserTable
     """Create and return a second test user in the database."""
     other_data = {**test_user_data}
     other_data["id"] = str(uuid.uuid4())
-    other_data["email"] = "other@example.com"
-    other_data["username"] = "otheruser"
+    other_data["email"] = f"other_{uuid.uuid4().hex[:8]}@example.com"
+    other_data["username"] = f"otheruser_{uuid.uuid4().hex[:8]}"
     user = UserTable(**other_data)
     db_session.add(user)
     await db_session.flush()

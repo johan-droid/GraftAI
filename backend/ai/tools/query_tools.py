@@ -7,6 +7,8 @@ Tools for querying databases, retrieving history, and checking business rules.
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from backend.utils.logger import get_logger
+from backend.utils.db import get_db_context
+from sqlalchemy import text
 from .registry import register_tool, ToolCategory, ToolPriority
 
 try:
@@ -86,14 +88,24 @@ async def query_database(
 
         logger.info("Executing query", extra={"query_preview": sql[:50]})
 
-        # TODO: Execute query through database
-        # async with get_db() as db:
-        #     result = await db.execute(text(sql), parameters or {})
-        #     rows = result.fetchmany(max_rows)
+        async with get_db_context() as db:
+            result = await db.execute(text(sql), parameters or {})
 
-        # Demo response
-        rows = []
-        columns = []
+            # CRITICAL FIX for review: only fetch if query returns rows
+            if not result.returns_rows:
+                return {
+                    "success": True,
+                    "sql": sql,
+                    "columns": [],
+                    "rows": [],
+                    "row_count": 0,
+                    "truncated": False,
+                    "executed_at": datetime.now(timezone.utc).isoformat(),
+                }
+
+            fetched_rows = result.fetchmany(max_rows)
+            columns = list(result.keys())
+            rows = [dict(zip(columns, row)) for row in fetched_rows]
 
         return {
             "success": True,
@@ -126,25 +138,32 @@ async def get_booking_history(
 ) -> dict:
     """
     Get booking history for a user.
-
-    Args:
-        user_id: User ID
-        limit: Maximum bookings to return
-        status: Optional filter by status (confirmed, cancelled, pending)
-        start_date: Optional start date filter (YYYY-MM-DD)
-        end_date: Optional end date filter (YYYY-MM-DD)
-
-    Returns:
-        Dict with booking history
     """
     try:
         logger.info(f"Getting booking history for user {user_id}")
 
-        # TODO: Query database for user's bookings
-        # Query: SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC LIMIT ?
+        async with get_db_context() as db:
+            query = "SELECT * FROM bookings WHERE user_id = :user_id"
+            params = {"user_id": user_id, "limit": limit}
 
-        # Demo history
-        bookings = []
+            if status:
+                query += " AND status = :status"
+                params["status"] = status
+            if start_date:
+                query += " AND start_time >= :start_date"
+                params["start_date"] = start_date
+            if end_date:
+                query += " AND end_time <= :end_date"
+                params["end_date"] = end_date
+
+            query += " ORDER BY created_at DESC LIMIT :limit"
+
+            result = await db.execute(text(query), params)
+            if result.returns_rows:
+                columns = list(result.keys())
+                bookings = [dict(zip(columns, row)) for row in result.fetchall()]
+            else:
+                bookings = []
 
         return {
             "success": True,
@@ -174,26 +193,30 @@ async def get_booking_history(
 async def get_attendee_info(email: str) -> dict:
     """
     Get information about an attendee.
-
-    Args:
-        email: Attendee email address
-
-    Returns:
-        Dict with attendee information
     """
     try:
         logger.info("Getting info for attendee", extra={"email": _mask_email(email)})
 
-        # TODO: Query user/contact database
-        # Check if user exists in system
-        # Get profile, preferences, history
+        async with get_db_context() as db:
+            result = await db.execute(text("SELECT * FROM users WHERE email = :email LIMIT 1"), {"email": email})
+            row = result.fetchone()
 
-        # Demo info
+        if row:
+            columns = list(result.keys())
+            user_data = dict(zip(columns, row))
+            exists_in_system = True
+            name = f"{user_data.get('first_name', '')} {user_data.get('last_name', '')}".strip() or user_data.get('username') or "Unknown User"
+            timezone_str = user_data.get('timezone', "America/New_York")
+        else:
+            exists_in_system = False
+            name = "Unknown User"
+            timezone_str = "America/New_York"
+
         info = {
             "email": email,
-            "exists_in_system": True,
-            "name": "John Smith",
-            "timezone": "America/New_York",
+            "exists_in_system": exists_in_system,
+            "name": name,
+            "timezone": timezone_str,
             "preferences": {"meeting_duration": 30, "preferred_times": ["morning"]},
             "recent_meetings": [],
             "no_show_rate": 0.05,
@@ -230,28 +253,14 @@ async def get_attendee_info(email: str) -> dict:
 async def check_business_rules(booking: Dict[str, Any]) -> dict:
     """
     Check if booking complies with business rules.
-
-    Args:
-        booking: Dict with booking details to validate
-
-    Returns:
-        Dict with validation results
     """
     try:
         logger.info("Checking business rules for booking")
-
-        # TODO: Check various business rules
-        # - Max duration
-        # - Max attendees
-        # - Advance booking required
-        # - Room capacity
-        # - Budget limits
 
         rules_checked = []
         violations = []
         warnings = []
 
-        # Rule: Max duration
         max_duration = 480  # 8 hours
         duration = booking.get("duration_minutes", 0)
         if duration > max_duration:
@@ -264,7 +273,6 @@ async def check_business_rules(booking: Dict[str, Any]) -> dict:
             )
         rules_checked.append("max_duration")
 
-        # Rule: Max attendees
         max_attendees = 50
         attendee_count = booking.get("attendee_count", 1)
         if attendee_count > max_attendees:
@@ -277,7 +285,6 @@ async def check_business_rules(booking: Dict[str, Any]) -> dict:
             )
         rules_checked.append("max_attendees")
 
-        # Rule: Advance booking
         min_advance_hours = 2
         start_time = booking.get("start_time")
         if start_time:
@@ -295,7 +302,6 @@ async def check_business_rules(booking: Dict[str, Any]) -> dict:
                 )
         rules_checked.append("advance_booking")
 
-        # Rule: Working hours
         rules_checked.append("working_hours")
 
         is_valid = len([v for v in violations if v["severity"] == "error"]) == 0

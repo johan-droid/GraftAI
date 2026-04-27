@@ -48,6 +48,9 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           expires_at: ${{ env.EXPIRES_AT }}
 
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Run Migrations
         run: |
           cd backend

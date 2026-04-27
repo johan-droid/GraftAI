@@ -55,7 +55,7 @@ jobs:
         run: |
           cd backend
           pip install -r requirements.txt
-          alembic upgrade head
+          PYTHONPATH=. alembic upgrade head
         env:
           DATABASE_URL: "${{ steps.create_neon_branch.outputs.db_url_with_pooler }}"
 

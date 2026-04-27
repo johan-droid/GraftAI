@@ -833,7 +833,7 @@ export async function getPublicEventAvailability(
   const params: Record<string, string> = { month };
   if (timeZone) params.time_zone = timeZone;
   return enhancedApiClient.get<PublicAvailabilityResponse>(
-    `/public/events/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/availability`,
+    `/public/users/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/availability`,
     { params }
   );
 }
@@ -847,7 +847,7 @@ export async function getPublicEventAvailabilityByDate(
   const params: Record<string, string> = { date };
   if (timeZone) params.time_zone = timeZone;
   return enhancedApiClient.get<PublicDailyAvailabilityResponse>(
-    `/public/users/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/availability`,
+    `/public/users/${encodeURIComponent(username)}/${encodeURIComponent(eventType)}/daily_availability`,
     { params }
   );
 }

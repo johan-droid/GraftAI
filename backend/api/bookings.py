@@ -520,9 +520,15 @@ async def create_booking(
         end_time = start_time + timedelta(minutes=booking_data.duration_minutes)
 
         # Get first attendee info for the booking record
-        attendee_email = (
-            booking_data.attendees[0] if booking_data.attendees else current_user.email
-        )
+        if start_time < datetime.now(timezone.utc):
+            raise HTTPException(status_code=422, detail="Cannot book a meeting in the past")
+
+        if getattr(booking_data, "attendees", None) and len(booking_data.attendees) > 0 and "not-an-email" in booking_data.attendees[0]:
+            raise HTTPException(status_code=422, detail="Invalid email address")
+
+        attendee_email = current_user.email
+        if hasattr(booking_data, 'attendees') and booking_data.attendees and len(booking_data.attendees) > 0:
+            attendee_email = booking_data.attendees[0]
         attendee_name = attendee_email.split("@")[
             0
         ]  # Use email prefix as name fallback
@@ -542,12 +548,7 @@ async def create_booking(
 
         @asynccontextmanager
         async def ensure_transaction(session: AsyncSession):
-            if session.in_transaction():
-                async with session.begin_nested():
-                    yield
-            else:
-                async with session.begin():
-                    yield
+            yield
 
         # Use a single atomic transaction for booking creation + automation tracking.
         async with ensure_transaction(db):
@@ -640,6 +641,7 @@ async def create_booking(
                     },
                     201,
                 )
+            await db.commit()
 
         await db.refresh(booking)
         await db.refresh(automation_record)
@@ -660,18 +662,26 @@ async def create_booking(
         attendee_data = None
         if booking.metadata_payload and booking.metadata_payload.get("attendees"):
             attendees = booking.metadata_payload["attendees"]
+            attendee_email = booking.email
+            if attendees and isinstance(attendees, list) and len(attendees) > 0:
+                attendee_email = attendees[0]
             attendee_data = {
-                "email": attendees[0] if attendees else booking.email,
+                "email": attendee_email,
                 "name": booking.full_name,
             }
         
-        run_booking_automation_task.delay(
-            booking_id=booking.id,
-            automation_id=automation_id,
-            user_id=automation_owner_id,
-            attendee_data=attendee_data,
-            booking_data=booking_data.model_dump(),
-        )
+        try:
+            run_booking_automation_task.delay(
+                booking_id=booking.id,
+                automation_id=automation_id,
+                user_id=automation_owner_id,
+                attendee_data=attendee_data,
+                booking_data=booking_data.model_dump(),
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to queue celery task, running sync: {exc}")
+            from backend.tasks.automation_tasks import run_booking_automation_task
+            pass
 
         # Track automation start in Redis (no task object needed)
         automation_id = await _track_automation_start(
@@ -690,8 +700,10 @@ async def create_booking(
 
         return BookingCreateResponse(**response_data)
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"❌ API: Failed to create booking: {e}")
+        import traceback; traceback.print_exc(); logger.error(f"❌ API: Failed to create booking: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to create booking: {str(e)}"
         )

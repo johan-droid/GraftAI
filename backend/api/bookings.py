@@ -521,7 +521,7 @@ async def create_booking(
 
         # Get first attendee info for the booking record
         attendee_email = (
-            booking_data.attendees[0] if getattr(booking_data, "attendees", []) else current_user.email
+            booking_data.attendees[0] if booking_data.attendees else current_user.email
         )
         attendee_name = attendee_email.split("@")[
             0

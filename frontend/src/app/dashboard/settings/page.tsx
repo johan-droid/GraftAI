@@ -126,16 +126,21 @@ export default function SettingsProfilePage() {
     }
   };
 
-  // Placeholder handlers for security actions
-  const handleChangePassword = () => {
-    // TODO: wire to backend password change flow
-    toast.info("Change Password flow is not implemented yet.");
-  };
-
-  const handleDeleteAccount = () => {
-    // TODO: implement account deletion flow with confirmation modal
+  const handleDeleteAccount = async () => {
     if (!confirm("Are you sure you want to delete your account? This action is irreversible.")) return;
-    toast.error("Delete Account flow is not implemented.");
+
+    try {
+      const { apiClient } = await import("@/lib/api-client");
+      await apiClient.fetch("/users/me", {
+        method: "DELETE",
+      });
+      toast.success("Account successfully deleted.");
+      // Redirect or log out the user
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Failed to delete account:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to delete account.");
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -351,13 +356,6 @@ export default function SettingsProfilePage() {
           </p>
           
           <div className="space-y-3 mt-auto">
-            <button
-              onClick={handleChangePassword}
-              type="button"
-              className="w-full py-2.5 px-4 text-sm font-medium text-[#202124] border border-[#DADCE0] rounded-xl hover:bg-[#F8F9FA] transition-colors text-left"
-            >
-              Change Password
-            </button>
             <button
               onClick={handleDeleteAccount}
               type="button"

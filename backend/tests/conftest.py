@@ -92,8 +92,8 @@ def test_user_data():
     """Return standard test user data."""
     return {
         "id": str(uuid.uuid4()),
-        "email": "test@example.com",
-        "username": "testuser",
+        "email": f"test_{uuid.uuid4().hex[:8]}@example.com",
+        "username": f"testuser_{uuid.uuid4().hex[:8]}",
         "full_name": "Test User",
         "hashed_password": "$2b$12$test_hash",  # Pre-hashed for tests
         "timezone": "UTC",

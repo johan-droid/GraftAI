@@ -322,8 +322,9 @@ async def send_calendar_invite(
         fmt = "%Y%m%dT%H%M%SZ"
         from datetime import timezone as tz
         dtstamp = datetime.now(tz.utc).strftime(fmt)
-        dtstart = start.strftime(fmt)
-        dtend = end.strftime(fmt)
+        # ensure start and end are in UTC before formatting
+        dtstart = start.astimezone(tz.utc).strftime(fmt)
+        dtend = end.astimezone(tz.utc).strftime(fmt)
 
         uid = f"invite_{uuid.uuid4().hex}@graftai.com"
 

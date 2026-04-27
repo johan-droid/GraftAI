@@ -5,7 +5,7 @@ Uses Redis for distributed rate limiting across multiple workers.
 
 import logging
 import time
-from typing import Optional, Callable, Dict
+from typing import Optional, Callable, Dict, Any
 from functools import wraps
 from enum import Enum
 

@@ -128,11 +128,15 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
 
     # SaaS Audit Logging for significant actions
     if feature in ["ai_messages", "scheduling", "calendar_syncs"]:
+        # Extract feature prefix for daily count attribute
+        feature_parts = feature.split('_')
+        feature_prefix = feature_parts[1] if len(feature_parts) > 1 else feature_parts[0]
+
         await log_activity(
             db, 
             action=f"usage.{feature}", 
             user_id=user_id, 
-            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature.split('_')[1]}_count", None)}
+            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature_prefix}_count", None)}
         )
 
     await db.commit()

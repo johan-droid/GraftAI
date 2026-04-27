@@ -520,9 +520,10 @@ async def create_booking(
         end_time = start_time + timedelta(minutes=booking_data.duration_minutes)
 
         # Get first attendee info for the booking record
-        attendee_email = (
-            booking_data.attendees[0] if booking_data.attendees else current_user.email
-        )
+        if booking_data.attendees and len(booking_data.attendees) > 0:
+            attendee_email = booking_data.attendees[0]
+        else:
+            attendee_email = current_user.email
         attendee_name = attendee_email.split("@")[
             0
         ]  # Use email prefix as name fallback
@@ -538,108 +539,98 @@ async def create_booking(
                 detail="Requested slot is currently being claimed. Please retry.",
             )
 
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def ensure_transaction(session: AsyncSession):
-            if session.in_transaction():
-                async with session.begin_nested():
-                    yield
-            else:
-                async with session.begin():
-                    yield
-
         # Use a single atomic transaction for booking creation + automation tracking.
-        async with ensure_transaction(db):
-            bind = db.get_bind()
-            if bind is not None and bind.dialect.name == "postgresql":
-                await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
+        bind = db.get_bind()
+        if bind is not None and bind.dialect.name == "postgresql":
+            await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
 
-            await db.execute(
-                select(UserTable).where(UserTable.id == organizer_id).with_for_update()
+        await db.execute(
+            select(UserTable).where(UserTable.id == organizer_id).with_for_update()
+        )
+
+        conflict_stmt = (
+            select(BookingTable)
+            .where(
+                and_(
+                    BookingTable.user_id == organizer_id,
+                    BookingTable.start_time < end_time,
+                    BookingTable.end_time > start_time,
+                )
+            )
+            .with_for_update()
+        )
+        existing_conflict = (await db.execute(conflict_stmt)).scalars().first()
+        if existing_conflict:
+            raise HTTPException(
+                status_code=409,
+                detail="Requested slot is already booked or no longer available.",
             )
 
-            conflict_stmt = (
-                select(BookingTable)
-                .where(
-                    and_(
-                        BookingTable.user_id == organizer_id,
-                        BookingTable.start_time < end_time,
-                        BookingTable.end_time > start_time,
-                    )
-                )
-                .with_for_update()
+        # Check idempotency key for duplicate request prevention.
+        if idempotency_key:
+            cached_response = await check_idempotency_key(
+                db, idempotency_key, current_user.id, booking_data.model_dump()
             )
-            existing_conflict = (await db.execute(conflict_stmt)).scalars().first()
-            if existing_conflict:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Requested slot is already booked or no longer available.",
+            if cached_response:
+                logger.info(
+                    f"🔄 Returning cached response for idempotency key: {idempotency_key[:16]}..."
                 )
+                return BookingCreateResponse(**cached_response)
 
-            # Check idempotency key for duplicate request prevention.
-            if idempotency_key:
-                cached_response = await check_idempotency_key(
-                    db, idempotency_key, current_user.id, booking_data.model_dump()
-                )
-                if cached_response:
-                    logger.info(
-                        f"🔄 Returning cached response for idempotency key: {idempotency_key[:16]}..."
-                    )
-                    return BookingCreateResponse(**cached_response)
+        booking = BookingTable(
+            id=generate_uuid(),
+            user_id=organizer_id,
+            full_name=attendee_name,
+            email=attendee_email,
+            time_zone="UTC",  # Default, could be enhanced to detect from user prefs
+            start_time=start_time,
+            end_time=end_time,
+            status="confirmed",
+            is_reminder_sent=False,
+            metadata_payload={
+                "title": booking_data.title,
+                "description": booking_data.description,
+                "attendees": booking_data.attendees,
+                "location": booking_data.location,
+                "meeting_type": booking_data.meeting_type,
+                "estimated_value": booking_data.estimated_value,
+                "duration_minutes": booking_data.duration_minutes,
+            },
+        )
+        db.add(booking)
+        await db.flush()
 
-            booking = BookingTable(
-                id=generate_uuid(),
-                user_id=organizer_id,
-                full_name=attendee_name,
-                email=attendee_email,
-                time_zone="UTC",  # Default, could be enhanced to detect from user prefs
-                start_time=start_time,
-                end_time=end_time,
-                status="confirmed",
-                is_reminder_sent=False,
-                metadata_payload={
-                    "title": booking_data.title,
-                    "description": booking_data.description,
-                    "attendees": booking_data.attendees,
-                    "location": booking_data.location,
-                    "meeting_type": booking_data.meeting_type,
-                    "estimated_value": booking_data.estimated_value,
-                    "duration_minutes": booking_data.duration_minutes,
+        # Track scheduling usage
+        from backend.services.usage import increment_usage
+        await increment_usage(db, organizer_id, "scheduling")
+
+        automation_owner_id = organizer_id
+        automation_record = AIAutomationTable(
+            booking_id=booking.id,
+            user_id=automation_owner_id,
+            status="in_progress",
+            started_at=datetime.now(timezone.utc),
+            trigger_source="api",
+        )
+        db.add(automation_record)
+        await db.flush()
+
+        await db.commit()
+
+        if idempotency_key:
+            await store_idempotency_key(
+                db,
+                idempotency_key,
+                current_user.id,
+                booking_data.model_dump(),
+                {
+                    "status": "created",
+                    "booking_id": booking.id,
+                    "automation": "in_progress",
+                    "message": "Booking created successfully. AI automation is running in the background.",
                 },
+                201,
             )
-            db.add(booking)
-            await db.flush()
-
-            # Track scheduling usage
-            from backend.services.usage import increment_usage
-            await increment_usage(db, organizer_id, "scheduling")
-
-            automation_owner_id = organizer_id
-            automation_record = AIAutomationTable(
-                booking_id=booking.id,
-                user_id=automation_owner_id,
-                status="in_progress",
-                started_at=datetime.now(timezone.utc),
-                trigger_source="api",
-            )
-            db.add(automation_record)
-            await db.flush()
-
-            if idempotency_key:
-                await store_idempotency_key(
-                    db,
-                    idempotency_key,
-                    current_user.id,
-                    booking_data.model_dump(),
-                    {
-                        "status": "created",
-                        "booking_id": booking.id,
-                        "automation": "in_progress",
-                        "message": "Booking created successfully. AI automation is running in the background.",
-                    },
-                    201,
-                )
 
         await db.refresh(booking)
         await db.refresh(automation_record)
@@ -657,20 +648,27 @@ async def create_booking(
         from backend.tasks.automation_tasks import run_booking_automation_task
         
         # Build attendee data from booking metadata
-        attendee_data = None
+        attendee_data = {
+            "email": attendee_email or booking.email,
+            "name": attendee_name or booking.full_name,
+        }
         if booking.metadata_payload and booking.metadata_payload.get("attendees"):
             attendees = booking.metadata_payload["attendees"]
-            attendee_data = {
-                "email": attendees[0] if attendees else booking.email,
-                "name": booking.full_name,
-            }
+            if isinstance(attendees, str):
+                attendees = [attendees]
+            if isinstance(attendees, list) and len(attendees) > 0:
+                attendee_data["email"] = attendees[0]
         
+        booking_data_dump = booking_data.model_dump()
+        if "start_time" in booking_data_dump and hasattr(booking_data_dump["start_time"], "isoformat"):
+            booking_data_dump["start_time"] = booking_data_dump["start_time"].isoformat()
+
         run_booking_automation_task.delay(
             booking_id=booking.id,
             automation_id=automation_id,
             user_id=automation_owner_id,
             attendee_data=attendee_data,
-            booking_data=booking_data.model_dump(),
+            booking_data=booking_data_dump,
         )
 
         # Track automation start in Redis (no task object needed)
@@ -691,7 +689,7 @@ async def create_booking(
         return BookingCreateResponse(**response_data)
 
     except Exception as e:
-        logger.error(f"❌ API: Failed to create booking: {e}")
+        logger.error(f"❌ API: Failed to create booking: {e}", exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Failed to create booking: {str(e)}"
         )

@@ -93,6 +93,24 @@ class StorageService:
             logger.error(f"❌ Failed to generate presigned URL: {e}")
             return None
 
+    def get_file_size(self, key: str) -> int:
+        """Gets the file size of an object from the cloud bucket or local fallback path."""
+        if not self.client:
+            try:
+                local_path = _safe_path("uploads", key)
+            except ValueError:
+                return 0
+            if os.path.exists(local_path):
+                return os.path.getsize(local_path)
+            return 0
+
+        try:
+            response = self.client.head_object(Bucket=self.bucket, Key=key)
+            return response.get('ContentLength', 0)
+        except ClientError as e:
+            logger.warning(f"⚠️ Failed to get file size for {key}: {e}")
+            return 0
+
     def delete_file(self, key: str) -> bool:
         """Deletes an object from the cloud bucket or local fallback path."""
         if not self.client:

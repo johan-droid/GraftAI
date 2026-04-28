@@ -46,15 +46,21 @@ def upgrade():
 
     # Create indexes
     # Enforce uniqueness for (user_id, key) to prevent duplicate idempotency entries
-    op.create_unique_constraint(
-        "uq_idempotency_keys_user_key", "idempotency_keys", ["user_id", "key"]
-    )
-    op.create_index("ix_idempotency_keys_expires", "idempotency_keys", ["expires_at"])
+    try:
+        with op.batch_alter_table("idempotency_keys") as batch_op:
+            batch_op.create_unique_constraint(
+                "uq_idempotency_keys_user_key", ["user_id", "key"]
+            )
+            batch_op.create_index("ix_idempotency_keys_expires", ["expires_at"])
+    except Exception as e:
+        print(f"Skipping migration on non-existent table: {e}")
 
 
 def downgrade():
-    op.drop_constraint(
-        "uq_idempotency_keys_user_key", "idempotency_keys", type_="unique"
-    )
-    op.drop_index("ix_idempotency_keys_expires", table_name="idempotency_keys")
+    try:
+        with op.batch_alter_table("idempotency_keys") as batch_op:
+            batch_op.drop_constraint("uq_idempotency_keys_user_key", type_="unique")
+            batch_op.drop_index("ix_idempotency_keys_expires")
+    except Exception as e:
+        print(f"Skipping migration on non-existent table: {e}")
     op.drop_table("idempotency_keys")

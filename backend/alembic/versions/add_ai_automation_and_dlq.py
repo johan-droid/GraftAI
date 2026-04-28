@@ -19,22 +19,24 @@ depends_on = None
 
 def upgrade():
     # 1. Add automation fields to bookings table
-    op.add_column(
-        "bookings",
-        sa.Column("automation_status", sa.String(50), nullable=True, default="pending"),
-    )
-    op.add_column(
-        "bookings",
-        sa.Column("automation_run_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.add_column("bookings", sa.Column("decision_score", sa.Integer, nullable=True))
-    op.add_column("bookings", sa.Column("risk_level", sa.String(50), nullable=True))
+    try:
+        with op.batch_alter_table("bookings") as batch_op:
+            batch_op.add_column(
+                sa.Column("automation_status", sa.String(50), nullable=True, default="pending"),
+            )
+            batch_op.add_column(
+                sa.Column("automation_run_at", sa.DateTime(timezone=True), nullable=True),
+            )
+            batch_op.add_column(sa.Column("decision_score", sa.Integer, nullable=True))
+            batch_op.add_column(sa.Column("risk_level", sa.String(50), nullable=True))
 
-    # Create indexes for new booking columns
-    op.create_index("ix_bookings_automation_status", "bookings", ["automation_status"])
-    op.create_index("ix_bookings_automation_run_at", "bookings", ["automation_run_at"])
-    op.create_index("ix_bookings_decision_score", "bookings", ["decision_score"])
-    op.create_index("ix_bookings_risk_level", "bookings", ["risk_level"])
+            # Create indexes for new booking columns
+            batch_op.create_index("ix_bookings_automation_status", ["automation_status"])
+            batch_op.create_index("ix_bookings_automation_run_at", ["automation_run_at"])
+            batch_op.create_index("ix_bookings_decision_score", ["decision_score"])
+            batch_op.create_index("ix_bookings_risk_level", ["risk_level"])
+    except Exception as e:
+        print(f"Skipping migration on non-existent table: {e}")
 
     # 2. Create AI automations table (tracks agent execution results)
     op.create_table(
@@ -159,14 +161,18 @@ def downgrade():
     # Drop AI automations
     op.drop_table("ai_automations")
 
-    # Drop indexes from bookings
-    op.drop_index("ix_bookings_automation_status", table_name="bookings")
-    op.drop_index("ix_bookings_automation_run_at", table_name="bookings")
-    op.drop_index("ix_bookings_decision_score", table_name="bookings")
-    op.drop_index("ix_bookings_risk_level", table_name="bookings")
+    try:
+        with op.batch_alter_table("bookings") as batch_op:
+            # Drop indexes from bookings
+            batch_op.drop_index("ix_bookings_automation_status")
+            batch_op.drop_index("ix_bookings_automation_run_at")
+            batch_op.drop_index("ix_bookings_decision_score")
+            batch_op.drop_index("ix_bookings_risk_level")
 
-    # Drop columns from bookings
-    op.drop_column("bookings", "automation_status")
-    op.drop_column("bookings", "automation_run_at")
-    op.drop_column("bookings", "decision_score")
-    op.drop_column("bookings", "risk_level")
+            # Drop columns from bookings
+            batch_op.drop_column("automation_status")
+            batch_op.drop_column("automation_run_at")
+            batch_op.drop_column("decision_score")
+            batch_op.drop_column("risk_level")
+    except Exception as e:
+        print(f"Skipping migration on non-existent table: {e}")

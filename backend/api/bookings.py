@@ -694,7 +694,7 @@ async def create_booking(
         return BookingCreateResponse(**response_data)
 
     except Exception as e:
-        import traceback; traceback.print_exc(); logger.error(f"❌ API: Failed to create booking: {e}")
+        logger.error(f"❌ API: Failed to create booking: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to create booking: {str(e)}"
         )

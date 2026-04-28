@@ -23,7 +23,7 @@ if config.config_file_name is not None:
 def get_url():
     url = DATABASE_URL
     if not url:
-        return url
+        return ""
 
     # Preserve SQLite file URLs exactly (avoid urlunparse removing a slash)
     if url.startswith("sqlite"):
@@ -69,6 +69,9 @@ async def run_async_migrations() -> None:
         connect_args["command_timeout"] = 60
 
     async_config = config.get_section(config.config_ini_section, {})
+    if not async_config.get("sqlalchemy.url"):
+        logger.warning("No sqlalchemy.url found in config, aborting migrations")
+        return
 
     connectable = async_engine_from_config(
         async_config,

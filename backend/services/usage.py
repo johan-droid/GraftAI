@@ -132,7 +132,7 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
             db, 
             action=f"usage.{feature}", 
             user_id=user_id, 
-            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature.split('_')[1]}_count", None)}
+            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature.split('_')[1] if '_' in feature else feature}_count", None)}
         )
 
     await db.commit()

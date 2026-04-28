@@ -375,5 +375,43 @@ class TestRateLimitStrategiesComparison:
             assert sliding_allowed is True
 
 
+class TestRateLimiterTypingImport:
+    """
+    Regression tests for the PR change that removed `Any` from the
+    `from typing import ...` statement in rate_limiter.py.
+
+    Ensures the module still imports cleanly and RateLimiter is usable
+    even though `Any` was removed from the explicit imports.
+    """
+
+    def test_module_imports_without_error(self):
+        """Importing backend.utils.rate_limiter must not raise any NameError."""
+        import importlib
+        import backend.utils.rate_limiter as mod
+        # If Any removal breaks anything, importlib.reload would surface it.
+        importlib.reload(mod)
+
+    def test_rate_limiter_instantiates(self):
+        """RateLimiter() must construct successfully after the import cleanup."""
+        limiter = RateLimiter(redis_client=None)
+        assert limiter is not None
+
+    def test_memory_store_is_dict(self):
+        """_memory_store must still be an initialised dict after the typing change."""
+        limiter = RateLimiter(redis_client=None)
+        assert isinstance(limiter._memory_store, dict)
+
+    def test_any_not_in_module_imports(self):
+        """Verify that `Any` is no longer imported at module level in rate_limiter."""
+        import typing
+        import backend.utils.rate_limiter as mod
+        # 'Any' should not appear as a direct attribute of the module namespace
+        # (it was only used as a typing annotation, not exported).
+        assert not hasattr(mod, "Any"), (
+            "Any was removed from rate_limiter imports in this PR; "
+            "it should not be a module-level name"
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

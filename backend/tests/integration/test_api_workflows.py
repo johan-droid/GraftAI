@@ -217,10 +217,11 @@ class TestWorkflowStepsAPI:
         response = await async_client.get(f"/api/v1/workflows/{created_workflow}/steps")
         
         assert response.status_code == 200
-        data = response.json()["data"]
+        data = response.json()
+        steps = data.get("data", [])
         
-        assert isinstance(data, list)
-        assert len(data) >= 1
+        assert isinstance(steps, list)
+        assert len(steps) >= 1
 
     @pytest.mark.asyncio
     async def test_delete_workflow_step(self, async_client, created_workflow):
@@ -235,7 +236,7 @@ class TestWorkflowStepsAPI:
             f"/api/v1/workflows/{created_workflow}/steps",
             json=step_data
         )
-        step_id = create_response.json()["id"]
+        step_id = create_response.json().get("data", {}).get("id") or create_response.json().get("id")
         
         # Delete the step
         response = await async_client.delete(

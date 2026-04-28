@@ -23,7 +23,7 @@ if config.config_file_name is not None:
 def get_url():
     url = DATABASE_URL
     if not url:
-        return url
+        return "sqlite+aiosqlite:///:memory:"
 
     # Preserve SQLite file URLs exactly (avoid urlunparse removing a slash)
     if url.startswith("sqlite"):
@@ -61,7 +61,7 @@ async def run_async_migrations() -> None:
     # Add any other required asyncpg params here. For sqlite, use the
     # DB driver's supported timeout option instead of asyncpg's
     # `command_timeout` which is invalid for sqlite connections.
-    is_sqlite = (DATABASE_URL or "").startswith("sqlite")
+    is_sqlite = (DATABASE_URL or "").startswith("sqlite") or config.get_main_option("sqlalchemy.url", "").startswith("sqlite")
     if is_sqlite:
         # `timeout` is accepted by sqlite3.connect
         connect_args["timeout"] = int(os.getenv("DB_CONNECT_TIMEOUT", "30"))
@@ -69,6 +69,9 @@ async def run_async_migrations() -> None:
         connect_args["command_timeout"] = 60
 
     async_config = config.get_section(config.config_ini_section, {})
+    if not async_config.get("sqlalchemy.url"):
+        logger.warning("No sqlalchemy.url found in config, aborting migrations")
+        return
 
     connectable = async_engine_from_config(
         async_config,

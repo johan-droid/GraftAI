@@ -67,7 +67,7 @@ class BookingCreateRequest(BaseModel):
         30, json_schema_extra={"example": 60}, description="Duration in minutes"
     )
     attendees: list[str] = Field(
-        ..., json_schema_extra={"example": ["alice@example.com", "bob@example.com"]}, description="List of attendee emails"
+        default_factory=list, json_schema_extra={"example": ["alice@example.com", "bob@example.com"]}, description="List of attendee emails"
     )
     organizer_id: Optional[str] = Field(
         None,
@@ -520,9 +520,11 @@ async def create_booking(
         end_time = start_time + timedelta(minutes=booking_data.duration_minutes)
 
         # Get first attendee info for the booking record
-        attendee_email = (
-            booking_data.attendees[0] if booking_data.attendees else current_user.email
-        )
+        if getattr(booking_data, 'attendees', None) and len(booking_data.attendees) > 0:
+            attendee_email = booking_data.attendees[0]
+        else:
+            attendee_email = current_user.email
+
         attendee_name = attendee_email.split("@")[
             0
         ]  # Use email prefix as name fallback
@@ -538,19 +540,8 @@ async def create_booking(
                 detail="Requested slot is currently being claimed. Please retry.",
             )
 
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def ensure_transaction(session: AsyncSession):
-            if session.in_transaction():
-                async with session.begin_nested():
-                    yield
-            else:
-                async with session.begin():
-                    yield
-
         # Use a single atomic transaction for booking creation + automation tracking.
-        async with ensure_transaction(db):
+        try:
             bind = db.get_bind()
             if bind is not None and bind.dialect.name == "postgresql":
                 await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
@@ -640,6 +631,10 @@ async def create_booking(
                     },
                     201,
                 )
+            await db.commit()
+        except BaseException:
+            await db.rollback()
+            raise
 
         await db.refresh(booking)
         await db.refresh(automation_record)
@@ -658,20 +653,28 @@ async def create_booking(
         
         # Build attendee data from booking metadata
         attendee_data = None
-        if booking.metadata_payload and booking.metadata_payload.get("attendees"):
-            attendees = booking.metadata_payload["attendees"]
+        if booking.metadata_payload and "attendees" in booking.metadata_payload:
+            attendees = booking.metadata_payload.get("attendees")
+            if attendees and isinstance(attendees, list) and len(attendees) > 0:
+                attendee_email_local = attendees[0]
+            else:
+                attendee_email_local = booking.email
+
             attendee_data = {
-                "email": attendees[0] if attendees else booking.email,
+                "email": attendee_email_local,
                 "name": booking.full_name,
             }
         
-        run_booking_automation_task.delay(
-            booking_id=booking.id,
-            automation_id=automation_id,
-            user_id=automation_owner_id,
-            attendee_data=attendee_data,
-            booking_data=booking_data.model_dump(),
-        )
+        try:
+            run_booking_automation_task.delay(
+                booking_id=booking.id,
+                automation_id=automation_id,
+                user_id=automation_owner_id,
+                attendee_data=attendee_data,
+                booking_data=booking_data.model_dump(),
+            )
+        except Exception as celery_err:
+            logger.error(f"Failed to queue celery task: {celery_err}")
 
         # Track automation start in Redis (no task object needed)
         automation_id = await _track_automation_start(

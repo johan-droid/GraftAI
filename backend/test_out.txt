@@ -1,0 +1,179 @@
+The "poetry.dev-dependencies" section is deprecated and will be removed in a future version. Use "poetry.group.dev.dependencies" instead.
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-8.4.2, pluggy-1.6.0 -- /home/jules/.cache/pypoetry/virtualenvs/graftai-backend-vsmFjuTQ-py3.12/bin/python
+cachedir: .pytest_cache
+rootdir: /app/backend
+configfile: pytest.ini
+plugins: langsmith-0.7.22, cov-7.1.0, anyio-4.12.1, asyncio-0.25.3
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=None
+collecting ... collected 16 items
+
+tests/integration/test_api_bookings.py::TestBookingAPI::test_create_booking FAILED [  6%]
+tests/integration/test_api_bookings.py::TestBookingAPI::test_list_bookings PASSED [ 12%]
+tests/integration/test_api_bookings.py::TestBookingAPI::test_get_booking PASSED [ 18%]
+tests/integration/test_api_bookings.py::TestBookingAPI::test_update_booking PASSED [ 25%]
+tests/integration/test_api_bookings.py::TestBookingAPI::test_cancel_booking PASSED [ 31%]
+tests/integration/test_api_bookings.py::TestBookingAPI::test_reschedule_booking PASSED [ 37%]
+tests/integration/test_api_bookings.py::TestBookingValidation::test_create_booking_missing_required_fields PASSED [ 43%]
+tests/integration/test_api_bookings.py::TestBookingValidation::test_create_booking_invalid_email FAILED [ 50%]
+tests/integration/test_api_bookings.py::TestBookingValidation::test_create_booking_past_date FAILED [ 56%]
+tests/integration/test_api_bookings.py::TestBookingValidation::test_get_nonexistent_booking PASSED [ 62%]
+tests/integration/test_api_bookings.py::TestBookingPublicAPI::test_public_booking_page FAILED [ 68%]
+tests/integration/test_api_bookings.py::TestBookingWorkflowIntegration::test_booking_triggers_workflow FAILED [ 75%]
+tests/integration/test_api_bookings.py::TestBookingPagination::test_list_bookings_with_pagination PASSED [ 81%]
+tests/integration/test_api_bookings.py::TestBookingPagination::test_list_bookings_with_limit PASSED [ 87%]
+tests/integration/test_api_bookings.py::TestBookingFilters::test_filter_by_status PASSED [ 93%]
+tests/integration/test_api_bookings.py::TestBookingFilters::test_filter_by_date_range PASSED [100%]
+tests/integration/test_api_bookings.py::TestBookingFilters::test_filter_by_date_range ERROR [100%]
+
+==================================== ERRORS ====================================
+______ ERROR at teardown of TestBookingFilters.test_filter_by_date_range _______
+/home/jules/.cache/pypoetry/virtualenvs/graftai-backend-vsmFjuTQ-py3.12/lib/python3.12/site-packages/pytest_asyncio/plugin.py:346: in finalizer
+    task = _create_task_in_context(event_loop, async_finalizer(), context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/jules/.cache/pypoetry/virtualenvs/graftai-backend-vsmFjuTQ-py3.12/lib/python3.12/site-packages/pytest_asyncio/plugin.py:432: in _create_task_in_context
+    return loop.create_task(coro, context=context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/jules/.pyenv/versions/3.12.13/lib/python3.12/asyncio/base_events.py:455: in create_task
+    self._check_closed()
+/home/jules/.pyenv/versions/3.12.13/lib/python3.12/asyncio/base_events.py:545: in _check_closed
+    raise RuntimeError('Event loop is closed')
+E   RuntimeError: Event loop is closed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-04-28T04:13:15.568155+00:00", "level": "WARNING", "logger": "backend.utils.rate_limiter", "service": "graftai-backend", "message": "Redis error during rate check; falling back to in-memory rate limiting."}
+{"timestamp": "2026-04-28T04:13:15.569058+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request started: GET /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1"}
+{"timestamp": "2026-04-28T04:13:15.577482+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request completed: GET /api/v1/bookings | Status: 200 | Duration: 0.008s"}
+{"timestamp": "2026-04-28T04:13:15.580773+00:00", "level": "INFO", "logger": "httpx", "service": "graftai-backend", "message": "HTTP Request: GET http://localhost/api/v1/bookings?start_date=2026-03-29T04:13:15.565224+00:00&end_date=2026-05-28T04:13:15.565250+00:00 \"HTTP/1.1 200 OK\""}
+------------------------------ Captured log call -------------------------------
+WARNING  backend.utils.rate_limiter:rate_limiter.py:145 Redis error during rate check; falling back to in-memory rate limiting.
+INFO     backend.utils.security_middleware:security_middleware.py:241 Request started: GET /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1
+INFO     backend.utils.security_middleware:security_middleware.py:250 Request completed: GET /api/v1/bookings | Status: 200 | Duration: 0.008s
+INFO     httpx:_client.py:1740 HTTP Request: GET http://localhost/api/v1/bookings?start_date=2026-03-29T04:13:15.565224+00:00&end_date=2026-05-28T04:13:15.565250+00:00 "HTTP/1.1 200 OK"
+=================================== FAILURES ===================================
+______________________ TestBookingAPI.test_create_booking ______________________
+tests/integration/test_api_bookings.py:30: in test_create_booking
+    assert response.status_code in [200, 201]
+E   assert 500 in [200, 201]
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-04-28T04:13:10.495178+00:00", "level": "WARNING", "logger": "backend.utils.rate_limiter", "service": "graftai-backend", "message": "Redis error during rate check; falling back to in-memory rate limiting."}
+{"timestamp": "2026-04-28T04:13:10.496975+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request started: POST /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1"}
+{"timestamp": "2026-04-28T04:13:10.503979+00:00", "level": "INFO", "logger": "backend.api.bookings", "service": "graftai-backend", "message": "\ud83d\udcc5 API: Creating booking 'Test Booking' for user 25ca1420-c8ba-4c9e-aff7-a423a1ccf11a"}
+{"timestamp": "2026-04-28T04:13:10.533737+00:00", "level": "ERROR", "logger": "backend.api.bookings", "service": "graftai-backend", "message": "\u274c API: Failed to create booking: list index out of range"}
+{"timestamp": "2026-04-28T04:13:10.534270+00:00", "level": "WARNING", "logger": "backend.error_handler", "service": "graftai-backend", "message": "API HTTPException", "user_id": null, "status_code": 500}
+{"timestamp": "2026-04-28T04:13:10.535720+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request completed: POST /api/v1/bookings | Status: 500 | Duration: 0.039s"}
+{"timestamp": "2026-04-28T04:13:10.540279+00:00", "level": "INFO", "logger": "httpx", "service": "graftai-backend", "message": "HTTP Request: POST http://localhost/api/v1/bookings \"HTTP/1.1 500 Internal Server Error\""}
+------------------------------ Captured log call -------------------------------
+WARNING  backend.utils.rate_limiter:rate_limiter.py:145 Redis error during rate check; falling back to in-memory rate limiting.
+INFO     backend.utils.security_middleware:security_middleware.py:241 Request started: POST /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1
+INFO     backend.api.bookings:bookings.py:512 📅 API: Creating booking 'Test Booking' for user 25ca1420-c8ba-4c9e-aff7-a423a1ccf11a
+ERROR    backend.api.bookings:bookings.py:694 ❌ API: Failed to create booking: list index out of range
+WARNING  backend.error_handler:error_handlers.py:55 API HTTPException
+INFO     backend.utils.security_middleware:security_middleware.py:250 Request completed: POST /api/v1/bookings | Status: 500 | Duration: 0.039s
+INFO     httpx:_client.py:1740 HTTP Request: POST http://localhost/api/v1/bookings "HTTP/1.1 500 Internal Server Error"
+___________ TestBookingValidation.test_create_booking_invalid_email ____________
+tests/integration/test_api_bookings.py:143: in test_create_booking_invalid_email
+    assert response.status_code in [400, 422]
+E   assert 500 in [400, 422]
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-04-28T04:13:13.067199+00:00", "level": "WARNING", "logger": "backend.utils.rate_limiter", "service": "graftai-backend", "message": "Redis error during rate check; falling back to in-memory rate limiting."}
+{"timestamp": "2026-04-28T04:13:13.067991+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request started: POST /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1"}
+{"timestamp": "2026-04-28T04:13:13.072560+00:00", "level": "INFO", "logger": "backend.api.bookings", "service": "graftai-backend", "message": "\ud83d\udcc5 API: Creating booking 'Test Booking' for user 0590dfa8-43dc-49b3-82c7-6327b6258586"}
+{"timestamp": "2026-04-28T04:13:13.087720+00:00", "level": "ERROR", "logger": "backend.api.bookings", "service": "graftai-backend", "message": "\u274c API: Failed to create booking: list index out of range"}
+{"timestamp": "2026-04-28T04:13:13.088298+00:00", "level": "WARNING", "logger": "backend.error_handler", "service": "graftai-backend", "message": "API HTTPException", "user_id": null, "status_code": 500}
+{"timestamp": "2026-04-28T04:13:13.089507+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request completed: POST /api/v1/bookings | Status: 500 | Duration: 0.022s"}
+{"timestamp": "2026-04-28T04:13:13.092794+00:00", "level": "INFO", "logger": "httpx", "service": "graftai-backend", "message": "HTTP Request: POST http://localhost/api/v1/bookings \"HTTP/1.1 500 Internal Server Error\""}
+------------------------------ Captured log call -------------------------------
+WARNING  backend.utils.rate_limiter:rate_limiter.py:145 Redis error during rate check; falling back to in-memory rate limiting.
+INFO     backend.utils.security_middleware:security_middleware.py:241 Request started: POST /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1
+INFO     backend.api.bookings:bookings.py:512 📅 API: Creating booking 'Test Booking' for user 0590dfa8-43dc-49b3-82c7-6327b6258586
+ERROR    backend.api.bookings:bookings.py:694 ❌ API: Failed to create booking: list index out of range
+WARNING  backend.error_handler:error_handlers.py:55 API HTTPException
+INFO     backend.utils.security_middleware:security_middleware.py:250 Request completed: POST /api/v1/bookings | Status: 500 | Duration: 0.022s
+INFO     httpx:_client.py:1740 HTTP Request: POST http://localhost/api/v1/bookings "HTTP/1.1 500 Internal Server Error"
+_____________ TestBookingValidation.test_create_booking_past_date ______________
+tests/integration/test_api_bookings.py:159: in test_create_booking_past_date
+    assert response.status_code in [400, 422]
+E   assert 500 in [400, 422]
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-04-28T04:13:13.341116+00:00", "level": "WARNING", "logger": "backend.utils.rate_limiter", "service": "graftai-backend", "message": "Redis error during rate check; falling back to in-memory rate limiting."}
+{"timestamp": "2026-04-28T04:13:13.342175+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request started: POST /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1"}
+{"timestamp": "2026-04-28T04:13:13.347245+00:00", "level": "INFO", "logger": "backend.api.bookings", "service": "graftai-backend", "message": "\ud83d\udcc5 API: Creating booking 'Test Booking' for user fb792e10-57cc-46e1-81ce-b7db8e372e60"}
+{"timestamp": "2026-04-28T04:13:13.359798+00:00", "level": "ERROR", "logger": "backend.api.bookings", "service": "graftai-backend", "message": "\u274c API: Failed to create booking: list index out of range"}
+{"timestamp": "2026-04-28T04:13:13.360340+00:00", "level": "WARNING", "logger": "backend.error_handler", "service": "graftai-backend", "message": "API HTTPException", "user_id": null, "status_code": 500}
+{"timestamp": "2026-04-28T04:13:13.361632+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request completed: POST /api/v1/bookings | Status: 500 | Duration: 0.020s"}
+{"timestamp": "2026-04-28T04:13:13.365367+00:00", "level": "INFO", "logger": "httpx", "service": "graftai-backend", "message": "HTTP Request: POST http://localhost/api/v1/bookings \"HTTP/1.1 500 Internal Server Error\""}
+------------------------------ Captured log call -------------------------------
+WARNING  backend.utils.rate_limiter:rate_limiter.py:145 Redis error during rate check; falling back to in-memory rate limiting.
+INFO     backend.utils.security_middleware:security_middleware.py:241 Request started: POST /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1
+INFO     backend.api.bookings:bookings.py:512 📅 API: Creating booking 'Test Booking' for user fb792e10-57cc-46e1-81ce-b7db8e372e60
+ERROR    backend.api.bookings:bookings.py:694 ❌ API: Failed to create booking: list index out of range
+WARNING  backend.error_handler:error_handlers.py:55 API HTTPException
+INFO     backend.utils.security_middleware:security_middleware.py:250 Request completed: POST /api/v1/bookings | Status: 500 | Duration: 0.020s
+INFO     httpx:_client.py:1740 HTTP Request: POST http://localhost/api/v1/bookings "HTTP/1.1 500 Internal Server Error"
+________________ TestBookingPublicAPI.test_public_booking_page _________________
+tests/integration/test_api_bookings.py:183: in test_public_booking_page
+    assert response.status_code in [200, 307, 308]
+E   assert 404 in [200, 307, 308]
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-04-28T04:13:14.063503+00:00", "level": "WARNING", "logger": "backend.utils.rate_limiter", "service": "graftai-backend", "message": "Redis error during rate check; falling back to in-memory rate limiting."}
+{"timestamp": "2026-04-28T04:13:14.064479+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request started: GET /public/test-user | IP: 127.0.0.1 | UA: python-httpx/0.28.1"}
+{"timestamp": "2026-04-28T04:13:14.066963+00:00", "level": "WARNING", "logger": "backend.error_handler", "service": "graftai-backend", "message": "API HTTPException", "user_id": null, "status_code": 404}
+{"timestamp": "2026-04-28T04:13:14.069291+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request completed: GET /public/test-user | Status: 404 | Duration: 0.005s"}
+{"timestamp": "2026-04-28T04:13:14.072471+00:00", "level": "INFO", "logger": "httpx", "service": "graftai-backend", "message": "HTTP Request: GET http://localhost/public/test-user \"HTTP/1.1 404 Not Found\""}
+------------------------------ Captured log call -------------------------------
+WARNING  backend.utils.rate_limiter:rate_limiter.py:145 Redis error during rate check; falling back to in-memory rate limiting.
+INFO     backend.utils.security_middleware:security_middleware.py:241 Request started: GET /public/test-user | IP: 127.0.0.1 | UA: python-httpx/0.28.1
+WARNING  backend.error_handler:error_handlers.py:55 API HTTPException
+INFO     backend.utils.security_middleware:security_middleware.py:250 Request completed: GET /public/test-user | Status: 404 | Duration: 0.005s
+INFO     httpx:_client.py:1740 HTTP Request: GET http://localhost/public/test-user "HTTP/1.1 404 Not Found"
+________ TestBookingWorkflowIntegration.test_booking_triggers_workflow _________
+tests/integration/test_api_bookings.py:204: in test_booking_triggers_workflow
+    assert response.status_code in [200, 201]
+E   assert 500 in [200, 201]
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-04-28T04:13:14.319920+00:00", "level": "WARNING", "logger": "backend.utils.rate_limiter", "service": "graftai-backend", "message": "Redis error during rate check; falling back to in-memory rate limiting."}
+{"timestamp": "2026-04-28T04:13:14.320793+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request started: POST /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1"}
+{"timestamp": "2026-04-28T04:13:14.325312+00:00", "level": "INFO", "logger": "backend.api.bookings", "service": "graftai-backend", "message": "\ud83d\udcc5 API: Creating booking 'Workflow Test Booking' for user 99b6a960-1185-43a0-82ac-ee872a657503"}
+{"timestamp": "2026-04-28T04:13:14.338124+00:00", "level": "ERROR", "logger": "backend.api.bookings", "service": "graftai-backend", "message": "\u274c API: Failed to create booking: list index out of range"}
+{"timestamp": "2026-04-28T04:13:14.338631+00:00", "level": "WARNING", "logger": "backend.error_handler", "service": "graftai-backend", "message": "API HTTPException", "user_id": null, "status_code": 500}
+{"timestamp": "2026-04-28T04:13:14.339904+00:00", "level": "INFO", "logger": "backend.utils.security_middleware", "service": "graftai-backend", "message": "Request completed: POST /api/v1/bookings | Status: 500 | Duration: 0.019s"}
+{"timestamp": "2026-04-28T04:13:14.343284+00:00", "level": "INFO", "logger": "httpx", "service": "graftai-backend", "message": "HTTP Request: POST http://localhost/api/v1/bookings \"HTTP/1.1 500 Internal Server Error\""}
+------------------------------ Captured log call -------------------------------
+WARNING  backend.utils.rate_limiter:rate_limiter.py:145 Redis error during rate check; falling back to in-memory rate limiting.
+INFO     backend.utils.security_middleware:security_middleware.py:241 Request started: POST /api/v1/bookings | IP: 127.0.0.1 | UA: python-httpx/0.28.1
+INFO     backend.api.bookings:bookings.py:512 📅 API: Creating booking 'Workflow Test Booking' for user 99b6a960-1185-43a0-82ac-ee872a657503
+ERROR    backend.api.bookings:bookings.py:694 ❌ API: Failed to create booking: list index out of range
+WARNING  backend.error_handler:error_handlers.py:55 API HTTPException
+INFO     backend.utils.security_middleware:security_middleware.py:250 Request completed: POST /api/v1/bookings | Status: 500 | Duration: 0.019s
+INFO     httpx:_client.py:1740 HTTP Request: POST http://localhost/api/v1/bookings "HTTP/1.1 500 Internal Server Error"
+=============================== warnings summary ===============================
+../../home/jules/.cache/pypoetry/virtualenvs/graftai-backend-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /home/jules/.cache/pypoetry/virtualenvs/graftai-backend-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart/home/jules/.cache/pypoetry/virtualenvs/graftai-backend-vsmFjuTQ-py3.12/lib/python3.12/site-packages/_pytest/unraisableexception.py:33: RuntimeWarning: coroutine '_wrap_asyncgen_fixture.<locals>._asyncgen_fixture_wrapper.<locals>.finalizer.<locals>.async_finalizer' was never awaited
+  gc.collect()
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+
+
+../../home/jules/.cache/pypoetry/virtualenvs/graftai-backend-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/sql/sqltypes.py:1999
+  /home/jules/.cache/pypoetry/virtualenvs/graftai-backend-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/sql/sqltypes.py:1999: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    epoch = dt.datetime.utcfromtimestamp(0)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/test_api_bookings.py::TestBookingAPI::test_create_booking - assert 500 in [200, 201]
+ +  where 500 = <Response [500 Internal Server Error]>.status_code
+FAILED tests/integration/test_api_bookings.py::TestBookingValidation::test_create_booking_invalid_email - assert 500 in [400, 422]
+ +  where 500 = <Response [500 Internal Server Error]>.status_code
+FAILED tests/integration/test_api_bookings.py::TestBookingValidation::test_create_booking_past_date - assert 500 in [400, 422]
+ +  where 500 = <Response [500 Internal Server Error]>.status_code
+FAILED tests/integration/test_api_bookings.py::TestBookingPublicAPI::test_public_booking_page - assert 404 in [200, 307, 308]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED tests/integration/test_api_bookings.py::TestBookingWorkflowIntegration::test_booking_triggers_workflow - assert 500 in [200, 201]
+ +  where 500 = <Response [500 Internal Server Error]>.status_code
+ERROR tests/integration/test_api_bookings.py::TestBookingFilters::test_filter_by_date_range - RuntimeError: Event loop is closed
+============== 5 failed, 11 passed, 2 warnings, 1 error in 6.12s ===============

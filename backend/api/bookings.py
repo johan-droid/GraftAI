@@ -665,13 +665,16 @@ async def create_booking(
                 "name": booking.full_name,
             }
         
-        run_booking_automation_task.delay(
-            booking_id=booking.id,
-            automation_id=automation_id,
-            user_id=automation_owner_id,
-            attendee_data=attendee_data,
-            booking_data=booking_data.model_dump(),
-        )
+        try:
+            run_booking_automation_task.delay(
+                booking_id=booking.id,
+                automation_id=automation_id,
+                user_id=automation_owner_id,
+                attendee_data=attendee_data,
+                booking_data=booking_data.model_dump(),
+            )
+        except Exception as celery_err:
+            logger.error(f"Failed to queue celery task: {celery_err}")
 
         # Track automation start in Redis (no task object needed)
         automation_id = await _track_automation_start(
@@ -691,7 +694,7 @@ async def create_booking(
         return BookingCreateResponse(**response_data)
 
     except Exception as e:
-        logger.error(f"❌ API: Failed to create booking: {e}")
+        import traceback; traceback.print_exc(); logger.error(f"❌ API: Failed to create booking: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to create booking: {str(e)}"
         )

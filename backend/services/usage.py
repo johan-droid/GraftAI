@@ -39,9 +39,7 @@ async def get_user_quota(db: AsyncSession, user_id: str) -> UserTable:
         user.quota_reset_at = next_midnight
 
         await db.commit()
-        await db.refresh(user)
-
-    return user
+        return user
 
 
 def check_usage_limit(feature_key: str):
@@ -111,31 +109,25 @@ def check_usage_limit(feature_key: str):
 
 async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: int = 1):
     """Increment usage and log the activity for auditing."""
-    user = await get_user_quota(db, user_id)
+    from sqlalchemy import update
 
+    update_kwargs = {}
     if feature == "ai_messages":
-        user.daily_ai_count += amount
+        update_kwargs = {"daily_ai_count": UserTable.daily_ai_count + amount}
     elif feature == "calendar_syncs":
-        user.daily_sync_count += amount
+        update_kwargs = {"daily_sync_count": UserTable.daily_sync_count + amount}
     elif feature == "ai_tokens":
-        user.total_ai_tokens += amount
+        update_kwargs = {"total_ai_tokens": UserTable.total_ai_tokens + amount}
     elif feature == "api_calls":
-        user.total_api_calls += amount
+        update_kwargs = {"total_api_calls": UserTable.total_api_calls + amount}
     elif feature == "scheduling":
-        user.total_scheduling_count += amount
-    else:
-        logger.debug(f"Unknown usage feature: {feature}")
+        update_kwargs = {"total_scheduling_count": UserTable.total_scheduling_count + amount}
 
-    # SaaS Audit Logging for significant actions
-    if feature in ["ai_messages", "scheduling", "calendar_syncs"]:
-        await log_activity(
-            db, 
-            action=f"usage.{feature}", 
-            user_id=user_id, 
-            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature.split('_')[1] if '_' in feature else feature}_count", None)}
-        )
+    if update_kwargs:
+        # We perform an UPDATE statement directly so we don't need to load the model into the session
+        # This avoids throwing "Can't operate on closed transaction" if the session context is strictly closed.
+        await db.execute(update(UserTable).where(UserTable.id == user_id).values(**update_kwargs))
 
-    await db.commit()
 
 
 async def get_usage_counts(db: AsyncSession, user_id: str) -> dict:

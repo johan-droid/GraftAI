@@ -62,7 +62,7 @@ jobs:
           pip install -r requirements.txt
           alembic upgrade head
         env:
-          DATABASE_URL: "${{ steps.create_neon_branch.outputs.db_url_with_pooler }}"
+          DATABASE_URL: "${{ steps.create_neon_branch.outputs.db_url }}"
           PYTHONPATH: ${{ github.workspace }}
 
       - name: Post Schema Diff Comment to PR

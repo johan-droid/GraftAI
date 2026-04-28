@@ -402,7 +402,7 @@ async def list_workflow_steps(
     stmt = (
         select(WorkflowStepTable)
         .where(WorkflowStepTable.workflow_id == workflow_id)
-        .order_by(WorkflowStepTable.step_order)
+        .order_by(WorkflowStepTable.step_number)
     )
     steps = (await db.execute(stmt)).scalars().all()
 

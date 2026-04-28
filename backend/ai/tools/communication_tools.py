@@ -41,6 +41,7 @@ async def send_email(
     bcc: Optional[List[str]] = None,
     template: Optional[str] = None,
     from_address: Optional[str] = None,
+    attachments: Optional[List[dict]] = None,
 ) -> dict:
     """
     Send an email to a recipient.
@@ -53,6 +54,7 @@ async def send_email(
         bcc: Optional list of BCC recipients
         template: Optional template name to use
         from_address: Optional sender address (uses default if not specified)
+        attachments: Optional list of dictionaries with filename, content, and type
 
     Returns:
         Dict with email_id, status, and timestamp
@@ -286,7 +288,7 @@ async def send_calendar_invite(
     location: Optional[str] = None,
     description: Optional[str] = None,
     organizer: Optional[str] = None,
-    timezone: str = "UTC",
+    timezone_str: str = "UTC",
 ) -> dict:
     """
     Send a calendar invite to an attendee.
@@ -299,7 +301,7 @@ async def send_calendar_invite(
         location: Optional meeting location
         description: Optional meeting description
         organizer: Optional organizer email
-        timezone: Timezone (default UTC)
+        timezone_str: Timezone (default UTC)
 
     Returns:
         Dict with invite_id and status
@@ -314,19 +316,66 @@ async def send_calendar_invite(
 
         logger.info(f"Sending calendar invite to {attendee} for {title}")
 
-        # TODO: Generate and send ICS file or integrate with calendar API
-        # calendar_client.create_event(
-        #     title=title,
-        #     start=start,
-        #     end=end,
-        #     attendees=[attendee],
-        #     location=location,
-        #     description=description
-        # )
+        import uuid
+
+        # Generate ICS file content
+        fmt = "%Y%m%dT%H%M%SZ"
+        from datetime import timezone as tz
+        dtstamp = datetime.now(tz.utc).strftime(fmt)
+        # ensure start and end are in UTC before formatting
+        dtstart = start.astimezone(tz.utc).strftime(fmt)
+        dtend = end.astimezone(tz.utc).strftime(fmt)
+
+        uid = f"invite_{uuid.uuid4().hex}@graftai.com"
+
+        ics_lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//GraftAI//NONSGML Calendar Tool//EN",
+            "BEGIN:VEVENT",
+            f"UID:{uid}",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART:{dtstart}",
+            f"DTEND:{dtend}",
+            f"SUMMARY:{title}"
+        ]
+
+        if location:
+            ics_lines.append(f"LOCATION:{location}")
+
+        if description:
+            # Escape newlines for ICS format
+            escaped_desc = description.replace("\n", "\\n")
+            ics_lines.append(f"DESCRIPTION:{escaped_desc}")
+
+        if organizer:
+            ics_lines.append(f"ORGANIZER;CN=Organizer:mailto:{organizer}")
+
+        ics_lines.append(f"ATTENDEE;RSVP=TRUE:mailto:{attendee}")
+        ics_lines.append("END:VEVENT")
+        ics_lines.append("END:VCALENDAR")
+
+        ics_content = "\r\n".join(ics_lines)
+
+        logger.info(f"Generated ICS content for {title}")
+
+        # Simulate sending email with ICS attachment
+        await send_email(
+            to=attendee,
+            subject=f"Invitation: {title}",
+            body=f"Please find the calendar invitation for {title} attached.",
+            from_address=organizer,
+            attachments=[{
+                "filename": "invite.ics",
+                "content": ics_content,
+                "type": "text/calendar"
+            }]
+        )
 
         return {
             "success": True,
             "invite_id": invite_id,
+            "ics_content": ics_content,
             "attendee": attendee,
             "title": title,
             "start_time": start_time,

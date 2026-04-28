@@ -105,8 +105,21 @@ def test_user_data():
 
 
 @pytest_asyncio.fixture
-async def test_user(db_session: AsyncSession, test_user_data) -> UserTable:
+async def test_user(db_session: AsyncSession) -> UserTable:
     """Create and return a test user in the database."""
+    rand_suffix = str(uuid.uuid4())[:8]
+    test_user_data = {
+        "id": str(uuid.uuid4()),
+        "email": f"test_{rand_suffix}@example.com",
+        "username": f"testuser_{rand_suffix}",
+        "full_name": "Test User",
+        "hashed_password": "$2b$12$test_hash",  # Pre-hashed for tests
+        "timezone": "UTC",
+        "email_verified": True,
+        "tier": "free",
+        "subscription_status": "inactive",
+        "created_at": datetime.now(timezone.utc),
+    }
     user = UserTable(**test_user_data)
     db_session.add(user)
     await db_session.flush()
@@ -115,12 +128,21 @@ async def test_user(db_session: AsyncSession, test_user_data) -> UserTable:
 
 
 @pytest_asyncio.fixture
-async def other_test_user(db_session: AsyncSession, test_user_data) -> UserTable:
+async def other_test_user(db_session: AsyncSession) -> UserTable:
     """Create and return a second test user in the database."""
-    other_data = {**test_user_data}
-    other_data["id"] = str(uuid.uuid4())
-    other_data["email"] = "other@example.com"
-    other_data["username"] = "otheruser"
+    rand_suffix = str(uuid.uuid4())[:8]
+    other_data = {
+        "id": str(uuid.uuid4()),
+        "email": f"other_{rand_suffix}@example.com",
+        "username": f"otheruser_{rand_suffix}",
+        "full_name": "Test User",
+        "hashed_password": "$2b$12$test_hash",  # Pre-hashed for tests
+        "timezone": "UTC",
+        "email_verified": True,
+        "tier": "free",
+        "subscription_status": "inactive",
+        "created_at": datetime.now(timezone.utc),
+    }
     user = UserTable(**other_data)
     db_session.add(user)
     await db_session.flush()

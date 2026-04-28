@@ -1,7 +1,9 @@
+import asyncio
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
+from backend.utils.db import get_db_context
 from backend.models.tables import UserTokenTable
 from backend.services.integrations.calendar_provider import (
     get_calendar_provider_for_token,
@@ -40,10 +42,16 @@ async def sync_ms_graph_events(db: AsyncSession, token_record: UserTokenTable):
 
 async def sync_user_calendar(db: AsyncSession, user_id: str):
     """Straightforward orchestrator without Redis locks or SSE publishing."""
-    stmt = select(UserTokenTable).where(
+    stmt = select(UserTokenTable.id).where(
         and_(UserTokenTable.user_id == user_id, UserTokenTable.is_active == True)
     )
-    tokens = (await db.execute(stmt)).scalars().all()
+    token_ids = (await db.execute(stmt)).scalars().all()
 
-    for token in tokens:
-        await sync_calendar_token(db, token)
+    async def _sync_token(tid: str):
+        async with get_db_context() as session:
+            token = (await session.execute(select(UserTokenTable).where(UserTokenTable.id == tid))).scalars().first()
+            if token:
+                await sync_calendar_token(session, token)
+                await session.commit()
+
+    await asyncio.gather(*[_sync_token(tid) for tid in token_ids])

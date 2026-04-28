@@ -641,9 +641,10 @@ async def create_booking(
                     201,
                 )
 
-        await db.refresh(booking)
-        await db.refresh(automation_record)
+
+        booking_id = booking.id
         automation_id = automation_record.id
+
 
         logger.info(f"✅ API: Booking created with ID: {booking.id}")
 
@@ -661,17 +662,21 @@ async def create_booking(
         if booking.metadata_payload and booking.metadata_payload.get("attendees"):
             attendees = booking.metadata_payload["attendees"]
             attendee_data = {
-                "email": attendees[0] if attendees else booking.email,
+                "email": attendees[0] if attendees and len(attendees) > 0 else booking.email,
                 "name": booking.full_name,
             }
-        
-        run_booking_automation_task.delay(
-            booking_id=booking.id,
-            automation_id=automation_id,
-            user_id=automation_owner_id,
-            attendee_data=attendee_data,
-            booking_data=booking_data.model_dump(),
-        )
+
+        try:
+            run_booking_automation_task.apply_async(kwargs=dict(
+                booking_id=booking.id,
+                automation_id=automation_id,
+                user_id=automation_owner_id,
+                attendee_data=attendee_data,
+                booking_data=booking_data.model_dump()), ignore_result=True
+            )
+        except Exception as celery_err:
+            logger.warning(f"Failed to queue automation task (Celery/Redis might be down): {celery_err}")
+
 
         # Track automation start in Redis (no task object needed)
         automation_id = await _track_automation_start(
@@ -691,7 +696,8 @@ async def create_booking(
         return BookingCreateResponse(**response_data)
 
     except Exception as e:
-        logger.error(f"❌ API: Failed to create booking: {e}")
+        import traceback
+        logger.error(f"❌ API: Failed to create booking: {e}\n{traceback.format_exc()}")
         raise HTTPException(
             status_code=500, detail=f"Failed to create booking: {str(e)}"
         )

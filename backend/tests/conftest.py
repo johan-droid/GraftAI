@@ -90,11 +90,10 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 @pytest.fixture
 def test_user_data():
     """Return standard test user data."""
-    uid = str(uuid.uuid4())
     return {
-        "id": uid,
-        "email": f"test_{uid}@example.com",
-        "username": f"testuser_{uid[:8]}",
+        "id": str(uuid.uuid4()),
+        "email": f"test_{uuid.uuid4().hex[:8]}@example.com",
+        "username": f"testuser_{uuid.uuid4().hex[:8]}",
         "full_name": "Test User",
         "hashed_password": "$2b$12$test_hash",  # Pre-hashed for tests
         "timezone": "UTC",

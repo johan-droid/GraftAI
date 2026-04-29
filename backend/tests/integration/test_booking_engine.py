@@ -149,14 +149,20 @@ async def test_booking_html_sanitization(async_client: AsyncClient):
     
     if response.status_code in [200, 201]:
         data = response.json()
-        # If sanitization is working, script tags should be escaped
-        title = data.get("title")
-        assert title is not None and title != "", "Response title should be present and non-empty"
+        booking_id = data.get("booking_id")
+        assert booking_id is not None
+
+        # Now fetch the actual booking to verify sanitization
+        get_response = await async_client.get(f"/api/v1/bookings/{booking_id}")
+        assert get_response.status_code == 200
+        booking_data = get_response.json()
+        metadata = booking_data.get("metadata_payload", {})
+
+        title = metadata.get("title", "")
         assert "<script>" not in title and "&lt;script&gt;" in title, \
             "Script tags should be escaped in title"
 
-        description = data.get("description")
-        assert description is not None and description != "", "Response description should be present and non-empty"
+        description = metadata.get("description", "")
         assert "onerror=" not in description and "&lt;" in description, \
             "XSS payloads should be escaped in description"
 

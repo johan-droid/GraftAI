@@ -18,14 +18,14 @@ class TestWorkflowAPI:
         response = await async_client.get("/api/v1/workflows/triggers")
         
         assert response.status_code == 200
-        data = response.json()["data"]
+        data = response.json()["triggers"]
         
-        # Should return list of triggers
-        assert isinstance(data, list)
+        # Should return dict of triggers
+        assert isinstance(data, dict)
         assert len(data) > 0
         
         # Check for known triggers
-        trigger_values = [t["value"] for t in data]
+        trigger_values = list(data.keys())
         assert "BOOKING_CREATED" in trigger_values
         assert "BOOKING_CONFIRMED" in trigger_values
         assert "BOOKING_CANCELLED" in trigger_values
@@ -36,14 +36,14 @@ class TestWorkflowAPI:
         response = await async_client.get("/api/v1/workflows/actions")
         
         assert response.status_code == 200
-        data = response.json()["data"]
+        data = response.json()["actions"]
         
-        # Should return list of actions
-        assert isinstance(data, list)
+        # Should return dict of actions
+        assert isinstance(data, dict)
         assert len(data) > 0
         
         # Check for known actions
-        action_values = [a["value"] for a in data]
+        action_values = list(data.keys())
         assert "EMAIL" in action_values
         assert "SMS" in action_values
         assert "SLACK" in action_values
@@ -62,7 +62,7 @@ class TestWorkflowAPI:
         response = await async_client.post("/api/v1/workflows", json=workflow_data)
         
         assert response.status_code in [200, 201]
-        data = response.json()["data"]
+        data = response.json()
         
         # Should return created workflow
         assert "id" in data
@@ -107,7 +107,7 @@ class TestWorkflowAPI:
         response = await async_client.get(f"/api/v1/workflows/{workflow_id}")
         
         assert response.status_code == 200
-        data = response.json()["data"]
+        data = response.json()
         
         assert data["id"] == workflow_id
         assert data["name"] == workflow_data["name"]
@@ -132,7 +132,7 @@ class TestWorkflowAPI:
         response = await async_client.patch(f"/api/v1/workflows/{workflow_id}", json=update_data)
         
         assert response.status_code == 200
-        data = response.json()["data"]
+        data = response.json()
         
         assert data["name"] == update_data["name"]
         assert data["is_active"] == update_data["is_active"]
@@ -235,7 +235,7 @@ class TestWorkflowStepsAPI:
             f"/api/v1/workflows/{created_workflow}/steps",
             json=step_data
         )
-        step_id = create_response.json()["id"]
+        step_id = create_response.json()["data"]["id"]
         
         # Delete the step
         response = await async_client.delete(
@@ -280,7 +280,10 @@ class TestWorkflowTestAPI:
     @pytest.mark.asyncio
     async def test_workflow_test_endpoint(self, async_client, workflow_with_step):
         """Test the workflow test endpoint."""
-        response = await async_client.post(f"/api/v1/workflows/{workflow_with_step}/test")
+        response = await async_client.post(
+            f"/api/v1/workflows/{workflow_with_step}/test",
+            json={"event_data": {"attendee_email": "test@example.com"}}
+        )
         
         # Should return test results
         assert response.status_code in [200, 202]

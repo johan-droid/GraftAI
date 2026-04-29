@@ -64,11 +64,21 @@ class BookingCreateRequest(BaseModel):
         ..., json_schema_extra={"example": "2026-05-01T14:00:00Z"}, description="Start time (ISO format with timezone)"
     )
     duration_minutes: int = Field(
-        30, json_schema_extra={"example": 60}, description="Duration in minutes"
+        30, gt=0, json_schema_extra={"example": 60}, description="Duration in minutes"
     )
     attendees: list[str] = Field(
         ..., json_schema_extra={"example": ["alice@example.com", "bob@example.com"]}, description="List of attendee emails"
     )
+
+    @field_validator('attendees')
+    @classmethod
+    def validate_attendees_emails(cls, v: list[str]) -> list[str]:
+        import re
+        email_regex = re.compile(r"[^@]+@[^@]+\.[^@]+")
+        for email in v:
+            if not email_regex.match(email):
+                raise ValueError(f"Invalid email address: {email}")
+        return v
     organizer_id: Optional[str] = Field(
         None,
         json_schema_extra={"example": "user_1234"},
@@ -87,10 +97,13 @@ class BookingCreateRequest(BaseModel):
     @classmethod
     def sanitize_html(cls, v: str | None) -> str | None:
         """Neutralizes malicious script tags into harmless plain text."""
+        import re
         if v is None:
             return v
-        # Converts <script> to &lt;script&gt;
-        return html.escape(v.strip())
+        # basic escaping
+        escaped = html.escape(v.strip())
+        # strip out dangerous attributes like onerror
+        return re.sub(r'(?i)(on[a-z]+)=', 'data-stripped-attr=', escaped)
 
     @field_validator('start_time', mode='before')
     @classmethod
@@ -110,7 +123,12 @@ class BookingCreateRequest(BaseModel):
             raise ValueError("All datetimes must include timezone information (e.g., ending in 'Z' or '+00:00').")
         
         # Normalize to UTC for database storage
-        return dt.astimezone(timezone.utc)
+        dt_utc = dt.astimezone(timezone.utc)
+
+        if dt_utc < datetime.now(timezone.utc):
+            raise ValueError("Booking start time must be in the future.")
+
+        return dt_utc
     
     estimated_value: Optional[float] = Field(
         None, json_schema_extra={"example": 2500.0}, description="Estimated business value"
@@ -520,12 +538,22 @@ async def create_booking(
         end_time = start_time + timedelta(minutes=booking_data.duration_minutes)
 
         # Get first attendee info for the booking record
-        attendee_email = (
-            booking_data.attendees[0] if booking_data.attendees else current_user.email
-        )
-        attendee_name = attendee_email.split("@")[
-            0
-        ]  # Use email prefix as name fallback
+
+        attendees = getattr(booking_data, "attendees", [])
+        if not isinstance(attendees, (list, tuple)):
+            attendees = []
+
+        # safely get the first attendee if any exists
+        attendee_email = current_user.email
+        if attendees and len(attendees) > 0:
+            try:
+                attendee_email = list(attendees)[0]
+            except IndexError:
+                pass
+
+        if not attendee_email:
+            attendee_email = current_user.email
+        attendee_name = attendee_email.split("@")[0] if attendee_email else "Unknown"
         organizer_id = booking_data.organizer_id or current_user.id
 
         lock_key = (
@@ -550,7 +578,7 @@ async def create_booking(
                     yield
 
         # Use a single atomic transaction for booking creation + automation tracking.
-        async with ensure_transaction(db):
+        try:
             bind = db.get_bind()
             if bind is not None and bind.dialect.name == "postgresql":
                 await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
@@ -640,6 +668,10 @@ async def create_booking(
                     },
                     201,
                 )
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            raise e
 
         await db.refresh(booking)
         await db.refresh(automation_record)
@@ -660,8 +692,15 @@ async def create_booking(
         attendee_data = None
         if booking.metadata_payload and booking.metadata_payload.get("attendees"):
             attendees = booking.metadata_payload["attendees"]
+            if not isinstance(attendees, (list, tuple)):
+                attendees = []
+
+            attendee_email_val = booking.email
+            if isinstance(attendees, (list, tuple)) and len(attendees) > 0:
+                attendee_email_val = list(attendees)[0]
+
             attendee_data = {
-                "email": attendees[0] if attendees else booking.email,
+                "email": attendee_email_val,
                 "name": booking.full_name,
             }
         
@@ -691,7 +730,8 @@ async def create_booking(
         return BookingCreateResponse(**response_data)
 
     except Exception as e:
-        logger.error(f"❌ API: Failed to create booking: {e}")
+        import traceback
+        logger.error(f"❌ API: Failed to create booking: {e}\n{traceback.format_exc()}")
         raise HTTPException(
             status_code=500, detail=f"Failed to create booking: {str(e)}"
         )

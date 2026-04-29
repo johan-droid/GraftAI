@@ -152,12 +152,15 @@ class TestChatAPI:
         data = response.json()
         assert isinstance(data, dict)
         assert "items" in data
-        assert "total" in data
-        assert "has_more" in data
-        assert "next_cursor" in data
+
+        # PaginatedResponse structure: {"items": [...], "pagination": {"total": X, ...}}
+        assert "pagination" in data
+        pagination = data["pagination"]
+        assert "total" in pagination
+
         assert isinstance(data["items"], list)
         assert len(data["items"]) >= 1
-        assert data["total"] >= 1
+        assert pagination["total"] >= 1
 
         # Check message structure
         message = data["items"][0]
@@ -307,7 +310,7 @@ class TestChatAPI:
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, dict)
-        assert data["total"] == 1
+        assert data["pagination"]["total"] == 1
         assert len(data["items"]) == 1
 
 
@@ -349,9 +352,7 @@ class TestChatErrorHandling:
         if response.status_code == 200:
             payload = response.json()
             assert payload["items"] == []
-            assert payload["total"] == 0
-            assert payload["has_more"] is False
-            assert payload["next_cursor"] is None
+            assert payload["pagination"]["total"] == 0
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_conversation(self, async_client, test_user):

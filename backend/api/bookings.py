@@ -67,7 +67,7 @@ class BookingCreateRequest(BaseModel):
         30, json_schema_extra={"example": 60}, description="Duration in minutes"
     )
     attendees: list[str] = Field(
-        ..., json_schema_extra={"example": ["alice@example.com", "bob@example.com"]}, description="List of attendee emails"
+        default_factory=list, json_schema_extra={"example": ["alice@example.com", "bob@example.com"]}, description="List of attendee emails"
     )
     organizer_id: Optional[str] = Field(
         None,
@@ -520,10 +520,11 @@ async def create_booking(
         end_time = start_time + timedelta(minutes=booking_data.duration_minutes)
 
         # Get first attendee info for the booking record
-        if booking_data.attendees and len(booking_data.attendees) > 0:
+        if getattr(booking_data, 'attendees', None) and len(booking_data.attendees) > 0:
             attendee_email = booking_data.attendees[0]
         else:
             attendee_email = current_user.email
+
         attendee_name = attendee_email.split("@")[
             0
         ]  # Use email prefix as name fallback
@@ -540,9 +541,10 @@ async def create_booking(
             )
 
         # Use a single atomic transaction for booking creation + automation tracking.
-        bind = db.get_bind()
-        if bind is not None and bind.dialect.name == "postgresql":
-            await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
+        try:
+            bind = db.get_bind()
+            if bind is not None and bind.dialect.name == "postgresql":
+                await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
 
         await db.execute(
             select(UserTable).where(UserTable.id == organizer_id).with_for_update()
@@ -631,6 +633,42 @@ async def create_booking(
                 },
                 201,
             )
+            db.add(booking)
+            await db.flush()
+
+            # Track scheduling usage
+            from backend.services.usage import increment_usage
+            await increment_usage(db, organizer_id, "scheduling")
+
+            automation_owner_id = organizer_id
+            automation_record = AIAutomationTable(
+                booking_id=booking.id,
+                user_id=automation_owner_id,
+                status="in_progress",
+                started_at=datetime.now(timezone.utc),
+                trigger_source="api",
+            )
+            db.add(automation_record)
+            await db.flush()
+
+            if idempotency_key:
+                await store_idempotency_key(
+                    db,
+                    idempotency_key,
+                    current_user.id,
+                    booking_data.model_dump(),
+                    {
+                        "status": "created",
+                        "booking_id": booking.id,
+                        "automation": "in_progress",
+                        "message": "Booking created successfully. AI automation is running in the background.",
+                    },
+                    201,
+                )
+            await db.commit()
+        except BaseException:
+            await db.rollback()
+            raise
 
         await db.refresh(booking)
         await db.refresh(automation_record)
@@ -648,28 +686,29 @@ async def create_booking(
         from backend.tasks.automation_tasks import run_booking_automation_task
         
         # Build attendee data from booking metadata
-        attendee_data = {
-            "email": attendee_email or booking.email,
-            "name": attendee_name or booking.full_name,
-        }
-        if booking.metadata_payload and booking.metadata_payload.get("attendees"):
-            attendees = booking.metadata_payload["attendees"]
-            if isinstance(attendees, str):
-                attendees = [attendees]
-            if isinstance(attendees, list) and len(attendees) > 0:
-                attendee_data["email"] = attendees[0]
-        
-        booking_data_dump = booking_data.model_dump()
-        if "start_time" in booking_data_dump and hasattr(booking_data_dump["start_time"], "isoformat"):
-            booking_data_dump["start_time"] = booking_data_dump["start_time"].isoformat()
+        attendee_data = None
+        if booking.metadata_payload and "attendees" in booking.metadata_payload:
+            attendees = booking.metadata_payload.get("attendees")
+            if attendees and isinstance(attendees, list) and len(attendees) > 0:
+                attendee_email_local = attendees[0]
+            else:
+                attendee_email_local = booking.email
 
-        run_booking_automation_task.delay(
-            booking_id=booking.id,
-            automation_id=automation_id,
-            user_id=automation_owner_id,
-            attendee_data=attendee_data,
-            booking_data=booking_data_dump,
-        )
+            attendee_data = {
+                "email": attendee_email_local,
+                "name": booking.full_name,
+            }
+        
+        try:
+            run_booking_automation_task.delay(
+                booking_id=booking.id,
+                automation_id=automation_id,
+                user_id=automation_owner_id,
+                attendee_data=attendee_data,
+                booking_data=booking_data.model_dump(),
+            )
+        except Exception as celery_err:
+            logger.error(f"Failed to queue celery task: {celery_err}")
 
         # Track automation start in Redis (no task object needed)
         automation_id = await _track_automation_start(

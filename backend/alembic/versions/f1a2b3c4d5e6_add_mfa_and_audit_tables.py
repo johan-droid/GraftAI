@@ -84,8 +84,8 @@ def upgrade() -> None:
             sa.Column("metadata", postgresql.JSON(), nullable=True),
             sa.Column(
                 "compliance_standards",
-                postgresql.JSON(),
-                server_default=sa.text("'[\"SOC2\"]'::jsonb"),
+                sa.JSON(),
+                server_default=sa.text("'[\"SOC2\"]'"),
             ),
             sa.Column("data_subjects_affected", sa.Integer(), nullable=True),
             sa.Column("data_categories", postgresql.JSON(), nullable=True),

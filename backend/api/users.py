@@ -496,6 +496,9 @@ async def upload_profile_avatar(
         extension = ".png"
     upload_key = f"avatars/{current_user.id}/{uuid.uuid4().hex}{extension}"
 
+    prefs = _normalize_preferences(current_user)
+    old_avatar_key = prefs.get("avatar_key")
+
     try:
         file.file.seek(0)
         storage_key = await storage.upload_file(
@@ -503,14 +506,20 @@ async def upload_profile_avatar(
         )
         if not storage_key:
             raise ValueError("Storage upload failed")
+
+        current_user.storage_bytes += file_size
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not upload avatar at this time.",
         ) from exc
 
+    if old_avatar_key:
+        old_size = storage.get_file_size(old_avatar_key)
+        storage.delete_file(old_avatar_key)
+        current_user.storage_bytes = max(0, current_user.storage_bytes - old_size)
+
     avatar_url = storage.get_presigned_url(storage_key)
-    prefs = _normalize_preferences(current_user)
     prefs["avatar_key"] = storage_key
     prefs.pop("avatar_url", None)
     _set_preferences(current_user, prefs)

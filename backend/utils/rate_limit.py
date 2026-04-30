@@ -78,9 +78,9 @@ class RateLimit:
                 RATE_LIMIT_LUA,
                 1,
                 key,
-                str(now),
-                str(self.window_seconds),
-                str(self.max_requests),
+                now,
+                self.window_seconds,
+                self.max_requests,
                 member,
             )
 

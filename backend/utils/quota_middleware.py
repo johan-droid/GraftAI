@@ -150,7 +150,7 @@ redis.call('EXPIRE', KEYS[1], 86400)
 
 return {allowed and 1 or 0, tokens}
 """
-            result = await r.eval(lua_script, 1, key, str(now), str(refill_rate), str(capacity), str(cost))
+            result = await r.eval(lua_script, 1, key, now, refill_rate, capacity, cost)
             
             allowed = bool(result[0])
             tokens_left = float(result[1])

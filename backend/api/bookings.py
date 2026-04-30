@@ -670,9 +670,10 @@ async def create_booking(
             await db.rollback()
             raise
 
-        await db.refresh(booking)
-        await db.refresh(automation_record)
+
+        booking_id = booking.id
         automation_id = automation_record.id
+
 
         logger.info(f"✅ API: Booking created with ID: {booking.id}")
 

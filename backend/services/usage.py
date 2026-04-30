@@ -39,9 +39,7 @@ async def get_user_quota(db: AsyncSession, user_id: str) -> UserTable:
         user.quota_reset_at = next_midnight
 
         await db.commit()
-        await db.refresh(user)
-
-    return user
+        return user
 
 
 def check_usage_limit(feature_key: str):
@@ -111,16 +109,17 @@ def check_usage_limit(feature_key: str):
 
 async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: int = 1):
     """Increment usage and log the activity for auditing."""
-    user = await get_user_quota(db, user_id)
+    from sqlalchemy import update
 
+    update_kwargs = {}
     if feature == "ai_messages":
-        user.daily_ai_count += amount
+        update_kwargs = {"daily_ai_count": UserTable.daily_ai_count + amount}
     elif feature == "calendar_syncs":
-        user.daily_sync_count += amount
+        update_kwargs = {"daily_sync_count": UserTable.daily_sync_count + amount}
     elif feature == "ai_tokens":
-        user.total_ai_tokens += amount
+        update_kwargs = {"total_ai_tokens": UserTable.total_ai_tokens + amount}
     elif feature == "api_calls":
-        user.total_api_calls += amount
+        update_kwargs = {"total_api_calls": UserTable.total_api_calls + amount}
     elif feature == "scheduling":
         user.total_scheduling_count += amount
     else:

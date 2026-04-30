@@ -7,7 +7,6 @@ Unit tests for DecisionEngine changes introduced in this PR:
 
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
 
 from backend.ai.decision_engine import (
     AttendeeAnalysis,

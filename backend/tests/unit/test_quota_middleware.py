@@ -6,7 +6,6 @@ Unit tests for AIQuotaMiddleware changes introduced in this PR:
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi import HTTPException
 
 from backend.utils.quota_middleware import (
     AIQuotaExceeded,

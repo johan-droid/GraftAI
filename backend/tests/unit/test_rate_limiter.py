@@ -403,7 +403,6 @@ class TestRateLimiterTypingImport:
 
     def test_any_not_in_module_imports(self):
         """Verify that `Any` is no longer imported at module level in rate_limiter."""
-        import typing
         import backend.utils.rate_limiter as mod
         # 'Any' should not appear as a direct attribute of the module namespace
         # (it was only used as a typing annotation, not exported).

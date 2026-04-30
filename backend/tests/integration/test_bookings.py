@@ -5,6 +5,7 @@ This is the "Canary in the Coal Mine." If this fails, the app is broken.
 """
 
 import pytest
+from datetime import datetime, timezone, timedelta
 from httpx import AsyncClient
 
 
@@ -16,12 +17,11 @@ async def test_create_booking_flow(async_client: AsyncClient, db_session):
     """
     # 1. Define the payload matching BookingCreateRequest
     payload = {
-        "full_name": "Jane Doe",
-        "email": "jane@example.com",
         "title": "Quarterly Sync",
         "description": "Discuss roadmap and action items.",
         "start_time": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
         "duration_minutes": 30,
+        "attendees": ["jane@example.com"],
         "meeting_type": "consultation",
         "location": "Zoom"
     }

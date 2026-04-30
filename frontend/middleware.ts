@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
 
-const { auth } = NextAuth(authConfig);
+const { auth } = NextAuth({ ...authConfig, trustHost: true });
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 

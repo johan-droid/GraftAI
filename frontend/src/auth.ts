@@ -70,12 +70,16 @@ function getServerBackendUrl(): string {
     process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/v1$/, "");
 
   if (!url) {
-    throw new Error(
-      "Missing BACKEND_URL or NEXT_PUBLIC_BACKEND_URL environment variable. " +
-      "For Render, set BACKEND_URL=https://graftai.onrender.com and/or " +
-      "NEXT_PUBLIC_API_BASE_URL=https://graftai.onrender.com/api/v1. " +
-      "For local development, use BACKEND_URL=http://localhost:8000."
-    );
+    if (process.env.NODE_ENV === "production") {
+      console.warn(
+        "Missing BACKEND_URL or NEXT_PUBLIC_BACKEND_URL environment variable. " +
+        "Falling back to https://graftai.onrender.com for production."
+      );
+      return "https://graftai.onrender.com";
+    } else {
+      console.warn("Missing BACKEND_URL environment variable. Falling back to http://localhost:8000 for development.");
+      return "http://localhost:8000";
+    }
   }
 
   return url.replace(/\/+$/, "");

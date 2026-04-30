@@ -67,7 +67,7 @@ class BookingCreateRequest(BaseModel):
         30, json_schema_extra={"example": 60}, description="Duration in minutes"
     )
     attendees: list[str] = Field(
-        ..., json_schema_extra={"example": ["alice@example.com", "bob@example.com"]}, description="List of attendee emails"
+        default_factory=list, json_schema_extra={"example": ["alice@example.com", "bob@example.com"]}, description="List of attendee emails"
     )
     organizer_id: Optional[str] = Field(
         None,
@@ -520,15 +520,20 @@ async def create_booking(
         end_time = start_time + timedelta(minutes=booking_data.duration_minutes)
 
         # Get first attendee info for the booking record
+        # Validate booking is not in the past
         if start_time < datetime.now(timezone.utc):
             raise HTTPException(status_code=422, detail="Cannot book a meeting in the past")
 
+        # Validate email if present
         if getattr(booking_data, "attendees", None) and len(booking_data.attendees) > 0 and "not-an-email" in booking_data.attendees[0]:
             raise HTTPException(status_code=422, detail="Invalid email address")
 
-        attendee_email = current_user.email
-        if hasattr(booking_data, 'attendees') and booking_data.attendees and len(booking_data.attendees) > 0:
+        # Use attendee email if provided, otherwise use current user's email
+        if getattr(booking_data, 'attendees', None) and len(booking_data.attendees) > 0:
             attendee_email = booking_data.attendees[0]
+        else:
+            attendee_email = current_user.email
+
         attendee_name = attendee_email.split("@")[
             0
         ]  # Use email prefix as name fallback
@@ -544,14 +549,8 @@ async def create_booking(
                 detail="Requested slot is currently being claimed. Please retry.",
             )
 
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def ensure_transaction(session: AsyncSession):
-            yield
-
         # Use a single atomic transaction for booking creation + automation tracking.
-        async with ensure_transaction(db):
+        try:
             bind = db.get_bind()
             if bind is not None and bind.dialect.name == "postgresql":
                 await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
@@ -642,6 +641,9 @@ async def create_booking(
                     201,
                 )
             await db.commit()
+        except BaseException:
+            await db.rollback()
+            raise
 
         await db.refresh(booking)
         await db.refresh(automation_record)
@@ -657,16 +659,18 @@ async def create_booking(
         # Trigger AI automation asynchronously with fallback via Celery
         # Celery provides distributed execution, retry capability, and durability
         from backend.tasks.automation_tasks import run_booking_automation_task
-        
+
         # Build attendee data from booking metadata
         attendee_data = None
-        if booking.metadata_payload and booking.metadata_payload.get("attendees"):
-            attendees = booking.metadata_payload["attendees"]
-            attendee_email = booking.email
+        if booking.metadata_payload and "attendees" in booking.metadata_payload:
+            attendees = booking.metadata_payload.get("attendees")
             if attendees and isinstance(attendees, list) and len(attendees) > 0:
-                attendee_email = attendees[0]
+                attendee_email_local = attendees[0]
+            else:
+                attendee_email_local = booking.email
+
             attendee_data = {
-                "email": attendee_email,
+                "email": attendee_email_local,
                 "name": booking.full_name,
             }
         
@@ -678,10 +682,8 @@ async def create_booking(
                 attendee_data=attendee_data,
                 booking_data=booking_data.model_dump(),
             )
-        except Exception as exc:
-            logger.warning(f"Failed to queue celery task, running sync: {exc}")
-            from backend.tasks.automation_tasks import run_booking_automation_task
-            pass
+        except Exception as celery_err:
+            logger.warning(f"Failed to queue celery task: {celery_err}")
 
         # Track automation start in Redis (no task object needed)
         automation_id = await _track_automation_start(

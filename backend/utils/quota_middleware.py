@@ -27,37 +27,6 @@ AI_QUOTA_CONFIG = {
     }
 }
 
-# LUA script for atomic update of token bucket
-QUOTA_LUA_SCRIPT = """
-local bucket = redis.call('HMGET', KEYS[1], 'tokens', 'last_update')
-local tokens = tonumber(bucket[1])
-local last_update = tonumber(bucket[2])
-
-local now = tonumber(ARGV[1])
-local refill_rate = tonumber(ARGV[2])
-local capacity = tonumber(ARGV[3])
-local cost = tonumber(ARGV[4])
-
-if tokens == nil then
-    tokens = capacity
-    last_update = now
-else
-    local delta = math.max(0, now - last_update)
-    tokens = math.min(capacity, tokens + delta * refill_rate)
-    last_update = now
-end
-
-local allowed = false
-if tokens >= cost then
-    tokens = tokens - cost
-    allowed = true
-end
-
-redis.call('HMSET', KEYS[1], 'tokens', tokens, 'last_update', last_update)
-redis.call('EXPIRE', KEYS[1], 86400) -- Clean up after 24h of inactivity
-
-return {allowed and 1 or 0, tokens}
-"""
 
 class AIQuotaExceeded(HTTPException):
     def __init__(self, retry_after: int):
@@ -150,9 +119,38 @@ class AIQuotaMiddleware(BaseHTTPMiddleware):
             cost = config["cost"]
             now = time.time()
 
-            # Register and run Lua script for atomic update
-            script = r.register_script(QUOTA_LUA_SCRIPT)
-            result = await script(keys=[key], args=[now, refill_rate, capacity, cost])
+            # Inline Lua script for atomic token bucket update
+            lua_script = """
+local bucket = redis.call('HMGET', KEYS[1], 'tokens', 'last_update')
+local tokens = tonumber(bucket[1])
+local last_update = tonumber(bucket[2])
+
+local now = tonumber(ARGV[1])
+local refill_rate = tonumber(ARGV[2])
+local capacity = tonumber(ARGV[3])
+local cost = tonumber(ARGV[4])
+
+if tokens == nil then
+    tokens = capacity
+    last_update = now
+else
+    local delta = math.max(0, now - last_update)
+    tokens = math.min(capacity, tokens + delta * refill_rate)
+    last_update = now
+end
+
+local allowed = false
+if tokens >= cost then
+    tokens = tokens - cost
+    allowed = true
+end
+
+redis.call('HMSET', KEYS[1], 'tokens', tokens, 'last_update', last_update)
+redis.call('EXPIRE', KEYS[1], 86400)
+
+return {allowed and 1 or 0, tokens}
+"""
+            result = await r.eval(lua_script, 1, key, str(now), str(refill_rate), str(capacity), str(cost))
             
             allowed = bool(result[0])
             tokens_left = float(result[1])

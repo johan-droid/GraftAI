@@ -5,7 +5,7 @@ Uses Redis for distributed rate limiting across multiple workers.
 
 import logging
 import time
-from typing import Optional, Callable, Dict, Any
+from typing import Optional, Callable, Dict
 from functools import wraps
 from enum import Enum
 
@@ -52,7 +52,7 @@ class RateLimiter:
         self.default_limit = default_limit
         self.default_window = default_window
         self.strategy = strategy
-        self._memory_store: Dict[str, Dict[str, Any]] = {}
+        self._memory_store: Dict[str, dict] = {}
 
         # No in-memory fallback: require Redis for rate limiting.
         # If Redis is not configured or experiences errors, the limiter

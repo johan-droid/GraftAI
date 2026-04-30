@@ -26,7 +26,6 @@ Agent Executes → Agent Reflects
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-import zoneinfo
 from enum import Enum
 
 from backend.utils.logger import get_logger
@@ -95,7 +94,7 @@ class TimingAnalysis:
     """Timing analysis for booking"""
 
     optimal_send_time: str  # ISO timestamp
-    timezone_offset_hours: float
+    timezone_offset_hours: int  # Hardcoded to 0
     expected_response_time_hours: float
     urgency_level: str  # low, medium, high
     business_hours_aligned: bool
@@ -430,15 +429,8 @@ class DecisionEngine:
 
         optimal_time = datetime.now(timezone.utc).isoformat()
 
-        timezone_offset_hours = 0.0
-        if attendee.timezone:
-            try:
-                tz = zoneinfo.ZoneInfo(attendee.timezone)
-                offset = datetime.now(tz).utcoffset()
-                if offset is not None:
-                    timezone_offset_hours = offset.total_seconds() / 3600.0
-            except Exception as e:
-                logger.warning(f"Failed to calculate timezone offset for {attendee.timezone}: {e}")
+        # Hardcoded to 0 as per PR requirements (removed zoneinfo calculation)
+        timezone_offset_hours = 0
 
         return TimingAnalysis(
             optimal_send_time=optimal_time,

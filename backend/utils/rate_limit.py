@@ -74,15 +74,14 @@ class RateLimit:
             now = int(time.time())
             member = f"{now}-{uuid.uuid4().hex}"
 
-            script = redis.register_script(RATE_LIMIT_LUA)
-            result = await script(
-                keys=[key],
-                args=[
-                    now,
-                    self.window_seconds,
-                    self.max_requests,
-                    member,
-                ],
+            result = await redis.eval(
+                RATE_LIMIT_LUA,
+                1,
+                key,
+                str(now),
+                str(self.window_seconds),
+                str(self.max_requests),
+                member,
             )
 
             success = bool(result[0])

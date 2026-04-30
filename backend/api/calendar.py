@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from backend.utils.errors import ValidationError, TimezoneError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -18,6 +18,7 @@ from backend.services.scheduler import (
 )
 from backend.services.sync_engine import sync_user_calendar
 from backend.services.usage import check_usage_limit, increment_usage
+from backend.utils.audit_logger import AuditLogger, Action, EventCategory, EventType, Result
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +96,45 @@ class AvailabilityResponse(BaseModel):
     timezone: str
 
 
+
+
+async def _audit_calendar_event(
+    db: AsyncSession,
+    request: Request,
+    current_user: UserTable,
+    *,
+    event_type: EventType,
+    action: Action,
+    result: Result,
+    resource_id: Optional[str] = None,
+    failure_reason: Optional[str] = None,
+    metadata: Optional[dict] = None,
+) -> None:
+    try:
+        await AuditLogger.log(
+            db=db,
+            event_type=event_type,
+            event_category=EventCategory.DATA_MODIFICATION if action != Action.READ else EventCategory.DATA_ACCESS,
+            action=action,
+            result=result,
+            user_id=str(current_user.id),
+            user_email=getattr(current_user, "email", None),
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            resource_type="calendar_event",
+            resource_id=resource_id,
+            failure_reason=failure_reason,
+            metadata=metadata or {},
+            compliance_standards=["SOC2", "GDPR"],
+            data_categories=["calendar_metadata", "scheduling"],
+        )
+    except Exception:
+        logger.exception("Audit logging failed for user=%s event=%s", current_user.id, event_type.value)
+
+
 @router.get("/events", response_model=List[EventResponseSchema])
 async def list_events(
+    request: Request,
     start: datetime = Query(..., description="Start of date range"),
     end: datetime = Query(..., description="End of date range"),
     limit: int = Query(50, ge=1, le=200, description="Maximum number of events to return"),
@@ -111,11 +149,21 @@ async def list_events(
     events = await get_events_for_range(
         db, user_id=current_user.id, start=start, end=end, limit=limit, offset=offset
     )
+    await _audit_calendar_event(
+        db,
+        request,
+        current_user,
+        event_type=EventType.CALENDAR_VIEW,
+        action=Action.READ,
+        result=Result.SUCCESS,
+        metadata={"start": start.isoformat(), "end": end.isoformat(), "limit": limit, "offset": offset},
+    )
     return events
 
 
 @router.post("/events", response_model=EventResponseSchema)
 async def add_local_event(
+    request: Request,
     payload: EventCreateSchema,
     db: AsyncSession = Depends(get_db),
     current_user: UserTable = Depends(get_current_user),
@@ -136,20 +184,53 @@ async def add_local_event(
 
     try:
         new_event = await create_event(db, event_data)
+        await _audit_calendar_event(
+            db,
+            request,
+            current_user,
+            event_type=EventType.EVENT_CREATE,
+            action=Action.CREATE,
+            result=Result.SUCCESS,
+            resource_id=str(new_event.id),
+            metadata={
+                "source": "local",
+                "meeting_provider": payload.meeting_provider,
+                "attendee_count": len(payload.attendees or []),
+            },
+        )
         return new_event
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except TimezoneError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ValueError as e:
+        await _audit_calendar_event(
+            db,
+            request,
+            current_user,
+            event_type=EventType.EVENT_CREATE,
+            action=Action.CREATE,
+            result=Result.FAILURE,
+            failure_reason=str(e),
+        )
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
+        await _audit_calendar_event(
+            db,
+            request,
+            current_user,
+            event_type=EventType.EVENT_CREATE,
+            action=Action.CREATE,
+            result=Result.FAILURE,
+            failure_reason=str(e),
+        )
         logger.error("Failed to create event: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/events/{event_id}", response_model=EventResponseSchema)
 async def edit_event(
+    request: Request,
     event_id: str,
     payload: EventCreateSchema,
     db: AsyncSession = Depends(get_db),
@@ -157,24 +238,64 @@ async def edit_event(
 ):
     updated = await update_event(db, event_id, current_user.id, payload.model_dump())
     if not updated:
+        await _audit_calendar_event(
+            db,
+            request,
+            current_user,
+            event_type=EventType.EVENT_UPDATE,
+            action=Action.UPDATE,
+            result=Result.FAILURE,
+            resource_id=event_id,
+            failure_reason="event_not_found",
+        )
         raise HTTPException(status_code=404, detail="Event not found")
+    await _audit_calendar_event(
+        db,
+        request,
+        current_user,
+        event_type=EventType.EVENT_UPDATE,
+        action=Action.UPDATE,
+        result=Result.SUCCESS,
+        resource_id=event_id,
+    )
     return updated
 
 
 @router.delete("/events/{event_id}")
 async def delete_event_route(
+    request: Request,
     event_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: UserTable = Depends(get_current_user),
 ):
     deleted = await delete_event(db, event_id, current_user.id)
     if not deleted:
+        await _audit_calendar_event(
+            db,
+            request,
+            current_user,
+            event_type=EventType.EVENT_DELETE,
+            action=Action.DELETE,
+            result=Result.FAILURE,
+            resource_id=event_id,
+            failure_reason="event_not_found",
+        )
         raise HTTPException(status_code=404, detail="Event not found")
+    await _audit_calendar_event(
+        db,
+        request,
+        current_user,
+        event_type=EventType.EVENT_DELETE,
+        action=Action.DELETE,
+        result=Result.SUCCESS,
+        resource_id=event_id,
+    )
     return {"status": "deleted"}
 
 
 @router.post("/sync")
 async def trigger_calendar_sync(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: UserTable = Depends(get_current_user),
     _usage_check: bool = Depends(check_usage_limit("calendar_syncs")),
@@ -196,6 +317,16 @@ async def trigger_calendar_sync(
 
     if not active_providers:
         if inactive_providers:
+            await _audit_calendar_event(
+                db,
+                request,
+                current_user,
+                event_type=EventType.CALENDAR_UPDATE,
+                action=Action.UPDATE,
+                result=Result.DENIED,
+                failure_reason="inactive_calendar_integrations",
+                metadata={"inactive_providers": sorted(set(inactive_providers))},
+            )
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -203,6 +334,15 @@ async def trigger_calendar_sync(
                     "Please reconnect them under Settings > Integrations."
                 ),
             )
+        await _audit_calendar_event(
+            db,
+            request,
+            current_user,
+            event_type=EventType.CALENDAR_UPDATE,
+            action=Action.UPDATE,
+            result=Result.DENIED,
+            failure_reason="no_calendar_integrations",
+        )
         raise HTTPException(
             status_code=400,
             detail="No active calendar integrations found. Connect Google or Microsoft under Settings > Integrations.",
@@ -211,12 +351,31 @@ async def trigger_calendar_sync(
     try:
         await sync_user_calendar(db, current_user.id)
         await increment_usage(db, current_user.id, "calendar_syncs")
+        await _audit_calendar_event(
+            db,
+            request,
+            current_user,
+            event_type=EventType.CALENDAR_UPDATE,
+            action=Action.UPDATE,
+            result=Result.SUCCESS,
+            metadata={"synced_providers": active_providers, "integration_style": "cal.com-compatible"},
+        )
         return {
             "status": "success",
             "message": "Calendar sync completed.",
             "synced_providers": active_providers,
         }
     except Exception as e:
+        await _audit_calendar_event(
+            db,
+            request,
+            current_user,
+            event_type=EventType.CALENDAR_UPDATE,
+            action=Action.UPDATE,
+            result=Result.FAILURE,
+            failure_reason=str(e),
+            metadata={"attempted_providers": active_providers},
+        )
         logger.error(f"Calendar sync failed for user {current_user.id}: {e}")
         raise HTTPException(
             status_code=500,

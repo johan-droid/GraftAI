@@ -63,6 +63,12 @@ export const RecentActivity: React.FC = () => {
                   {new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                   <span className="w-1 h-1 rounded-full bg-slate-700" />
                   {log.event_category.toUpperCase()}
+                  {log.resource_type ? (
+                    <>
+                      <span className="w-1 h-1 rounded-full bg-slate-700" />
+                      {String(log.resource_type).toUpperCase()}
+                    </>
+                  ) : null}
                 </p>
               </div>
             </div>

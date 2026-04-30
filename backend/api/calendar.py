@@ -317,6 +317,16 @@ async def trigger_calendar_sync(
 
     if not active_providers:
         if inactive_providers:
+            await _audit_calendar_event(
+                db,
+                request,
+                current_user,
+                event_type=EventType.CALENDAR_UPDATE,
+                action=Action.UPDATE,
+                result=Result.DENIED,
+                failure_reason="inactive_calendar_integrations",
+                metadata={"inactive_providers": sorted(set(inactive_providers))},
+            )
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -324,6 +334,15 @@ async def trigger_calendar_sync(
                     "Please reconnect them under Settings > Integrations."
                 ),
             )
+        await _audit_calendar_event(
+            db,
+            request,
+            current_user,
+            event_type=EventType.CALENDAR_UPDATE,
+            action=Action.UPDATE,
+            result=Result.DENIED,
+            failure_reason="no_calendar_integrations",
+        )
         raise HTTPException(
             status_code=400,
             detail="No active calendar integrations found. Connect Google or Microsoft under Settings > Integrations.",

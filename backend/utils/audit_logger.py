@@ -207,6 +207,7 @@ class AuditLogger:
             resource_type=resource_type or "system",
             resource_id=resource_id,
             result=result.value,
+            status=result.value,
             failure_reason=failure_reason,
             metadata_json=metadata,
             compliance_standards=compliance_standards or ["SOC2"],

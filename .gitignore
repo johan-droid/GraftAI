@@ -198,19 +198,20 @@ NPLUS1_AND_TESTING_FIXES.md
 TASK_QUEUE_AND_INFRASTRUCTURE_HARDENING.md
 
 # Test output artifacts
-test_output.txt
+test_*.txt
 pytest_test_results.txt
 
 # Scratch / AI working dirs
 scratch/
 brain/
 .gemini/
+claude.md
 
 # =============================================================================
 # Miscellaneous
 # =============================================================================
 # Root-level stray files
-AuthLayout.tsx
+# (AuthLayout.tsx removed as it is deleted)
 
 # Pyre configuration (type checker)
 .pyre_configuration

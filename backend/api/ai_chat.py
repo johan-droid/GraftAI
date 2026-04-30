@@ -512,7 +512,7 @@ async def send_chat_message(
         str(current_user.id), 
         db,
         conversation_history=conversation_history,
-        timezone=request.timezone,
+        user_timezone=request.timezone,
     )
 
     # Extract content and metadata

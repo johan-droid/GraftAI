@@ -37,4 +37,8 @@ jobs:
         env:
           deploy_url: ${{ secrets['RENDER_DEPLOY_HOOK_URL'] }}
         run: |
+          if [ -z "$deploy_url" ]; then
+            echo "Skipping deployment: RENDER_DEPLOY_HOOK_URL secret not configured"
+            exit 0
+          fi
           curl -fS --show-error "$deploy_url"

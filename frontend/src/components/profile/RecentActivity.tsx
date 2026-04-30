@@ -26,6 +26,10 @@ export const RecentActivity: React.FC = () => {
       case 'ai': return <Zap className="w-3.5 h-3.5 text-indigo-400" />;
       case 'billing': return <Shield className="w-3.5 h-3.5 text-emerald-400" />;
       case 'security': return <Shield className="w-3.5 h-3.5 text-red-400" />;
+      case 'data_access':
+      case 'data_modification':
+      case 'system':
+        return <Clock className="w-3.5 h-3.5 text-cyan-400" />;
       default: return <Clock className="w-3.5 h-3.5 text-slate-400" />;
     }
   };
@@ -43,7 +47,9 @@ export const RecentActivity: React.FC = () => {
       {logs.length === 0 ? (
         <div className="p-8 text-center text-slate-600 text-xs italic">No recent activity detected.</div>
       ) : (
-        logs.slice(0, 10).map((log, i) => (
+        logs.slice(0, 10).map((log, i) => {
+          const status = log.result || log.status || 'unknown';
+          return (
           <div key={log.id} className="group flex items-center justify-between p-3 rounded-xl hover:bg-white/[0.03] transition-colors border border-transparent hover:border-white/[0.05]">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-8 h-8 rounded-lg bg-white/[0.03] flex items-center justify-center shrink-0">
@@ -62,12 +68,12 @@ export const RecentActivity: React.FC = () => {
             </div>
             <div className="flex items-center gap-3 shrink-0">
                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/[0.05]">
-                 {getStatusIcon(log.status)}
-                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{log.status}</span>
+                 {getStatusIcon(status)}
+                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{status}</span>
                </div>
             </div>
           </div>
-        ))
+        )})
       )}
     </div>
   );

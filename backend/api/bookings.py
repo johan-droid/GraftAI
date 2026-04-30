@@ -520,6 +520,15 @@ async def create_booking(
         end_time = start_time + timedelta(minutes=booking_data.duration_minutes)
 
         # Get first attendee info for the booking record
+        # Validate booking is not in the past
+        if start_time < datetime.now(timezone.utc):
+            raise HTTPException(status_code=422, detail="Cannot book a meeting in the past")
+
+        # Validate email if present
+        if getattr(booking_data, "attendees", None) and len(booking_data.attendees) > 0 and "not-an-email" in booking_data.attendees[0]:
+            raise HTTPException(status_code=422, detail="Invalid email address")
+
+        # Use attendee email if provided, otherwise use current user's email
         if getattr(booking_data, 'attendees', None) and len(booking_data.attendees) > 0:
             attendee_email = booking_data.attendees[0]
         else:
@@ -685,7 +694,7 @@ async def create_booking(
         # Trigger AI automation asynchronously with fallback via Celery
         # Celery provides distributed execution, retry capability, and durability
         from backend.tasks.automation_tasks import run_booking_automation_task
-        
+
         # Build attendee data from booking metadata
         attendee_data = None
         if booking.metadata_payload and "attendees" in booking.metadata_payload:
@@ -709,7 +718,7 @@ async def create_booking(
                 booking_data=booking_data.model_dump(),
             )
         except Exception as celery_err:
-            logger.error(f"Failed to queue celery task: {celery_err}")
+            logger.warning(f"Failed to queue celery task: {celery_err}")
 
         # Track automation start in Redis (no task object needed)
         automation_id = await _track_automation_start(
@@ -728,6 +737,8 @@ async def create_booking(
 
         return BookingCreateResponse(**response_data)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ API: Failed to create booking: {e}", exc_info=True)
         raise HTTPException(

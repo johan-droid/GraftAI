@@ -370,6 +370,23 @@ async def get_public_event_availability(
 
 @router.get(
     "/public/users/{username}/{event_type}/availability",
+    response_model=PublicAvailabilityResponse,
+)
+async def get_public_user_event_availability(
+    request: Request,
+    username: str,
+    event_type: str,
+    month: str = Query(..., description="Month in YYYY-MM format."),
+    time_zone: Optional[str] = Query(None, description="Optional guest timezone."),
+    db: AsyncSession = Depends(get_db),
+):
+    # Alias for cal.com-style pathing while preserving existing route compatibility
+    return await get_public_event_availability(
+        request=request, username=username, event_type=event_type, month=month, time_zone=time_zone, db=db
+    )
+
+@router.get(
+    "/public/users/{username}/{event_type}/daily_availability",
     response_model=PublicDailyAvailabilityResponse,
 )
 async def get_public_user_event_availability_for_day(

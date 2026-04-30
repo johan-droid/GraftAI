@@ -52,7 +52,7 @@ class TestBookingAPI:
         
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data["id"] == test_booking.id
 
     @pytest.mark.asyncio
@@ -61,15 +61,15 @@ class TestBookingAPI:
         update_data = {
             "full_name": "Updated Name",
         }
-        
+
         response = await async_client.patch(
             f"/api/v1/bookings/{test_booking.id}",
             json=update_data
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data.get("full_name") == update_data["full_name"] or data.get("name") == update_data["full_name"]
 
     @pytest.mark.asyncio
@@ -100,7 +100,7 @@ class TestBookingAPI:
             f"/api/v1/bookings/{test_booking.id}/reschedule",
             json=reschedule_data
         )
-        
+
         # Reschedule endpoint may not exist, check status
         if response.status_code in [200, 201]:
             data = response.json()
@@ -174,10 +174,10 @@ class TestBookingPublicAPI:
     """Test public booking endpoints (no auth required)."""
 
     @pytest.mark.asyncio
-    async def test_public_booking_page(self, async_client):
+    async def test_public_booking_page(self, async_client, test_user):
         """Test accessing public booking page."""
         # This endpoint may be at /u/{username} or similar
-        response = await async_client.get("/public/test-user")
+        response = await async_client.get(f"/api/public/users/{test_user.username}")
         
         # May return 200 or redirect or 404 (if user doesn't exist in DB)
         assert response.status_code in [200, 307, 308, 404]

@@ -130,10 +130,10 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
         parts = feature.split('_')
         feature_name = parts[1] if len(parts) > 1 else feature
         await log_activity(
-            db, 
-            action=f"usage.{feature}", 
-            user_id=user_id, 
-            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature_name}_count", None)}
+            db,
+            action=f"usage.{feature}",
+            user_id=user_id,
+            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature.split('_')[1]}_count", 0) if "_" in feature else getattr(user, f"total_{feature}_count", 0)}
         )
 
     await db.commit()

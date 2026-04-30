@@ -577,10 +577,9 @@ async def create_booking(
             )
 
         # Use a single atomic transaction for booking creation + automation tracking.
-        try:
-            bind = db.get_bind()
-            if bind is not None and bind.dialect.name == "postgresql":
-                await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
+        bind = db.get_bind()
+        if bind is not None and bind.dialect.name == "postgresql":
+            await db.execute(text("SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
 
         await db.execute(
             select(UserTable).where(UserTable.id == organizer_id).with_for_update()
@@ -738,12 +737,8 @@ async def create_booking(
     except HTTPException:
         raise
     except Exception as e:
-<<<<<<< HEAD
-        logger.error(f"❌ API: Failed to create booking: {e}", exc_info=True)
-=======
         import traceback
         logger.error(f"❌ API: Failed to create booking: {e}\n{traceback.format_exc()}")
->>>>>>> 1e6d32e (feat: implement usage quota tracking, feature gating, and comprehensive integration testing suite for workflows and bookings)
         raise HTTPException(
             status_code=500, detail=f"Failed to create booking: {str(e)}"
         )

@@ -124,12 +124,20 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
     elif feature == "api_calls":
         update_kwargs = {"total_api_calls": UserTable.total_api_calls + amount}
     elif feature == "scheduling":
-        user.total_scheduling_count += amount
+        update_kwargs = {"total_scheduling_count": UserTable.total_scheduling_count + amount}
     else:
         logger.debug(f"Unknown usage feature: {feature}")
 
+    if update_kwargs:
+        await db.execute(
+            update(UserTable).where(UserTable.id == user_id).values(**update_kwargs)
+        )
+
     # SaaS Audit Logging for significant actions
     if feature in ["ai_messages", "scheduling", "calendar_syncs"]:
+        # Fetch user for accurate metadata logging
+        user = await get_user_quota(db, user_id)
+        
         # SEC-09: Map feature names to their corresponding field parts in UserTable
         feature_map = {
             "ai_messages": "ai",
@@ -146,7 +154,6 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
                 "increment": amount, 
                 "total_daily": getattr(user, f"daily_{feature_part}_count", None) if feature_part != "scheduling" else getattr(user, "total_scheduling_count", None)
             }
-        )
         )
 
     await db.flush()

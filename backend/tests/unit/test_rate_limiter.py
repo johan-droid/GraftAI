@@ -206,7 +206,8 @@ class TestRateLimitMiddleware:
     @patch("backend.utils.rate_limiter.RateLimiter.is_allowed")
     async def test_middleware_rejects_when_rate_limited(self, mock_is_allowed):
         """Test that middleware rejects requests when rate limited."""
-        mock_is_allowed.return_value = (False, 0, 30)
+        mock_is_allowed.return_value = asyncio.Future()
+        mock_is_allowed.return_value.set_result((False, 0, 30))
         
         app = MagicMock()
         middleware = RateLimitMiddleware(app=app)

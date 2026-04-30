@@ -8,9 +8,9 @@ import html
 import os
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 import json
@@ -32,6 +32,7 @@ from backend.models.tables import (
     AIAutomationTable,
     generate_uuid,
 )
+from backend.utils.sanitization import sanitize_text
 from backend.services.booking_automation import AutomationResult
 from backend.utils.logger import get_logger
 from backend.utils.idempotency import (
@@ -64,9 +65,9 @@ class BookingCreateRequest(BaseModel):
         ..., json_schema_extra={"example": "2026-05-01T14:00:00Z"}, description="Start time (ISO format with timezone)"
     )
     duration_minutes: int = Field(
-        30, json_schema_extra={"example": 60}, description="Duration in minutes"
+        30, gt=0, json_schema_extra={"example": 60}, description="Duration in minutes"
     )
-    attendees: list[str] = Field(
+    attendees: list[EmailStr] = Field(
         default_factory=list, json_schema_extra={"example": ["alice@example.com", "bob@example.com"]}, description="List of attendee emails"
     )
     organizer_id: Optional[str] = Field(
@@ -111,19 +112,31 @@ class BookingCreateRequest(BaseModel):
         
         # Normalize to UTC for database storage
         return dt.astimezone(timezone.utc)
+
+    @field_validator('start_time')
+    @classmethod
+    def validate_future_date(cls, v: datetime) -> datetime:
+        """Ensures the booking is in the future."""
+        if v < datetime.now(timezone.utc):
+            raise ValueError("Booking start time must be in the future.")
+        return v
     
     estimated_value: Optional[float] = Field(
         None, json_schema_extra={"example": 2500.0}, description="Estimated business value"
     )
 
 
-class BookingCreateResponse(BaseModel):
-    """Response after creating booking"""
-
+class BookingCreateData(BaseModel):
+    """Data payload for booking creation"""
     status: str
     booking_id: str
     automation: str
+
+class BookingCreateResponse(BaseModel):
+    """Wrapped response after creating booking"""
+    success: bool = True
     message: str
+    data: BookingCreateData
 
 
 class AutomationStatusResponse(BaseModel):
@@ -171,6 +184,20 @@ class BookingResponse(BaseModel):
     risk_level: Optional[str] = "unknown"
     created_at: datetime
     updated_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class SingleBookingResponse(BaseModel):
+    """Wrapped single booking response"""
+    success: bool = True
+    message: str = "Booking retrieved successfully"
+    data: BookingResponse
+
+class BookingListResponse(BaseModel):
+    """Wrapped booking list response"""
+    success: bool = True
+    message: str = "Bookings retrieved successfully"
+    data: List[BookingResponse]
     metadata_payload: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -588,19 +615,23 @@ async def create_booking(
                 )
                 return BookingCreateResponse(**cached_response)
 
+        # Sanitize inputs for the database record
+        safe_title = sanitize_text(booking_data.title)
+        safe_description = sanitize_text(booking_data.description) if booking_data.description else None
+
         booking = BookingTable(
             id=generate_uuid(),
             user_id=organizer_id,
             full_name=attendee_name,
             email=attendee_email,
-            time_zone="UTC",  # Default, could be enhanced to detect from user prefs
+            time_zone="UTC",
             start_time=start_time,
             end_time=end_time,
             status="confirmed",
             is_reminder_sent=False,
             metadata_payload={
-                "title": booking_data.title,
-                "description": booking_data.description,
+                "title": safe_title,
+                "description": safe_description,
                 "attendees": booking_data.attendees,
                 "location": booking_data.location,
                 "meeting_type": booking_data.meeting_type,
@@ -617,6 +648,7 @@ async def create_booking(
 
         automation_owner_id = organizer_id
         automation_record = AIAutomationTable(
+            id=generate_uuid(),
             booking_id=booking.id,
             user_id=automation_owner_id,
             status="in_progress",
@@ -624,9 +656,6 @@ async def create_booking(
             trigger_source="api",
         )
         db.add(automation_record)
-        await db.flush()
-
-        await db.commit()
 
         if idempotency_key:
             await store_idempotency_key(
@@ -642,45 +671,11 @@ async def create_booking(
                 },
                 201,
             )
-            db.add(booking)
-            await db.flush()
-
-            # Track scheduling usage
-            from backend.services.usage import increment_usage
-            await increment_usage(db, organizer_id, "scheduling")
-
-            automation_owner_id = organizer_id
-            automation_record = AIAutomationTable(
-                booking_id=booking.id,
-                user_id=automation_owner_id,
-                status="in_progress",
-                started_at=datetime.now(timezone.utc),
-                trigger_source="api",
-            )
-            db.add(automation_record)
-            await db.flush()
-
-            if idempotency_key:
-                await store_idempotency_key(
-                    db,
-                    idempotency_key,
-                    current_user.id,
-                    booking_data.model_dump(),
-                    {
-                        "status": "created",
-                        "booking_id": booking.id,
-                        "automation": "in_progress",
-                        "message": "Booking created successfully. AI automation is running in the background.",
-                    },
-                    201,
-                )
-            await db.commit()
-        except BaseException:
-            await db.rollback()
-            raise
-
-
-        booking_id = booking.id
+        
+        await db.flush()
+        await db.refresh(booking)
+        await db.refresh(automation_record)
+        await db.commit()
         automation_id = automation_record.id
 
 
@@ -729,10 +724,13 @@ async def create_booking(
 
         # Return immediately - automation runs via Celery worker
         response_data = {
-            "status": "created",
-            "booking_id": booking.id,
-            "automation": "in_progress",
-            "message": "Booking created successfully. AI automation is running in the background.",
+            "success": True,
+            "message": "Booking created successfully and AI automation triggered",
+            "data": {
+                "status": booking.status,
+                "booking_id": booking.id,
+                "automation": "in_progress",
+            }
         }
 
         return BookingCreateResponse(**response_data)
@@ -740,7 +738,12 @@ async def create_booking(
     except HTTPException:
         raise
     except Exception as e:
+<<<<<<< HEAD
         logger.error(f"❌ API: Failed to create booking: {e}", exc_info=True)
+=======
+        import traceback
+        logger.error(f"❌ API: Failed to create booking: {e}\n{traceback.format_exc()}")
+>>>>>>> 1e6d32e (feat: implement usage quota tracking, feature gating, and comprehensive integration testing suite for workflows and bookings)
         raise HTTPException(
             status_code=500, detail=f"Failed to create booking: {str(e)}"
         )
@@ -748,20 +751,32 @@ async def create_booking(
 
 @router.get(
     "",
-    response_model=List[BookingResponse],
+    response_model=BookingListResponse,
     summary="List all bookings for current user",
 )
 async def list_bookings(
     status: Optional[str] = None,
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
     pagination: PaginationParams = Depends(get_pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: UserTable = Depends(get_current_user),
-) -> List[BookingResponse]:
-    """List bookings with optional status filter and pagination."""
+) -> BookingListResponse:
+    """List bookings with optional status filter, date range, and pagination."""
     stmt = select(BookingTable).where(BookingTable.user_id == current_user.id)
     
     if status:
         stmt = stmt.where(BookingTable.status == status)
+        
+    if start_date:
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
+        stmt = stmt.where(BookingTable.start_time >= start_date)
+        
+    if end_date:
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+        stmt = stmt.where(BookingTable.start_time <= end_date)
         
     stmt = stmt.order_by(BookingTable.start_time.desc())
     
@@ -770,21 +785,24 @@ async def list_bookings(
     stmt = stmt.limit(pagination.size).offset((pagination.page - 1) * pagination.size)
     
     result = await db.execute(stmt)
-    bookings = result.scalars().all()
+    bookings_list = result.scalars().all()
     
-    return [BookingResponse.model_validate(b) for b in bookings]
+    return BookingListResponse(
+        message="Bookings retrieved successfully",
+        data=[BookingResponse.model_validate(b) for b in bookings_list]
+    )
 
 
 @router.get(
     "/{booking_id}",
-    response_model=BookingResponse,
+    response_model=SingleBookingResponse,
     summary="Get details of a specific booking",
 )
 async def get_booking(
     booking_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: UserTable = Depends(get_current_user),
-) -> BookingResponse:
+) -> SingleBookingResponse:
     """Get a single booking by ID."""
     stmt = select(BookingTable).where(
         and_(BookingTable.id == booking_id, BookingTable.user_id == current_user.id)
@@ -795,12 +813,15 @@ async def get_booking(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
         
-    return BookingResponse.model_validate(booking)
+    return SingleBookingResponse(
+        message="Booking retrieved successfully",
+        data=BookingResponse.model_validate(booking)
+    )
 
 
 @router.patch(
     "/{booking_id}",
-    response_model=BookingResponse,
+    response_model=SingleBookingResponse,
     summary="Update booking details",
 )
 async def update_booking(
@@ -808,7 +829,7 @@ async def update_booking(
     update_data: BookingUpdateSchema,
     db: AsyncSession = Depends(get_db),
     current_user: UserTable = Depends(get_current_user),
-) -> BookingResponse:
+) -> SingleBookingResponse:
     """Update booking fields."""
     stmt = select(BookingTable).where(
         and_(BookingTable.id == booking_id, BookingTable.user_id == current_user.id)
@@ -828,7 +849,10 @@ async def update_booking(
     await db.commit()
     await db.refresh(booking)
     
-    return BookingResponse.model_validate(booking)
+    return SingleBookingResponse(
+        message="Booking updated successfully",
+        data=BookingResponse.model_validate(booking)
+    )
 
 
 @router.delete(
@@ -860,7 +884,7 @@ async def cancel_booking(
 
 @router.patch(
     "/{booking_id}/reschedule",
-    response_model=BookingResponse,
+    response_model=SingleBookingResponse,
     summary="Reschedule an existing booking",
 )
 async def reschedule_booking(
@@ -868,7 +892,7 @@ async def reschedule_booking(
     reschedule_data: BookingRescheduleSchema,
     db: AsyncSession = Depends(get_db),
     current_user: UserTable = Depends(get_current_user),
-) -> BookingResponse:
+) -> SingleBookingResponse:
     """Change the time of an existing booking."""
     stmt = select(BookingTable).where(
         and_(BookingTable.id == booking_id, BookingTable.user_id == current_user.id)
@@ -904,7 +928,10 @@ async def reschedule_booking(
     await db.commit()
     await db.refresh(booking)
     
-    return BookingResponse.model_validate(booking)
+    return SingleBookingResponse(
+        message="Booking rescheduled successfully",
+        data=BookingResponse.model_validate(booking)
+    )
 
 
 @router.get(

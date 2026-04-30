@@ -10,6 +10,22 @@ from unittest.mock import AsyncMock, patch
 from backend.models.tables import ChatMessageTable
 
 
+@pytest.fixture(autouse=True)
+def mock_llm_core():
+    """Mock the LLM core for all chat tests to prevent real API calls."""
+    with patch("backend.api.ai_chat.get_llm_core", new_callable=AsyncMock) as mock:
+        mock_instance = AsyncMock()
+        mock_instance.generate_response.return_value = AsyncMock(
+            content="Mocked AI response",
+            confidence=0.9
+        )
+        mock_instance._call_llm.return_value = AsyncMock(
+            content='{"intent": "general_chat", "agent_type": null, "confidence": 0.9, "entities": {}}'
+        )
+        mock.return_value = mock_instance
+        yield mock
+
+
 @pytest.mark.integration
 @pytest.mark.api
 class TestChatAPI:
@@ -24,7 +40,9 @@ class TestChatAPI:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        payload = response.json()
+        assert payload["success"] is True
+        data = payload["data"]
 
         # Verify response structure
         assert "id" in data
@@ -45,7 +63,8 @@ class TestChatAPI:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        payload = response.json()
+        data = payload["data"]
         assert data["conversation_id"] == conversation_id
 
     @pytest.mark.asyncio
@@ -114,7 +133,9 @@ class TestChatAPI:
         response = await async_client.get("/api/v1/ai/conversations")
 
         assert response.status_code == 200
-        data = response.json()
+        payload = response.json()
+        assert payload["success"] is True
+        data = payload["data"]
         assert isinstance(data, list)
         assert len(data) >= 1
 
@@ -149,15 +170,13 @@ class TestChatAPI:
         )
 
         assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, dict)
-        assert "items" in data
-        assert "total" in data
-        assert "has_more" in data
-        assert "next_cursor" in data
+        payload = response.json()
+        data = payload["data"]
+        assert "pagination" in data
+        assert data["pagination"]["total"] >= 1
+        assert "has_more" in data["pagination"]
         assert isinstance(data["items"], list)
         assert len(data["items"]) >= 1
-        assert data["total"] >= 1
 
         # Check message structure
         message = data["items"][0]
@@ -190,7 +209,9 @@ class TestChatAPI:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        payload = response.json()
+        assert payload["success"] is True
+        data = payload["data"]
         assert data["status"] == "deleted"
         assert data["conversation_id"] == conversation_id
 
@@ -218,32 +239,41 @@ class TestChatAPI:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        payload = response.json()
+        assert payload["success"] is True
+        data = payload["data"]
         assert data["status"] == "cleared"
 
     @pytest.mark.asyncio
     async def test_chat_agent_execution_metadata(self, async_client, test_user):
-        """Test that chat response includes agent execution metadata."""
-        # Mock the LLM to trigger agent execution
+        """Test metadata extraction when an agent executes."""
         with patch(
             "backend.api.ai_chat.get_llm_core", new_callable=AsyncMock
-        ) as mock_llm:
+        ) as mock_llm, patch(
+            "backend.api.ai_chat.get_agent_controller", new_callable=AsyncMock
+        ) as mock_controller:
+            # Mock LLM for intent detection
             mock_llm_instance = AsyncMock()
-            mock_llm_instance.generate_response.return_value = {
-                "content": "I've scheduled your meeting!",
-                "agent_executed": True,
-                "agent_type": "booking",
-                "intent": "schedule_meeting",
-                "confidence": 0.95,
+            mock_llm_instance._call_llm.return_value = AsyncMock(
+                content='{"intent": "schedule_meeting", "agent_type": "BOOKING", "confidence": 0.95, "entities": {"date": "tomorrow", "time": "14:00"}}'
+            )
+            mock_llm.return_value = mock_llm_instance
+            
+            # Mock Agent Controller for execution
+            mock_controller_instance = AsyncMock()
+            mock_agent_result = AsyncMock()
+            mock_agent_result.success = True
+            mock_agent_result.result = {
                 "phases": {
                     "perception": {"status": "completed", "time_ms": 100},
                     "cognition": {"status": "completed", "time_ms": 200},
                     "action": {"status": "completed", "time_ms": 500},
                     "reflection": {"status": "completed", "time_ms": 50},
                 },
-                "entities": {"date": "tomorrow", "time": "14:00"},
+                "final_output": {"booking_id": "test-booking-123"}
             }
-            mock_llm.return_value = mock_llm_instance
+            mock_controller_instance.dispatch.return_value = mock_agent_result
+            mock_controller.return_value = mock_controller_instance
 
             response = await async_client.post(
                 "/api/v1/ai/chat",
@@ -251,12 +281,14 @@ class TestChatAPI:
             )
 
             assert response.status_code == 200
-            data = response.json()
-
+            payload = response.json()
+            assert payload["success"] is True
+            data = payload["data"]
+            
             # Verify metadata fields
-            assert "agent_executed" in data
-            assert "agent_type" in data
-            assert "intent" in data
+            assert data["agent_executed"] is True
+            assert data["agent_type"] == "booking"
+            assert data["intent"] == "schedule_meeting"
             assert "confidence" in data
             assert "phases" in data
             assert "entities" in data
@@ -305,9 +337,11 @@ class TestChatAPI:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        payload = response.json()
+        assert payload["success"] is True
+        data = payload["data"]
         assert isinstance(data, dict)
-        assert data["total"] == 1
+        assert data["pagination"]["total"] == 1
         assert len(data["items"]) == 1
 
 
@@ -348,10 +382,11 @@ class TestChatErrorHandling:
         assert response.status_code in [200, 404]
         if response.status_code == 200:
             payload = response.json()
-            assert payload["items"] == []
-            assert payload["total"] == 0
-            assert payload["has_more"] is False
-            assert payload["next_cursor"] is None
+            assert "data" in payload
+            assert "items" in payload["data"]
+            assert payload["data"]["items"] == []
+            assert payload["data"]["pagination"]["total"] == 0
+            assert payload["data"]["pagination"]["has_more"] is False
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_conversation(self, async_client, test_user):

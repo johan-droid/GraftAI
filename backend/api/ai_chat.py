@@ -56,9 +56,8 @@ class ChatRequest(BaseModel):
         return self
 
 
-class ChatResponse(BaseModel):
+class ChatResponseData(BaseModel):
     """Response schema for AI chat."""
-
     id: str
     role: str
     content: str
@@ -75,14 +74,39 @@ class ChatResponse(BaseModel):
     entities: Optional[Dict[str, Any]] = None
     milestone: Optional[str] = None
 
+class ChatResponse(BaseModel):
+    """Standardized chat response."""
+    success: bool = True
+    message: str = "Message processed"
+    data: ChatResponseData
+
 
 class ConversationListSchema(BaseModel):
     """Schema for listing conversations."""
-
     id: str
     title: str
     last_message_at: datetime
     message_count: int
+
+class ConversationListResponse(BaseModel):
+    """Standardized conversation list response."""
+    success: bool = True
+    message: str = "Conversations retrieved"
+    data: List[ConversationListSchema]
+
+
+class PaginatedChatResponse(BaseModel):
+    """Standardized paginated chat response."""
+    success: bool = True
+    message: str = "Messages retrieved"
+    data: PaginatedResponse[ChatMessageSchema]
+
+
+class ChatDeleteResponse(BaseModel):
+    """Standardized chat delete response."""
+    success: bool = True
+    message: str = "Conversation deleted"
+    data: Dict[str, Any]
 
 
 def sanitize_user_message(content: str) -> str:
@@ -234,7 +258,7 @@ async def generate_ai_response(
     user_id: str,
     db: AsyncSession,
     conversation_history: Optional[List[Dict]] = None,
-    timezone: str = "UTC",
+    user_timezone: str = "UTC",
 ) -> Dict[str, Any]:
     """
     Generate AI response using the 4-phase agent loop architecture.
@@ -253,7 +277,7 @@ async def generate_ai_response(
         # Step 1: Analyze intent and extract entities (Perception phase entry point)
         # Pass conversation history for context-aware entity extraction
         analysis = await analyze_intent_and_extract(
-            user_message, conversation_history, timezone
+            user_message, conversation_history, user_timezone
         )
         intent = analysis.get("intent", "general_chat")
         agent_type = analysis.get("agent_type")
@@ -280,7 +304,7 @@ async def generate_ai_response(
                     "intent": intent,
                     "entities": entities,
                     "conversation_history": conversation_history or [],
-                    "timezone": timezone,
+                    "timezone": user_timezone,
                     "extracted_date": entities.get("date"),
                     "extracted_time": entities.get("time"),
                     "extracted_duration": entities.get("duration"),
@@ -413,7 +437,7 @@ async def _build_user_context(user_id: str, db: AsyncSession) -> Dict[str, Any]:
         user = result.scalar_one_or_none()
 
         if user:
-            context["user_name"] = user.name
+            context["user_name"] = user.full_name
             context["user_email"] = user.email
             context["user_timezone"] = getattr(user, "timezone", "UTC")
 
@@ -536,26 +560,30 @@ async def send_chat_message(
         except Exception as exc:
             logger.warning(f"Chat milestone stream publish failed: {exc}")
 
-    return ChatResponse(
-        id=ai_message.id,
-        role="assistant",
-        content=ai_content,
-        timestamp=ai_message.timestamp,
-        conversation_id=conversation_id,
-        result=ai_content,
-        model_used=ai_result.get("model_used"),
-        action=ai_result.get("action"),
-        agent_executed=agent_executed,
-        agent_type=agent_type,
-        intent=intent,
-        confidence=confidence,
-        phases=phases,
-        entities=entities,
-        milestone=ai_result.get("milestone"),
-    )
+    return {
+        "success": True,
+        "message": "AI response generated",
+        "data": {
+            "id": ai_message.id,
+            "role": "assistant",
+            "content": ai_content,
+            "timestamp": ai_message.timestamp,
+            "conversation_id": conversation_id,
+            "result": ai_content,
+            "model_used": ai_result.get("model_used"),
+            "action": ai_result.get("action"),
+            "agent_executed": agent_executed,
+            "agent_type": agent_type,
+            "intent": intent,
+            "confidence": confidence,
+            "phases": phases,
+            "entities": entities,
+            "milestone": ai_result.get("milestone"),
+        }
+    }
 
 
-@router.get("/conversations", response_model=List[ConversationListSchema])
+@router.get("/conversations", response_model=ConversationListResponse)
 async def list_conversations(
     current_user: UserTable = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -612,12 +640,16 @@ async def list_conversations(
             )
         )
 
-    return response
+    return {
+        "success": True,
+        "message": f"Found {len(response)} conversations",
+        "data": response
+    }
 
 
 @router.get(
     "/conversations/{conversation_id}/messages",
-    response_model=PaginatedResponse[ChatMessageSchema],
+    response_model=PaginatedChatResponse,
 )
 async def get_conversation_messages(
     conversation_id: str,
@@ -656,10 +688,14 @@ async def get_conversation_messages(
     result = await db.execute(stmt)
     messages = result.scalars().all()
 
-    return paginate(messages, total, page, size)
+    return {
+        "success": True,
+        "message": f"Retrieved {len(messages)} messages",
+        "data": paginate(messages, total, page, size)
+    }
 
 
-@router.delete("/conversations/{conversation_id}")
+@router.delete("/conversations/{conversation_id}", response_model=ChatDeleteResponse)
 async def delete_conversation(
     conversation_id: str,
     current_user: UserTable = Depends(get_current_user),
@@ -679,7 +715,11 @@ async def delete_conversation(
     await db.execute(stmt)
     await db.commit()
 
-    return {"status": "deleted", "conversation_id": conversation_id}
+    return {
+        "success": True,
+        "message": "Conversation deleted",
+        "data": {"status": "deleted", "conversation_id": conversation_id}
+    }
 
 
 @router.post("/conversations/{conversation_id}/clear")
@@ -701,4 +741,8 @@ async def clear_conversation(
     await db.execute(stmt)
     await db.commit()
 
-    return {"status": "cleared", "conversation_id": conversation_id}
+    return {
+        "success": True,
+        "message": "Conversation cleared",
+        "data": {"status": "cleared", "conversation_id": conversation_id}
+    }

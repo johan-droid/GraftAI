@@ -1,5 +1,19 @@
 """
 Pytest configuration and shared fixtures for GraftAI backend tests.
+
+Isolation strategy
+──────────────────
+We use a *single* SQLite in-memory database for the entire test session
+(created once, dropped once).  Each test gets its own nested transaction
+(SAVEPOINT) so that the test's INSERT/UPDATE/DELETE statements are rolled
+back at teardown and never visible to other tests.
+
+Why SAVEPOINT and not a new connection per test?
+  - SQLite in-memory databases are connection-local.  StaticPool keeps one
+    connection alive for the session so all fixtures share the same schema.
+  - Without SAVEPOINT, flush() inside a fixture commits to the shared
+    connection and the row is visible to every subsequent test, causing
+    UNIQUE-constraint failures when pytest-randomly changes execution order.
 """
 
 import os
@@ -14,7 +28,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import OperationalError, ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    AsyncConnection,
+    create_async_engine,
+    async_sessionmaker,
+)
 from sqlalchemy.pool import StaticPool
 
 # Add project root to path
@@ -22,26 +41,34 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import asyncio
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create a session-scoped event loop."""
-    try:
-        loop = asyncio.get_event_loop_policy().get_event_loop()
-    except RuntimeError:
-        loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
 from backend.models.base import Base
 from backend.models.tables import UserTable, EventTable, BookingTable
 from backend.api.main import create_app
 from backend.utils.db import get_db
 from backend.api.deps import get_current_user
 
-# Test database URL (SQLite in-memory for tests)
+
+# ---------------------------------------------------------------------------
+# Event loop  (session-scoped so async fixtures share a loop)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create a session-scoped event loop."""
+    try:
+        loop = asyncio.get_event_loop_policy().get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+# ---------------------------------------------------------------------------
+# Engine  (one engine / one connection for the whole session)
+# ---------------------------------------------------------------------------
+
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
-# Create async engine for tests
 test_engine = create_async_engine(
     TEST_DATABASE_URL,
     echo=False,
@@ -50,26 +77,18 @@ test_engine = create_async_engine(
     poolclass=StaticPool,
 )
 
-# Session factory
-AsyncTestingSessionLocal = async_sessionmaker(
-    test_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
 
+# ---------------------------------------------------------------------------
+# Schema lifecycle  (session-scoped)
+# ---------------------------------------------------------------------------
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_test_database():
-    """Create test database tables."""
+    """Create all tables once before the session; drop them after."""
     async with test_engine.begin() as conn:
         try:
             await conn.run_sync(Base.metadata.create_all)
         except (OperationalError, ProgrammingError) as exc:
-            # Occasionally SQLite create_all will attempt to create an index that
-            # already exists (race in metadata generation). Treat that as non-fatal
-            # for test setup so unit tests can run reliably in CI/local dev.
             if "already exists" in str(exc).lower():
                 pass
             else:
@@ -79,23 +98,60 @@ async def setup_test_database():
         await conn.run_sync(Base.metadata.drop_all)
 
 
+# ---------------------------------------------------------------------------
+# Per-test transactional isolation via SAVEPOINT
+# ---------------------------------------------------------------------------
+
 @pytest_asyncio.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Provide a transactional database session for tests."""
-    async with AsyncTestingSessionLocal() as session:
+async def db_connection() -> AsyncGenerator[AsyncConnection, None]:
+    """
+    Yield a single connection wrapped in a transaction that is rolled back
+    after each test.  All sessions within the test share this connection so
+    that SAVEPOINT semantics work correctly with SQLite.
+    """
+    async with test_engine.connect() as conn:
+        await conn.begin()          # outer transaction — never committed
+        yield conn
+        await conn.rollback()       # undo everything the test did
+
+
+@pytest_asyncio.fixture
+async def db_session(db_connection: AsyncConnection) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Provide a transactional session bound to the per-test connection.
+    Uses a SAVEPOINT so every flush/execute inside the test is rolled back
+    at teardown without touching data from other tests.
+    """
+    # Bind a new session to the already-open connection
+    session_factory = async_sessionmaker(
+        bind=db_connection,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+        join_transaction_mode="create_savepoint",
+    )
+    async with session_factory() as session:
         yield session
+        # Session teardown: roll back the SAVEPOINT so the outer transaction
+        # can be cleanly rolled back by db_connection.
         await session.rollback()
 
 
+# ---------------------------------------------------------------------------
+# User data helpers
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
 def test_user_data():
-    """Return standard test user data."""
+    """Return unique test user data per test (avoids UNIQUE conflicts)."""
+    suffix = uuid.uuid4().hex[:8]
     return {
         "id": str(uuid.uuid4()),
-        "email": f"test_{uuid.uuid4().hex[:8]}@example.com",
-        "username": f"testuser_{uuid.uuid4().hex[:8]}",
+        "email": f"test_{suffix}@example.com",
+        "username": f"testuser_{suffix}",
         "full_name": "Test User",
-        "hashed_password": "$2b$12$test_hash",  # Pre-hashed for tests
+        "hashed_password": "$2b$12$test_hash",
         "timezone": "UTC",
         "email_verified": True,
         "tier": "free",
@@ -105,21 +161,8 @@ def test_user_data():
 
 
 @pytest_asyncio.fixture
-async def test_user(db_session: AsyncSession) -> UserTable:
-    """Create and return a test user in the database."""
-    rand_suffix = str(uuid.uuid4())[:8]
-    test_user_data = {
-        "id": str(uuid.uuid4()),
-        "email": f"test_{rand_suffix}@example.com",
-        "username": f"testuser_{rand_suffix}",
-        "full_name": "Test User",
-        "hashed_password": "$2b$12$test_hash",  # Pre-hashed for tests
-        "timezone": "UTC",
-        "email_verified": True,
-        "tier": "free",
-        "subscription_status": "inactive",
-        "created_at": datetime.now(timezone.utc),
-    }
+async def test_user(db_session: AsyncSession, test_user_data) -> UserTable:
+    """Create and return a test user inside the test's savepoint."""
     user = UserTable(**test_user_data)
     db_session.add(user)
     await db_session.flush()
@@ -128,20 +171,14 @@ async def test_user(db_session: AsyncSession) -> UserTable:
 
 
 @pytest_asyncio.fixture
-async def other_test_user(db_session: AsyncSession) -> UserTable:
-    """Create and return a second test user in the database."""
-    rand_suffix = str(uuid.uuid4())[:8]
+async def other_test_user(db_session: AsyncSession, test_user_data) -> UserTable:
+    """Create and return a second (distinct) test user inside the same savepoint."""
+    suffix = uuid.uuid4().hex[:8]
     other_data = {
+        **test_user_data,
         "id": str(uuid.uuid4()),
-        "email": f"other_{rand_suffix}@example.com",
-        "username": f"otheruser_{rand_suffix}",
-        "full_name": "Test User",
-        "hashed_password": "$2b$12$test_hash",  # Pre-hashed for tests
-        "timezone": "UTC",
-        "email_verified": True,
-        "tier": "free",
-        "subscription_status": "inactive",
-        "created_at": datetime.now(timezone.utc),
+        "email": f"other_{suffix}@example.com",
+        "username": f"otheruser_{suffix}",
     }
     user = UserTable(**other_data)
     db_session.add(user)
@@ -157,6 +194,10 @@ async def authenticated_user(
     """Return an authenticated test user."""
     return test_user
 
+
+# ---------------------------------------------------------------------------
+# Dependency overrides
+# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def override_get_db(db_session: AsyncSession):
@@ -178,6 +219,10 @@ def override_get_current_user(test_user: UserTable):
     return _override
 
 
+# ---------------------------------------------------------------------------
+# FastAPI test apps
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
 def test_app(
     override_get_db,
@@ -185,11 +230,8 @@ def test_app(
 ) -> FastAPI:
     """Create a test FastAPI application with overridden dependencies."""
     app = create_app()
-
-    # Override dependencies
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
-
     return app
 
 
@@ -217,6 +259,10 @@ def override_get_current_other_user(other_test_user: UserTable):
 
     return _override
 
+
+# ---------------------------------------------------------------------------
+# HTTP clients
+# ---------------------------------------------------------------------------
 
 @pytest_asyncio.fixture
 async def async_client_for_other_user(
@@ -258,7 +304,10 @@ def sync_client(test_app: FastAPI) -> Generator[TestClient, None, None]:
         yield client
 
 
+# ---------------------------------------------------------------------------
 # Event fixtures
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
 def test_event_data(test_user: UserTable):
     """Return standard test event data."""
@@ -284,7 +333,10 @@ async def test_event(db_session: AsyncSession, test_event_data) -> EventTable:
     return event
 
 
+# ---------------------------------------------------------------------------
 # Booking fixtures
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
 def test_booking_data(test_user: UserTable, test_event: EventTable):
     """Return standard test booking data."""
@@ -312,7 +364,10 @@ async def test_booking(db_session: AsyncSession, test_booking_data) -> BookingTa
     return booking
 
 
-# Mock fixtures for external services
+# ---------------------------------------------------------------------------
+# External service mocks
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
 def mock_sendgrid(mocker):
     """Mock SendGrid API client."""
@@ -331,7 +386,10 @@ def mock_llm_core(mocker):
     return mocker.patch("backend.ai.llm_core.get_llm_core")
 
 
-# AI Agent test fixtures
+# ---------------------------------------------------------------------------
+# AI agent test fixtures
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
 def agent_context(test_user: UserTable):
     """Provide standard agent execution context."""

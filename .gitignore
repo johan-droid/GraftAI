@@ -211,11 +211,15 @@ brain/
 # =============================================================================
 # Root-level stray files
 AuthLayout.tsx
-claude.md
 
 # Pyre configuration (type checker)
 .pyre_configuration
 
 # Python version pin (committed for tooling; ignore local overrides)
-# Uncomment if you do NOT want to commit .python-version:
-# .python-version
+.python-version
+
+# Temporary and backup files
+*.bak
+*.tmp
+*.swp
+*~

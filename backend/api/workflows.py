@@ -94,6 +94,13 @@ class WorkflowListResponse(BaseModel):
     data: List[WorkflowResponse]
 
 
+class WorkflowSingleResponse(BaseModel):
+    """Single workflow response."""
+    success: bool
+    message: str
+    data: WorkflowResponse
+
+
 class WorkflowTestRequest(BaseModel):
     """Test a workflow with sample data."""
     event_data: Dict[str, Any] = Field(
@@ -114,14 +121,18 @@ class WorkflowTestResponse(BaseModel):
     data: Dict[str, Any]
 
 
-class TriggerTypeResponse(BaseModel):
-    """Available trigger types."""
-    triggers: Dict[str, str]
-
-
 class ActionTypeResponse(BaseModel):
     """Available action types."""
-    actions: Dict[str, str]
+    success: bool
+    message: str
+    data: List[Dict[str, str]]
+
+
+class TriggerTypeResponse(BaseModel):
+    """Available trigger types."""
+    success: bool
+    message: str
+    data: List[Dict[str, str]]
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -163,14 +174,22 @@ def _serialize_workflow(workflow: WorkflowTable) -> Dict[str, Any]:
 async def get_trigger_types():
     """Get available workflow trigger types."""
     engine = get_workflow_engine()
-    return {"triggers": engine.TRIGGERS}
+    return {
+        "success": True,
+        "message": "Triggers retrieved",
+        "data": [{"value": k, "label": v} for k, v in engine.TRIGGERS.items()]
+    }
 
 
 @router.get("/actions", response_model=ActionTypeResponse)
 async def get_action_types():
     """Get available workflow action types."""
     engine = get_workflow_engine()
-    return {"actions": engine.ACTIONS}
+    return {
+        "success": True,
+        "message": "Actions retrieved",
+        "data": [{"value": k, "label": v} for k, v in engine.ACTIONS.items()]
+    }
 
 
 @router.get("", response_model=WorkflowListResponse)
@@ -197,7 +216,7 @@ async def list_workflows(
     }
 
 
-@router.post("", response_model=WorkflowResponse)
+@router.post("", response_model=WorkflowSingleResponse)
 async def create_workflow(
     payload: WorkflowCreate,
     current_user: UserTable = Depends(get_current_user),
@@ -236,7 +255,11 @@ async def create_workflow(
         
         logger.info(f"Created workflow {workflow.id} for user {current_user.id[:8]}...")
         
-        return _serialize_workflow(workflow)
+        return {
+            "success": True,
+            "message": "Workflow created successfully",
+            "data": _serialize_workflow(workflow)
+        }
         
     except Exception as e:
         logger.error(f"Failed to create workflow: {e}")
@@ -244,7 +267,7 @@ async def create_workflow(
         raise HTTPException(status_code=500, detail=f"Failed to create workflow: {str(e)}")
 
 
-@router.get("/{workflow_id}", response_model=WorkflowResponse)
+@router.get("/{workflow_id}", response_model=WorkflowSingleResponse)
 async def get_workflow(
     workflow_id: str,
     current_user: UserTable = Depends(get_current_user),
@@ -264,10 +287,14 @@ async def get_workflow(
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
     
-    return _serialize_workflow(workflow)
+    return {
+        "success": True,
+        "message": "Workflow retrieved successfully",
+        "data": _serialize_workflow(workflow)
+    }
 
 
-@router.patch("/{workflow_id}", response_model=WorkflowResponse)
+@router.patch("/{workflow_id}", response_model=WorkflowSingleResponse)
 async def update_workflow(
     workflow_id: str,
     payload: WorkflowUpdate,
@@ -305,7 +332,11 @@ async def update_workflow(
     
     logger.info(f"Updated workflow {workflow.id}")
     
-    return _serialize_workflow(workflow)
+    return {
+        "success": True,
+        "message": "Workflow updated successfully",
+        "data": _serialize_workflow(workflow)
+    }
 
 
 @router.delete("/{workflow_id}")
@@ -402,7 +433,7 @@ async def list_workflow_steps(
     stmt = (
         select(WorkflowStepTable)
         .where(WorkflowStepTable.workflow_id == workflow_id)
-        .order_by(WorkflowStepTable.step_order)
+        .order_by(WorkflowStepTable.step_number)
     )
     steps = (await db.execute(stmt)).scalars().all()
 

@@ -101,7 +101,7 @@ class TestWorkflowAPI:
             "is_active": True,
         }
         create_response = await async_client.post("/api/v1/workflows", json=workflow_data)
-        workflow_id = create_response.json()["id"]
+        workflow_id = create_response.json()["data"]["id"]
         
         # Now get the workflow
         response = await async_client.get(f"/api/v1/workflows/{workflow_id}")
@@ -122,7 +122,7 @@ class TestWorkflowAPI:
             "is_active": True,
         }
         create_response = await async_client.post("/api/v1/workflows", json=workflow_data)
-        workflow_id = create_response.json()["id"]
+        workflow_id = create_response.json()["data"]["id"]
         
         # Update the workflow
         update_data = {
@@ -147,7 +147,7 @@ class TestWorkflowAPI:
             "is_active": True,
         }
         create_response = await async_client.post("/api/v1/workflows", json=workflow_data)
-        workflow_id = create_response.json()["id"]
+        workflow_id = create_response.json()["data"]["id"]
         
         # Delete the workflow
         response = await async_client.delete(f"/api/v1/workflows/{workflow_id}")
@@ -173,7 +173,7 @@ class TestWorkflowStepsAPI:
             "is_active": True,
         }
         response = await async_client.post("/api/v1/workflows", json=workflow_data)
-        return response.json()["id"]
+        return response.json()["data"]["id"]
 
     @pytest.mark.asyncio
     async def test_add_workflow_step(self, async_client, created_workflow):
@@ -236,7 +236,7 @@ class TestWorkflowStepsAPI:
             f"/api/v1/workflows/{created_workflow}/steps",
             json=step_data
         )
-        step_id = create_response.json().get("data", {}).get("id") or create_response.json().get("id")
+        step_id = create_response.json()["data"]["id"]
         
         # Delete the step
         response = await async_client.delete(
@@ -261,7 +261,7 @@ class TestWorkflowTestAPI:
             "is_active": True,
         }
         wf_response = await async_client.post("/api/v1/workflows", json=workflow_data)
-        workflow_id = wf_response.json()["id"]
+        workflow_id = wf_response.json()["data"]["id"]
         
         # Add step
         step_data = {
@@ -281,7 +281,10 @@ class TestWorkflowTestAPI:
     @pytest.mark.asyncio
     async def test_workflow_test_endpoint(self, async_client, workflow_with_step):
         """Test the workflow test endpoint."""
-        response = await async_client.post(f"/api/v1/workflows/{workflow_with_step}/test")
+        response = await async_client.post(
+            f"/api/v1/workflows/{workflow_with_step}/test",
+            json={}
+        )
         
         # Should return test results
         assert response.status_code in [200, 202]
@@ -306,7 +309,7 @@ class TestWorkflowTriggerAPI:
             "is_active": True,
         }
         wf_response = await async_client.post("/api/v1/workflows", json=workflow_data)
-        workflow_id = wf_response.json()["id"]
+        workflow_id = wf_response.json()["data"]["id"]
         
         # Add step
         step_data = {
@@ -361,7 +364,7 @@ class TestWorkflowAuthorization:
             "is_active": True,
         }
         response = await async_client.post("/api/v1/workflows", json=workflow_data)
-        workflow_id = response.json()["id"]
+        workflow_id = response.json()["data"]["id"]
 
         get_response = await async_client_for_other_user.get(
             f"/api/v1/workflows/{workflow_id}"

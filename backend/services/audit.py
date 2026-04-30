@@ -50,9 +50,7 @@ async def log_activity(
             user_agent=user_agent
         )
         db.add(new_log)
-        await db.commit()
+        await db.flush()
     except Exception as e:
         logger.error(f"Failed to write audit log: {e}", exc_info=True)
-        # We don't want to break the main flow if logging fails, 
-        # but in a critical SaaS it might be required to fail open/closed.
-        await db.rollback()
+        # Don't rollback the whole session, just skip this log entry if it failed

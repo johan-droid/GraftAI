@@ -38,8 +38,11 @@ async def get_user_quota(db: AsyncSession, user_id: str) -> UserTable:
         ) + timedelta(days=1)
         user.quota_reset_at = next_midnight
 
-        await db.commit()
-        return user
+        # Quotas reset is a state change that should be visible to other queries in same session
+        await db.flush()
+        await db.refresh(user)
+
+    return user
 
 
 def check_usage_limit(feature_key: str):
@@ -127,16 +130,25 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
 
     # SaaS Audit Logging for significant actions
     if feature in ["ai_messages", "scheduling", "calendar_syncs"]:
-        parts = feature.split('_')
-        feature_name = parts[1] if len(parts) > 1 else feature
+        feature_map = {
+            "ai_messages": "ai",
+            "calendar_syncs": "sync",
+            "scheduling": "scheduling",
+        }
+        feature_part = feature_map.get(feature, feature.split('_')[1] if '_' in feature else feature)
+        
         await log_activity(
-            db,
-            action=f"usage.{feature}",
-            user_id=user_id,
-            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature.split('_')[1]}_count", 0) if "_" in feature else getattr(user, f"total_{feature}_count", 0)}
+            db, 
+            action=f"usage.{feature}", 
+            user_id=user_id, 
+            metadata={
+                "increment": amount, 
+                "total_daily": getattr(user, f"daily_{feature_part}_count", None) if feature_part != "scheduling" else getattr(user, "total_scheduling_count", None)
+            }
+        )
         )
 
-    await db.commit()
+    await db.flush()
 
 
 async def get_usage_counts(db: AsyncSession, user_id: str) -> dict:

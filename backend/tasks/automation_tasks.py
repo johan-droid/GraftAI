@@ -109,6 +109,14 @@ def run_booking_automation_task(
                 
                 return {"success": False, "error": str(e), "booking_id": booking_id}
     
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(_execute())
+            return {"success": True, "message": "Task scheduled in existing loop"}
+    except RuntimeError:
+        pass
+        
     return asyncio.run(_execute())
 
 
@@ -142,6 +150,14 @@ def log_agent_interaction_task(
             logger.error(f"Failed to log interaction to vector store: {e}")
             return False
             
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(_execute())
+            return True
+    except RuntimeError:
+        pass
+        
     return asyncio.run(_execute())
 
 

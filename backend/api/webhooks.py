@@ -27,7 +27,7 @@ from backend.utils.cache import (
     invalidate_user_cache_pattern,
     acquire_lock,
 )
-from backend.utils.arq_utils import enqueue_job
+from backend.tasks.calendar_tasks import sync_user_calendar
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +207,7 @@ async def google_calendar_webhook(request: Request, db: AsyncSession = Depends(g
     await invalidate_user_cache_pattern(sub.user_id, "busy_windows")
     # 2. Enqueue background sync with short debounce to avoid burst storms
     if await acquire_lock(f"webhook_sync_enqueue:{sub.user_id}", ttl_seconds=45):
-        await enqueue_job("task_sync_calendar", user_id=sub.user_id)
+        sync_user_calendar.delay(user_id=sub.user_id, provider="google")
         logger.info(f"[WEBHOOK] 🔄 Triggered background sync for user {sub.user_id}")
     else:
         logger.info(
@@ -253,7 +253,7 @@ async def microsoft_graph_webhook(
                 if await acquire_lock(
                     f"webhook_sync_enqueue:{sub.user_id}", ttl_seconds=45
                 ):
-                    await enqueue_job("task_sync_calendar", user_id=sub.user_id)
+                    sync_user_calendar.delay(user_id=sub.user_id, provider="microsoft")
                 else:
                     logger.info(
                         f"[WEBHOOK] ⏱ Debounced duplicate sync enqueue for user {sub.user_id}"

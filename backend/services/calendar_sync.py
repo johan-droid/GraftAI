@@ -89,6 +89,85 @@ class CalendarSyncService:
                         f" range={range_start.isoformat()}-{range_end.isoformat()}: {exc}"
                     )
 
+    async def create_event(
+        self, user_id: str, provider: str, event_data: dict
+    ) -> dict:
+        """Creates an event in the user's external calendar."""
+        async with get_db_context() as db:
+            stmt = select(UserTokenTable).where(
+                UserTokenTable.user_id == user_id,
+                UserTokenTable.provider == provider,
+                UserTokenTable.is_active == True,
+            )
+            token = (await db.execute(stmt)).scalars().first()
+            if not token:
+                raise ValueError(f"No active {provider} token found for user {user_id}")
+
+            provider_impl = get_calendar_provider_for_token(token)
+            if not provider_impl:
+                raise ValueError(f"Unsupported provider: {provider}")
+
+            return await provider_impl.create_event(event_data)
+
+    async def delete_event(
+        self, user_id: str, provider: str, external_event_id: str
+    ) -> bool:
+        """Deletes an event from the user's external calendar."""
+        async with get_db_context() as db:
+            stmt = select(UserTokenTable).where(
+                UserTokenTable.user_id == user_id,
+                UserTokenTable.provider == provider,
+                UserTokenTable.is_active == True,
+            )
+            token = (await db.execute(stmt)).scalars().first()
+            if not token:
+                raise ValueError(f"No active {provider} token found for user {user_id}")
+
+            provider_impl = get_calendar_provider_for_token(token)
+            if not provider_impl:
+                raise ValueError(f"Unsupported provider: {provider}")
+
+            return await provider_impl.delete_event(external_event_id)
+
+    async def check_conflicts(
+        self, user_id: str, start_time: str, end_time: str
+    ) -> dict:
+        """Checks for conflicts in the user's calendar for a given time range."""
+        from datetime import datetime
+        try:
+            start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+            end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+        except ValueError:
+            return {"has_conflicts": False, "conflicts": [], "error": "Invalid time format"}
+
+        async with get_db_context() as db:
+            stmt = select(UserTokenTable).where(
+                UserTokenTable.user_id == user_id,
+                UserTokenTable.is_active == True,
+            )
+            tokens = (await db.execute(stmt)).scalars().all()
+            
+            all_busy = []
+            for token in tokens:
+                provider_impl = get_calendar_provider_for_token(token)
+                if provider_impl:
+                    busy = await provider_impl.get_busy_windows(db, start, end)
+                    all_busy.extend(busy)
+
+            conflicts = []
+            for slot in all_busy:
+                slot_start = datetime.fromisoformat(slot["start"].replace("Z", "+00:00"))
+                slot_end = datetime.fromisoformat(slot["end"].replace("Z", "+00:00"))
+                
+                # Check overlap: (StartA < EndB) and (EndA > StartB)
+                if (start < slot_end) and (end > slot_start):
+                    conflicts.append(slot)
+
+            return {
+                "has_conflicts": len(conflicts) > 0,
+                "conflicts": conflicts
+            }
+
 
 # Functional alias for backward compatibility
 async def sync_calendar_for_user(db: AsyncSession, user_id: str) -> None:

@@ -81,6 +81,12 @@ class CalendarSyncProvider(ABC):
     @abstractmethod
     def normalize_event(self, item: Dict[str, Any]) -> Dict[str, Any]: ...
 
+    @abstractmethod
+    async def create_event(self, event_details: Dict[str, Any]) -> Dict[str, Any]: ...
+
+    @abstractmethod
+    async def delete_event(self, external_event_id: str) -> bool: ...
+
 
 class GoogleCalendarSyncProvider(CalendarSyncProvider):
     provider = "google"
@@ -156,6 +162,24 @@ class GoogleCalendarSyncProvider(CalendarSyncProvider):
             ],
         }
 
+    async def create_event(self, event_details: Dict[str, Any]) -> Dict[str, Any]:
+        refresh_token, _ = decrypt_token_value(self.token_record.refresh_token)
+        token_data = {
+            "access_token": self.token_record.access_token,
+            "refresh_token": refresh_token,
+        }
+        result = await google_calendar.create_google_event(token_data, event_details)
+        return {"event_id": result.get("id")}
+
+    async def delete_event(self, external_event_id: str) -> bool:
+        refresh_token, _ = decrypt_token_value(self.token_record.refresh_token)
+        token_data = {
+            "access_token": self.token_record.access_token,
+            "refresh_token": refresh_token,
+        }
+        await google_calendar.delete_google_event(token_data, external_event_id)
+        return True
+
     def _parse_datetime(self, value: Optional[str]) -> Optional[datetime]:
         if not value:
             return None
@@ -217,6 +241,22 @@ class MicrosoftGraphSyncProvider(CalendarSyncProvider):
             ],
         }
 
+    async def create_event(self, event_details: Dict[str, Any]) -> Dict[str, Any]:
+        token_data = {
+            "refresh_token": self.token_record.refresh_token,
+            "scopes": self.token_record.scopes,
+        }
+        result = await ms_graph.create_ms_event(token_data, event_details)
+        return {"event_id": result.get("id")}
+
+    async def delete_event(self, external_event_id: str) -> bool:
+        token_data = {
+            "refresh_token": self.token_record.refresh_token,
+            "scopes": self.token_record.scopes,
+        }
+        await ms_graph.delete_ms_event(token_data, external_event_id)
+        return True
+
     def _parse_datetime(self, value: Optional[str]) -> Optional[datetime]:
         if not value:
             return None
@@ -245,6 +285,14 @@ class CalDavCalendarSyncProvider(CalendarSyncProvider):
 
     def normalize_event(self, item: Dict[str, Any]) -> Dict[str, Any]:
         return {"removed": False, "external_id": None}
+
+    async def create_event(self, event_details: Dict[str, Any]) -> Dict[str, Any]:
+        logger.warning("CalDAV create_event is not implemented.")
+        return {"event_id": None}
+
+    async def delete_event(self, external_event_id: str) -> bool:
+        logger.warning("CalDAV delete_event is not implemented.")
+        return False
 
 
 def get_calendar_provider_for_token(

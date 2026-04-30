@@ -130,6 +130,7 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
 
     # SaaS Audit Logging for significant actions
     if feature in ["ai_messages", "scheduling", "calendar_syncs"]:
+        # SEC-09: Map feature names to their corresponding field parts in UserTable
         feature_map = {
             "ai_messages": "ai",
             "calendar_syncs": "sync",

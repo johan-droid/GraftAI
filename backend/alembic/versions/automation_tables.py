@@ -136,15 +136,27 @@ def upgrade():
     )
 
     # Seed default templates
-    op.execute("""
-        INSERT INTO automation_templates (id, name, description, category, rule_type, template_conditions, template_actions, default_confidence_threshold, default_require_confirmation, is_featured, created_at)
-        VALUES 
-        ('auto_accept_1to1', 'Auto-Accept 1:1 Meetings', 'Automatically accept 1:1 meetings from team members', 'scheduling', 'auto_accept', '{"event_type": "1:1", "organizer_in_team": true}', '{"action": "accept", "add_to_calendar": true}', 85.0, false, true, NOW()),
-        ('smart_scheduling', 'Smart Scheduling', 'Find optimal meeting times based on patterns', 'scheduling', 'smart_scheduling', '{"has_pattern": true}', '{"action": "suggest_times", "consider_history": true}', 75.0, true, true, NOW()),
-        ('conflict_resolution', 'Conflict Resolution', 'Automatically resolve minor scheduling conflicts', 'conflict', 'conflict_resolution', '{"severity": "low"}', '{"action": "reschedule", "find_alternative": true}', 70.0, true, false, NOW()),
-        ('team_sync', 'Team Sync Finder', 'Find best times for team meetings', 'team', 'team_coordination', '{"meeting_type": "team_sync"}', '{"action": "find_common_slots", "consider_timezones": true}', 80.0, true, true, NOW()),
-        ('reminder_scheduling', 'Smart Reminders', 'Schedule optimal reminder times', 'reminder', 'reminder_scheduling', '{"event_type": "important"}', '{"action": "schedule_reminder", "timing": "optimal"}', 90.0, false, true, NOW())
-    """)
+    bind = op.get_bind()
+    if bind.engine.name == "sqlite":
+        op.execute("""
+            INSERT INTO automation_templates (id, name, description, category, rule_type, template_conditions, template_actions, default_confidence_threshold, default_require_confirmation, is_featured, created_at)
+            VALUES
+            ('auto_accept_1to1', 'Auto-Accept 1:1 Meetings', 'Automatically accept 1:1 meetings from team members', 'scheduling', 'auto_accept', '{"event_type": "1:1", "organizer_in_team": true}', '{"action": "accept", "add_to_calendar": true}', 85.0, false, true, CURRENT_TIMESTAMP),
+            ('smart_scheduling', 'Smart Scheduling', 'Find optimal meeting times based on patterns', 'scheduling', 'smart_scheduling', '{"has_pattern": true}', '{"action": "suggest_times", "consider_history": true}', 75.0, true, true, CURRENT_TIMESTAMP),
+            ('conflict_resolution', 'Conflict Resolution', 'Automatically resolve minor scheduling conflicts', 'conflict', 'conflict_resolution', '{"severity": "low"}', '{"action": "reschedule", "find_alternative": true}', 70.0, true, false, CURRENT_TIMESTAMP),
+            ('team_sync', 'Team Sync Finder', 'Find best times for team meetings', 'team', 'team_coordination', '{"meeting_type": "team_sync"}', '{"action": "find_common_slots", "consider_timezones": true}', 80.0, true, true, CURRENT_TIMESTAMP),
+            ('reminder_scheduling', 'Smart Reminders', 'Schedule optimal reminder times', 'reminder', 'reminder_scheduling', '{"event_type": "important"}', '{"action": "schedule_reminder", "timing": "optimal"}', 90.0, false, true, CURRENT_TIMESTAMP)
+        """)
+    else:
+        op.execute("""
+            INSERT INTO automation_templates (id, name, description, category, rule_type, template_conditions, template_actions, default_confidence_threshold, default_require_confirmation, is_featured, created_at)
+            VALUES
+            ('auto_accept_1to1', 'Auto-Accept 1:1 Meetings', 'Automatically accept 1:1 meetings from team members', 'scheduling', 'auto_accept', '{"event_type": "1:1", "organizer_in_team": true}', '{"action": "accept", "add_to_calendar": true}', 85.0, false, true, NOW()),
+            ('smart_scheduling', 'Smart Scheduling', 'Find optimal meeting times based on patterns', 'scheduling', 'smart_scheduling', '{"has_pattern": true}', '{"action": "suggest_times", "consider_history": true}', 75.0, true, true, NOW()),
+            ('conflict_resolution', 'Conflict Resolution', 'Automatically resolve minor scheduling conflicts', 'conflict', 'conflict_resolution', '{"severity": "low"}', '{"action": "reschedule", "find_alternative": true}', 70.0, true, false, NOW()),
+            ('team_sync', 'Team Sync Finder', 'Find best times for team meetings', 'team', 'team_coordination', '{"meeting_type": "team_sync"}', '{"action": "find_common_slots", "consider_timezones": true}', 80.0, true, true, NOW()),
+            ('reminder_scheduling', 'Smart Reminders', 'Schedule optimal reminder times', 'reminder', 'reminder_scheduling', '{"event_type": "important"}', '{"action": "schedule_reminder", "timing": "optimal"}', 90.0, false, true, NOW())
+        """)
 
 
 def downgrade():

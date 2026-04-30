@@ -121,13 +121,22 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
     elif feature == "api_calls":
         update_kwargs = {"total_api_calls": UserTable.total_api_calls + amount}
     elif feature == "scheduling":
-        update_kwargs = {"total_scheduling_count": UserTable.total_scheduling_count + amount}
+        user.total_scheduling_count += amount
+    else:
+        logger.debug(f"Unknown usage feature: {feature}")
 
-    if update_kwargs:
-        # We perform an UPDATE statement directly so we don't need to load the model into the session
-        # This avoids throwing "Can't operate on closed transaction" if the session context is strictly closed.
-        await db.execute(update(UserTable).where(UserTable.id == user_id).values(**update_kwargs))
+    # SaaS Audit Logging for significant actions
+    if feature in ["ai_messages", "scheduling", "calendar_syncs"]:
+        parts = feature.split('_')
+        feature_name = parts[1] if len(parts) > 1 else feature
+        await log_activity(
+            db, 
+            action=f"usage.{feature}", 
+            user_id=user_id, 
+            metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature_name}_count", None)}
+        )
 
+    await db.commit()
 
 
 async def get_usage_counts(db: AsyncSession, user_id: str) -> dict:

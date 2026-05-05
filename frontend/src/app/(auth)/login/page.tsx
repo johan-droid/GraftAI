@@ -10,8 +10,10 @@ function isValidCallbackUrl(value: string | null): value is string {
   if (value.startsWith("/") && !value.startsWith("//")) return true;
 
   try {
-    const url = new URL(value, window.location.origin);
-    const trustedHosts = ["www.graftai.tech", "graftai.tech", "http://localhost:3000"];
+    const baseOrigin =
+      typeof window !== "undefined" ? window.location.origin : "https://www.graftai.tech";
+    const url = new URL(value, baseOrigin);
+    const trustedHosts = ["www.graftai.tech", "graftai.tech", "localhost", "127.0.0.1"];
     return trustedHosts.includes(url.hostname);
   } catch {
     return false;
@@ -21,9 +23,13 @@ function isValidCallbackUrl(value: string | null): value is string {
 export default function LoginPage() {
   const searchParams = useSearchParams();
   const requestedCallbackUrl = searchParams.get("callbackUrl");
+  const authError = searchParams.get("error");
   const callbackUrl = isValidCallbackUrl(requestedCallbackUrl)
     ? requestedCallbackUrl
     : "/dashboard";
+  const authErrorMessage = authError
+    ? "Sign in could not be completed. Please try again, or check the production auth configuration if this keeps happening."
+    : null;
 
   return (
     <AuthLayout
@@ -31,6 +37,12 @@ export default function LoginPage() {
       subtitle="Sign in to pick up your schedule, messages, and automations where you left off."
     >
       <div className="space-y-5">
+        {authErrorMessage ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {authErrorMessage}
+          </div>
+        ) : null}
+
         <OAuthButtons callbackURL={callbackUrl} actionText="Sign in" />
 
         {/* Divider */}

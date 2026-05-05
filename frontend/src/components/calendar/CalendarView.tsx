@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,12 +52,22 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
     return daysArray;
   }, [monthRange]);
 
-  const getEventsForDay = (day: Date) => {
-    return events.filter(event => {
-      const eventDate = new Date(event.start_time);
-      return eventDate.toDateString() === day.toDateString();
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, Event[]>();
+    events.forEach(event => {
+      const dateKey = new Date(event.start_time).toDateString();
+      if (!map.has(dateKey)) {
+        map.set(dateKey, []);
+      }
+      map.get(dateKey)!.push(event);
     });
-  };
+    return map;
+  }, [events]);
+
+  const EMPTY_EVENTS: Event[] = [];
+  const getEventsForDay = useCallback((day: Date) => {
+    return eventsByDate.get(day.toDateString()) || EMPTY_EVENTS;
+  }, [eventsByDate]);
 
   const navigate = (direction: "prev" | "next") => {
     const newDate = new Date(currentDate);

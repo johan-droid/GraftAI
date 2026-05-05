@@ -1,6 +1,7 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { useEffect, useMemo, useState } from "react";
+import { getProviders, signIn } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 
 const GoogleIcon = () => (
@@ -41,6 +42,44 @@ interface OAuthButtonsProps {
 }
 
 export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in" }: OAuthButtonsProps) {
+  const [availableProviderIds, setAvailableProviderIds] = useState<Set<string> | null>(null);
+  const [providerLoadFailed, setProviderLoadFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getProviders()
+      .then((configuredProviders) => {
+        if (cancelled) return;
+
+        const ids = new Set(Object.keys(configuredProviders || {}));
+        setAvailableProviderIds(ids);
+        setProviderLoadFailed(false);
+
+        const missing = providers
+          .map((provider) => provider.id)
+          .filter((providerId) => !ids.has(providerId));
+        if (missing.length > 0) {
+          console.warn("[OAuthButtons] OAuth providers unavailable:", missing);
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("[OAuthButtons] Failed to load auth providers:", error);
+        setAvailableProviderIds(new Set());
+        setProviderLoadFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const visibleProviders = useMemo(() => {
+    if (!availableProviderIds) return providers;
+    return providers.filter((provider) => availableProviderIds.has(provider.id));
+  }, [availableProviderIds]);
+
   const buildCallbackUrl = (callbackURL: string, timestamp: number) => {
     if (!callbackURL.startsWith("/")) {
       return callbackURL;
@@ -72,7 +111,14 @@ export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in
 
   return (
     <div className="flex flex-col gap-3">
-      {providers.map((provider) => (
+      {availableProviderIds && visibleProviders.length === 0 ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Sign-in providers are not configured for this deployment. Check the auth environment variables in production.
+          {providerLoadFailed ? " The provider check also failed, so the auth route may be misconfigured." : ""}
+        </div>
+      ) : null}
+
+      {visibleProviders.map((provider) => (
         <button
           key={provider.id}
           onClick={() => handleOAuth(provider.id, Date.now())}

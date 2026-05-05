@@ -66,16 +66,18 @@ type NextAuthJwt = JWT & {
 function getServerBackendUrl(): string {
   const url =
     process.env.BACKEND_URL ||
+    process.env.INTERNAL_BACKEND_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/v1$/, "");
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/v1$/, "") ||
+    process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/v1$/, "");
 
   if (!url) {
     if (process.env.NODE_ENV === "production") {
       console.warn(
         "Missing BACKEND_URL or NEXT_PUBLIC_BACKEND_URL environment variable. " +
-        "Falling back to https://graftai.onrender.com for production."
+        "Falling back to https://graftai-abu1.onrender.com for production."
       );
-      return "https://graftai.onrender.com";
+      return "https://graftai-abu1.onrender.com";
     } else {
       console.warn("Missing BACKEND_URL environment variable. Falling back to http://localhost:8000 for development.");
       return "http://localhost:8000";

@@ -386,10 +386,12 @@ class TestRateLimiterTypingImport:
 
     def test_module_imports_without_error(self):
         """Importing backend.utils.rate_limiter must not raise any NameError."""
-        import importlib
-        import backend.utils.rate_limiter as mod
-        # If Any removal breaks anything, importlib.reload would surface it.
-        importlib.reload(mod)
+        import backend.utils.rate_limiter as mod  # noqa: F401
+        # The top-level import in this file already verifies the module loads
+        # without NameError. Calling importlib.reload() here would replace class
+        # objects in the module's __dict__ in-place, causing subsequent tests
+        # that use pytest.raises(RateLimitExceeded) to fail because the class
+        # identity no longer matches the one imported at test-file load time.
 
     def test_rate_limiter_instantiates(self):
         """RateLimiter() must construct successfully after the import cleanup."""

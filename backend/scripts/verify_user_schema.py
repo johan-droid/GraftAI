@@ -34,9 +34,9 @@ DB_PATH = BACKEND_DIR / "dev.db"
 
 def get_actual_columns(conn: sqlite3.Connection, table: str) -> List[str]:
     cur = conn.cursor()
-    cur.execute(f"PRAGMA table_info('{table}')")
+    cur.execute("SELECT name FROM pragma_table_info(?)", (table,))
     rows = cur.fetchall()
-    return [r[1] for r in rows]
+    return [r[0] for r in rows]
 
 
 def add_column_sqlalchemy_column(col) -> str:

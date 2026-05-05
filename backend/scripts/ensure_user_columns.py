@@ -38,8 +38,8 @@ def sqlite_db_path_from_url(url: str) -> str:
 
 def ensure_columns(conn: sqlite3.Connection, table: str, columns_to_add: dict) -> list:
     cur = conn.cursor()
-    cur.execute(f"PRAGMA table_info('{table}')")
-    existing = {row[1] for row in cur.fetchall()}
+    cur.execute("SELECT name FROM pragma_table_info(?)", (table,))
+    existing = {row[0] for row in cur.fetchall()}
     added = []
     for name, sql in columns_to_add.items():
         if name not in existing:
@@ -75,7 +75,7 @@ def main():
     added = ensure_columns(conn, "users", columns)
     print("Added columns:", added)
     cur = conn.cursor()
-    cur.execute("PRAGMA table_info('users')")
+    cur.execute("SELECT * FROM pragma_table_info(?)", ("users",))
     rows = cur.fetchall()
     print("Final users table columns:")
     for r in rows:

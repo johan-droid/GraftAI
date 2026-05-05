@@ -41,14 +41,20 @@ interface OAuthButtonsProps {
 }
 
 export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in" }: OAuthButtonsProps) {
+  const buildCallbackUrl = (callbackURL: string, timestamp: number) => {
+    if (!callbackURL.startsWith("/")) {
+      return callbackURL;
+    }
+
+    const separator = callbackURL.includes("?") ? "&" : "?";
+    return `${callbackURL}${separator}t=${timestamp}&skip_setup=true`;
+  };
+
   const handleOAuth = async (provider: string, timestamp: number) => {
     try {
       // Force redirect to dashboard, bypassing profile setup/onboarding
       // Timestamp is provided by the event handler so no impure calls occur during render.
-      const t = timestamp;
-      const finalCallbackUrl = callbackURL.startsWith("/")
-        ? `${callbackURL}?t=${t}&skip_setup=true`
-        : callbackURL;
+      const finalCallbackUrl = buildCallbackUrl(callbackURL, timestamp);
 
       await signIn(provider, {
         callbackUrl: finalCallbackUrl,

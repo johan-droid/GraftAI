@@ -108,6 +108,18 @@ function AuthCallbackInner() {
           }
 
           addTelemetry("KERNEL_SESSION_MOUNTED_OK");
+          if (skipSetup) {
+            addTelemetry("SKIP_SETUP_PERSISTENCE_STARTED");
+            try {
+              await fetch("/api/users/me/profile/skip-setup", {
+                method: "POST",
+                credentials: "include",
+              });
+              addTelemetry("SKIP_SETUP_PERSISTED");
+            } catch (error) {
+              console.warn("Could not persist skip setup state:", error);
+            }
+          }
           setStatus("SEQUENCE_SUCCESSFUL. REDIRECTING...");
           
           // If skip_setup is set, ensure we go to dashboard directly
@@ -161,11 +173,24 @@ function AuthCallbackInner() {
               throw new Error("RESTORATION_FAULT_DETECTED");
             }
 
+            if (skipSetup) {
+              addTelemetry("SKIP_SETUP_PERSISTENCE_STARTED");
+              try {
+                await fetch("/api/users/me/profile/skip-setup", {
+                  method: "POST",
+                  credentials: "include",
+                });
+                addTelemetry("SKIP_SETUP_PERSISTED");
+              } catch (error) {
+                console.warn("Could not persist skip setup state:", error);
+              }
+            }
+
             setStatus("ACCESS_GRANTED_BY_KERNEL.");
-            
+
             // If skip_setup is set, ensure we go to dashboard directly
-            const finalRedirect = skipSetup 
-              ? "/dashboard" 
+            const finalRedirect = skipSetup
+              ? "/dashboard"
               : (data.redirect_to || redirectTo);
             safeReplace(finalRedirect);
             return;
@@ -175,10 +200,19 @@ function AuthCallbackInner() {
         }
 
         // ── Scenario 1: NextAuth handles directly — should barely blink if we end up here
+        if (skipSetup) {
+          try {
+            await fetch("/api/users/me/profile/skip-setup", {
+              method: "POST",
+              credentials: "include",
+            });
+          } catch (error) {
+            console.warn("Could not persist skip setup state:", error);
+          }
+        }
         setStatus("POLLING_SESSION_INTEGRITY...");
         // Always redirect to dashboard, skip any profile setup
         setTimeout(() => safeReplace("/dashboard"), 1000);
-
       } catch (err) {
         console.error("[AuthCallback]", err);
         setStatus(`ERROR_CODE: ${err instanceof Error ? err.message : "AUTH_GENERAL_FAULT"}`);

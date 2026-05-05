@@ -44,7 +44,7 @@ async def connect_apple_calendar(
         )
 
     # Get Apple user ID from metadata
-    metadata = token.metadata or {}
+    metadata = token.metadata_payload or {}
     apple_user_id = metadata.get("apple_user_id")
 
     if not apple_user_id:
@@ -53,9 +53,9 @@ async def connect_apple_calendar(
             detail="Apple user ID not found. Please sign in with Apple again.",
         )
 
-    # Store app-specific password in metadata
+    # Store app-specific password in metadata_payload
     # Note: In production, this should be encrypted
-    token.metadata = {
+    token.metadata_payload = {
         **metadata,
         "apple_user_id": apple_user_id,
         "app_specific_password": request.app_specific_password,
@@ -90,8 +90,8 @@ async def disconnect_apple_calendar(
         )
 
     # Remove app-specific password but keep OAuth token
-    metadata = token.metadata or {}
-    token.metadata = {
+    metadata = token.metadata_payload or {}
+    token.metadata_payload = {
         **metadata,
         "app_specific_password": None,
         "calendar_connected": False,
@@ -120,7 +120,7 @@ async def list_calendar_connections(
 
     connections = []
     for token in tokens:
-        metadata = token.metadata or {}
+        metadata = token.metadata_payload or {}
         is_calendar_connected = metadata.get("calendar_connected", False)
 
         connections.append(

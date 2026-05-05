@@ -11,7 +11,7 @@ function isValidCallbackUrl(value: string | null): value is string {
 
   try {
     const url = new URL(value, window.location.origin);
-    const trustedHosts = ["www.graftai.tech", "graftai.tech"];
+    const trustedHosts = ["www.graftai.tech", "graftai.tech", "http://localhost:3000"];
     return trustedHosts.includes(url.hostname);
   } catch {
     return false;

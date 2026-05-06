@@ -23,6 +23,7 @@ except ImportError:
 
 from backend.api.deps import get_current_user
 from backend.auth.config import ALGORITHM, SECRET_KEY
+from backend.auth.schemes import require_admin
 from backend.models.tables import UserTable
 from backend.ai.monitoring import get_agent_metrics, LogAnalyzer
 from backend.services.messaging import get_recent_messages
@@ -685,7 +686,7 @@ async def monitoring_websocket(websocket: WebSocket):
     description="Reset all Prometheus counters and gauges",
 )
 async def reset_metrics(
-    current_user: UserTable = Depends(get_current_user),
+    admin_id: str = Depends(require_admin),
 ) -> Dict[str, str]:
     """
     Reset all metrics (admin only)
@@ -693,10 +694,6 @@ async def reset_metrics(
     Returns:
         Status message
     """
-    # In production, check if user is admin
-    # if not current_user.is_admin:
-    #     raise HTTPException(status_code=403, detail="Admin access required")
-
     try:
         if PROMETHEUS_AVAILABLE:
             # Reset counters (set to 0)
@@ -717,7 +714,7 @@ async def reset_metrics(
     description="Download agent activity logs",
 )
 async def get_logs(
-    lines: int = 100, current_user: UserTable = Depends(get_current_user)
+    lines: int = 100, admin_id: str = Depends(require_admin)
 ) -> Dict[str, Any]:
     """
     Get recent agent logs

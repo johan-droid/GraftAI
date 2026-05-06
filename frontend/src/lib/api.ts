@@ -180,6 +180,7 @@ export async function uploadProfileAvatar(file: File) {
 export interface ProfileSetupStatus {
   completed_steps: string[];
   profile_setup_completed: boolean;
+  profile_setup_skipped?: boolean;
   onboarding_completed: boolean;
   profile: {
     id: string;
@@ -199,6 +200,7 @@ export interface ProfileSetupStatus {
     default_calendar_id?: string;
     preferences?: Record<string, any>;
     profile_setup_completed?: boolean;
+    profile_setup_skipped?: boolean;
     onboarding_completed?: boolean;
     completed_steps?: string[];
   };
@@ -219,6 +221,13 @@ export async function completeOnboardingStep(stepId: string, stepData?: Record<s
   const response = await enhancedApiClient.post<{ success: boolean; step: string; completed_steps: string[] } | { success: boolean; data?: { completed_steps: string[]; next_step?: string | null } }>(
     `/users/me/profile/complete-step/${encodeURIComponent(stepId)}`,
     stepData || {}
+  );
+  return unwrapApiData(response);
+}
+
+export async function skipProfileSetup() {
+  const response = await enhancedApiClient.post<{ success: boolean; message?: string; data?: { profile_setup_skipped: boolean } }>(
+    "/users/me/profile/skip-setup"
   );
   return unwrapApiData(response);
 }

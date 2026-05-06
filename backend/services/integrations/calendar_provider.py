@@ -164,8 +164,13 @@ class GoogleCalendarSyncProvider(CalendarSyncProvider):
 
     async def create_event(self, event_details: Dict[str, Any]) -> Dict[str, Any]:
         refresh_token, _ = decrypt_token_value(self.token_record.refresh_token)
+        access_token, _ = decrypt_token_value(self.token_record.access_token)
+        if access_token is None:
+            raise ValueError(
+                f"Cannot create Google event. Token decryption failed for token ID {self.token_record.id}"
+            )
         token_data = {
-            "access_token": self.token_record.access_token,
+            "access_token": access_token,
             "refresh_token": refresh_token,
         }
         result = await google_calendar.create_google_event(token_data, event_details)
@@ -173,8 +178,13 @@ class GoogleCalendarSyncProvider(CalendarSyncProvider):
 
     async def delete_event(self, external_event_id: str) -> bool:
         refresh_token, _ = decrypt_token_value(self.token_record.refresh_token)
+        access_token, _ = decrypt_token_value(self.token_record.access_token)
+        if access_token is None:
+            raise ValueError(
+                f"Cannot delete Google event. Token decryption failed for token ID {self.token_record.id}"
+            )
         token_data = {
-            "access_token": self.token_record.access_token,
+            "access_token": access_token,
             "refresh_token": refresh_token,
         }
         await google_calendar.delete_google_event(token_data, external_event_id)
@@ -242,16 +252,18 @@ class MicrosoftGraphSyncProvider(CalendarSyncProvider):
         }
 
     async def create_event(self, event_details: Dict[str, Any]) -> Dict[str, Any]:
+        refresh_token, _ = decrypt_token_value(self.token_record.refresh_token)
         token_data = {
-            "refresh_token": self.token_record.refresh_token,
+            "refresh_token": refresh_token,
             "scopes": self.token_record.scopes,
         }
         result = await ms_graph.create_ms_event(token_data, event_details)
         return {"event_id": result.get("id")}
 
     async def delete_event(self, external_event_id: str) -> bool:
+        refresh_token, _ = decrypt_token_value(self.token_record.refresh_token)
         token_data = {
-            "refresh_token": self.token_record.refresh_token,
+            "refresh_token": refresh_token,
             "scopes": self.token_record.scopes,
         }
         await ms_graph.delete_ms_event(token_data, external_event_id)

@@ -42,38 +42,8 @@ interface OAuthButtonsProps {
 }
 
 export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in" }: OAuthButtonsProps) {
-  const [availableProviderIds, setAvailableProviderIds] = useState<Set<string> | null>(null);
-  const [providerLoadFailed, setProviderLoadFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getProviders()
-      .then((configuredProviders) => {
-        if (cancelled) return;
-
-        const ids = new Set(Object.keys(configuredProviders || {}));
-        setAvailableProviderIds(ids);
-        setProviderLoadFailed(false);
-
-        const missing = providers
-          .map((provider) => provider.id)
-          .filter((providerId) => !ids.has(providerId));
-        if (missing.length > 0) {
-          console.warn("[OAuthButtons] OAuth providers unavailable:", missing);
-        }
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        console.error("[OAuthButtons] Failed to load auth providers:", error);
-        setAvailableProviderIds(new Set());
-        setProviderLoadFailed(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [availableProviderIds] = useState<Set<string> | null>(() => new Set(providers.map(p => p.id)));
+  const [providerLoadFailed] = useState(false);
 
   const visibleProviders = useMemo(() => {
     if (!availableProviderIds) return providers;

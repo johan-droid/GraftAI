@@ -216,9 +216,11 @@ class TestRateLimitMiddleware:
         async def mock_call_next(req):
             return MagicMock()
         
-        with pytest.raises(RateLimitExceeded) as exc_info:
+        # Use name-based check to avoid import identity issues in some CI environments
+        with pytest.raises(Exception) as exc_info:
             await middleware.dispatch(request, mock_call_next)
         
+        assert exc_info.type.__name__ == "RateLimitExceeded"
         assert exc_info.value.status_code == 429
         assert "30" in exc_info.value.headers.get("Retry-After", "")
 

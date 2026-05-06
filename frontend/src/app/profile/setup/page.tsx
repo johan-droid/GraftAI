@@ -6,7 +6,7 @@ import { Box } from "@mui/material";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { toast } from "@/components/ui/Toast";
-import { getProfileSetupStatus } from "@/lib/api";
+import { getProfileSetupStatus, skipProfileSetup } from "@/lib/api";
 
 const steps = [
   {
@@ -39,6 +39,7 @@ export default function OnboardingChecklistPage() {
   const router = useRouter();
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [skipping, setSkipping] = useState(false);
   const [finished, setFinished] = useState(false);
 
   useEffect(() => {
@@ -79,10 +80,26 @@ export default function OnboardingChecklistPage() {
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button variant="default" onClick={() => router.push(getFirstIncompleteStepRoute())} disabled={loading}>
+              <Button variant="default" onClick={() => router.push(getFirstIncompleteStepRoute())} disabled={loading || skipping}>
                 {loading ? "Loading..." : "Continue setup"}
               </Button>
-              <Button variant="secondary" onClick={() => router.push("/dashboard")}>Go to dashboard</Button>
+              <Button
+                variant="secondary"
+                disabled={loading || skipping}
+                onClick={async () => {
+                  setSkipping(true);
+                  try {
+                    await skipProfileSetup();
+                  } catch (error) {
+                    console.warn("Unable to persist skip setup before navigating to dashboard", error);
+                  } finally {
+                    setSkipping(false);
+                    router.push("/dashboard");
+                  }
+                }}
+              >
+                {skipping ? "Skipping setup..." : "Go to dashboard"}
+              </Button>
             </div>
           </div>
         </div>

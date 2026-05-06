@@ -1,6 +1,7 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { useEffect, useMemo, useState } from "react";
+import { getProviders, signIn } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 
 const GoogleIcon = () => (
@@ -41,14 +42,28 @@ interface OAuthButtonsProps {
 }
 
 export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in" }: OAuthButtonsProps) {
+  const [availableProviderIds] = useState<Set<string> | null>(() => new Set(providers.map(p => p.id)));
+  const [providerLoadFailed] = useState(false);
+
+  const visibleProviders = useMemo(() => {
+    if (!availableProviderIds) return providers;
+    return providers.filter((provider) => availableProviderIds.has(provider.id));
+  }, [availableProviderIds]);
+
+  const buildCallbackUrl = (callbackURL: string, timestamp: number) => {
+    if (!callbackURL.startsWith("/")) {
+      return callbackURL;
+    }
+
+    const separator = callbackURL.includes("?") ? "&" : "?";
+    return `${callbackURL}${separator}t=${timestamp}&skip_setup=true`;
+  };
+
   const handleOAuth = async (provider: string, timestamp: number) => {
     try {
       // Force redirect to dashboard, bypassing profile setup/onboarding
       // Timestamp is provided by the event handler so no impure calls occur during render.
-      const t = timestamp;
-      const finalCallbackUrl = callbackURL.startsWith("/")
-        ? `${callbackURL}?t=${t}&skip_setup=true`
-        : callbackURL;
+      const finalCallbackUrl = buildCallbackUrl(callbackURL, timestamp);
 
       await signIn(provider, {
         callbackUrl: finalCallbackUrl,
@@ -66,7 +81,14 @@ export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in
 
   return (
     <div className="flex flex-col gap-3">
-      {providers.map((provider) => (
+      {availableProviderIds && visibleProviders.length === 0 ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Sign-in providers are not configured for this deployment. Check the auth environment variables in production.
+          {providerLoadFailed ? " The provider check also failed, so the auth route may be misconfigured." : ""}
+        </div>
+      ) : null}
+
+      {visibleProviders.map((provider) => (
         <button
           key={provider.id}
           onClick={() => handleOAuth(provider.id, Date.now())}

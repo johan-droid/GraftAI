@@ -204,13 +204,13 @@ class TestRateLimitMiddleware:
         assert "X-RateLimit-Remaining" in response.headers
 
     @pytest.mark.asyncio
-    @patch("backend.utils.rate_limiter.RateLimiter.is_allowed", new_callable=AsyncMock)
-    async def test_middleware_rejects_when_rate_limited(self, mock_is_allowed):
+    async def test_middleware_rejects_when_rate_limited(self):
         """Test that middleware rejects requests when rate limited."""
-        mock_is_allowed.return_value = (False, 0, 30)
-        
         app = MagicMock()
         middleware = RateLimitMiddleware(app=app)
+        
+        # Patch the instance's is_allowed method after middleware is created
+        middleware.limiter.is_allowed = AsyncMock(return_value=(False, 0, 30))
         
         request = MockRequest(path="/api/v1/users")
         

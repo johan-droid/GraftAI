@@ -61,8 +61,9 @@ jobs:
 
       - name: Run Migrations
         run: |
-          pip install -r backend/requirements.txt
-          python -m alembic -c backend/alembic.ini -o "alembic.script_location=backend/alembic" upgrade head
+          cd backend
+          pip install -r requirements.txt
+          alembic upgrade head
         env:
           DATABASE_URL: "${{ steps.create_neon_branch.outputs.db_url_with_pooler }}"
           PYTHONPATH: ${{ github.workspace }}

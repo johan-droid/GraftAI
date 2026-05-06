@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -124,6 +125,7 @@ async def upsert_user_token(
     provider: str,
     token_info: dict,
 ) -> UserTokenTable:
+    now = datetime.now(timezone.utc)
     stmt = select(UserTokenTable).where(
         UserTokenTable.user_id == user.id,
         UserTokenTable.provider == provider,
@@ -153,6 +155,27 @@ async def upsert_user_token(
         if refresh_needs_upgrade and existing_refresh_token:
             user_token.refresh_token = encrypt_token_value(existing_refresh_token)
 
+    incoming_scopes = token_info.get("scopes") or token_info.get("scope")
+    if incoming_scopes is not None:
+        user_token.scopes = incoming_scopes
+
+    incoming_metadata = token_info.get("metadata_payload") or token_info.get("metadata")
+    if incoming_metadata is not None:
+        if isinstance(incoming_metadata, str):
+            try:
+                incoming_metadata = json.loads(incoming_metadata)
+            except ValueError:
+                incoming_metadata = {"metadata": incoming_metadata}
+
+        metadata_payload = dict(user_token.metadata_payload or {})
+        metadata_payload.update(incoming_metadata)
+        user_token.metadata_payload = metadata_payload
+
+    if provider in {"google", "microsoft"}:
+        metadata_payload = dict(user_token.metadata_payload or {})
+        metadata_payload.setdefault("calendar_connected", True)
+        user_token.metadata_payload = metadata_payload
+
     expires_at_raw = token_info.get("expires_at")
     if expires_at_raw is not None:
         expires_at_dt = None
@@ -174,5 +197,4 @@ async def upsert_user_token(
 
         if expires_at_dt is not None:
             user_token.expires_at = expires_at_dt
-    user_token.is_active = True
-    return user_token
+    user_token.updated_at = now

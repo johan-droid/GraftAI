@@ -9,6 +9,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 import time
 
+import backend.utils.rate_limiter as rl
 from backend.utils.rate_limiter import (
     RateLimiter,
     RateLimitStrategy,
@@ -216,7 +217,7 @@ class TestRateLimitMiddleware:
         async def mock_call_next(req):
             return MagicMock()
         
-        with pytest.raises(RateLimitExceeded) as exc_info:
+        with pytest.raises(rl.RateLimitExceeded) as exc_info:
             await middleware.dispatch(request, mock_call_next)
         
         assert exc_info.value.status_code == 429
@@ -386,12 +387,10 @@ class TestRateLimiterTypingImport:
 
     def test_module_imports_without_error(self):
         """Importing backend.utils.rate_limiter must not raise any NameError."""
-        import backend.utils.rate_limiter as mod  # noqa: F401
-        # The top-level import in this file already verifies the module loads
-        # without NameError. Calling importlib.reload() here would replace class
-        # objects in the module's __dict__ in-place, causing subsequent tests
-        # that use pytest.raises(RateLimitExceeded) to fail because the class
-        # identity no longer matches the one imported at test-file load time.
+        import importlib
+        import backend.utils.rate_limiter as mod
+        # If Any removal breaks anything, importlib.reload would surface it.
+        importlib.reload(mod)
 
     def test_rate_limiter_instantiates(self):
         """RateLimiter() must construct successfully after the import cleanup."""

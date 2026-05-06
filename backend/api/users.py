@@ -186,6 +186,11 @@ def _profile_setup_completed(user: UserTable) -> bool:
     )
 
 
+def _profile_setup_skipped(user: UserTable) -> bool:
+    prefs = _normalize_preferences(user)
+    return bool(prefs.get("profile_setup_skipped"))
+
+
 def _mark_profile_setup_completed(user: UserTable) -> None:
     prefs = _normalize_preferences(user)
     completed_steps = list(
@@ -193,6 +198,12 @@ def _mark_profile_setup_completed(user: UserTable) -> None:
     )
     prefs["completed_steps"] = completed_steps
     prefs["profile_setup_completed"] = True
+    _set_preferences(user, prefs)
+
+
+def _mark_profile_setup_skipped(user: UserTable) -> None:
+    prefs = _normalize_preferences(user)
+    prefs["profile_setup_skipped"] = True
     _set_preferences(user, prefs)
 
 
@@ -220,6 +231,7 @@ def _serialize_profile(user: UserTable) -> Dict[str, Any]:
         "default_calendar_id": prefs.get("default_calendar_id"),
         "preferences": prefs,
         "profile_setup_completed": _profile_setup_completed(user),
+        "profile_setup_skipped": _profile_setup_skipped(user),
         "onboarding_completed": bool(user.onboarding_completed),
         "completed_steps": prefs.get("completed_steps", []),
         "tier": user.tier,
@@ -418,6 +430,7 @@ async def get_profile_setup_status(current_user: UserTable = Depends(get_current
         "data": {
             "completed_steps": prefs.get("completed_steps", []),
             "profile_setup_completed": _profile_setup_completed(current_user),
+            "profile_setup_skipped": _profile_setup_skipped(current_user),
             "onboarding_completed": bool(current_user.onboarding_completed),
             "profile": _serialize_profile(current_user),
         },
@@ -444,6 +457,29 @@ async def get_google_calendar_auth_url(
         "success": True,
         "message": "Google authorization URL created",
         "data": {"auth_url": auth_url, "state": state},
+    }
+
+
+@router.post("/me/profile/skip-setup")
+async def skip_profile_setup(
+    current_user: UserTable = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _mark_profile_setup_skipped(current_user)
+    db.add(current_user)
+    if hasattr(current_user, "preferences"):
+        flag_modified(current_user, "preferences")
+    await db.commit()
+    await db.refresh(current_user)
+
+    return {
+        "success": True,
+        "message": "Profile setup skipped successfully",
+        "data": {
+            "profile_setup_skipped": True,
+            "profile_setup_completed": _profile_setup_completed(current_user),
+            "onboarding_completed": bool(current_user.onboarding_completed),
+        },
     }
 
 

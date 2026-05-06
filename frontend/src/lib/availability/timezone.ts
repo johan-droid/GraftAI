@@ -1,4 +1,4 @@
-import { TimeSlot } from "./compute";
+import type { TimeSlot } from "./compute";
 
 export function convertSlotToTimezone(
   slot: TimeSlot,
@@ -36,7 +36,7 @@ function convertDateToTimezone(date: Date, fromTz: string, toTz: string): Date {
 function getTimeZoneOffset(timeZone: string, date: Date): string {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
-    timeZoneName: "shortOffset",
+    timeZoneName: "longOffset",
   });
   const parts = formatter.formatToParts(date);
   const tzPart = parts.find((part) => part.type === "timeZoneName")?.value || "+00:00";

@@ -16,8 +16,8 @@ class AppleCalendarSyncProvider(CalendarSyncProvider):
 
     def __init__(self, token_record: UserTokenTable):
         super().__init__(token_record)
-        # Apple uses app-specific password stored in metadata
-        metadata = token_record.metadata or {}
+        # Apple uses app-specific password stored in metadata_payload
+        metadata = token_record.metadata_payload or {}
         self.apple_user_id = metadata.get("apple_user_id")
         self.app_specific_password = metadata.get("app_specific_password")
 
@@ -112,7 +112,7 @@ def get_apple_provider(
         return None
 
     # Check if we have required credentials
-    metadata = token_record.metadata or {}
+    metadata = token_record.metadata_payload or {}
     if not metadata.get("apple_user_id") or not metadata.get("app_specific_password"):
         return None
 

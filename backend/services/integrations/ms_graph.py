@@ -41,8 +41,12 @@ def get_ms_graph_token(token_data: dict) -> str:
     )
 
     # Try to get from refresh token
+    scopes = token_data.get("scopes") or ""
+    if isinstance(scopes, str):
+        scopes = [scope.strip() for scope in scopes.split(",") if scope.strip()]
+
     result = app.acquire_token_by_refresh_token(
-        token_data.get("refresh_token"), scopes=token_data.get("scopes", "").split(",")
+        token_data.get("refresh_token"), scopes=scopes
     )
 
     if "access_token" in result:

@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 import sqlite3
 import traceback
+import re
 
 
 # Ensure repo root is on sys.path so `import backend.models.tables` works
@@ -105,6 +106,13 @@ def verify_and_fix():
                         print(f"    Could not find Column object for {col_name}; skipping")
                         continue
                     decl = add_column_sqlalchemy_column(col)
+                    # Strictly validate to prevent injection in ALTER TABLE
+                    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", tbl_name):
+                        raise ValueError(f"Invalid table name: {tbl_name}")
+                    # Allow alphanumeric, spaces, parentheses, commas, and single quotes
+                    if not re.match(r"^[a-zA-Z0-9_ (),']+$", decl):
+                        raise ValueError(f"Invalid column declaration: {decl}")
+
                     sql = f"ALTER TABLE {tbl_name} ADD COLUMN {decl};"
                     print("    Executing:", sql)
                     try:

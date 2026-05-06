@@ -88,6 +88,7 @@ if DATABASE_URL:
             _params = parse_qs(_parsed.query)
 
             is_render = os.getenv("RENDER") == "true" or "render.com" in DATABASE_URL
+            is_neon = "neon.tech" in DATABASE_URL
 
             _needs_ssl = (
                 _params.pop("sslmode", [None])[0]
@@ -98,6 +99,7 @@ if DATABASE_URL:
                     "prefer",
                 )
                 or is_render
+                or is_neon
             )
 
             _params.pop("channel_binding", None)
@@ -110,7 +112,7 @@ if DATABASE_URL:
                 "server_settings": {"application_name": "GraftAI-Production"},
             }
             if _needs_ssl:
-                _connect_args["ssl"] = "require" if is_render else True
+                _connect_args["ssl"] = "require" if (is_render or is_neon) else True
 
             # CRITICAL PRODUCTION SETTINGS FOR POSTGRESQL
             # Strict Pool Size: Do not allow an infinite spike of connections

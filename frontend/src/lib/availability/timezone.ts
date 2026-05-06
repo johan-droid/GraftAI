@@ -1,4 +1,4 @@
-import { TimeSlot } from "./compute";
+import type { TimeSlot } from "./compute";
 
 export function convertSlotToTimezone(
   slot: TimeSlot,

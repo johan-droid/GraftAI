@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "normalize-sw": "node scripts/normalize-sw.js",
-    "postbuild": "npm run normalize-sw"
+    "postbuild": "npm run normalize-sw",
+    "test": "node --test --experimental-strip-types \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@auth/core": "^0.34.3",

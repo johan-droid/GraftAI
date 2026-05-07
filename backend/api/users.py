@@ -284,6 +284,10 @@ def _apply_profile_payload(
                 "brand_color_dark",
                 "booking_layout",
                 "default_calendar_id",
+                "role",
+                "tier",
+                "subscription_status",
+                "is_superuser",
             }
         }
         prefs.update(filtered)

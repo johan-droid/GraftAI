@@ -16,6 +16,12 @@ interface Event {
   meeting_url?: string;
 }
 
+const timeFormatter = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
+const monthYearFormatter = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
+const weekdayShortFormatter = new Intl.DateTimeFormat("en-US", { weekday: "short" });
+const weekdayLongFormatter = new Intl.DateTimeFormat("en-US", { weekday: "long" });
+const monthDayFormatter = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" });
+
 interface CalendarViewProps {
   events: Event[];
   onEventClick: (event: Event) => void;
@@ -91,7 +97,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 gap-4 border-b border-solid border-[var(--border-subtle)] mb-5">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold text-[var(--text-primary)] min-w-[120px]">
-            {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            {monthYearFormatter.format(currentDate)}
           </h2>
           <div className="flex items-center gap-2">
             <button
@@ -199,7 +205,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                           )}
                         >
                           <span className="text-[11px] text-[var(--text-secondary)] truncate">
-                            {new Date(event.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase()} {getEventTitle(event)}
+                            {timeFormatter.format(new Date(event.start_time)).toLowerCase()} {getEventTitle(event)}
                           </span>
                         </div>
                       )
@@ -230,7 +236,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                     isToday(day) && "bg-[var(--bg-hover)] border-b-[var(--primary)]"
                   )}>
                     <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-1">
-                      {day.toLocaleDateString("en-US", { weekday: "short" })}
+                      {weekdayShortFormatter.format(day)}
                     </div>
                     <div className={cn(
                       "text-sm font-bold",
@@ -256,7 +262,7 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                           </div>
                           <div className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
                             <Clock className="w-3 h-3 opacity-70" />
-                            {new Date(event.start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toLowerCase()}
+                            {timeFormatter.format(new Date(event.start_time)).toLowerCase()}
                           </div>
                         </div>
                       )
@@ -275,10 +281,10 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
           <div className="max-w-4xl mx-auto py-10 px-6">
             <div className="mb-12 pl-6 border-l-2 border-[var(--primary)]">
               <div className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] mb-2">
-                {currentDate.toLocaleDateString("en-US", { weekday: "long" })}
+                {weekdayLongFormatter.format(currentDate)}
               </div>
               <div className="text-4xl font-black text-[var(--text-primary)] tracking-tighter uppercase">
-                {currentDate.toLocaleDateString("en-US", { month: "long", day: "numeric" })}
+                {monthDayFormatter.format(currentDate)}
               </div>
             </div>
             
@@ -304,8 +310,8 @@ export function CalendarView({ events, onEventClick, onDateClick, onCreateEvent 
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-[var(--primary)]" />
                           <span>
-                            {new Date(event.start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} -{" "}
-                            {new Date(event.end_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                            {timeFormatter.format(new Date(event.start_time))} -{" "}
+                            {timeFormatter.format(new Date(event.end_time))}
                           </span>
                         </div>
                         {event.location && (

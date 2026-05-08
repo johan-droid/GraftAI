@@ -5,6 +5,7 @@ import subprocess
 import sys
 from urllib.parse import urlparse, urlunparse
 
+import re
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -38,6 +39,9 @@ async def drop_all_tables(url: str) -> None:
             )
             tables = [row[0] for row in result.fetchall()]
             if tables:
+                for t in tables:
+                    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", t):
+                        raise ValueError(f"Dangerous table name detected: {t}")
                 quoted_tables = ", ".join(quote_identifier(t) for t in tables)
                 await conn.execute(
                     text(f"DROP TABLE IF EXISTS {quoted_tables} CASCADE")
@@ -59,6 +63,8 @@ async def drop_all_tables(url: str) -> None:
             tables = [row[0] for row in result.fetchall()]
             if tables:
                 for table in tables:
+                    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table):
+                        raise ValueError(f"Dangerous table name detected: {table}")
                     await conn.execute(
                         text(f"DROP TABLE IF EXISTS {quote_identifier(table)}")
                     )

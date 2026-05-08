@@ -114,9 +114,13 @@ async def worker_loop():
         if engine is not None and DATABASE_URL is not None:
             async with engine.begin() as conn:
                 if DATABASE_URL.startswith("sqlite"):
-                    result = await conn.execute(text("PRAGMA table_info(events);"))
+                    # Use parameterized pragma_table_info for SQLite
+                    result = await conn.execute(
+                        text("SELECT name FROM pragma_table_info(:table)"),
+                        {"table": "events"}
+                    )
                     rows = result.fetchall()
-                    columns = [r[1] for r in rows]
+                    columns = [r[0] for r in rows]
                     if "description" not in columns:
                         await conn.execute(
                             text("ALTER TABLE events ADD COLUMN description TEXT;")

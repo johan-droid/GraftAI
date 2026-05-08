@@ -10,7 +10,7 @@
 // when the value must be available in client-side code.
 const defaultBackendBase =
   process.env.NODE_ENV === "production"
-    ? "https://graftai-abu1.onrender.com"
+    ? "https://graftai.onrender.com"
     : "http://127.0.0.1:8000";
 
 const rawBackendBase =

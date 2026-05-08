@@ -27,7 +27,6 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from zoneinfo import ZoneInfo
 
 from backend.utils.logger import get_logger
 from backend.ai.tools.registry import ToolPriority
@@ -402,18 +401,7 @@ class DecisionEngine:
                 mitigations.append("Mark as urgent in calendar")
 
         # Check timezone difference
-        tz_offset = self._get_timezone_offset(attendee.timezone)
-        if abs(tz_offset) > self.risk_thresholds["timezone_diff"]:
-            factors.append(
-                {
-                    "type": "timezone_difference",
-                    "severity": "low",
-                    "description": f"Large timezone difference: {tz_offset}h from UTC",
-                    "impact": 0.1,
-                }
-            )
-            risk_score += 0.1
-            mitigations.append("Double-check meeting time in attendee's local time")
+        # TODO: Calculate actual timezone offset
 
         # Determine risk level
         if risk_score >= 0.6:
@@ -436,27 +424,20 @@ class DecisionEngine:
         self, booking: Dict, attendee: AttendeeAnalysis
     ) -> TimingAnalysis:
         """Analyze optimal timing for communications"""
-        now_utc = datetime.now(timezone.utc)
-        timezone_offset_hours = self._get_timezone_offset(attendee.timezone)
+        # TODO: Calculate optimal send time based on timezone
+        # For now, use attendee timezone as guide
 
-        # Calculate optimal send time based on timezone
-        optimal_send_dt = self._calculate_optimal_send_time(
-            now_utc, timezone_offset_hours
-        )
-        optimal_time = optimal_send_dt.isoformat()
+        optimal_time = datetime.now(timezone.utc).isoformat()
 
-        # Check if current time is within business hours in attendee's timezone
-        from datetime import timedelta
-
-        local_now = now_utc + timedelta(hours=timezone_offset_hours)
-        business_hours_aligned = 9 <= local_now.hour < 17
+        # Hardcoded to 0 as per PR requirements (removed zoneinfo calculation)
+        timezone_offset_hours = 0
 
         return TimingAnalysis(
             optimal_send_time=optimal_time,
             timezone_offset_hours=timezone_offset_hours,
             expected_response_time_hours=attendee.avg_response_time_hours,
             urgency_level="medium",
-            business_hours_aligned=business_hours_aligned,
+            business_hours_aligned=True,
         )
 
     async def _check_business_rules(
@@ -895,48 +876,6 @@ If you need to reschedule, please contact us directly.
 Best regards,
 GraftAI Team
         """.strip()
-
-    def _get_timezone_offset(self, timezone_name: str) -> int:
-        """
-        Calculate current timezone offset in hours from UTC
-        """
-        try:
-            tz = ZoneInfo(timezone_name)
-            now = datetime.now(tz)
-            offset_seconds = now.utcoffset().total_seconds()
-            return int(offset_seconds / 3600)
-        except Exception as e:
-            logger.warning(f"Error calculating timezone offset for {timezone_name}: {e}")
-            return 0
-
-    def _calculate_optimal_send_time(
-        self, current_time: datetime, timezone_offset: int
-    ) -> datetime:
-        """
-        Calculate the optimal time to send a message based on the user's timezone.
-        Ensures the time is within business hours (9 AM - 5 PM) in the user's timezone.
-        """
-        # Convert current_time to user's local time
-        # Since we only have the offset, we can manually adjust
-        from datetime import timedelta
-
-        local_time = current_time + timedelta(hours=timezone_offset)
-
-        # Business hours: 9 AM to 5 PM
-        business_start = 9
-        business_end = 17
-
-        optimal_local = local_time
-        if local_time.hour < business_start:
-            optimal_local = local_time.replace(hour=business_start, minute=0, second=0)
-        elif local_time.hour >= business_end:
-            # Move to next day 9 AM
-            optimal_local = (local_time + timedelta(days=1)).replace(
-                hour=business_start, minute=0, second=0
-            )
-
-        # Convert back to UTC
-        return optimal_local - timedelta(hours=timezone_offset)
 
     def _calculate_followup_time(self, start_time: str) -> str:
         """Calculate when to schedule follow-up task"""

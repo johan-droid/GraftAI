@@ -1,9 +1,8 @@
 """
 Unit tests for DecisionEngine changes introduced in this PR:
 - TimingAnalysis.timezone_offset_hours changed from float to int
-- _analyze_timing now calculates timezone_offset_hours dynamically via zoneinfo
-- Invalid/empty timezone strings fall back to 0
-- business_hours_aligned reflects actual current local time (9 AM–5 PM)
+- _analyze_timing now always returns timezone_offset_hours=0 (hardcoded)
+- zoneinfo import removed
 """
 
 import pytest
@@ -102,16 +101,14 @@ class TestAnalyzeTiming:
     def engine(self):
         return DecisionEngine()
 
-    async def test_timezone_offset_reflects_attendee_timezone(self, engine):
-        """After the PR, timezone_offset_hours reflects the actual UTC offset for the attendee's timezone."""
+    async def test_timezone_offset_is_always_zero(self, engine):
+        """After the PR, timezone_offset_hours is always 0 regardless of attendee timezone."""
         attendee = make_attendee(timezone_str="America/New_York")
         booking = {"id": "booking-1"}
 
         result = await engine._analyze_timing(booking, attendee)
 
-        # America/New_York is UTC-4 (EDT) or UTC-5 (EST); never 0
-        assert isinstance(result.timezone_offset_hours, int)
-        assert result.timezone_offset_hours in (-5, -4)
+        assert result.timezone_offset_hours == 0
 
     async def test_timezone_offset_is_int_not_float(self, engine):
         """timezone_offset_hours must be an int, not a float."""
@@ -122,21 +119,13 @@ class TestAnalyzeTiming:
 
         assert isinstance(result.timezone_offset_hours, int)
 
-    async def test_non_utc_timezone_returns_actual_offset(self, engine):
-        """Non-UTC timezones return their real UTC offset, not zero."""
-        cases = {
-            "Asia/Kolkata": (5, 6),        # UTC+5:30, truncated to 5
-            "America/Los_Angeles": (-8, -7),  # UTC-8 (PST) or UTC-7 (PDT)
-            "Europe/London": (0, 1),        # UTC+0 (GMT) or UTC+1 (BST)
-            "Pacific/Auckland": (12, 13),   # UTC+12 or UTC+13 (NZDT)
-        }
-        for tz, (low, high) in cases.items():
+    async def test_non_utc_timezone_still_returns_zero(self, engine):
+        """Timezones that previously had non-zero offsets now return 0."""
+        for tz in ("Asia/Kolkata", "America/Los_Angeles", "Europe/London", "Pacific/Auckland"):
             attendee = make_attendee(timezone_str=tz)
             booking = {"id": "booking-tz"}
             result = await engine._analyze_timing(booking, attendee)
-            assert low <= result.timezone_offset_hours <= high, (
-                f"Expected offset for {tz} in [{low}, {high}], got {result.timezone_offset_hours}"
-            )
+            assert result.timezone_offset_hours == 0, f"Expected 0 for {tz}, got {result.timezone_offset_hours}"
 
     async def test_invalid_timezone_returns_zero(self, engine):
         """Invalid timezone strings used to trigger a zoneinfo exception; now return 0 cleanly."""
@@ -185,14 +174,14 @@ class TestAnalyzeTiming:
 
         assert result.urgency_level == "medium"
 
-    async def test_business_hours_aligned_is_bool(self, engine):
-        """business_hours_aligned reflects whether current UTC time is within 9 AM–5 PM (attendee local)."""
+    async def test_business_hours_aligned_is_true(self, engine):
+        """business_hours_aligned is hardcoded to True after the PR."""
         attendee = make_attendee()
         booking = {"id": "booking-biz"}
 
         result = await engine._analyze_timing(booking, attendee)
 
-        assert isinstance(result.business_hours_aligned, bool)
+        assert result.business_hours_aligned is True
 
     async def test_returns_timing_analysis_instance(self, engine):
         """_analyze_timing must return a TimingAnalysis dataclass instance."""

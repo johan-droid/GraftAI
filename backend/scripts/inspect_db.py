@@ -17,7 +17,7 @@ def inspect_db():
     print("Tables in database:")
     for table in tables:
         print(f"- {table[0]}")
-        cursor.execute("SELECT * FROM pragma_table_info(?);", (table[0],))
+        cursor.execute(f"PRAGMA table_info({table[0]});")
         columns = cursor.fetchall()
         for col in columns:
             print(f"  - {col[1]} ({col[2]})")

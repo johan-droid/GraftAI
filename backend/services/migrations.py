@@ -232,8 +232,7 @@ def _ensure_sqlite_soft_delete_flags(engine) -> None:
 def run_migrations(db_url: Optional[str] = None, migration_file: Optional[str] = None):
     db_url = db_url or DATABASE_URL
     if not db_url:
-        logger.warning("DATABASE_URL not set — skipping migrations")
-        return {"status": "skipped", "reason": "DATABASE_URL not set"}
+        raise RuntimeError("DATABASE_URL is not set")
 
     sync_url = _normalize_sync_url(db_url)
     engine = create_engine(sync_url, future=True)

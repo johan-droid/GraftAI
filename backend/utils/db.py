@@ -8,23 +8,11 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-ENV_FILES = [
-    ROOT_DIR / ".env",
-    ROOT_DIR / ".env.local",
-    ROOT_DIR / ".env.development",
-    ROOT_DIR / ".env.development.local",
-    BACKEND_DIR / ".env",
-    BACKEND_DIR / ".env.local",
-    BACKEND_DIR / ".env.development",
-    BACKEND_DIR / ".env.development.local",
-]
-
 if not os.environ.get("TESTING"):
-    for dotenv_path in ENV_FILES:
-        if dotenv_path.exists():
-            load_dotenv(dotenv_path=dotenv_path, override=False)
+    load_dotenv(
+        dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"),
+        override=False,
+    )
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 AsyncSessionLocal = None

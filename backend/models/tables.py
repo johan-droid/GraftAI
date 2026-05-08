@@ -192,9 +192,6 @@ class UserTokenTable(Base):
         DateTime(timezone=True), nullable=True
     )
     sync_token: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    metadata_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    scopes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     user: Mapped["UserTable"] = relationship("UserTable", back_populates="tokens")

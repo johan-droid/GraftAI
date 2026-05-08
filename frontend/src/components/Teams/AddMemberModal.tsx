@@ -82,8 +82,8 @@ export default function AddMemberModal({
         <h3 className="text-lg font-semibold mb-3">Add Team Member</h3>
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
-            <input
+            <label htmlFor="member-email" className="block text-sm font-medium text-gray-700">Email</label>
+            <input id="member-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"

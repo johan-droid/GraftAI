@@ -74,7 +74,7 @@ export function Topbar({ showMenuButton = false, onMenuClick }: TopbarProps) {
           }
         `}>
           <Search size={18} className={isDark ? "text-[#C9C5CA]" : "text-[#5F6368]"} />
-          <input 
+          <input aria-label="Search events, bookings, or settings..."
             type="text" 
             placeholder="Search events, bookings, or settings..." 
             aria-label="Search events, bookings, or settings"

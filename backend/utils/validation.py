@@ -324,15 +324,14 @@ def validate_and_sanitize_input(input_data: str | dict | list, schema_class: typ
         if isinstance(input_data, str):
             return SecurityValidator.sanitize_string(input_data)
         if isinstance(input_data, dict):
-                return {
-                    SecurityValidator.sanitize_string(str(k)): 
-                    SecurityValidator.sanitize_string(str(v)) 
-                    for k, v in input_data.items()
-                }
-            elif isinstance(input_data, list):
-                return [SecurityValidator.sanitize_string(str(item)) for item in input_data]
-            else:
-                return input_data
+            return {
+                SecurityValidator.sanitize_string(str(k)): SecurityValidator.sanitize_string(str(v))
+                for k, v in input_data.items()
+            }
+        elif isinstance(input_data, list):
+            return [SecurityValidator.sanitize_string(str(item)) for item in input_data]
+        else:
+            return input_data
     except Exception as e:
         logger.exception("Input validation failed: %s", str(e))
         raise HTTPException(

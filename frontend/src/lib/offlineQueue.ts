@@ -270,8 +270,8 @@ class OfflineQueue {
       'Content-Type': 'application/json',
     };
 
-    let endpoint = '';
-    let method: 'POST' | 'PUT' | 'DELETE' = 'POST';
+    let endpoint: string;
+    let method: 'POST' | 'PUT' | 'DELETE';
 
     switch (action.type) {
       case 'create':

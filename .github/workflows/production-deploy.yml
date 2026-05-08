@@ -1,0 +1,71 @@
+name: Auto-Deploy to Production
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+      - run: pnpm install
+      - run: pnpm typecheck
+      - run: pnpm lint --max-warnings=0
+      - run: pnpm test:unit --coverage
+      - run: pnpm test:e2e
+      - run: pnpm build
+
+  security-scan:
+    needs: quality-gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm snyk test --severity-threshold=high
+      - run: docker buildx build --load -t app:latest .
+      - run: trivy image --exit-code 1 --severity CRITICAL,HIGH app:latest
+
+  canary-deploy:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    environment: production-canary
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/k8s-deploy@v4
+        with:
+          image: app:latest
+          deployment-manifests: k8s/canary-deployment.yaml
+          traffic-split: "canary=5,stable=95"
+
+  monitor-canary:
+    needs: canary-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for metrics
+        run: sleep 300
+      - name: Check error rates
+        run: |
+          ERROR_RATE=$(curl -s $GRAFANA_API/errors?canary=true)
+          if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+            echo "Canary failing: error rate ${ERROR_RATE}%"
+            false
+          fi
+
+  full-rollout:
+    needs: monitor-canary
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: kubectl set image deployment/app app=app:latest
+      - run: kubectl rollout status deployment/app
+      - name: Notify success
+        run: curl -X POST $SLACK_WEBHOOK -d '{"text":"✅ Production deployed"}'

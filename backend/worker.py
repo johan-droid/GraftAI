@@ -1,36 +1,36 @@
 import logging
-from datetime import datetime, timedelta, timezone
-import pytz
-from sqlalchemy import select, and_
-from sqlalchemy.orm import selectinload
-from arq import cron  # Arq cron function for proper job scheduling
-
-from backend.utils.db import AsyncSessionLocal
-from backend.utils.webhook_signing import generate_webhook_signature
-from backend.models.tables import UserTable, EventTable, BookingTable, WebhookLogTable
-from backend.services.scheduler import (
-    push_event_to_external_calendar,
-    update_event,
-    delete_event,
-)
-from backend.services.sync_engine import sync_user_calendar
-from backend.services.calendar_sync import sync_calendar_for_user
-from backend.services.notifications import (
-    notify_event_created,
-    notify_event_updated,
-    notify_event_deleted,
-    send_booking_reminder_to_organizer,
-    send_custom_notification,
-)
-from backend.services.mail_service import send_email
-from backend.services.queue_monitoring import start_queue_monitoring
-from backend.utils.http_client import get_client
 import os
+from datetime import UTC, datetime, timedelta
 
+import pytz
+from arq import cron  # Arq cron function for proper job scheduling
+from sqlalchemy import and_, select
+from sqlalchemy.orm import selectinload
+
+from backend.models.tables import BookingTable, EventTable, UserTable, WebhookLogTable
+from backend.services.calendar_sync import sync_calendar_for_user
 from backend.services.integrations.unified_service import UnifiedService
 from backend.services.integrations.video_conference_service import (
     VideoConferenceService,
 )
+from backend.services.mail_service import send_email
+from backend.services.notifications import (
+    notify_event_created,
+    notify_event_deleted,
+    notify_event_updated,
+    send_booking_reminder_to_organizer,
+    send_custom_notification,
+)
+from backend.services.queue_monitoring import start_queue_monitoring
+from backend.services.scheduler import (
+    delete_event,
+    push_event_to_external_calendar,
+    update_event,
+)
+from backend.services.sync_engine import sync_user_calendar
+from backend.utils.db import AsyncSessionLocal
+from backend.utils.http_client import get_client
+from backend.utils.webhook_signing import generate_webhook_signature
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ async def task_sync_calendar(_ctx, user_id: str):
 async def task_process_reminders(_ctx):
     """Check for events starting in the next 60 minutes and send emails."""
     async with AsyncSessionLocal() as db:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         lookahead = now + timedelta(minutes=60)
 
         stmt = select(EventTable).where(
@@ -106,7 +106,7 @@ async def task_process_reminders(_ctx):
 async def task_send_booking_reminders(_ctx):
     """Send organizer reminders for bookings that start ~24 hours from now."""
     async with AsyncSessionLocal() as db:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         reminder_target = now + timedelta(hours=24)
         window_start = reminder_target - timedelta(minutes=30)
         window_end = reminder_target + timedelta(minutes=30)
@@ -288,7 +288,7 @@ async def task_provision_shortlink(_ctx, booking_id: str):
             meta["public"]["shortlink_id"] = short.get("id")
             meta["public"]["shortlink_external"] = bool(short.get("external"))
             booking.metadata_payload = meta
-            booking.updated_at = datetime.now(timezone.utc)
+            booking.updated_at = datetime.now(UTC)
             await db.commit()
             logger.info("Shortlink provisioned for booking %s", booking_id)
         except Exception as e:  # noqa: BLE001 - external service failure
@@ -339,7 +339,7 @@ async def task_provision_jitsi_meeting(_ctx, booking_id: str):
             meta["meeting"]["join_url"] = getattr(meeting, "join_url", None)
             meta["meeting"]["provider_meeting_id"] = getattr(meeting, "provider_meeting_id", None)
             booking.metadata_payload = meta
-            booking.updated_at = datetime.now(timezone.utc)
+            booking.updated_at = datetime.now(UTC)
             await db.commit()
             logger.info("Jitsi meeting provisioned for booking %s", booking_id)
         except Exception as e:  # noqa: BLE001 - external service failure
@@ -372,7 +372,7 @@ async def task_send_webhook(
     log_id: str | None = None,
     secret: str | None = None,
 ):
-    created_at = datetime.now(timezone.utc)
+    created_at = datetime.now(UTC)
     payload = {
         "event": event,
         "createdAt": created_at.isoformat(),
@@ -424,7 +424,7 @@ async def task_send_webhook(
                     log.request_status = 0
                     log.request_error = str(e)
                     log.attempts = max(log.attempts or 1, attempt)
-                    log.next_retry_at = datetime.now(timezone.utc) + timedelta(
+                    log.next_retry_at = datetime.now(UTC) + timedelta(
                         minutes=5
                     )
                     await db.commit()
@@ -550,18 +550,18 @@ class WorkerSettings:
 
     functions = REGISTERED_TASKS
     on_startup = _worker_startup
-    
+
     # CRITICAL: Do not drop the task if the worker is killed mid-execution
     allow_abort_jobs = False
-    
+
     # Re-queue tasks if the worker crashes (Late ACK)
     job_timeout = 60  # Force timeout if it hangs
     keep_result_forever = False
     keep_result = 3600  # Keep success logs for 1 hour
-    
+
     # Maximum retries at the worker level before moving to Dead Letter Queue
     max_tries = 3
-    
+
     # Arq cron jobs using proper cron() function calls (not dict literals)
     cron_jobs = [
         cron(task_sync_all_users, minute={0, 30}),  # Every hour at :00 and :30

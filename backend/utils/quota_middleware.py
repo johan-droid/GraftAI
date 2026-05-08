@@ -171,7 +171,7 @@ return {allowed and 1 or 0, tokens}
                 "/api/v1/ai/generate",
             ]
             
-            is_critical = any(path in path for path in critical_quota_paths)
+            is_critical = any(p in path for p in critical_quota_paths)
             
             if is_critical:
                 # SECURITY: Fail-closed - block the request for critical AI endpoints

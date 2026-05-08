@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 import httpx
 from enum import Enum
+from backend.utils.ssrf import is_safe_url
+
 
 
 class WebhookEventType(str, Enum):
@@ -76,6 +78,9 @@ class WebhookService:
         headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Send a webhook to a URL."""
+
+        if not is_safe_url(url):
+            return {"success": False, "error": "Unsafe webhook URL", "status_code": None}
 
         # Build request headers
         request_headers = {

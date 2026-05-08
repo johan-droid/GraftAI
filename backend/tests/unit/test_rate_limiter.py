@@ -13,7 +13,6 @@ import backend.utils.rate_limiter as rl
 from backend.utils.rate_limiter import (
     RateLimiter,
     RateLimitStrategy,
-    RateLimitExceeded,
     RateLimitMiddleware,
     rate_limit,
     get_rate_limiter,

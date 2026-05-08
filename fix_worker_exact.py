@@ -3,8 +3,7 @@ import re
 with open("backend/worker.py", "r") as f:
     content = f.read()
 
-# Fix the exact indentation errors from lines 215-240
-fixed_content = content.replace(
+fixed = content.replace(
 """        try:
                 if email_type == "confirmation":
                 await notify_event_created([booking.email], [], payload)
@@ -12,9 +11,9 @@ fixed_content = content.replace(
                 organizer_email = payload.get("organizer_email")
                 if organizer_email:
                     await send_custom_notification(
-                        [organizer_email],
-                        [],
-                        subject=f"New Booking: {event.title}",
+                        organizer_email,
+                        f"New booking for {event.title}",
+                        f"A new booking has been scheduled for {event.title} on {payload['start_time']}.",
                         html_body=f"<p>A new booking has been scheduled for <strong>{event.title}</strong> on {payload['start_time']}.</p>",
                     )
                     else:
@@ -38,9 +37,9 @@ fixed_content = content.replace(
                 organizer_email = payload.get("organizer_email")
                 if organizer_email:
                     await send_custom_notification(
-                        [organizer_email],
-                        [],
-                        subject=f"New Booking: {event.title}",
+                        organizer_email,
+                        f"New booking for {event.title}",
+                        f"A new booking has been scheduled for {event.title} on {payload['start_time']}.",
                         html_body=f"<p>A new booking has been scheduled for <strong>{event.title}</strong> on {payload['start_time']}.</p>",
                     )
                 else:
@@ -59,4 +58,4 @@ fixed_content = content.replace(
             logger.exception("Failed to send %s email for booking %s", email_type, booking_id)""")
 
 with open("backend/worker.py", "w") as f:
-    f.write(fixed_content)
+    f.write(fixed)

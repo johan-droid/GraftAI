@@ -3,19 +3,20 @@ Input validation and sanitization utilities for GraftAI backend.
 Provides comprehensive validation for common input types and patterns.
 """
 
-import re
 import html
 import logging
-from typing import Any, Optional, Union, List, Dict
-from pydantic import BaseModel, validator, EmailStr
+import re
+from typing import Any
+
 from fastapi import HTTPException, status
+from pydantic import BaseModel, validator
 
 logger = logging.getLogger(__name__)
 
 
 class SecurityValidator:
     """Security-focused input validation and sanitization."""
-    
+
     # Common attack patterns
     SQL_INJECTION_PATTERNS = [
         r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT)\b)",
@@ -25,7 +26,7 @@ class SecurityValidator:
         r"(\b(LOAD_FILE|INTO\s+OUTFILE|INTO\s+DUMPFILE)\b)",
         r"(\b(WAITFOR|DELAY|BENCHMARK)\b)",
     ]
-    
+
     XSS_PATTERNS = [
         r"<script[^>]*>.*?</script>",
         r"javascript:",
@@ -39,7 +40,7 @@ class SecurityValidator:
         r"@import",
         r"vbscript:",
     ]
-    
+
     PATH_TRAVERSAL_PATTERNS = [
         r"\.\.[/\\]",
         r"%2e%2e[/\\]",
@@ -50,14 +51,14 @@ class SecurityValidator:
         r"/proc/",
         r"/sys/",
     ]
-    
+
     COMMAND_INJECTION_PATTERNS = [
         r"[;&|`$(){}[\]]",
         r"\b(curl|wget|nc|netcat|telnet|ssh|ftp)\b",
         r"\b(rm|mv|cp|cat|ls|ps|kill|chmod|chown)\b",
         r"\b(python|perl|ruby|bash|sh|cmd|powershell)\b",
     ]
-    
+
     @classmethod
     def sanitize_string(cls, input_str: str, max_length: int = 1000) -> str:
         """
@@ -72,18 +73,18 @@ class SecurityValidator:
         """
         if not input_str:
             return ""
-        
+
         # HTML escape
         sanitized = html.escape(input_str)
-        
+
         # Remove null bytes
         sanitized = sanitized.replace("\x00", "")
-        
+
         # Limit length
         sanitized = sanitized[:max_length]
-        
+
         return sanitized.strip()
-    
+
     @classmethod
     def validate_email(cls, email: str) -> bool:
         """
@@ -97,21 +98,21 @@ class SecurityValidator:
         """
         if not email or len(email) > 254:
             return False
-        
+
         # Basic email regex (simplified for security)
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        
+        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+
         if not re.match(email_pattern, email):
             return False
-        
+
         # Check for dangerous patterns
         dangerous_patterns = cls.SQL_INJECTION_PATTERNS + cls.XSS_PATTERNS
         for pattern in dangerous_patterns:
             if re.search(pattern, email, re.IGNORECASE):
                 return False
-        
+
         return True
-    
+
     @classmethod
     def validate_phone(cls, phone: str) -> bool:
         """
@@ -125,13 +126,13 @@ class SecurityValidator:
         """
         if not phone:
             return False
-        
+
         # Remove common formatting characters
-        clean_phone = re.sub(r'[+()\s-]', '', phone)
-        
+        clean_phone = re.sub(r"[+()\s-]", "", phone)
+
         # Check if it's all digits and reasonable length
-        return bool(re.match(r'^\d{10,15}$', clean_phone))
-    
+        return bool(re.match(r"^\d{10,15}$", clean_phone))
+
     @classmethod
     def validate_url(cls, url: str) -> bool:
         """
@@ -145,21 +146,21 @@ class SecurityValidator:
         """
         if not url or len(url) > 2048:
             return False
-        
+
         # Basic URL pattern
-        url_pattern = r'^https?:\/\/[^\s/$.?#].[^\s]*$'
-        
+        url_pattern = r"^https?:\/\/[^\s/$.?#].[^\s]*$"
+
         if not re.match(url_pattern, url):
             return False
-        
+
         # Check for dangerous patterns
         dangerous_patterns = cls.XSS_PATTERNS + cls.JAVASCRIPT_PATTERNS
         for pattern in dangerous_patterns:
             if re.search(pattern, url, re.IGNORECASE):
                 return False
-        
+
         return True
-    
+
     @classmethod
     def validate_file_path(cls, file_path: str) -> bool:
         """
@@ -173,16 +174,16 @@ class SecurityValidator:
         """
         if not file_path:
             return False
-        
+
         # Check for path traversal patterns
         for pattern in cls.PATH_TRAVERSAL_PATTERNS:
             if re.search(pattern, file_path, re.IGNORECASE):
                 return False
-        
+
         # Only allow specific safe characters
-        safe_pattern = r'^[a-zA-Z0-9._/-]+$'
+        safe_pattern = r"^[a-zA-Z0-9._/-]+$"
         return bool(re.match(safe_pattern, file_path))
-    
+
     @classmethod
     def validate_sql_input(cls, input_str: str) -> bool:
         """
@@ -196,14 +197,14 @@ class SecurityValidator:
         """
         if not input_str:
             return True
-        
+
         # Check for SQL injection patterns
         for pattern in cls.SQL_INJECTION_PATTERNS:
             if re.search(pattern, input_str, re.IGNORECASE):
                 return False
-        
+
         return True
-    
+
     @classmethod
     def validate_command_input(cls, input_str: str) -> bool:
         """
@@ -217,16 +218,16 @@ class SecurityValidator:
         """
         if not input_str:
             return True
-        
+
         # Check for command injection patterns
         for pattern in cls.COMMAND_INJECTION_PATTERNS:
             if re.search(pattern, input_str, re.IGNORECASE):
                 return False
-        
+
         return True
-    
+
     @classmethod
-    def sanitize_html(cls, html_content: str, allowed_tags: Optional[List[str]] = None) -> str:
+    def sanitize_html(cls, html_content: str, allowed_tags: list[str] | None = None) -> str:
         """
         Basic HTML sanitization (simplified - consider using bleach library for production).
         
@@ -239,31 +240,31 @@ class SecurityValidator:
         """
         if not html_content:
             return ""
-        
-        allowed_tags = allowed_tags or ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li']
-        
+
+        allowed_tags = allowed_tags or ["p", "br", "strong", "em", "ul", "ol", "li"]
+
         # Remove all HTML tags except allowed ones
-        tag_pattern = r'<(?!\/?(' + '|'.join(allowed_tags) + ')\b)[^>]*>'
-        sanitized = re.sub(tag_pattern, '', html_content, flags=re.IGNORECASE)
-        
+        tag_pattern = r"<(?!\/?(" + "|".join(allowed_tags) + ")\b)[^>]*>"
+        sanitized = re.sub(tag_pattern, "", html_content, flags=re.IGNORECASE)
+
         # Remove dangerous attributes
-        attr_pattern = r'\s*(on\w+|javascript:|vbscript:|data:)[^>]*'
-        sanitized = re.sub(attr_pattern, '', sanitized, flags=re.IGNORECASE)
-        
+        attr_pattern = r"\s*(on\w+|javascript:|vbscript:|data:)[^>]*"
+        sanitized = re.sub(attr_pattern, "", sanitized, flags=re.IGNORECASE)
+
         return sanitized
 
 
 class SecureBaseModel(BaseModel):
     """Base model with security validation."""
-    
-    @validator('*', pre=True)
+
+    @validator("*", pre=True)
     def sanitize_strings(cls, v):
         """Sanitize all string inputs."""
         if isinstance(v, str):
             return SecurityValidator.sanitize_string(v)
         return v
-    
-    @validator('*', pre=True)
+
+    @validator("*", pre=True)
     def validate_sql_injection(cls, v):
         """Validate against SQL injection."""
         if isinstance(v, str) and not SecurityValidator.validate_sql_input(v):
@@ -273,27 +274,27 @@ class SecureBaseModel(BaseModel):
 
 class UserInputSchema(SecureBaseModel):
     """Schema for user input validation."""
-    
-    email: Optional[str] = None
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    message: Optional[str] = None
-    
-    @validator('email')
+
+    email: str | None = None
+    name: str | None = None
+    phone: str | None = None
+    message: str | None = None
+
+    @validator("email")
     def validate_email_field(cls, v):
         err_msg = "Invalid email format"
         if v and not SecurityValidator.validate_email(v):
             raise ValueError(err_msg)
         return v
-    
-    @validator('phone')
+
+    @validator("phone")
     def validate_phone_field(cls, v):
         err_msg = "Invalid phone number format"
         if v and not SecurityValidator.validate_phone(v):
             raise ValueError(err_msg)
         return v
-    
-    @validator('name', 'message')
+
+    @validator("name", "message")
     def validate_length(cls, v):
         err_msg = "Input too long"
         if v and len(v) > 1000:
@@ -328,10 +329,9 @@ def validate_and_sanitize_input(input_data: str | dict | list, schema_class: typ
                 SecurityValidator.sanitize_string(str(k)): SecurityValidator.sanitize_string(str(v))
                 for k, v in input_data.items()
             }
-        elif isinstance(input_data, list):
+        if isinstance(input_data, list):
             return [SecurityValidator.sanitize_string(str(item)) for item in input_data]
-        else:
-            return input_data
+        return input_data
     except Exception as e:
         logger.exception("Input validation failed: %s", str(e))
         raise HTTPException(

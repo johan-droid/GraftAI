@@ -54,12 +54,14 @@ export function MobileSidebar() {
         anchor="left"
         open={open}
         onClose={() => setOpen(false)}
-        PaperProps={{
-          sx: {
-            width: 280,
-            background: "#F8F9FA",
-            border: "none",
-            borderRight: "1px solid #DADCE0",
+        slotProps={{
+          paper: {
+            sx: {
+              width: 280,
+              background: "#F8F9FA",
+              border: "none",
+              borderRight: "1px solid #DADCE0",
+            },
           },
         }}
       >

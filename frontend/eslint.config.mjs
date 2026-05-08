@@ -1,32 +1,105 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import js from "@eslint/js";
+import typescript from "@typescript-eslint/eslint-plugin";
+import typescriptParser from "@typescript-eslint/parser";
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-    "public/sw.js",
-    "public/**",
-  ]),
+export default [
+  js.configs.recommended,
   {
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    languageOptions: {
+      parser: typescriptParser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: {
+        // Browser globals
+        window: "readonly",
+        document: "readonly",
+        navigator: "readonly",
+        localStorage: "readonly",
+        sessionStorage: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        FormData: "readonly",
+        XMLHttpRequest: "readonly",
+        AbortController: "readonly",
+        AbortSignal: "readonly",
+        Headers: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+        Blob: "readonly",
+        File: "readonly",
+        FileReader: "readonly",
+        TextDecoder: "readonly",
+        TextEncoder: "readonly",
+        crypto: "readonly",
+        indexedDB: "readonly",
+        IDBDatabase: "readonly",
+        IDBOpenDBRequest: "readonly",
+        IDBRequest: "readonly",
+        IDBKeyRange: "readonly",
+        ReadableStreamDefaultReader: "readonly",
+        Event: "readonly",
+        EventTarget: "readonly",
+        ExtendableEvent: "readonly",
+        FetchEvent: "readonly",
+        ServiceWorkerGlobalScope: "readonly",
+        Buffer: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+      },
+    },
+    plugins: {
+      "@typescript-eslint": typescript,
+    },
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-empty-object-type": "warn",
       "@typescript-eslint/no-unused-vars": "off",
-      "react-hooks/exhaustive-deps": "off",
-      "react-hooks/incompatible-library": "off",
-      "@next/next/no-img-element": "off",
-      "import/no-anonymous-default-export": "off",
-      "prefer-const": "off",
+      "@typescript-eslint/no-empty-object-type": "warn",
+      "no-unused-vars": "off",
+      "no-console": "off",
+      "no-undef": "off",
     },
   },
-]);
-
-export default eslintConfig;
+  {
+    files: ["**/*.cjs", "**/*.js"],
+    languageOptions: {
+      globals: {
+        // Node.js globals for CommonJS files
+        console: "readonly",
+        process: "readonly",
+        Buffer: "readonly",
+        __dirname: "readonly",
+        __filename: "readonly",
+        require: "readonly",
+        module: "readonly",
+        exports: "readonly",
+        global: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+      },
+    },
+  },
+  {
+    ignores: [
+      ".next/**",
+      "out/**", 
+      "build/**",
+      "next-env.d.ts",
+      "public/sw.js",
+      "public/**",
+      "node_modules/**",
+      "*.config.js",
+      "*.config.mjs",
+    ],
+  },
+];

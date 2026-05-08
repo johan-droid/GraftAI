@@ -523,12 +523,15 @@ async def google_callback(
 
         email = email.lower().strip()
 
+        # SECURITY FIX-H1.1: Prevent IDOR by ignoring user_id from OAuth state
+        # user_id in state parameter is untrusted and can be used for account hijacking
         if user_id:
-            result = await db.execute(select(UserTable).where(UserTable.id == user_id))
-            user = result.scalars().first()
-        else:
-            result = await db.execute(select(UserTable).where(UserTable.email == email))
-            user = result.scalars().first()
+            logger.warning(f"OAuth state contained user_id (ignoring for security): {user_id[:8]}...")
+            user_id = None  # Discard user_id; always use email-based lookup
+        
+        # SECURITY FIX-H1.2: Always use email-based lookup (prevents IDOR)
+        result = await db.execute(select(UserTable).where(UserTable.email == email))
+        user = result.scalars().first()
 
         if not user:
             user = await create_user_from_oauth(

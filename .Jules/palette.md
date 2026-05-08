@@ -1,3 +1,3 @@
-## 2025-05-06 - Search Accessibility
-**Learning:** Added an `aria-label` attribute directly to the raw `<input>` field used for searching in `Topbar.tsx`. It's a highly visible element missing essential screen reader support.
-**Action:** Always check global navigation elements like search inputs for proper labels.
+## 2024-05-07 - Accessible Topbar Interactive Elements
+**Learning:** Custom interactive elements (links, buttons, search inputs) in layout components often lack native `focus-visible` styles and proper ARIA labels, making keyboard navigation difficult and screen reading impossible.
+**Action:** Always verify that every custom interactive element in a navigation bar has an explicit `aria-label` (if icon-only or generic) and a clear `focus-visible` ring state to ensure WCAG compliance.

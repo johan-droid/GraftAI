@@ -201,6 +201,7 @@ def parse_oauth_state(
         hashlib.sha256,
     ).hexdigest()[:16]
 
+    # SECURITY FIX-C1.1: Use timing-safe comparison to prevent timing attacks
     if not hmac.compare_digest(signature, expected_signature):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -210,6 +211,7 @@ def parse_oauth_state(
     try:
         state_time = int(timestamp_str)
         current_time = int(time.time())
+        # SECURITY FIX-C1.2: Validate state expiration to prevent replay attacks
         if current_time - state_time > OAUTH_STATE_EXPIRY_SECONDS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

@@ -74,6 +74,11 @@ export default function AnalyticsPage() {
       : data?.details?.weeklyBreakdown ?? [];
   }, [realtime, data]);
 
+  const maxCategoryCount = useMemo(() => {
+    if (!data?.details?.categoryBreakdown) return 1;
+    return Math.max(...data.details.categoryBreakdown.map(c => c.count), 1);
+  }, [data]);
+
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-[#f8f9fa] selection:bg-[#d2e3fc] selection:text-[#1a73e8]">
@@ -318,8 +323,8 @@ export default function AnalyticsPage() {
                       <SkeletonText lines={4} />
                     ) : data?.details?.categoryBreakdown ? (
                       data.details.categoryBreakdown.slice(0, 4).map(({ category, count }, i) => {
-                        const max = Math.max(...data.details!.categoryBreakdown!.map(c => c.count), 1);
-                        const pct = Math.round((count / max) * 100);
+                        // ⚡ Bolt: Calculated `maxCategoryCount` outside this loop to prevent O(N) recalculation on every iteration.
+                        const pct = Math.round((count / maxCategoryCount) * 100);
                         const colors = ["#1a73e8", "#34a853", "#fbbc04", "#ea4335"];
                         return (
                           <div key={category} className="space-y-2">

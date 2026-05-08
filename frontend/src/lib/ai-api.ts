@@ -257,10 +257,30 @@ export interface NotificationMessage {
   source?: string;
 }
 
+export interface QuotaUpdateMessage {
+  user_id?: string;
+  tier?: string;
+  subscription_status?: string;
+  daily_ai_count?: number;
+  daily_ai_limit?: number;
+  daily_ai_remaining?: number;
+  daily_sync_count?: number;
+  daily_sync_limit?: number;
+  daily_sync_remaining?: number;
+  total_ai_tokens?: number;
+  total_api_calls?: number;
+  total_scheduling_count?: number;
+  quota_reset_at?: string | null;
+  source?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+}
+
 export interface WebSocketCallbacks {
   onAutomationUpdate?: (status: AutomationStatus) => void;
   onMetricsUpdate?: (metrics: DashboardMetrics) => void;
   onNotification?: (notification: NotificationMessage) => void;
+  onQuotaUpdate?: (snapshot: QuotaUpdateMessage) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
   onError?: (error: Error) => void;
@@ -374,6 +394,9 @@ export class WebSocketClient {
           break;
         case "metrics_update":
           this.callbacks.onMetricsUpdate?.(message.payload);
+          break;
+        case "quota_update":
+          this.callbacks.onQuotaUpdate?.(message.payload ?? message);
           break;
         case "notification":
           this.callbacks.onNotification?.(message.payload ?? message);
@@ -511,6 +534,7 @@ export function useWebSocket(url?: string, token?: string | null) {
   const [automationUpdate, setAutomationUpdate] = useState<AutomationStatus | null>(null);
   const [metricsUpdate, setMetricsUpdate] = useState<DashboardMetrics | null>(null);
   const [notification, setNotification] = useState<NotificationMessage | null>(null);
+  const [quotaUpdate, setQuotaUpdate] = useState<QuotaUpdateMessage | null>(null);
   const wsRef = useRef<WebSocketClient | null>(null);
 
   useEffect(() => {
@@ -530,6 +554,7 @@ export function useWebSocket(url?: string, token?: string | null) {
       onAutomationUpdate: setAutomationUpdate,
       onMetricsUpdate: setMetricsUpdate,
       onNotification: setNotification,
+      onQuotaUpdate: setQuotaUpdate,
       onError: (err) => console.error("WebSocket error:", err),
     });
 
@@ -554,6 +579,7 @@ export function useWebSocket(url?: string, token?: string | null) {
     automationUpdate,
     metricsUpdate,
     notification,
+    quotaUpdate,
     subscribeToAutomation,
     unsubscribeFromAutomation,
   };

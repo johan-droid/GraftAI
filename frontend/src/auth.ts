@@ -134,7 +134,7 @@ declare module "@auth/core/jwt" {
 /**
  * Returns true only if we have a concrete expiry AND that expiry is imminent.
  * If expiresAt is undefined (e.g. first sign-in or decode failed), we consider
- * the token valid to avoid an unnecessary refresh cycle that signs the user out.
+ * token valid to avoid an unnecessary refresh cycle that signs the user out.
  */
 function isBackendTokenExpired(expiresAt?: number): boolean {
   if (!expiresAt) return false; // Treat unknown expiry as still valid
@@ -142,29 +142,56 @@ function isBackendTokenExpired(expiresAt?: number): boolean {
   return Date.now() / 1000 > expiresAt - 60;
 }
 
+// In-memory refresh locks to prevent concurrent refresh attempts
+const _refreshLocks = new Map<string, Promise<{
+  access_token: string;
+  refresh_token: string;
+} | null>>();
+
 async function refreshBackendToken(refreshToken?: string): Promise<{
   access_token: string;
   refresh_token: string;
 } | null> {
   if (!refreshToken) return null;
-  try {
-    const url = `${getBackendApiUrl()}/auth/refresh`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-      credentials: "include",
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      console.error("[NextAuth] Refresh failed:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    return await res.json();
-  } catch (err) {
-    console.error("[NextAuth] Refresh error:", err);
-    return null;
+  
+  // Check if there's already a refresh in progress for this token
+  const existingLock = _refreshLocks.get(refreshToken);
+  if (existingLock) {
+    console.log("[NextAuth] Refresh already in progress, waiting for result");
+    return existingLock;
   }
+
+  // Create the refresh promise and store it in the lock map
+  const refreshPromise = (async () => {
+    try {
+      const url = `${getBackendApiUrl()}/auth/refresh`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        console.error("[NextAuth] Refresh failed:", res.status, await res.text().catch(() => ""));
+        return null;
+      }
+      const result = await res.json();
+      console.log("[NextAuth] Refresh successful");
+      return result;
+    } catch (err) {
+      console.error("[NextAuth] Refresh error:", err);
+      return null;
+    } finally {
+      // Clean up the lock after completion
+      _refreshLocks.delete(refreshToken);
+    }
+  })();
+
+  // Store the promise in the lock map
+  _refreshLocks.set(refreshToken, refreshPromise);
+  
+  return refreshPromise;
 }
 
 /**
@@ -259,25 +286,12 @@ function createCredentialsProvider() {
         role: String(userData.role ?? "user"),
         backendToken: accessToken,
         refreshToken: data?.refresh_token,
-        backendTokenExpiresAt: decodeJwtExpiry(accessToken),
-      } as User & { backendToken: string; refreshToken?: string; backendTokenExpiresAt?: number };
-    },
+      };
+    }
   });
 }
 
-/**
- * NextAuth v5 (beta) does NOT allow passing arbitrary custom data through the
- * `user` object from signIn → jwt. We keep a short-lived in-memory map keyed by
- * providerAccountId for same-instance callback handoff.
- *
- * In serverless environments the signIn and jwt callbacks may run in different
- * instances, so the map can be missed. In that case, jwt will retry the
- * backend exchange directly as a fallback.
- */
 // Token handoff storage with TTL for cleanup
-// In serverless environments the signIn and jwt callbacks may run in different
-// instances, so the map can be missed. In that case, jwt will retry the
-// backend exchange directly as a fallback.
 const PENDING_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const CLEANUP_INTERVAL_MS = 60 * 1000; // Cleanup every minute
 
@@ -475,6 +489,10 @@ const authOptions: NextAuthConfig = {
       }
 
       // Subsequent requests — silently refresh if near-expiry
+      if (token.error === "RefreshTokenError") {
+        return token;
+      }
+
       if (!isBackendTokenExpired(token.backendTokenExpiresAt)) {
         return token; // Still valid
       }

@@ -55,3 +55,11 @@ async def enqueue_analytics_job(event: str, properties: Mapping[str, Any]):
         event=event,
         properties=properties,
     )
+
+
+async def enqueue_provision_shortlink(booking_id: str):
+    return await _enqueue_job("task_provision_shortlink", booking_id=booking_id)
+
+
+async def enqueue_provision_jitsi_meeting(booking_id: str):
+    return await _enqueue_job("task_provision_jitsi_meeting", booking_id=booking_id)

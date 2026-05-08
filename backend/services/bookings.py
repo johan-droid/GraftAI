@@ -1,4 +1,5 @@
 import hashlib
+import os
 import logging
 import pytz
 from datetime import datetime, timedelta, date as date_cls
@@ -20,6 +21,10 @@ from backend.services.webhook_subscriptions import (
     enqueue_webhook_notifications_for_event,
 )
 from backend.services.usage import increment_usage
+from backend.services.integrations.unified_service import UnifiedService
+from backend.services.integrations.video_conference_service import (
+    VideoConferenceService,
+)
 from backend.utils.errors import BookingConflictError, TimezoneError, ValidationError
 from backend.utils.cache import (
     acquire_lock,
@@ -1143,6 +1148,22 @@ async def create_public_booking(
         booking.updated_at = datetime.now(pytz.UTC)
 
     await db.refresh(booking)
+
+    # Enqueue background jobs to provision shortlink and (optionally) Jitsi meeting
+    try:
+        from backend.services.jobs import (
+            enqueue_provision_shortlink,
+            enqueue_provision_jitsi_meeting,
+        )
+
+        # Queue shortlink provisioning job
+        await enqueue_provision_shortlink(booking.id)
+
+        # Queue Jitsi provisioning if configured on the event type
+        if (event_type.meeting_provider or "").lower() == "jitsi":
+            await enqueue_provision_jitsi_meeting(booking.id)
+    except Exception as exc:
+        logger.warning("Failed to enqueue provisioning jobs for booking=%s: %s", booking.id, exc)
 
     await invalidate_user_cache_pattern(organizer_user.id, "availability")
     await invalidate_user_cache_pattern(organizer_user.id, "busy_windows")

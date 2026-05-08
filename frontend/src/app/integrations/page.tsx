@@ -343,7 +343,7 @@ export default function IntegrationsPage() {
           {integrationsLoading ? (
             <Grid container spacing={3}>
               {Array.from({ length: 6 }).map((_, index) => (
-                <Grid item xs={12} sm={6} lg={4} key={index}>
+                <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={index}>
                   <Paper
                     elevation={0}
                     sx={{
@@ -400,7 +400,7 @@ export default function IntegrationsPage() {
           ) : (
           <Grid container spacing={3}>
             {filteredIntegrations.map((integration, index) => (
-              <Grid item xs={12} sm={6} lg={4} key={integration.id}>
+              <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={integration.id}>
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}

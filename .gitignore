@@ -201,6 +201,10 @@ TASK_QUEUE_AND_INFRASTRUCTURE_HARDENING.md
 test_*.txt
 pytest_test_results.txt
 
+# Generated analysis and security reports
+DATABASE_*.md
+SECURITY_*.md
+
 # Scratch / AI working dirs
 scratch/
 brain/

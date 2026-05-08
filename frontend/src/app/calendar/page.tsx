@@ -200,7 +200,7 @@ export default function CalendarPage() {
                     {/* Week Header */}
                     <Grid container sx={{ borderBottom: "1px solid var(--border-subtle)" }}>
                       {weekDays.map((day) => (
-                        <Grid item xs={12 / 7} key={day} sx={{ p: 1.5, textAlign: "center", borderRight: day !== "SAT" ? "1px solid var(--border-subtle)" : "none" }}>
+                        <Grid size={12 / 7} key={day} sx={{ p: 1.5, textAlign: "center", borderRight: day !== "SAT" ? "1px solid var(--border-subtle)" : "none" }}>
                           <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)" }}>{day}</Typography>
                         </Grid>
                       ))}
@@ -215,8 +215,7 @@ export default function CalendarPage() {
                         
                         return (
                           <Grid
-                            item
-                            xs={12 / 7}
+                            size={12 / 7}
                             key={idx}
                             sx={{
                               minHeight: { xs: 100, md: 140 },
@@ -391,7 +390,7 @@ export default function CalendarPage() {
                    </Box>
 
                    <Grid container spacing={2}>
-                      <Grid item xs={6}>
+                      <Grid size={6}>
                          <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", mb: 0.5 }}>Time</Typography>
                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "var(--text-primary)" }}>
                             <Clock size={16} className="text-[#1a73e8]" />
@@ -400,7 +399,7 @@ export default function CalendarPage() {
                             </Typography>
                          </Box>
                       </Grid>
-                      <Grid item xs={6}>
+                      <Grid size={6}>
                          <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", mb: 0.5 }}>Location</Typography>
                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "var(--text-primary)" }}>
                             <MapPin size={16} className="text-[#1a73e8]" />

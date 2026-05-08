@@ -38,7 +38,7 @@ export default function OnboardingPage() {
   return (
     <AuthLayout title="Resolving your account">
       <Box sx={{ py: 6 }}>
-        <Stack spacing={2.5} alignItems="center" textAlign="center">
+        <Stack spacing={2.5} sx={{ alignItems: "center", textAlign: "center" }}>
           <CircularProgress size={28} sx={{ color: "var(--primary)" }} />
           <Typography sx={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
             Checking your account state.

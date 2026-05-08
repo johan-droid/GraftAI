@@ -25,7 +25,7 @@ export default function SignoutPage() {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
       >
-        <Stack spacing={6} alignItems="center" textAlign="center">
+        <Stack spacing={6} sx={{ alignItems: "center", textAlign: "center" }}>
           <Box sx={{ position: "relative" }}>
             <motion.div
               animate={{ 

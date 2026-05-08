@@ -20,6 +20,7 @@ class VideoConferenceProvider(str):
     GOOGLE_MEET = "google_meet"
     MICROSOFT_TEAMS = "microsoft_teams"
     WEBEX = "webex"
+    JITSI = "jitsi"
 
 
 class VideoConferenceConfig(Base):

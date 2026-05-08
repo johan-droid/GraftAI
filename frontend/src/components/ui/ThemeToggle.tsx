@@ -67,15 +67,17 @@ export function ThemeToggle() {
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleClose}
-        PaperProps={{
-          sx: {
-            background: "#FFFFFF",
-            border: "1px solid #DADCE0",
-            borderRadius: "20px",
-            boxShadow: "0 24px 60px -38px rgba(32,33,36,0.28)",
-            minWidth: 160,
-            mt: 1,
-            py: 0.5,
+        slotProps={{
+          paper: {
+            sx: {
+              background: "#FFFFFF",
+              border: "1px solid #DADCE0",
+              borderRadius: "20px",
+              boxShadow: "0 24px 60px -38px rgba(32,33,36,0.28)",
+              minWidth: 160,
+              mt: 1,
+              py: 0.5,
+            },
           },
         }}
       >

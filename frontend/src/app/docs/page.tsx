@@ -81,7 +81,11 @@ export default function DocsPage() {
             RETURN_TO_CORE
           </Button>
 
-          <Stack direction={{ xs: "column", md: "row" }} spacing={4} alignItems="flex-start" justifyContent="space-between">
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={4}
+            sx={{ alignItems: "flex-start", justifyContent: "space-between" }}
+          >
             <Box>
               <Typography
                 variant="h1"
@@ -112,7 +116,7 @@ export default function DocsPage() {
 
         <Grid container spacing={3} sx={{ mb: 12 }}>
           {sections.map((section, idx) => (
-            <Grid item xs={12} md={6} key={section.title}>
+            <Grid size={{ xs: 12, md: 6 }} key={section.title}>
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -127,7 +131,7 @@ export default function DocsPage() {
                   flexDirection: "column",
                   "&:hover": { borderColor: "var(--primary)", transition: "0.3s" }
                 }}>
-                  <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                  <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 3 }}>
                     <Box sx={{ p: 1, bgcolor: "rgba(0, 255, 156, 0.05)", borderRadius: 1 }}>
                       {section.icon}
                     </Box>
@@ -145,7 +149,7 @@ export default function DocsPage() {
 
                   <Stack spacing={1.5} sx={{ mt: "auto" }}>
                     {section.bullets.map((bullet) => (
-                      <Stack key={bullet} direction="row" spacing={1.5} alignItems="center">
+                      <Stack key={bullet} direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
                         <ChevronRight size={12} className="text-primary opacity-50" />
                         <Typography sx={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }}>{bullet}</Typography>
                       </Stack>
@@ -171,7 +175,7 @@ export default function DocsPage() {
             </Typography>
             
             <Grid container spacing={6}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Typography sx={{ color: "var(--text-muted)", fontSize: 14, mb: 4, lineHeight: 1.6 }}>
                   For production readiness, ensure neural reminders remain enabled in workers, monitor synchronization delivery logs, and verify public action token flows after any kernel refactor.
                 </Typography>
@@ -195,7 +199,7 @@ export default function DocsPage() {
                 </Stack>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Box sx={{ 
                   p: 3, 
                   bgcolor: "rgba(0,0,0,0.5)", 

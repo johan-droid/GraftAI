@@ -454,6 +454,29 @@ def create_app() -> FastAPI:
         strategy="sliding_window",
         skip_paths=["/health", "/", "/docs", "/redoc", "/openapi.json", "/metrics"],
     )
+    
+    # Cost Optimization Middleware
+    from backend.utils.cost_optimizer import CostMonitoringMiddleware
+    
+    # Initialize cost optimization systems
+    @app.on_event("startup")
+    async def initialize_cost_optimizations():
+        from backend.utils.cost_optimizer import implement_cost_controls
+        from backend.utils.ai_cost_guard import implement_ai_cost_controls
+        from backend.utils.cache_optimizer import initialize_cache_optimizer
+        from backend.utils.database_optimizer import initialize_database_optimizer
+        
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            await initialize_database_optimizer(database_url)
+        
+        await implement_cost_controls()
+        await implement_ai_cost_controls()
+        await initialize_cache_optimizer()
+        
+        logger.info("Cost optimization systems initialized")
+    
+    app.add_middleware(CostMonitoringMiddleware)
 
     allow_origin_regex = (
         r"^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"

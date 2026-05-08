@@ -2,37 +2,62 @@
 
 import { useAuth } from "@/app/providers/auth-provider";
 import { motion } from "framer-motion";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { 
   BarChart3, 
   Sparkles, 
   AlertCircle,
 } from "lucide-react";
+import { useWebSocket } from "@/lib/ai-api";
 
 export default function QuotaPage() {
-  const { user } = useAuth();
+  const { user, backendToken } = useAuth();
+  const [liveStats, setLiveStats] = useState<Record<string, unknown> | null>(null);
+  const { quotaUpdate } = useWebSocket(undefined, backendToken ?? undefined);
   const liveStatus = "Live tracking active";
+
+  useEffect(() => {
+    if (!quotaUpdate) {
+      return;
+    }
+
+    setLiveStats((current) => ({
+      ...(current ?? {}),
+      ...quotaUpdate,
+    }));
+  }, [quotaUpdate]);
+
+  const stats = useMemo(() => {
+    const baseStats = user ? {
+      tier: user.tier || 'free',
+      daily_ai_count: Number(user.daily_ai_count ?? 0),
+      daily_sync_count: Number(user.daily_sync_count ?? 0),
+      daily_ai_limit: Number(user.daily_ai_limit ?? (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10))),
+      daily_sync_limit: Number(user.daily_sync_limit ?? (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3))),
+      quota_reset_at: user.quota_reset_at ? String(user.quota_reset_at) : undefined,
+    } : null;
+
+    if (!baseStats && !liveStats) {
+      return null;
+    }
+
+    return {
+      ...(baseStats ?? {}),
+      ...(liveStats ?? {}),
+    };
+  }, [user, liveStats]);
 
   const lastSyncedAt = useMemo(
     () =>
-      user
+      stats
         ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         : null,
-    [user]
+    [stats]
   );
 
-  const stats = user ? {
-    tier: user.tier || 'free',
-    daily_ai_count: Number(user.daily_ai_count ?? 0),
-    daily_sync_count: Number(user.daily_sync_count ?? 0),
-    daily_ai_limit: Number(user.daily_ai_limit ?? (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10))),
-    daily_sync_limit: Number(user.daily_sync_limit ?? (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3))),
-    quota_reset_at: user.quota_reset_at ? String(user.quota_reset_at) : undefined,
-  } : null;
-
-  const aiProgress = stats ? (stats.daily_ai_count / Math.max(1, stats.daily_ai_limit)) * 100 : 0;
-  const syncProgress = stats ? (stats.daily_sync_count / Math.max(1, stats.daily_sync_limit)) * 100 : 0;
+  const aiProgress = stats ? (Number(stats.daily_ai_count ?? 0) / Math.max(1, Number(stats.daily_ai_limit ?? 1))) * 100 : 0;
+  const syncProgress = stats ? (Number(stats.daily_sync_count ?? 0) / Math.max(1, Number(stats.daily_sync_limit ?? 1))) * 100 : 0;
   const aiRemaining = Math.max(0, (stats?.daily_ai_limit ?? 0) - (stats?.daily_ai_count ?? 0));
   const syncRemaining = Math.max(0, (stats?.daily_sync_limit ?? 0) - (stats?.daily_sync_count ?? 0));
   const aiQuotaPercent = Math.min(100, Math.round(aiProgress));

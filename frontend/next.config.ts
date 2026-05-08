@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   output: "standalone",
   outputFileTracingRoot: path.resolve(__dirname, ".."),
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   typescript: {
     ignoreBuildErrors: false,
   },

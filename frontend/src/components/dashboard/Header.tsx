@@ -195,15 +195,17 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
           onClose={() => setAnchorEl(null)}
           transformOrigin={{ horizontal: 'right', vertical: 'top' }}
           anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-          PaperProps={{
-            sx: {
-              mt: 1.5,
-              background: "var(--bg-card)",
-              border: "1px solid var(--border-subtle)",
-              borderRadius: "16px",
-              boxShadow: "0 10px 40px rgba(0,0,0,0.1)",
-              minWidth: 220,
-              p: 1,
+          slotProps={{
+            paper: {
+              sx: {
+                mt: 1.5,
+                background: "var(--bg-card)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "16px",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.1)",
+                minWidth: 220,
+                p: 1,
+              },
             },
           }}
         >

@@ -25,7 +25,7 @@ export default function GoodbyePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] as const }}
         >
-          <Stack spacing={6} alignItems="center" textAlign="center">
+          <Stack spacing={6} sx={{ alignItems: "center", textAlign: "center" }}>
             <Box sx={{ 
               width: 80, 
               height: 80, 

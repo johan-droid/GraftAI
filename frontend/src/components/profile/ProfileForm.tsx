@@ -133,7 +133,7 @@ export function ProfileForm({ onCompleted }: ProfileFormProps) {
               minLength: { value: 1, message: "Name must be 1-100 characters" },
               maxLength: { value: 100, message: "Name must be 1-100 characters" },
               pattern: {
-                value: /^[A-Za-z0-9 '\-]+$/,
+                value: /^[A-Za-z0-9 '-]+$/,
                 message: "Name may only contain letters, numbers, spaces, apostrophes, or hyphens",
               },
             })}

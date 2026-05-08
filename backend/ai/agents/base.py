@@ -9,27 +9,24 @@ The 4-Phase Agent Loop:
 4. REFLECTION - Check outcomes, learn from results, update memory, improve next time
 """
 
-from typing import Dict, Any, List, Optional, Callable
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime, timezone
 import asyncio
 import json
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any
 
 from backend.ai.memory.multi_layer_memory import MemoryLayer, MemoryPriority
 from backend.utils.logger import get_logger
 
-if TYPE_CHECKING:
-    pass
-
 logger = get_logger(__name__)
+
+MAX_EPISODIC_MEMORY_ITEMS = 100
+SLOW_PHASE_THRESHOLD_MS = 1000
 
 
 class AgentTimeoutError(Exception):
     """Raised when an agent phase exceeds its timeout limit."""
-
-    pass
 
 
 class AgentState(Enum):
@@ -73,9 +70,9 @@ class AgentMetrics:
     successful_requests: int = 0
     failed_requests: int = 0
     average_processing_time_ms: float = 0.0
-    last_request_time: Optional[datetime] = None
+    last_request_time: datetime | None = None
     errors: list = field(default_factory=list)
-    phase_times: Dict[str, float] = field(default_factory=dict)
+    phase_times: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -91,14 +88,14 @@ class AgentMemory:
     Also maintains backward compatibility with simple dict interface
     """
 
-    short_term: Dict[str, Any] = field(default_factory=dict)
-    long_term: Dict[str, Any] = field(default_factory=dict)
-    episodic: List[Dict[str, Any]] = field(default_factory=list)
-    learnings: List[Dict[str, Any]] = field(default_factory=list)
+    short_term: dict[str, Any] = field(default_factory=dict)
+    long_term: dict[str, Any] = field(default_factory=dict)
+    episodic: list[dict[str, Any]] = field(default_factory=list)
+    learnings: list[dict[str, Any]] = field(default_factory=list)
 
     # Multi-layer memory manager (optional, set during agent initialization)
-    manager: Optional[Any] = None
-    context: Optional[Any] = None  # AgentMemoryContext wrapper
+    manager: Any | None = None
+    context: Any | None = None  # AgentMemoryContext wrapper
 
 
 @dataclass
@@ -107,11 +104,11 @@ class AgentContext:
 
     user_id: str
     request_id: str
-    data: Dict[str, Any]
+    data: dict[str, Any]
     memory: AgentMemory = field(default_factory=AgentMemory)
-    tools_available: List[Dict[str, Any]] = field(default_factory=list)
-    llm_client: Optional[Any] = None
-    phase_results: Dict[str, Any] = field(default_factory=dict)
+    tools_available: list[dict[str, Any]] = field(default_factory=list)
+    llm_client: Any | None = None
+    phase_results: dict[str, Any] = field(default_factory=dict)
 
 
 class BaseAgent:
@@ -134,47 +131,48 @@ class BaseAgent:
         self.description = description
         self.state = AgentState.IDLE
         self.metrics = AgentMetrics()
-        self.controller: Optional[Any] = None
-        self.memory: Dict[str, Any] = {}
+        self.controller: Any | None = None
+        self.memory: dict[str, Any] = {}
         self.logger = logger
         self._lock = asyncio.Lock()
 
         # Tool registry
-        self.tools: Dict[str, Callable] = {}
+        self.tools: dict[str, Any] = {}
 
-        logger.info(f"Agent {name} initializing")
+        logger.info("Agent %s initializing", name)
 
     async def initialize(self):
         """Initialize the agent - override in subclass"""
         self.state = AgentState.READY
-        logger.info(f"Agent {self.name} ready")
+        logger.info("Agent %s ready", self.name)
 
     def transition_to(self, new_state: AgentState):
         """Transition the agent to a new lifecycle state."""
         if not isinstance(new_state, AgentState):
-            raise TypeError("new_state must be an AgentState")
+            error_message = "new_state must be an AgentState"
+            raise TypeError(error_message)
 
         self.state = new_state
 
-    async def perception_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def perception_phase(self, context: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError
 
-    async def cognition_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def cognition_phase(self, context: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError
 
-    async def action_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def action_phase(self, context: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError
 
     async def reflection_phase(
-        self, context: Dict[str, Any], results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, context: dict[str, Any], results: dict[str, Any]
+    ) -> dict[str, Any]:
         raise NotImplementedError
 
     # ╔══════════════════════════════════════════════════════════════════╗
     # ║                    THE 4-PHASE AGENT LOOP                        ║
     # ╚══════════════════════════════════════════════════════════════════╝
 
-    async def execute(self, request: Any) -> Dict[str, Any]:
+    async def execute(self, request: Any) -> dict[str, Any]:  # noqa: PLR0915
         """
         Execute the complete 4-phase agent loop
 
@@ -188,12 +186,11 @@ class BaseAgent:
         """
         async with self._lock:
             if self.state != AgentState.READY:
-                raise RuntimeError(
-                    f"Agent {self.name} not ready (state: {self.state.value})"
-                )
+                error_message = f"Agent {self.name} not ready (state: {self.state.value})"
+                raise RuntimeError(error_message)
 
             self.metrics.total_requests += 1
-            loop_start = datetime.now(timezone.utc)
+            loop_start = datetime.now(UTC)
 
             # Initialize context with memory
             context = AgentContext(
@@ -219,7 +216,7 @@ class BaseAgent:
                 # ║ Receive trigger → Read memory → Get context → Understand state ║
                 # ╚═══════════════════════════════════════════════════════════════╝
                 self.state = AgentState.PERCEIVING
-                phase_start = datetime.now(timezone.utc)
+                phase_start = datetime.now(UTC)
 
                 perception = await self._execute_phase_with_timeout(
                     "perception",
@@ -232,7 +229,7 @@ class BaseAgent:
 
                 result["phases"]["perception"] = {
                     "status": "completed",
-                    "time_ms": (datetime.now(timezone.utc) - phase_start).total_seconds() * 1000,
+                    "time_ms": (datetime.now(UTC) - phase_start).total_seconds() * 1000,
                     "understanding": perception.get("understanding"),
                     "trigger": perception.get("trigger"),
                 }
@@ -242,7 +239,7 @@ class BaseAgent:
                 # ║ Think goal → Consider options → Plan steps → Decide actions    ║
                 # ╚═══════════════════════════════════════════════════════════════╝
                 self.state = AgentState.COGNIZING
-                phase_start = datetime.now(timezone.utc)
+                phase_start = datetime.now(UTC)
 
                 cognition = await self._execute_phase_with_timeout(
                     "cognition",
@@ -256,7 +253,7 @@ class BaseAgent:
 
                 result["phases"]["cognition"] = {
                     "status": "completed",
-                    "time_ms": (datetime.now(timezone.utc) - phase_start).total_seconds() * 1000,
+                    "time_ms": (datetime.now(UTC) - phase_start).total_seconds() * 1000,
                     "goal": cognition.get("goal"),
                     "plan": cognition.get("plan"),
                     "decision": cognition.get("decision"),
@@ -267,7 +264,7 @@ class BaseAgent:
                 # ║ Call tools → Execute functions → Update systems → Record      ║
                 # ╚═══════════════════════════════════════════════════════════════╝
                 self.state = AgentState.ACTING
-                phase_start = datetime.now(timezone.utc)
+                phase_start = datetime.now(UTC)
 
                 action = await self._execute_phase_with_timeout(
                     "action",
@@ -280,7 +277,7 @@ class BaseAgent:
 
                 result["phases"]["action"] = {
                     "status": "completed",
-                    "time_ms": (datetime.now(timezone.utc) - phase_start).total_seconds() * 1000,
+                    "time_ms": (datetime.now(UTC) - phase_start).total_seconds() * 1000,
                     "tools_called": action.get("tools_called", []),
                     "results": action.get("results"),
                     "systems_updated": action.get("systems_updated", []),
@@ -291,7 +288,7 @@ class BaseAgent:
                 # ║ Check outcomes → Learn → Update memory → Improve              ║
                 # ╚═══════════════════════════════════════════════════════════════╝
                 self.state = AgentState.REFLECTING
-                phase_start = datetime.now(timezone.utc)
+                phase_start = datetime.now(UTC)
 
                 reflection = await self._execute_phase_with_timeout(
                     "reflection",
@@ -303,14 +300,14 @@ class BaseAgent:
 
                 result["phases"]["reflection"] = {
                     "status": "completed",
-                    "time_ms": (datetime.now(timezone.utc) - phase_start).total_seconds() * 1000,
+                    "time_ms": (datetime.now(UTC) - phase_start).total_seconds() * 1000,
                     "outcome": reflection.get("outcome"),
                     "learnings": reflection.get("learnings", []),
                     "improvements": reflection.get("improvements", []),
                 }
 
                 # Update final metrics
-                total_time = (datetime.now(timezone.utc) - loop_start).total_seconds() * 1000
+                total_time = (datetime.now(UTC) - loop_start).total_seconds() * 1000
                 self.metrics.successful_requests += 1
                 self._update_average_time(total_time)
 
@@ -321,14 +318,16 @@ class BaseAgent:
                 self.state = AgentState.READY
 
                 logger.info(
-                    f"Agent {self.name} completed 4-phase loop in {total_time:.2f}ms"
+                    "Agent %s completed 4-phase loop in %.2fms",
+                    self.name,
+                    total_time,
                 )
 
             except Exception as e:
                 self.metrics.failed_requests += 1
                 self.metrics.errors.append(
                     {
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "error": str(e),
                         "request_id": request.id,
                         "phase": self.state.value,
@@ -339,7 +338,9 @@ class BaseAgent:
                 result["error"] = str(e)
                 result["failed_phase"] = self.state.value
 
-                logger.error(f"Agent {self.name} failed in {self.state.value}: {e}")
+                logger.exception(
+                    "Agent %s failed in %s", self.name, self.state.value
+                )
                 self.state = AgentState.ERROR
 
                 # Attempt recovery through reflection
@@ -357,24 +358,27 @@ class BaseAgent:
         phase_func,
         context: AgentContext,
         timeout_sec: float = 25.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Forces a hard timeout on AI operations to prevent server DoS."""
         try:
             return await asyncio.wait_for(phase_func(context), timeout=timeout_sec)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.logger.critical(
-                f"CRITICAL: Agent phase '{phase_name}' timed out after {timeout_sec}s."
+                "CRITICAL: Agent phase '%s' timed out after %ss.",
+                phase_name,
+                timeout_sec,
             )
             self.state = AgentState.ERROR
-            raise AgentTimeoutError(
+            error_message = (
                 f"AI Provider timeout during {phase_name} phase after {timeout_sec}s."
             )
+            raise AgentTimeoutError(error_message) from None
 
     # ╔══════════════════════════════════════════════════════════════════╗
     # ║                    PHASE IMPLEMENTATIONS                         ║
     # ╚══════════════════════════════════════════════════════════════════╝
 
-    async def _phase_perception(self, context: AgentContext) -> Dict[str, Any]:
+    async def _phase_perception(self, context: AgentContext) -> dict[str, Any]:
         """
         PHASE 1: PERCEPTION
 
@@ -394,7 +398,7 @@ class BaseAgent:
                 "current_state": inferred state
             }
         """
-        logger.info(f"[{self.name}] Phase 1: PERCEPTION")
+        logger.info("[%s] Phase 1: PERCEPTION", self.name)
 
         # 1.1 Receive trigger
         trigger = context.data
@@ -451,11 +455,13 @@ class BaseAgent:
         }
 
         logger.info(
-            f"[{self.name}] Perception complete: intent={perception['user_intent']}"
+            "[%s] Perception complete: intent=%s",
+            self.name,
+            perception["user_intent"],
         )
         return perception
 
-    async def _phase_cognition(self, context: AgentContext) -> Dict[str, Any]:
+    async def _phase_cognition(self, context: AgentContext) -> dict[str, Any]:
         """
         PHASE 2: COGNITION
 
@@ -470,7 +476,7 @@ class BaseAgent:
                 "reasoning": why this approach
             }
         """
-        logger.info(f"[{self.name}] Phase 2: COGNITION")
+        logger.info("[%s] Phase 2: COGNITION", self.name)
 
         perception = context.phase_results.get("perception", {})
         understanding = perception.get("understanding", {})
@@ -498,11 +504,14 @@ class BaseAgent:
         }
 
         logger.info(
-            f"[{self.name}] Cognition complete: goal='{goal}', confidence={cognition['confidence']:.2f}"
+            "[%s] Cognition complete: goal='%s', confidence=%.2f",
+            self.name,
+            goal,
+            cognition["confidence"],
         )
         return cognition
 
-    async def _phase_action(self, context: AgentContext) -> Dict[str, Any]:
+    async def _phase_action(self, context: AgentContext) -> dict[str, Any]:
         """
         PHASE 3: ACTION
 
@@ -517,7 +526,7 @@ class BaseAgent:
                 "success": overall success
             }
         """
-        logger.info(f"[{self.name}] Phase 3: ACTION")
+        logger.info("[%s] Phase 3: ACTION", self.name)
 
         cognition = context.phase_results.get("cognition", {})
         plan = cognition.get("plan", {})
@@ -547,7 +556,7 @@ class BaseAgent:
 
             # Check for failure
             if not step_result.get("success", False) and step.get("critical", False):
-                logger.error(f"Critical step failed: {step}")
+                logger.error("Critical step failed: %s", step)
                 break
 
         # 3.2 Aggregate results
@@ -562,13 +571,16 @@ class BaseAgent:
         }
 
         logger.info(
-            f"[{self.name}] Action complete: {len(tools_called)} tools called, success={action['success']}"
+            "[%s] Action complete: %s tools called, success=%s",
+            self.name,
+            len(tools_called),
+            action["success"],
         )
         return action
 
     async def _phase_reflection(
-        self, context: AgentContext, result: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, context: AgentContext, result: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         PHASE 4: REFLECTION
 
@@ -588,7 +600,7 @@ class BaseAgent:
                 "memory_updates": what was stored in each layer
             }
         """
-        logger.info(f"[{self.name}] Phase 4: REFLECTION")
+        logger.info("[%s] Phase 4: REFLECTION", self.name)
 
         # 4.1 Check outcomes
         outcome = self._assess_outcome(result)
@@ -617,13 +629,10 @@ class BaseAgent:
         improvements = self._identify_improvements(result, context)
 
         # 4.5 Promote important memories to long-term
-        if context.memory.manager and result.get("success"):
-            # Promote successful strategy
-            if "cognition" in context.phase_results:
-                plan = context.phase_results["cognition"].get("plan", {})
-                await context.memory.manager.promote_to_long_term(
-                    key="successful_strategy", importance=0.8
-                )
+        if context.memory.manager and result.get("success") and "cognition" in context.phase_results:
+            await context.memory.manager.promote_to_long_term(
+                key="successful_strategy", importance=0.8
+            )
 
         reflection = {
             "outcome": outcome,
@@ -637,7 +646,7 @@ class BaseAgent:
             "episodic_memory": {
                 "request": context.data,
                 "result": result,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "importance": 0.8 if result.get("success") else 0.5,
             },
         }
@@ -649,7 +658,10 @@ class BaseAgent:
             )
 
         logger.info(
-            f"[{self.name}] Reflection complete: {len(learnings)} learnings, {len(improvements)} improvements"
+            "[%s] Reflection complete: %s learnings, %s improvements",
+            self.name,
+            len(learnings),
+            len(improvements),
         )
         return reflection
 
@@ -657,7 +669,7 @@ class BaseAgent:
     # ║              ABSTRACT METHODS FOR SUBCLASSES                     ║
     # ╚══════════════════════════════════════════════════════════════════╝
 
-    async def _retrieve_memories(self, context: AgentContext) -> Dict[str, Any]:
+    async def _retrieve_memories(self, context: AgentContext) -> dict[str, Any]:
         """
         Retrieve relevant memories from long-term storage
         Legacy method - use _retrieve_memories_multi_layer for full capability
@@ -669,7 +681,7 @@ class BaseAgent:
 
     async def _retrieve_memories_multi_layer(
         self, context: AgentContext
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Retrieve memories from all three layers
 
@@ -697,56 +709,56 @@ class BaseAgent:
             "query": user_message,
         }
 
-    async def _retrieve_memories_legacy(self, context: AgentContext) -> Dict[str, Any]:
+    async def _retrieve_memories_legacy(self, _context: AgentContext) -> dict[str, Any]:
         """Legacy memory retrieval for backward compatibility"""
         return {}
 
-    async def _enrich_context(self, context: AgentContext) -> Dict[str, Any]:
+    async def _enrich_context(self, context: AgentContext) -> dict[str, Any]:
         """Enrich context with additional data from systems"""
         raise NotImplementedError
 
     async def _understand_state(
-        self, trigger: Dict[str, Any], context: Dict[str, Any], memories: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, trigger: dict[str, Any], context: dict[str, Any], memories: dict[str, Any]
+    ) -> dict[str, Any]:
         """Understand current state using LLM"""
         raise NotImplementedError
 
     async def _determine_goal(
-        self, understanding: Dict[str, Any], context: AgentContext
+        self, understanding: dict[str, Any], context: AgentContext
     ) -> str:
         """Determine what we want to achieve"""
         raise NotImplementedError
 
     async def _generate_options(
         self, goal: str, context: AgentContext
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Generate possible approaches"""
         raise NotImplementedError
 
     async def _create_plan(
-        self, goal: str, options: List[Dict[str, Any]], context: AgentContext
-    ) -> Dict[str, Any]:
+        self, goal: str, options: list[dict[str, Any]], context: AgentContext
+    ) -> dict[str, Any]:
         """Create step-by-step plan"""
         raise NotImplementedError
 
     async def _make_decision(
         self,
         goal: str,
-        options: List[Dict[str, Any]],
-        plan: Dict[str, Any],
+        options: list[dict[str, Any]],
+        plan: dict[str, Any],
         context: AgentContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Decide on best approach"""
         raise NotImplementedError
 
     async def _execute_step(
-        self, step: Dict[str, Any], context: AgentContext
-    ) -> Dict[str, Any]:
+        self, step: dict[str, Any], context: AgentContext
+    ) -> dict[str, Any]:
         """Execute a single step"""
         raise NotImplementedError
 
     async def _aggregate_results(
-        self, results: List[Dict[str, Any]], context: AgentContext
+        self, results: list[dict[str, Any]], context: AgentContext
     ) -> Any:
         """Aggregate step results into final output"""
         raise NotImplementedError
@@ -755,11 +767,11 @@ class BaseAgent:
     # ║                    UTILITY METHODS                               ║
     # ╚══════════════════════════════════════════════════════════════════╝
 
-    def _summarize_context(self, context: Dict[str, Any]) -> str:
+    def _summarize_context(self, context: dict[str, Any]) -> str:
         """Create a summary of the context"""
         return json.dumps(context, default=str)[:500]
 
-    def _assess_outcome(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    def _assess_outcome(self, result: dict[str, Any]) -> dict[str, Any]:
         """Assess the outcome of the agent loop"""
         success = result.get("success", False)
 
@@ -777,8 +789,8 @@ class BaseAgent:
         }
 
     async def _extract_learnings(
-        self, result: Dict[str, Any], context: AgentContext
-    ) -> List[Dict[str, Any]]:
+        self, result: dict[str, Any], context: AgentContext
+    ) -> list[dict[str, Any]]:
         """Extract learnings from the execution"""
         learnings = []
 
@@ -810,10 +822,10 @@ class BaseAgent:
 
     async def _update_memory(
         self,
-        result: Dict[str, Any],
-        learnings: List[Dict[str, Any]],
+        result: dict[str, Any],
+        learnings: list[dict[str, Any]],
         context: AgentContext,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Update memory with learnings (legacy method)
         Use _update_memory_multi_layer for full capability
@@ -822,10 +834,10 @@ class BaseAgent:
 
     async def _update_memory_multi_layer(
         self,
-        result: Dict[str, Any],
-        learnings: List[Dict[str, Any]],
+        result: dict[str, Any],
+        learnings: list[dict[str, Any]],
         context: AgentContext,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Update all three memory layers with learnings
 
@@ -843,7 +855,7 @@ class BaseAgent:
                 "user_id": context.user_id,
                 "result": result,
                 "learnings": learnings,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
         updates.append(f"short_term:episodic_{context.request_id}")
@@ -877,21 +889,21 @@ class BaseAgent:
                 updates.append("long_term:best_practice")
 
         # Keep short-term episodes manageable
-        if len(context.memory.episodic) > 100:
-            context.memory.episodic = context.memory.episodic[-100:]
+        if len(context.memory.episodic) > MAX_EPISODIC_MEMORY_ITEMS:
+            context.memory.episodic = context.memory.episodic[-MAX_EPISODIC_MEMORY_ITEMS:]
 
         return updates
 
     def _identify_improvements(
-        self, result: Dict[str, Any], context: AgentContext
-    ) -> List[str]:
+        self, result: dict[str, Any], _context: AgentContext
+    ) -> list[str]:
         """Identify potential improvements"""
         improvements = []
 
         # Check for slow phases
         for phase_name, phase_data in result.get("phases", {}).items():
             time_ms = phase_data.get("time_ms", 0)
-            if time_ms > 1000:  # > 1 second
+            if time_ms > SLOW_PHASE_THRESHOLD_MS:  # > 1 second
                 improvements.append(
                     f"Optimize {phase_name} phase (took {time_ms:.0f}ms)"
                 )
@@ -903,10 +915,10 @@ class BaseAgent:
         return improvements
 
     async def _handle_error_with_reflection(
-        self, error: Exception, context: AgentContext, result: Dict[str, Any]
+        self, error: Exception, context: AgentContext, _result: dict[str, Any]
     ):
         """Handle error and record for learning"""
-        logger.error(f"Agent {self.name} error in {self.state.value}: {error}")
+        logger.exception("Agent %s error in %s", self.name, self.state.value)
 
         # Create a failure learning
         learning = {
@@ -914,7 +926,7 @@ class BaseAgent:
             "error": str(error),
             "phase": self.state.value,
             "request": context.data,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "confidence": 0.9,
         }
 
@@ -932,7 +944,7 @@ class BaseAgent:
         await asyncio.sleep(0.5)
         self.state = AgentState.READY
 
-    def _get_available_tools(self) -> List[Dict[str, Any]]:
+    def _get_available_tools(self) -> list[dict[str, Any]]:
         """Get list of tools available to this agent - override in subclass"""
         return []
 
@@ -947,9 +959,9 @@ class BaseAgent:
     async def shutdown(self):
         """Graceful shutdown of the agent"""
         self.state = AgentState.SHUTDOWN
-        logger.info(f"Agent {self.name} shutdown")
+        logger.info("Agent %s shutdown", self.name)
 
-    def get_capabilities(self) -> Dict[str, Any]:
+    def get_capabilities(self) -> dict[str, Any]:
         """Return agent capabilities and configuration"""
         return {
             "name": self.name,

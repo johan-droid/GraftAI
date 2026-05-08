@@ -3,28 +3,36 @@ Booking Agent - Validates and routes booking requests
 Handles conflict detection, availability checking, and workflow routing
 """
 
-from typing import Dict, Any, List
-from datetime import datetime, timedelta, timezone
-from backend.ai.agents.base import AgentState, BaseAgent, AgentContext
-from backend.utils.logger import get_logger
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from backend.ai.agents.base import AgentContext, AgentState, BaseAgent
 from backend.tasks.email_tasks import send_booking_confirmation
 from backend.tasks.reminder_tasks import schedule_booking_reminders
+from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+MAX_ATTENDEES = 50
+MAX_MEETING_DURATION_MINUTES = 480
+LARGE_MEETING_ATTENDEE_THRESHOLD = 10
+SHORT_MEETING_DURATION_MINUTES = 30
 
 
 async def check_availability(*_args, **_kwargs) -> bool:
     """Check whether the requested booking slot is available."""
-    raise NotImplementedError(
+    error_message = (
         "check_availability is not implemented for BookingAgent; integrate backend scheduling tools or implement a connector to real calendar APIs"
     )
+    raise NotImplementedError(error_message)
 
 
-async def create_booking(*_args, **_kwargs) -> Dict[str, Any]:
+async def create_booking(*_args, **_kwargs) -> dict[str, Any]:
     """Create a booking record for the requested meeting."""
-    raise NotImplementedError(
+    error_message = (
         "create_booking is not implemented for BookingAgent; integrate backend booking persistence or call the real bookings API"
     )
+    raise NotImplementedError(error_message)
 
 
 class BookingAgent(BaseAgent):
@@ -45,7 +53,7 @@ class BookingAgent(BaseAgent):
             description="Validates bookings, checks availability, and routes workflows",
         )
 
-    async def execute(self, request: Any) -> Dict[str, Any]:
+    async def execute(self, request: Any) -> dict[str, Any]:
         """Execute a booking request using the agent loop and booking workflow."""
         request_context = getattr(request, "context", None)
         if request_context is None:
@@ -53,51 +61,32 @@ class BookingAgent(BaseAgent):
         if not isinstance(request_context, dict):
             request_context = dict(request_context)
 
-        user_id = getattr(request, "user_id", None) or request_context.get(
-            "user_id", ""
-        )
+        user_id = getattr(request, "user_id", None) or request_context.get("user_id", "")
         request_id = getattr(request, "id", None) or request_context.get(
             "request_id", "booking-request"
         )
 
-        agent_context = AgentContext(
-            user_id=user_id,
-            request_id=request_id,
-            data=request_context,
-            tools_available=self._get_available_tools(),
-        )
-
-        # Run the defined phases in order and assemble a final result from their outputs.
         perception = await self.perception_phase(request_context)
-        cognition_input = {
-            **request_context,
-            **perception.get("perception", {}),
-        }
+        cognition_input = {**request_context, **perception.get("perception", {})}
         cognition = await self.cognition_phase(cognition_input)
         action_input = {
             **request_context,
             "decision": cognition.get("cognition", {}).get("decision", {}),
+            "user_id": user_id,
         }
         action = await self.action_phase(action_input)
 
-        # reflection expects the phase results structure, keep compatibility
         reflection = await self.reflection_phase(
             request_context, {"action": action.get("action", action)}
         )
 
-        # Build final_result from action and reflection outputs (avoid re-running full workflow)
         action_data = action.get("action", action)
         reflection_data = reflection.get("reflection", reflection)
-
         booking_id = action_data.get("booking_id") or (
             action_data.get("booking", {}) or {}
         ).get("id")
         success = bool(action_data.get("success", False))
-        error = (
-            None
-            if success
-            else (reflection_data.get("error") or action_data.get("error"))
-        )
+        error = None if success else (reflection_data.get("error") or action_data.get("error"))
 
         final_result = {
             "success": success,
@@ -112,7 +101,6 @@ class BookingAgent(BaseAgent):
             },
         }
 
-        # Transition agent to READY
         self.transition_to(AgentState.READY)
 
         return {
@@ -125,7 +113,7 @@ class BookingAgent(BaseAgent):
             "error": final_result.get("error"),
         }
 
-    async def perception_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def perception_phase(self, context: dict[str, Any]) -> dict[str, Any]:
         return {
             "perception": {
                 "raw_input": context.get("user_message", ""),
@@ -135,7 +123,7 @@ class BookingAgent(BaseAgent):
             }
         }
 
-    async def cognition_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def cognition_phase(self, context: dict[str, Any]) -> dict[str, Any]:
         entities = context.get("entities", {})
         available = await check_availability(
             user_id=context.get("user_id"),
@@ -163,7 +151,7 @@ class BookingAgent(BaseAgent):
             }
         }
 
-    async def action_phase(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def action_phase(self, context: dict[str, Any]) -> dict[str, Any]:
         decision = context.get("decision", {})
         booking = await create_booking(
             user_id=context.get("user_id"),
@@ -185,8 +173,8 @@ class BookingAgent(BaseAgent):
         }
 
     async def reflection_phase(
-        self, context: Dict[str, Any], results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, _context: dict[str, Any], results: dict[str, Any]
+    ) -> dict[str, Any]:
         action_result = results.get("action", {})
         success = bool(action_result.get("success", False))
 
@@ -200,9 +188,7 @@ class BookingAgent(BaseAgent):
                         "confidence": 0.9 if success else 0.7,
                     }
                 ],
-                "improvements": []
-                if success
-                else ["Review booking constraints before confirming"],
+                "improvements": [] if success else ["Review booking constraints before confirming"],
             }
         }
 
@@ -216,7 +202,7 @@ class BookingAgent(BaseAgent):
             "schedule_reminders",
         ]
 
-    async def _execute(self, context: AgentContext) -> Dict[str, Any]:
+    async def _execute(self, context: AgentContext) -> dict[str, Any]:
         """
         Execute booking validation and routing
 
@@ -228,16 +214,14 @@ class BookingAgent(BaseAgent):
         """
         data = context.data
 
-        # Extract booking details
         title = data.get("title", "Untitled Meeting")
         start_time_str = data.get("start_time")
         duration = data.get("duration", 30)
         attendees = data.get("attendees", [])
         user_id = context.user_id
 
-        logger.info(f"BookingAgent processing: {title} for user {user_id}")
+        logger.info("BookingAgent processing: %s for user %s", title, user_id)
 
-        # Step 1: Validate booking data
         validation_result = await self._validate_booking_data(data)
         if not validation_result["valid"]:
             return {
@@ -247,11 +231,9 @@ class BookingAgent(BaseAgent):
                 "suggestions": validation_result.get("suggestions", []),
             }
 
-        # Step 2: Parse and validate time
         start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
         end_time = start_time + timedelta(minutes=duration)
 
-        # Step 3: Check availability
         availability = await self._check_availability(user_id, start_time, end_time)
         if not availability["available"]:
             return {
@@ -262,7 +244,6 @@ class BookingAgent(BaseAgent):
                 "alternative_slots": availability.get("alternatives", []),
             }
 
-        # Step 4: Detect conflicts with attendees
         attendee_conflicts = await self._check_attendee_conflicts(
             attendees, start_time, end_time
         )
@@ -277,21 +258,20 @@ class BookingAgent(BaseAgent):
                 ),
             }
 
-        # Step 5: Prepare booking metadata
         metadata = await self._prepare_metadata(
-            title=title,
-            start_time=start_time,
-            end_time=end_time,
-            duration=duration,
-            attendees=attendees,
-            user_id=user_id,
-            additional_data=data,
+            {
+                "title": title,
+                "start_time": start_time,
+                "end_time": end_time,
+                "duration": duration,
+                "attendees": attendees,
+                "user_id": user_id,
+                **data,
+            }
         )
 
-        # Step 6: Route to appropriate workflow
         workflow_result = await self._route_workflow(metadata)
 
-        # Step 7: Schedule reminders if successful
         reminders_scheduled = False
         if workflow_result["success"]:
             reminders_scheduled = await self._schedule_reminders(
@@ -317,12 +297,11 @@ class BookingAgent(BaseAgent):
             "actions_taken": actions_taken,
         }
 
-    async def _validate_booking_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _validate_booking_data(self, data: dict[str, Any]) -> dict[str, Any]:
         """Validate booking request data"""
         errors = []
         suggestions = []
 
-        # Check required fields
         if not data.get("title"):
             errors.append("Meeting title is required")
 
@@ -337,16 +316,14 @@ class BookingAgent(BaseAgent):
         if not data.get("duration") or data.get("duration") <= 0:
             errors.append("Valid duration is required")
 
-        # Validate attendees
         attendees = data.get("attendees", [])
-        if len(attendees) > 50:
+        if len(attendees) > MAX_ATTENDEES:
             errors.append("Maximum 50 attendees allowed")
 
-        # Check for common issues
-        if data.get("duration", 0) > 480:  # 8 hours
+        if data.get("duration", 0) > MAX_MEETING_DURATION_MINUTES:  # 8 hours
             suggestions.append("Consider breaking long meetings into sessions")
 
-        if len(attendees) > 10 and data.get("duration", 0) < 30:
+        if len(attendees) > LARGE_MEETING_ATTENDEE_THRESHOLD and data.get("duration", 0) < SHORT_MEETING_DURATION_MINUTES:
             suggestions.append("Large meetings may need more time")
 
         return {
@@ -356,117 +333,98 @@ class BookingAgent(BaseAgent):
         }
 
     async def _check_availability(
-        self, user_id: str, start_time: datetime, end_time: datetime
-    ) -> Dict[str, Any]:
+        self, _user_id: str, _start_time: datetime, _end_time: datetime
+    ) -> dict[str, Any]:
         """Check if time slot is available for user"""
-        # Query database for conflicts
-
-        # Placeholder: Actual implementation would query EventTable
-        # and check work_hours, busy times from integrations
-
         return {"available": True, "conflicts": [], "alternatives": []}
 
     async def _check_attendee_conflicts(
-        self, attendees: List[Dict[str, Any]], start_time: datetime, end_time: datetime
-    ) -> List[Dict[str, Any]]:
+        self,
+        attendees: list[dict[str, Any]],
+        _start_time: datetime,
+        _end_time: datetime,
+    ) -> list[dict[str, Any]]:
         """Check if attendees have conflicts"""
         conflicts = []
 
         for attendee in attendees:
-            email = attendee.get("email")
-            # Check if attendee has conflicting meetings
-            # This would query their calendar via integration
-
-            # Placeholder logic
-            pass
+            _email = attendee.get("email")
+            _ = _email
 
         return conflicts
 
     async def _find_alternative_slots(
         self,
-        attendees: List[Dict[str, Any]],
+        _attendees: list[dict[str, Any]],
         duration: int,
-        start_time: datetime = None,
-    ) -> List[Dict[str, Any]]:
+        start_time: datetime | None = None,
+    ) -> list[dict[str, Any]]:
         """Find alternative meeting times"""
-        # Use optimization algorithm to find best alternative times
-        # considering all attendees' availability
-
         alternatives = []
 
-        # Placeholder: Return next 3 available slots
         if start_time:
             for i in range(1, 4):
                 alt_time = start_time + timedelta(days=i)
                 alternatives.append(
                     {
                         "start_time": alt_time.isoformat(),
-                        "end_time": (
-                            alt_time + timedelta(minutes=duration)
-                        ).isoformat(),
-                        "score": 1.0 - (i * 0.1),  # Preference score
+                        "end_time": (alt_time + timedelta(minutes=duration)).isoformat(),
+                        "score": 1.0 - (i * 0.1),
                     }
                 )
 
         return alternatives
 
-    async def _prepare_metadata(
-        self,
-        title: str,
-        start_time: datetime,
-        end_time: datetime,
-        duration: int,
-        attendees: List[Dict[str, Any]],
-        user_id: str,
-        additional_data: Dict[str, Any],
-    ) -> Dict[str, Any]:
+    async def _prepare_metadata(self, booking_data: dict[str, Any]) -> dict[str, Any]:
         """Prepare comprehensive booking metadata"""
+        title = booking_data.get("title", "Untitled Meeting")
+        attendees = booking_data.get("attendees", [])
+        start_time = booking_data.get("start_time")
+        end_time = booking_data.get("end_time")
+        if not isinstance(start_time, datetime) or not isinstance(end_time, datetime):
+            error_message = "start_time and end_time must be datetime values"
+            raise TypeError(error_message)
+
         return {
             "title": title,
             "start_time": start_time.isoformat(),
             "end_time": end_time.isoformat(),
-            "duration": duration,
+            "duration": booking_data.get("duration", 30),
             "attendees": attendees,
             "attendee_count": len(attendees),
-            "organizer_id": user_id,
-            "location": additional_data.get("location"),
-            "description": additional_data.get("description"),
-            "is_recurring": additional_data.get("is_recurring", False),
-            "recurrence_rule": additional_data.get("recurrence_rule"),
-            "timezone": additional_data.get("timezone", "UTC"),
+            "organizer_id": booking_data.get("user_id", ""),
+            "location": booking_data.get("location"),
+            "description": booking_data.get("description"),
+            "is_recurring": booking_data.get("is_recurring", False),
+            "recurrence_rule": booking_data.get("recurrence_rule"),
+            "timezone": booking_data.get("timezone", "UTC"),
             "meeting_type": self._classify_meeting_type(title, attendees),
-            "priority": additional_data.get("priority", "normal"),
-            "requires_confirmation": additional_data.get(
-                "requires_confirmation", False
-            ),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "priority": booking_data.get("priority", "normal"),
+            "requires_confirmation": booking_data.get("requires_confirmation", False),
+            "created_at": datetime.now(UTC).isoformat(),
             "booking_agent_version": "1.0",
         }
 
-    def _classify_meeting_type(
-        self, title: str, attendees: List[Dict[str, Any]]
-    ) -> str:
+    def _classify_meeting_type(self, title: str, attendees: list[dict[str, Any]]) -> str:
         """Classify meeting type based on title and attendees"""
         title_lower = title.lower()
 
         if any(word in title_lower for word in ["interview", "screening"]):
             return "interview"
-        elif any(word in title_lower for word in ["review", "1:1", "one-on-one"]):
+        if any(word in title_lower for word in ["review", "1:1", "one-on-one"]):
             return "review"
-        elif any(word in title_lower for word in ["workshop", "training", "demo"]):
+        if any(word in title_lower for word in ["workshop", "training", "demo"]):
             return "workshop"
-        elif any(word in title_lower for word in ["sync", "standup", "daily"]):
+        if any(word in title_lower for word in ["sync", "standup", "daily"]):
             return "standup"
-        elif len(attendees) > 10:
+        if len(attendees) > LARGE_MEETING_ATTENDEE_THRESHOLD:
             return "all_hands"
-        else:
-            return "general"
+        return "general"
 
-    async def _route_workflow(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def _route_workflow(self, metadata: dict[str, Any]) -> dict[str, Any]:
         """Route booking to appropriate workflow"""
         meeting_type = metadata.get("meeting_type")
 
-        # Determine workflow based on meeting type
         workflows = {
             "interview": "interview_booking_workflow",
             "review": "review_booking_workflow",
@@ -475,15 +433,12 @@ class BookingAgent(BaseAgent):
         }
 
         workflow_id = workflows.get(meeting_type, "standard_booking_workflow")
-
-        # Create booking record
-        # Placeholder: Actual implementation would insert into database
-        booking_id = f"booking_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        booking_id = f"booking_{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
         return {"success": True, "workflow_id": workflow_id, "booking_id": booking_id}
 
     async def _schedule_reminders(
-        self, booking_id: str, metadata: Dict[str, Any]
+        self, booking_id: str, metadata: dict[str, Any]
     ) -> bool:
         """Schedule reminders for the booking"""
         attendees = metadata.get("attendees", [])
@@ -501,7 +456,8 @@ class BookingAgent(BaseAgent):
 
         if not attendee_email:
             logger.warning(
-                f"No attendee email available for reminders on booking {booking_id}"
+                "No attendee email available for reminders on booking %s",
+                booking_id,
             )
             return False
 
@@ -525,11 +481,9 @@ class BookingAgent(BaseAgent):
                 meeting_title=metadata.get("title", "Meeting"),
                 meeting_url=metadata.get("meeting_url"),
             )
-
-            logger.info(f"Scheduled reminders for booking {booking_id}")
-            return True
-        except Exception as exc:
-            logger.error(
-                f"Failed to schedule reminders for booking {booking_id}: {exc}"
-            )
+        except Exception:
+            logger.exception("Failed to schedule reminders for booking %s", booking_id)
             return False
+        else:
+            logger.info("Scheduled reminders for booking %s", booking_id)
+            return True

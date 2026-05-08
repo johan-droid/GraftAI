@@ -51,6 +51,7 @@ export function Topbar({ showMenuButton = false, onMenuClick }: TopbarProps) {
               w-10 h-10 rounded-full
               flex items-center justify-center
               transition-colors duration-150
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A73E8] focus-visible:ring-offset-2
               ${isDark
                 ? "hover:bg-[#49454F] text-[#E6E1E5]"
                 : "hover:bg-[#F1F3F4] text-[#5F6368]"
@@ -73,9 +74,10 @@ export function Topbar({ showMenuButton = false, onMenuClick }: TopbarProps) {
           }
         `}>
           <Search size={18} className={isDark ? "text-[#C9C5CA]" : "text-[#5F6368]"} />
-          <input 
-            type="text" 
-            placeholder="Search events, bookings, or settings..." 
+          <input
+            type="text"
+            aria-label="Search events, bookings, or settings"
+            placeholder="Search events, bookings, or settings..."
             className={`
               bg-transparent border-none outline-none text-sm ml-3 w-full
               placeholder:text-sm
@@ -95,7 +97,7 @@ export function Topbar({ showMenuButton = false, onMenuClick }: TopbarProps) {
           href="/copilot"
           className={`
             inline-flex items-center gap-2 rounded-full border px-3 py-2
-            transition-colors
+            transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A73E8] focus-visible:ring-offset-2
             ${isDark
               ? "border-[#49454F] bg-[#1C1B1F] text-[#C9C5CA] hover:border-[#AAC7FF] hover:text-[#AAC7FF]"
               : "border-[#DADCE0] bg-white text-[#5F6368] hover:border-[#1A73E8] hover:text-[#1A73E8]"
@@ -115,7 +117,7 @@ export function Topbar({ showMenuButton = false, onMenuClick }: TopbarProps) {
           aria-label="Notifications" 
           title="Notifications" 
           className={`
-            p-2 rounded-full transition-colors relative
+            p-2 rounded-full transition-colors relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A73E8] focus-visible:ring-offset-2
             ${isDark 
               ? "hover:bg-[#49454F] text-[#C9C5CA]" 
               : "hover:bg-[#F1F3F4] text-[#5F6368]"
@@ -143,7 +145,8 @@ export function Topbar({ showMenuButton = false, onMenuClick }: TopbarProps) {
           <button 
             onClick={() => signOut({ callbackUrl: '/login' })}
             title="Sign out"
-            className="w-9 h-9 rounded-full bg-[#1A73E8] text-white flex items-center justify-center font-medium text-sm hover:ring-2 hover:ring-offset-2 hover:ring-[#1A73E8] transition-all cursor-pointer shadow-sm"
+            aria-label="Sign out"
+            className="w-9 h-9 rounded-full bg-[#1A73E8] text-white flex items-center justify-center font-medium text-sm hover:ring-2 hover:ring-offset-2 hover:ring-[#1A73E8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A73E8] focus-visible:ring-offset-2 transition-all cursor-pointer shadow-sm"
           >
             {firstInitial}
           </button>

@@ -43,7 +43,7 @@ function LoadingCard({ icon: Icon, title, text }: (typeof hintCards)[number]) {
         backdropFilter: "blur(16px)",
       }}
     >
-      <Stack direction="row" spacing={1.5} alignItems="flex-start">
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start" }}>
         <Box
           sx={{
             width: 40,

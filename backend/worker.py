@@ -25,6 +25,12 @@ from backend.services.notifications import (
 from backend.services.mail_service import send_email
 from backend.services.queue_monitoring import start_queue_monitoring
 from backend.utils.http_client import get_client
+import os
+
+from backend.services.integrations.unified_service import UnifiedService
+from backend.services.integrations.video_conference_service import (
+    VideoConferenceService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +264,90 @@ async def task_send_booking_confirmation(ctx, booking_id: str):
             logger.warning(
                 f"Booking confirmation failed: event for booking {booking_id} not found"
             )
+
+@task
+async def task_provision_shortlink(ctx, booking_id: str):
+    async with AsyncSessionLocal() as db:
+        booking = await db.get(BookingTable, booking_id)
+        if not booking:
+            logger.warning("Shortlink job: booking %s not found", booking_id)
+            return
+
+        user = await db.get(UserTable, booking.user_id)
+        if not user:
+            logger.warning("Shortlink job: user for booking %s not found", booking_id)
+            return
+
+        try:
+            frontend_base = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            target_url = f"{frontend_base}/b/{booking.booking_code or booking.id}"
+            unified = UnifiedService(api_key=os.getenv("UNIFIED_TO_API_KEY"))
+            short = await unified.create_shortlink(target_url, title=(booking.full_name or "Booking"))
+
+            # Persist dedicated column + metadata
+            booking.shortlink = short.get("short_url")
+            meta = dict(booking.metadata_payload or {})
+            meta.setdefault("public", {})
+            meta["public"]["shortlink"] = short.get("short_url")
+            meta["public"]["shortlink_id"] = short.get("id")
+            meta["public"]["shortlink_external"] = bool(short.get("external"))
+            booking.metadata_payload = meta
+            booking.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+            logger.info("Shortlink provisioned for booking %s", booking_id)
+        except Exception as e:
+            logger.error("Shortlink provisioning failed for %s: %s", booking_id, e, exc_info=True)
+
+
+@task
+async def task_provision_jitsi_meeting(ctx, booking_id: str):
+    async with AsyncSessionLocal() as db:
+        booking = await db.get(BookingTable, booking_id)
+        if not booking:
+            logger.warning("Jitsi job: booking %s not found", booking_id)
+            return
+
+        # Load related event_type and organizer
+        organizer = await db.get(UserTable, booking.user_id)
+        if not organizer:
+            logger.warning("Jitsi job: organizer for booking %s not found", booking_id)
+            return
+
+        try:
+            # Determine event_type from booking.event_type if present
+            event_type = None
+            if booking.event_type_id:
+                from backend.models.tables import EventTypeTable
+
+                event_type = await db.get(EventTypeTable, booking.event_type_id)
+
+            vc_service = VideoConferenceService(db)
+            config = await vc_service.get_config(organizer.id, "jitsi")
+            meeting = await vc_service.create_jitsi_meeting(
+                config=config,
+                topic=(event_type.name if event_type else booking.full_name),
+                start_time=booking.start_time,
+                duration_minutes=(event_type.duration_minutes if event_type else 30),
+                booking_id=booking.id,
+            )
+
+            # Update event meeting URL if event exists
+            if booking.event_id:
+                event = await db.get(EventTable, booking.event_id)
+                if event:
+                    event.meeting_url = getattr(meeting, "join_url", None)
+
+            meta = dict(booking.metadata_payload or {})
+            meta.setdefault("meeting", {})
+            meta["meeting"]["provider"] = "jitsi"
+            meta["meeting"]["join_url"] = getattr(meeting, "join_url", None)
+            meta["meeting"]["provider_meeting_id"] = getattr(meeting, "provider_meeting_id", None)
+            booking.metadata_payload = meta
+            booking.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+            logger.info("Jitsi meeting provisioned for booking %s", booking_id)
+        except Exception as e:
+            logger.error("Jitsi provisioning failed for %s: %s", booking_id, e, exc_info=True)
             return
 
         notification_data = {

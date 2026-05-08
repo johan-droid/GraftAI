@@ -163,4 +163,25 @@ return {allowed and 1 or 0, tokens}
 
         except Exception as e:
             logger.error(f"Redis quota check failed: {e}")
-            return True, 0, 0
+            # SECURITY FIX-C3.1: Fail-closed for AI endpoints (block if Redis down)
+            # Check if this is a quota-critical endpoint that requires strict enforcement
+            critical_quota_paths = [
+                "/api/v1/ai/chat",
+                "/api/v1/ai/complete",
+                "/api/v1/ai/generate",
+            ]
+            
+            is_critical = any(path in path for path in critical_quota_paths)
+            
+            if is_critical:
+                # SECURITY: Fail-closed - block the request for critical AI endpoints
+                logger.critical(f"🚨 Redis DOWN - BLOCKING quota request for security: {path}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Quota system temporarily unavailable. Please try again later.",
+                    headers={"Retry-After": "30"},
+                )
+            else:
+                # For non-critical endpoints, allow with warning
+                logger.warning(f"Redis down for quota check on non-critical endpoint: {path}")
+                return True, 0, 0

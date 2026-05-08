@@ -28,6 +28,7 @@ from backend.models.tables import UserTable
 from backend.ai.monitoring import get_agent_metrics, LogAnalyzer
 from backend.services.messaging import get_recent_messages
 from backend.services.redis_client import get_redis_client
+from backend.services.usage import build_quota_snapshot, get_user_quota
 from backend.utils.db import get_async_session_maker
 from backend.utils.serialization import serializer
 from backend.utils.logger import get_logger
@@ -596,6 +597,7 @@ async def monitoring_websocket(websocket: WebSocket):
     redis = await get_redis_client() if user_id else None
     pubsub = None
     channel_name = None
+    quota_channel_name = None
     last_metrics_sent_at = 0.0
 
     try:
@@ -603,8 +605,24 @@ async def monitoring_websocket(websocket: WebSocket):
 
         if user_id and redis:
             channel_name = f"chat_message_{user_id}"
+            quota_channel_name = f"account_update_{user_id}"
             pubsub = redis.pubsub()
-            await pubsub.subscribe(channel_name)
+            await pubsub.subscribe(channel_name, quota_channel_name)
+
+            try:
+                session_maker = get_async_session_maker()
+                async with session_maker() as db:
+                    user = await get_user_quota(db, user_id)
+                    await websocket.send_json(
+                        {
+                            "type": "quota_update",
+                            "payload": build_quota_snapshot(user, source="websocket.seed"),
+                        }
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to seed monitoring websocket with quota snapshot: %s", exc
+                )
 
             try:
                 recent_messages = await get_recent_messages(user_id, count=3)
@@ -628,12 +646,20 @@ async def monitoring_websocket(websocket: WebSocket):
                 if message and message.get("type") == "message":
                     decoded = _decode_stream_payload(message.get("data"))
                     if decoded:
-                        await websocket.send_json(
-                            {
-                                "type": "notification",
-                                "payload": _stream_event_to_notification(decoded),
-                            }
-                        )
+                        if decoded.get("type") == "quota_update":
+                            await websocket.send_json(
+                                {
+                                    "type": "quota_update",
+                                    "payload": decoded.get("payload", decoded),
+                                }
+                            )
+                        else:
+                            await websocket.send_json(
+                                {
+                                    "type": "notification",
+                                    "payload": _stream_event_to_notification(decoded),
+                                }
+                            )
                 else:
                     await asyncio.sleep(0.1)
             else:
@@ -660,7 +686,10 @@ async def monitoring_websocket(websocket: WebSocket):
     finally:
         if pubsub and channel_name:
             try:
-                await pubsub.unsubscribe(channel_name)
+                unsubscribe_channels = [channel_name]
+                if quota_channel_name:
+                    unsubscribe_channels.append(quota_channel_name)
+                await pubsub.unsubscribe(*unsubscribe_channels)
             except Exception:
                 pass
             try:

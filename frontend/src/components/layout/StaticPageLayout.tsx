@@ -64,7 +64,7 @@ export function StaticPageLayout({
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] as const }}
         >
           {/* Breadcrumbs & Status Bar */}
-          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 6 }}>
+          <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 6 }}>
              <Link href="/" style={{ 
                 display: "flex", 
                 alignItems: "center", 

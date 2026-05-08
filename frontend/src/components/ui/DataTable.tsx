@@ -528,12 +528,14 @@ export function DataTable<T>({
                   placeholder={searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Search size={18} />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search size={18} />
+                        </InputAdornment>
+                      ),
+                    },
                   }}
                   sx={{ minWidth: 200 }}
                 />
@@ -699,7 +701,6 @@ export function DataTable<T>({
       {/* Pagination */}
       {pagination && processedData.length > 0 && (
         <TablePagination
-          component="div"
           count={processedData.length}
           page={page}
           onPageChange={(_, newPage) => setPage(newPage)}
@@ -709,8 +710,12 @@ export function DataTable<T>({
             setPage(0);
           }}
           rowsPerPageOptions={rowsPerPageOptions}
-          backIconButtonProps={{ children: <ChevronLeft size={20} /> }}
-          nextIconButtonProps={{ children: <ChevronRight size={20} /> }}
+          slotProps={{
+            actions: {
+              previousButton: { children: <ChevronLeft size={20} /> },
+              nextButton: { children: <ChevronRight size={20} /> },
+            },
+          }}
           sx={{
             borderTop: "1px solid hsl(var(--border))",
             backgroundColor: "hsl(var(--card))",

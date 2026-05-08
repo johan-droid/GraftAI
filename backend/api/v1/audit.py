@@ -8,6 +8,7 @@ from backend.utils.db import get_db
 from backend.auth.schemes import get_current_user_id
 from backend.models.tables import AuditLogTable, UserTable
 from backend.models.base import DBModel
+from backend.core.saas_config import get_limit
 
 router = APIRouter()
 
@@ -60,6 +61,18 @@ async def get_my_usage_stats(
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    daily_ai_limit = (
+        user.daily_ai_limit
+        if user.daily_ai_limit is not None
+        else get_limit(user.tier, "daily_ai_messages")
+    )
+    daily_sync_limit = (
+        user.daily_sync_limit
+        if user.daily_sync_limit is not None
+        else get_limit(user.tier, "daily_calendar_syncs")
+    )
+    quota_reset_at = user.quota_reset_at.isoformat() if user.quota_reset_at else None
         
     return {
         "ai_tokens": user.total_ai_tokens,
@@ -67,6 +80,11 @@ async def get_my_usage_stats(
         "scheduling_count": user.total_scheduling_count,
         "daily_ai_usage": user.daily_ai_count,
         "daily_sync_usage": user.daily_sync_count,
+        "daily_ai_limit": daily_ai_limit,
+        "daily_sync_limit": daily_sync_limit,
+        "ai_remaining": max(0, daily_ai_limit - user.daily_ai_count),
+        "sync_remaining": max(0, daily_sync_limit - user.daily_sync_count),
+        "quota_reset_at": quota_reset_at,
         "tier": user.tier,
         "subscription_status": user.subscription_status
     }

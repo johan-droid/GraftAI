@@ -660,6 +660,11 @@ export async function getUsageStats() {
     scheduling_count: number;
     daily_ai_usage: number;
     daily_sync_usage: number;
+    daily_ai_limit?: number;
+    daily_sync_limit?: number;
+    ai_remaining?: number;
+    sync_remaining?: number;
+    quota_reset_at?: string | null;
     tier: string;
     subscription_status: string;
   }>("/audit/stats");

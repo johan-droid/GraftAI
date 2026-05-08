@@ -210,7 +210,9 @@ export default function PricingPage() {
         const res = await fetch("https://ipapi.co/json/");
         const data = await res.json();
         if (data.country_code === "IN") setRegion("IN");
-      } catch {
+      } catch (error) {
+        // Silent fail for region detection - not critical functionality
+        console.warn('Failed to detect region:', error);
       }
     };
     detectRegion();
@@ -451,7 +453,7 @@ export default function PricingPage() {
 
         <Grid container spacing={4} sx={{ mb: 16 }}>
           {tiers.map((tier, idx) => (
-            <Grid item xs={12} md={4} key={tier.id}>
+            <Grid size={{ xs: 12, md: 4 }} key={tier.id}>
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -481,7 +483,10 @@ export default function PricingPage() {
                     </Box>
                   )}
 
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
+                  <Stack
+                    direction="row"
+                    sx={{ justifyContent: "space-between", alignItems: "center", mb: 4 }}
+                  >
                     <Box sx={{ p: 1, bgcolor: "rgba(0, 255, 156, 0.1)", borderRadius: 1 }}>
                       {tier.icon}
                     </Box>
@@ -490,7 +495,7 @@ export default function PricingPage() {
                   <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "var(--text-primary)" }}>
                     {tier.name}
                   </Typography>
-                  <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 3 }}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", mb: 3 }}>
                     <Typography variant="h3" sx={{ fontWeight: 900, color: "var(--text-primary)" }}>
                       {formatPrice(tier)}
                     </Typography>
@@ -507,7 +512,7 @@ export default function PricingPage() {
 
                   <Stack spacing={2} sx={{ mb: 6, flexGrow: 1 }}>
                     {tier.features.map(f => (
-                      <Stack key={f} direction="row" spacing={1.5} alignItems="center">
+                      <Stack key={f} direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
                         <Check size={14} className="text-primary" />
                         <Typography sx={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }}>{f}</Typography>
                       </Stack>
@@ -576,21 +581,21 @@ export default function PricingPage() {
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>Market comparison</Typography>
           <Typography sx={{ color: 'var(--text-muted)', mb: 3 }}>Competitive pricing vs typical market offerings (illustrative).</Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Box sx={{ p: 3, border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
                 <Typography sx={{ fontWeight: 800 }}>GraftAI Pro</Typography>
                 <Typography sx={{ color: 'var(--text-muted)' }}>$19 / month</Typography>
                 <Typography sx={{ mt: 1, fontSize: 13 }}>200 AI messages / day, priority processing, analytics, integrations.</Typography>
               </Box>
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Box sx={{ p: 3, border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
                 <Typography sx={{ fontWeight: 800 }}>Competitor A</Typography>
                 <Typography sx={{ color: 'var(--text-muted)' }}>$29 / month</Typography>
                 <Typography sx={{ mt: 1, fontSize: 13 }}>Similar AI features, higher price for comparable usage.</Typography>
               </Box>
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Box sx={{ p: 3, border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
                 <Typography sx={{ fontWeight: 800 }}>Competitor B</Typography>
                 <Typography sx={{ color: 'var(--text-muted)' }}>$24 / month</Typography>

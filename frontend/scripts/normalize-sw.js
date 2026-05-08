@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('fs');
 const path = require('path');
 
@@ -15,7 +14,7 @@ let changed = false;
 
 content = content.replace(/(["'])url\1\s*:\s*\1([^"']*)\1/g, (m, quote, url) => {
   if (!url.includes('\\')) return m;
-  if (!/^[\\\/.]/.test(url)) return m;
+  if (!/^[\\/.]/.test(url)) return m;
   const normalized = url.replace(/\\/g, '/');
   changed = true;
   return m.replace(url, normalized);

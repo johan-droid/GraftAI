@@ -39,13 +39,15 @@ export function Modal({
       onClose={onClose}
       maxWidth={maxWidth}
       fullWidth={fullWidth}
-      PaperProps={{
-        sx: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #DADCE0",
-          borderRadius: "28px",
-          boxShadow: "0 24px 60px -36px rgba(32,33,36,0.35)",
-          overflow: "hidden",
+      slotProps={{
+        paper: {
+          sx: {
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DADCE0",
+            borderRadius: "28px",
+            boxShadow: "0 24px 60px -36px rgba(32,33,36,0.35)",
+            overflow: "hidden",
+          },
         },
       }}
       sx={{

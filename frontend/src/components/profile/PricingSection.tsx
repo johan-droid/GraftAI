@@ -66,8 +66,16 @@ export function PricingSection({ currentTier = "free" }: { currentTier?: string 
               )}
               
               <div className="flex items-center gap-3 mb-6">
-                <div className={`w-10 h-10 rounded-xl bg-${plan.color}-500/10 flex items-center justify-center`}>
-                  <Icon className={`w-5 h-5 text-${plan.color}-400`} />
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  plan.color === 'slate' ? 'bg-slate-500/10' :
+                  plan.color === 'indigo' ? 'bg-indigo-500/10' :
+                  'bg-violet-500/10'
+                }`}>
+                  <Icon className={`w-5 h-5 ${
+                    plan.color === 'slate' ? 'text-slate-400' :
+                    plan.color === 'indigo' ? 'text-indigo-400' :
+                    'text-violet-400'
+                  }`} />
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-widest">{plan.name}</h3>
@@ -107,7 +115,11 @@ export function PricingSection({ currentTier = "free" }: { currentTier?: string 
                 {isCurrent ? "Current Plan" : plan.buttonText}
               </button>
               
-              <div className={`absolute -bottom-12 -right-12 w-32 h-32 bg-${plan.color}-500/5 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity`} />
+              <div className={`absolute -bottom-12 -right-12 w-32 h-32 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${
+                plan.color === 'slate' ? 'bg-slate-500/5' :
+                plan.color === 'indigo' ? 'bg-indigo-500/5' :
+                'bg-violet-500/5'
+              }`} />
             </motion.div>
           );
         })}

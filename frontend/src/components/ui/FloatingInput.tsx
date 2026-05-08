@@ -34,6 +34,47 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
             setIsFocused(false);
             props.onBlur?.(e);
           }}
+          slotProps={{
+            ...props.slotProps,
+            input: {
+              ...props.slotProps?.input,
+              startAdornment: Icon ? (
+                <InputAdornment position="start">
+                  <Icon
+                    size={16}
+                    style={{
+                      color: errorMessage
+                        ? "var(--accent)"
+                        : isFocused
+                        ? "var(--primary)"
+                        : "var(--text-muted)",
+                      transition: "color 0.2s ease",
+                    }}
+                  />
+                </InputAdornment>
+              ) : null,
+              endAdornment: isPassword ? (
+                <InputAdornment position="end">
+                  <Box
+                    component="button"
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    sx={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      p: 0.5,
+                      color: "var(--text-muted)",
+                      "&:hover": { color: "var(--primary)" },
+                      transition: "color 0.2s",
+                    }}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </Box>
+                </InputAdornment>
+              ) : null,
+            },
+          }}
           sx={{
             "& .MuiOutlinedInput-root": {
               background: "rgba(255, 255, 255, 0.02)",
@@ -73,44 +114,6 @@ export const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
               },
             },
             ...props.sx,
-          }}
-          InputProps={{
-            ...props.InputProps,
-            startAdornment: Icon ? (
-              <InputAdornment position="start">
-                <Icon
-                  size={16}
-                  style={{
-                    color: errorMessage
-                      ? "var(--accent)"
-                      : isFocused
-                      ? "var(--primary)"
-                      : "var(--text-muted)",
-                    transition: "color 0.2s ease",
-                  }}
-                />
-              </InputAdornment>
-            ) : null,
-            endAdornment: isPassword ? (
-              <InputAdornment position="end">
-                <Box
-                  component="button"
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  sx={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    p: 0.5,
-                    color: "var(--text-muted)",
-                    "&:hover": { color: "var(--primary)" },
-                    transition: "color 0.2s",
-                  }}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </Box>
-              </InputAdornment>
-            ) : null,
           }}
         />
 

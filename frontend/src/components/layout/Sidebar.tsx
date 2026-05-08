@@ -21,11 +21,14 @@ import { useSession } from "next-auth/react";
 
 import { useEffect, useState } from "react";
 import { getUsageStats } from "@/lib/api";
+import { useWebSocket } from "@/lib/ai-api";
 
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [stats, setStats] = useState<any>(null);
+  const { quotaUpdate } = useWebSocket(undefined, session?.backendToken ?? undefined);
+  const user = session?.user as Record<string, any> | undefined;
   
   useEffect(() => {
     const fetchStats = async () => {
@@ -38,10 +41,21 @@ export function Sidebar() {
     };
     if (session?.user) fetchStats();
   }, [session]);
+
+  useEffect(() => {
+    if (!quotaUpdate) {
+      return;
+    }
+
+    setStats((current: Record<string, unknown> | null) => ({
+      ...(current ?? {}),
+      ...quotaUpdate,
+    }));
+  }, [quotaUpdate]);
   
-  const user = session?.user;
   const tier = stats?.tier || user?.tier || "Free";
-  const aiCount = stats?.daily_ai_usage || user?.daily_ai_count || 0;
+  const aiCount = stats?.daily_ai_usage ?? stats?.daily_ai_count ?? user?.daily_ai_count ?? 0;
+  const syncCount = stats?.daily_sync_usage ?? stats?.daily_sync_count ?? user?.daily_sync_count ?? 0;
   
   // Dynamic limits based on tier if not provided in user object
   const getLimits = (tier: string) => {
@@ -59,13 +73,14 @@ export function Sidebar() {
   };
 
   const limits = getLimits(tier);
-  const aiLimit = user?.daily_ai_limit || limits.ai;
+  const aiLimit = stats?.daily_ai_limit ?? user?.daily_ai_limit ?? limits.ai;
+  const syncLimit = stats?.daily_sync_limit ?? user?.daily_sync_limit ?? (tier.toLowerCase() === "elite" ? 500 : tier.toLowerCase() === "pro" ? 50 : 3);
   const progress = Math.min((aiCount / aiLimit) * 100, 100);
   
   // Dynamic percentages for SaaS meters
-  const tokenPct = Math.min(((stats?.ai_tokens || 0) / limits.tokens) * 100, 100);
-  const apiPct = Math.min(((stats?.api_calls || 0) / limits.api) * 100, 100);
-  const bookingPct = Math.min(((stats?.scheduling_count || 0) / limits.bookings) * 100, 100);
+  const tokenPct = Math.min((((stats?.ai_tokens ?? stats?.total_ai_tokens) || 0) / limits.tokens) * 100, 100);
+  const apiPct = Math.min((((stats?.api_calls ?? stats?.total_api_calls) || 0) / limits.api) * 100, 100);
+  const bookingPct = Math.min((((stats?.scheduling_count ?? stats?.total_scheduling_count) || 0) / limits.bookings) * 100, 100);
 
   const isPro = tier.toLowerCase() !== "free";
 
@@ -142,7 +157,7 @@ export function Sidebar() {
             <div>
               <div className="flex justify-between text-[11px] mb-1">
                 <span className="text-[#444746] font-medium">AI Tokens</span>
-                <span className="text-[#1A73E8] font-bold">{stats?.ai_tokens?.toLocaleString() || 0}</span>
+                <span className="text-[#1A73E8] font-bold">{(stats?.ai_tokens ?? stats?.total_ai_tokens)?.toLocaleString?.() || 0}</span>
               </div>
               <div className="w-full bg-[#F1F3F4] rounded-full h-1 overflow-hidden">
                 <div className="bg-[#1A73E8] h-full" style={{ width: `${tokenPct}%` }}></div>
@@ -153,7 +168,7 @@ export function Sidebar() {
             <div>
               <div className="flex justify-between text-[11px] mb-1">
                 <span className="text-[#444746] font-medium">API Calls</span>
-                <span className="text-[#1A73E8] font-bold">{stats?.api_calls?.toLocaleString() || 0}</span>
+                <span className="text-[#1A73E8] font-bold">{(stats?.api_calls ?? stats?.total_api_calls)?.toLocaleString?.() || 0}</span>
               </div>
               <div className="w-full bg-[#F1F3F4] rounded-full h-1 overflow-hidden">
                 <div className="bg-[#34A853] h-full" style={{ width: `${apiPct}%` }}></div>
@@ -164,7 +179,7 @@ export function Sidebar() {
             <div>
               <div className="flex justify-between text-[11px] mb-1">
                 <span className="text-[#444746] font-medium">Total Bookings</span>
-                <span className="text-[#1A73E8] font-bold">{stats?.scheduling_count?.toLocaleString() || 0}</span>
+                <span className="text-[#1A73E8] font-bold">{(stats?.scheduling_count ?? stats?.total_scheduling_count)?.toLocaleString?.() || 0}</span>
               </div>
               <div className="w-full bg-[#F1F3F4] rounded-full h-1 overflow-hidden">
                 <div className="bg-[#FBBC04] h-full" style={{ width: `${bookingPct}%` }}></div>
@@ -182,6 +197,10 @@ export function Sidebar() {
                   className={`h-full rounded-full transition-all duration-1000 ${progress > 90 ? "bg-red-500" : "bg-[#1A73E8]"}`}
                   style={{ width: `${progress}%` }}
                 ></div>
+              </div>
+              <div className="flex justify-between text-[10px] mt-1 text-[#5F6368]">
+                <span>Syncs</span>
+                <span>{syncCount} / {syncLimit}</span>
               </div>
             </div>
           </div>

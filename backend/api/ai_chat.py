@@ -25,6 +25,9 @@ from backend.utils.logger import get_logger
 logger = get_logger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai"])
 
+MAX_USER_MESSAGE_CHARS = 2000
+MAX_CONTEXT_CHARS = 8000
+
 
 class ChatMessageSchema(BaseModel):
     """Schema for a chat message."""
@@ -115,7 +118,10 @@ def sanitize_user_message(content: str) -> str:
     sanitized = str(content)
     sanitized = sanitized.replace("\r", " ").replace("\n", " ").replace("\t", " ")
     sanitized = " ".join(sanitized.split())
-    return sanitized.strip()
+    sanitized = sanitized.strip()
+    if len(sanitized) > MAX_USER_MESSAGE_CHARS:
+        sanitized = sanitized[:MAX_USER_MESSAGE_CHARS].rstrip() + "…"
+    return sanitized
 
 
 def serialize_conversation_history_for_prompt(conversation_history: List[Dict[str, Any]]) -> str:
@@ -139,6 +145,7 @@ async def analyze_intent_and_extract(
     Includes conversation history for context understanding.
     """
     llm = await get_llm_core()
+    user_message = sanitize_user_message(user_message)
     
     # Build context from conversation history in a data-only format
     context_prompt = ""
@@ -149,6 +156,9 @@ async def analyze_intent_and_extract(
         )
         context_prompt += serialize_conversation_history_for_prompt(conversation_history)
         context_prompt += f"\nCurrent timezone: {timezone}\n"
+
+        if len(context_prompt) > MAX_CONTEXT_CHARS:
+            context_prompt = context_prompt[:MAX_CONTEXT_CHARS].rstrip() + "…"
 
     routing_prompt = f"""
     You are a routing engine for an Executive AI Copilot. 

@@ -117,20 +117,28 @@ class RateLimit:
             )
 
 
+# SECURITY FIX-H2: Hardened rate limiting to prevent brute force and abuse
 api_limits = {
     "public_booking": RateLimit("public_booking", max_requests=10, window_seconds=3600),
     "availability": RateLimit("availability", max_requests=10, window_seconds=60),
     "create_event": RateLimit("create_event", max_requests=100, window_seconds=3600),
     "webhooks": RateLimit("webhooks", max_requests=100, window_seconds=60),
+    # FIX-H2.1: Tighten login (3 per minute prevents brute force)
     "login": RateLimit(
-        "login", max_requests=5, window_seconds=300
-    ),  # 5 attempts per 5 minutes
+        "login", max_requests=3, window_seconds=60
+    ),  # was: 5 per 5 minutes, now: 3 per minute
+    # FIX-H2.2: Tighten register (1 per hour prevents credential stuffing)
     "register": RateLimit(
-        "register", max_requests=3, window_seconds=3600
-    ),  # 3 registrations per hour
+        "register", max_requests=1, window_seconds=3600
+    ),  # was: 3 per hour, now: 1 per hour
+    # FIX-H2.3: Reduce OAuth callback (2 per 5 min was excessive)
     "oauth_callback": RateLimit(
-        "oauth_callback", max_requests=10, window_seconds=300
-    ),  # 10 per 5 minutes
+        "oauth_callback", max_requests=2, window_seconds=300
+    ),  # was: 10 per 5 minutes, now: 2 per 5 minutes
+    # FIX-H2.4: Add rate limiting for password reset
+    "password_reset": RateLimit(
+        "password_reset", max_requests=3, window_seconds=3600
+    ),  # 3 per hour
 }
 
 

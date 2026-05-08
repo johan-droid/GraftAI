@@ -44,7 +44,7 @@ def task(func):
 
 
 @task
-async def task_sync_all_users(ctx):
+async def task_sync_all_users(_ctx):
     """Simple loop through users to trigger sync."""
     async with AsyncSessionLocal() as db:
         # STRIPPED: Simplified user fetch without status filters
@@ -56,22 +56,22 @@ async def task_sync_all_users(ctx):
                 # Note: sync_user_calendar handles its own session/commits if needed
                 # but here we pass the current session.
                 await sync_user_calendar(db, str(user.id))
-            except Exception as e:
-                logger.error(f"Sync failed for {user.email}: {e}")
+            except Exception as e:  # noqa: BLE001 - log and continue background sync
+                logger.exception("Sync failed for %s", user.email)
 
 
 @task
-async def task_sync_calendar(ctx, user_id: str):
+async def task_sync_calendar(_ctx, user_id: str):
     async with AsyncSessionLocal() as db:
         try:
             await sync_user_calendar(db, user_id)
             await sync_calendar_for_user(db, user_id)
-        except Exception as e:
-            logger.error(f"Calendar sync failed for user {user_id}: {e}")
+        except Exception as e:  # noqa: BLE001 - log and continue background sync
+            logger.exception("Calendar sync failed for user %s", user_id)
 
 
 @task
-async def task_process_reminders(ctx):
+async def task_process_reminders(_ctx):
     """Check for events starting in the next 60 minutes and send emails."""
     async with AsyncSessionLocal() as db:
         now = datetime.now(timezone.utc)
@@ -96,14 +96,14 @@ async def task_process_reminders(ctx):
                         f"Hi {user.full_name or 'there'}, your meeting '{event.title}' starts soon at {event.start_time}.",
                     )
                     event.is_reminded = True
-                except Exception as e:
-                    logger.error(f"Failed to send reminder for event {event.id}: {e}")
+                except Exception as e:  # noqa: BLE001 - best-effort notify
+                    logger.exception("Failed to send reminder for event %s", event.id)
 
         await db.commit()
 
 
 @task
-async def task_send_booking_reminders(ctx):
+async def task_send_booking_reminders(_ctx):
     """Send organizer reminders for bookings that start ~24 hours from now."""
     async with AsyncSessionLocal() as db:
         now = datetime.now(timezone.utc)
@@ -174,10 +174,8 @@ async def task_send_booking_reminders(ctx):
                 )
                 booking.is_reminder_sent = True
                 sent += 1
-            except Exception as e:
-                logger.error(
-                    f"Failed to send booking reminder for booking {booking.id}: {e}"
-                )
+            except Exception as e:  # noqa: BLE001 - best-effort notify
+                logger.exception("Failed to send booking reminder for booking %s", booking.id)
 
         if sent:
             await db.commit()
@@ -185,7 +183,7 @@ async def task_send_booking_reminders(ctx):
 
 
 @task
-async def task_send_email(ctx, booking_id: str, email_type: str, extra: dict = None):
+async def task_send_email(_ctx, booking_id: str, email_type: str, extra: dict = None):
     async with AsyncSessionLocal() as db:
         stmt = (
             select(BookingTable)
@@ -194,13 +192,13 @@ async def task_send_email(ctx, booking_id: str, email_type: str, extra: dict = N
         )
         booking = (await db.execute(stmt)).scalars().first()
         if not booking:
-            logger.warning(f"Email job failed: booking {booking_id} not found")
+            logger.warning("Email job failed: booking %s not found", booking_id)
             return
 
         event = booking.event
         if not event:
             logger.warning(
-                f"Email job failed: event for booking {booking_id} not found"
+                "Email job failed: event for booking %s not found", booking_id
             )
             return
 
@@ -215,7 +213,7 @@ async def task_send_email(ctx, booking_id: str, email_type: str, extra: dict = N
         }
 
         try:
-            if email_type == "confirmation":
+                if email_type == "confirmation":
                 await notify_event_created([booking.email], [], payload)
             elif email_type == "new_booking":
                 organizer_email = payload.get("organizer_email")
@@ -226,26 +224,24 @@ async def task_send_email(ctx, booking_id: str, email_type: str, extra: dict = N
                         f"A new booking has been scheduled for {event.title} on {payload['start_time']}.",
                         html_body=f"<p>A new booking has been scheduled for <strong>{event.title}</strong> on {payload['start_time']}.</p>",
                     )
-                else:
-                    logger.warning(
-                        f"Missing organizer_email for new_booking job {booking_id}"
-                    )
+                    else:
+                        logger.warning(
+                            "Missing organizer_email for new_booking job %s", booking_id
+                        )
             elif email_type == "reminder":
                 await notify_event_updated([booking.email], [], payload)
             elif email_type == "cancellation":
                 await notify_event_deleted([booking.email], [], payload)
             else:
                 logger.warning(
-                    f"Unknown email_type '{email_type}' for booking {booking_id}"
+                    "Unknown email_type '%s' for booking %s", email_type, booking_id
                 )
-        except Exception as e:
-            logger.error(
-                f"Failed to send {email_type} email for booking {booking_id}: {e}"
-            )
+        except Exception as e:  # noqa: BLE001 - log failures in background email tasks
+            logger.exception("Failed to send %s email for booking %s", email_type, booking_id)
 
 
 @task
-async def task_send_booking_confirmation(ctx, booking_id: str):
+async def task_send_booking_confirmation(_ctx, booking_id: str):
     async with AsyncSessionLocal() as db:
         stmt = (
             select(BookingTable)
@@ -255,18 +251,18 @@ async def task_send_booking_confirmation(ctx, booking_id: str):
         booking = (await db.execute(stmt)).scalars().first()
         if not booking:
             logger.warning(
-                f"Booking confirmation failed: booking {booking_id} not found"
+                "Booking confirmation failed: booking %s not found", booking_id
             )
             return
 
         event = booking.event
         if not event:
             logger.warning(
-                f"Booking confirmation failed: event for booking {booking_id} not found"
+                "Booking confirmation failed: event for booking %s not found", booking_id
             )
 
 @task
-async def task_provision_shortlink(ctx, booking_id: str):
+async def task_provision_shortlink(_ctx, booking_id: str):
     async with AsyncSessionLocal() as db:
         booking = await db.get(BookingTable, booking_id)
         if not booking:
@@ -295,12 +291,12 @@ async def task_provision_shortlink(ctx, booking_id: str):
             booking.updated_at = datetime.now(timezone.utc)
             await db.commit()
             logger.info("Shortlink provisioned for booking %s", booking_id)
-        except Exception as e:
-            logger.error("Shortlink provisioning failed for %s: %s", booking_id, e, exc_info=True)
+        except Exception as e:  # noqa: BLE001 - external service failure
+            logger.exception("Shortlink provisioning failed for %s", booking_id)
 
 
 @task
-async def task_provision_jitsi_meeting(ctx, booking_id: str):
+async def task_provision_jitsi_meeting(_ctx, booking_id: str):
     async with AsyncSessionLocal() as db:
         booking = await db.get(BookingTable, booking_id)
         if not booking:
@@ -346,8 +342,8 @@ async def task_provision_jitsi_meeting(ctx, booking_id: str):
             booking.updated_at = datetime.now(timezone.utc)
             await db.commit()
             logger.info("Jitsi meeting provisioned for booking %s", booking_id)
-        except Exception as e:
-            logger.error("Jitsi provisioning failed for %s: %s", booking_id, e, exc_info=True)
+        except Exception as e:  # noqa: BLE001 - external service failure
+            logger.exception("Jitsi provisioning failed for %s", booking_id)
             return
 
         notification_data = {
@@ -361,8 +357,8 @@ async def task_provision_jitsi_meeting(ctx, booking_id: str):
 
         try:
             await notify_event_created([booking.email], [], notification_data)
-        except Exception as e:
-            logger.error(f"Failed to send booking confirmation for {booking_id}: {e}")
+        except Exception as e:  # noqa: BLE001 - best-effort notification
+            logger.exception("Failed to send booking confirmation for %s", booking_id)
 
 
 @task
@@ -433,17 +429,16 @@ async def task_send_webhook(
                     )
                     await db.commit()
 
-        logger.error(
+        logger.exception(
             "Webhook delivery failed (webhook_id=%s, attempt=%s) to %s: %s",
             webhook_id,
             attempt,
             url,
             e,
-            exc_info=True,
         )
         if attempt < 5:
             raise
-        logger.error(
+        logger.exception(
             "Webhook permanently failed after %s attempts for webhook_id=%s url=%s",
             attempt,
             webhook_id,
@@ -452,66 +447,66 @@ async def task_send_webhook(
 
 
 @task
-async def task_track_analytics(ctx, event: str, properties: dict):
-    logger.info(f"Analytics event queued: {event} properties={properties}")
+async def task_track_analytics(_ctx, event: str, properties: dict):
+    logger.info("Analytics event queued: %s properties=%s", event, properties)
 
 
 @task
-async def task_create_calendar_event(ctx, event_id: str):
+async def task_create_calendar_event(_ctx, event_id: str):
     async with AsyncSessionLocal() as db:
         event = await db.get(EventTable, event_id)
         if not event:
-            logger.warning(f"Calendar create failed: event {event_id} not found")
+            logger.warning("Calendar create failed: event %s not found", event_id)
             return
 
         if not event.meeting_provider:
             logger.info(
-                f"Calendar create skipped: event {event_id} has no meeting provider"
+                "Calendar create skipped: event %s has no meeting provider", event_id
             )
             return
 
         if event.external_id:
             logger.info(
-                f"Calendar create skipped: event {event_id} already has external_id"
+                "Calendar create skipped: event %s already has external_id", event_id
             )
             return
 
         try:
             await push_event_to_external_calendar(db, event_id)
-        except Exception as e:
-            logger.error(f"Failed to push event {event_id} to external calendar: {e}")
+        except Exception as e:  # noqa: BLE001 - external calendar errors
+            logger.exception("Failed to push event %s to external calendar", event_id)
 
 
 @task
-async def task_update_calendar_event(ctx, event_id: str, update_data: dict = None):
+async def task_update_calendar_event(_ctx, event_id: str, update_data: dict = None):
     async with AsyncSessionLocal() as db:
         event = await db.get(EventTable, event_id)
         if not event:
-            logger.warning(f"Calendar update failed: event {event_id} not found")
+            logger.warning("Calendar update failed: event %s not found", event_id)
             return
 
         try:
             await update_event(db, event_id, event.user_id, update_data or {})
-        except Exception as e:
-            logger.error(f"Failed to update calendar event {event_id}: {e}")
+        except Exception as e:  # noqa: BLE001 - external calendar errors
+            logger.exception("Failed to update calendar event %s", event_id)
 
 
 @task
-async def task_delete_calendar_event(ctx, event_id: str):
+async def task_delete_calendar_event(_ctx, event_id: str):
     async with AsyncSessionLocal() as db:
         event = await db.get(EventTable, event_id)
         if not event:
-            logger.warning(f"Calendar delete failed: event {event_id} not found")
+            logger.warning("Calendar delete failed: event %s not found", event_id)
             return
 
         try:
             await delete_event(db, event_id, event.user_id)
-        except Exception as e:
-            logger.error(f"Failed to delete calendar event {event_id}: {e}")
+        except Exception as e:  # noqa: BLE001 - external calendar errors
+            logger.exception("Failed to delete calendar event %s", event_id)
 
 
 @task
-async def task_send_sms(ctx, phone_number: str, message: str):
+async def task_send_sms(_ctx, phone_number: str, message: str):
     """Send SMS notification - requires Twilio/SNS configuration."""
     import os
 
@@ -520,24 +515,24 @@ async def task_send_sms(ctx, phone_number: str, message: str):
         logger.warning("SMS not configured - set TWILIO_ACCOUNT_SID to enable")
         return
     # TODO: Implement Twilio integration
-    logger.info(f"SMS queued: {phone_number}")
+    logger.info("SMS queued: %s", phone_number)
 
 
 @task
-async def task_update_crm(ctx, booking_id: str):
+async def task_update_crm(_ctx, booking_id: str):
     """Update external CRM - requires CRM integration setup."""
     import os
 
     crm_api_key = os.getenv("CRM_API_KEY")
     if not crm_api_key:
-        logger.debug(f"CRM update skipped for booking {booking_id} - no CRM configured")
+        logger.debug("CRM update skipped for booking %s - no CRM configured", booking_id)
         return
     # TODO: Implement CRM integration (Salesforce, HubSpot, etc.)
-    logger.info(f"CRM update queued for booking {booking_id}")
+    logger.info("CRM update queued for booking %s", booking_id)
 
 
 @task
-async def task_daily_cleanup(ctx):
+async def task_daily_cleanup(_ctx):
     """Purge old logs or expired data."""
     logger.info("Running daily cleanup...")
 
@@ -545,7 +540,7 @@ async def task_daily_cleanup(ctx):
 # ── Arq Worker Settings ───────────────────────────────────────────────────────
 
 
-async def _worker_startup(ctx):
+async def _worker_startup(_ctx):
     logger.info("Worker started.")
     start_queue_monitoring()
 

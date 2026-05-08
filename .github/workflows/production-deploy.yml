@@ -9,19 +9,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: yarn install --frozen-lockfile
-      - run: yarn typecheck
-      - run: yarn lint --max-warnings=0
-      - run: yarn test:unit --coverage
-      - run: yarn test:e2e
-      - run: yarn build
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint --max-warnings=0
+      - run: pnpm test:unit --coverage
+      - run: pnpm test:e2e
+      - run: pnpm build
 
   security-scan:
     needs: quality-gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: yarn snyk test --severity-threshold=high
+      - run: pnpm snyk test --severity-threshold=high
       - run: docker buildx build --load -t app:latest .
       - run: trivy image --exit-code 1 --severity CRITICAL,HIGH app:latest
 

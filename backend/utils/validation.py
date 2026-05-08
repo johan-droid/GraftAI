@@ -281,24 +281,27 @@ class UserInputSchema(SecureBaseModel):
     
     @validator('email')
     def validate_email_field(cls, v):
+        err_msg = "Invalid email format"
         if v and not SecurityValidator.validate_email(v):
-            raise ValueError("Invalid email format")
+            raise ValueError(err_msg)
         return v
     
     @validator('phone')
     def validate_phone_field(cls, v):
+        err_msg = "Invalid phone number format"
         if v and not SecurityValidator.validate_phone(v):
-            raise ValueError("Invalid phone number format")
+            raise ValueError(err_msg)
         return v
     
     @validator('name', 'message')
     def validate_length(cls, v):
+        err_msg = "Input too long"
         if v and len(v) > 1000:
-            raise ValueError("Input too long")
+            raise ValueError(err_msg)
         return v
 
 
-def validate_and_sanitize_input(input_data: Union[str, Dict, List], schema_class: Optional[type] = None) -> Any:
+def validate_and_sanitize_input(input_data: str | dict | list, schema_class: type | None = None) -> Any:
     """
     Validate and sanitize input data.
     
@@ -316,12 +319,11 @@ def validate_and_sanitize_input(input_data: Union[str, Dict, List], schema_class
         if schema_class:
             if isinstance(input_data, dict):
                 return schema_class(**input_data)
-            else:
-                return schema_class.parse_obj(input_data)
-        else:
-            if isinstance(input_data, str):
-                return SecurityValidator.sanitize_string(input_data)
-            elif isinstance(input_data, dict):
+            return schema_class.parse_obj(input_data)
+
+        if isinstance(input_data, str):
+            return SecurityValidator.sanitize_string(input_data)
+        if isinstance(input_data, dict):
                 return {
                     SecurityValidator.sanitize_string(str(k)): 
                     SecurityValidator.sanitize_string(str(v)) 
@@ -332,11 +334,11 @@ def validate_and_sanitize_input(input_data: Union[str, Dict, List], schema_class
             else:
                 return input_data
     except Exception as e:
-        logger.error(f"Input validation failed: {str(e)}")
+        logger.exception("Input validation failed: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid input data"
-        )
+        ) from e
 
 
 # Add missing patterns that were referenced

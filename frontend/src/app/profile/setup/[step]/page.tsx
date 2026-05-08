@@ -347,7 +347,7 @@ function EventTypeStep({ onCompleted }: { onCompleted: () => void }) {
         </div>
         <div className="space-y-2">
           <label htmlFor="slug" className={labelClass}>Slug</label>
-          <Input id="slug" {...register("slug", { required: "Slug is required", pattern: { value: /^[a-z0-9\-]{1,50}$/, message: "Slug may only contain lowercase letters, numbers and hyphens." } })} />
+          <Input id="slug" {...register("slug", { required: "Slug is required", pattern: { value: /^[a-z0-9-]{1,50}$/, message: "Slug may only contain lowercase letters, numbers and hyphens." } })} />
           {errors.slug && <p className="text-sm text-red-500">{errors.slug.message}</p>}
         </div>
       </div>

@@ -199,6 +199,64 @@ class VideoConferenceService:
 
         return meeting
 
+    async def create_jitsi_meeting(
+        self,
+        config: Optional[object],
+        topic: str,
+        start_time: datetime,
+        duration_minutes: int = 30,
+        settings: Optional[Dict] = None,
+        booking_id: Optional[str] = None,
+    ) -> VideoConferenceMeeting:
+        """Create a Jitsi meeting descriptor and persist a VideoConferenceMeeting record.
+
+        For public Jitsi (`meet.jit.si`) this will generate a join URL without
+        contacting any external API. For self-hosted Jitsi, pass relevant `config`
+        with domain/jwt_secret and this method will record the metadata.
+        """
+        # Lazy import to avoid circular imports at module load time
+        from backend.models.video_conference import VideoConferenceMeeting
+
+        # Build room name
+        base = (booking_id or secrets.token_urlsafe(8)).replace("/", "-")
+        room_name = f"graftai-{base}"
+        domain = "meet.jit.si"
+        if config and getattr(config, "config", None) and config.config.get("domain"):
+            domain = config.config.get("domain")
+
+        join_url = f"https://{domain}/{room_name}"
+
+        meeting = VideoConferenceMeeting(
+            config_id=(config.id if config is not None else ""),
+            provider="jitsi",
+            provider_meeting_id=room_name,
+            topic=topic,
+            join_url=join_url,
+            host_url=None,
+            password=None,
+            start_time=start_time,
+            end_time=start_time + timedelta(minutes=duration_minutes),
+            timezone="UTC",
+            settings=(settings or {}),
+            status="scheduled",
+            metadata_json={"room_name": room_name, "domain": domain},
+        )
+
+        self.db.add(meeting)
+        await self.db.commit()
+        await self.db.refresh(meeting)
+
+        # Mark config last used if present
+        if config is not None:
+            try:
+                config.last_used_at = datetime.now(timezone.utc)
+                await self.db.commit()
+            except Exception:
+                # best-effort
+                pass
+
+        return meeting
+
     async def create_google_meet(
         self,
         config: VideoConferenceConfig,

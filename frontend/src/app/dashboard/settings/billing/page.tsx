@@ -16,29 +16,54 @@ import {
 import { useAuth } from "@/app/providers/auth-provider";
 import { enhancedApiClient } from "@/lib/api-client-enhanced";
 import Charts from "@/components/Analytics/Charts";
+import { useWebSocket } from "@/lib/ai-api";
 
 type UsageItem = { date: string; ai_count: number; sync_count: number; storage_bytes?: number | null };
 type TransactionItem = { id: string; timestamp: string; method: string; amount?: number | null; currency?: string | null; status: string; description?: string | null };
 
 export default function BillingPage() {
-  const { user } = useAuth();
+  const { user, backendToken } = useAuth();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
+  const [liveStats, setLiveStats] = useState<Record<string, unknown> | null>(null);
+  const { quotaUpdate } = useWebSocket(undefined, backendToken ?? undefined);
 
-  const stats = user ? {
-    tier: user.tier || 'free',
-    daily_ai_count: Number(user.daily_ai_count ?? 0),
-    daily_sync_count: Number(user.daily_sync_count ?? 0),
-    daily_ai_limit: Number(user.daily_ai_limit ?? (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10))),
-    daily_sync_limit: Number(user.daily_sync_limit ?? (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3))),
-    ai_remaining: Number(user.ai_remaining ?? Math.max(0, (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10)) - Number(user.daily_ai_count ?? 0))),
-    sync_remaining: Number(user.sync_remaining ?? Math.max(0, (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3)) - Number(user.daily_sync_count ?? 0))),
-    quota_reset_at: user.quota_reset_at ? String(user.quota_reset_at) : undefined,
-    trial_days_left: Number(user.trial_days_left ?? 0),
-    trial_expires_at: user.trial_expires_at ? String(user.trial_expires_at) : undefined,
-    trial_active: Boolean(user.trial_active),
-    subscription_status: user.subscription_status || 'inactive'
-  } : null;
+  useEffect(() => {
+    if (!quotaUpdate) {
+      return;
+    }
+
+    setLiveStats((current) => ({
+      ...(current ?? {}),
+      ...quotaUpdate,
+    }));
+  }, [quotaUpdate]);
+
+  const stats = useMemo(() => {
+    const baseStats = user ? {
+      tier: user.tier || 'free',
+      daily_ai_count: Number(user.daily_ai_count ?? 0),
+      daily_sync_count: Number(user.daily_sync_count ?? 0),
+      daily_ai_limit: Number(user.daily_ai_limit ?? (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10))),
+      daily_sync_limit: Number(user.daily_sync_limit ?? (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3))),
+      ai_remaining: Number(user.ai_remaining ?? Math.max(0, (user.tier === 'elite' ? 2000 : (user.tier === 'pro' ? 200 : 10)) - Number(user.daily_ai_count ?? 0))),
+      sync_remaining: Number(user.sync_remaining ?? Math.max(0, (user.tier === 'elite' ? 500 : (user.tier === 'pro' ? 50 : 3)) - Number(user.daily_sync_count ?? 0))),
+      quota_reset_at: user.quota_reset_at ? String(user.quota_reset_at) : undefined,
+      trial_days_left: Number(user.trial_days_left ?? 0),
+      trial_expires_at: user.trial_expires_at ? String(user.trial_expires_at) : undefined,
+      trial_active: Boolean(user.trial_active),
+      subscription_status: user.subscription_status || 'inactive'
+    } : null;
+
+    if (!baseStats && !liveStats) {
+      return null;
+    }
+
+    return {
+      ...(baseStats ?? {}),
+      ...(liveStats ?? {}),
+    };
+  }, [user, liveStats]);
 
   const handleManageSubscription = async () => {
     try {

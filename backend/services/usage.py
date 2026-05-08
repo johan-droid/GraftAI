@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.schemes import get_current_user_id
+from backend.core.redis import publish_message
 from backend.models.tables import UserTable
 from backend.utils.db import get_db
 from backend.core.saas_config import get_limit, Feature, has_feature
@@ -43,6 +44,58 @@ async def get_user_quota(db: AsyncSession, user_id: str) -> UserTable:
         await db.refresh(user)
 
     return user
+
+
+def build_quota_snapshot(user: UserTable, source: str = "usage") -> dict:
+    """Build a normalized quota snapshot for websocket clients and audit stats."""
+    daily_ai_limit = (
+        user.daily_ai_limit
+        if user.daily_ai_limit is not None
+        else get_limit(user.tier, "daily_ai_messages")
+    )
+    daily_sync_limit = (
+        user.daily_sync_limit
+        if user.daily_sync_limit is not None
+        else get_limit(user.tier, "daily_calendar_syncs")
+    )
+
+    quota_reset_at = user.quota_reset_at
+    if quota_reset_at and quota_reset_at.tzinfo is None:
+        quota_reset_at = quota_reset_at.replace(tzinfo=timezone.utc)
+
+    return {
+        "user_id": user.id,
+        "tier": user.tier,
+        "subscription_status": user.subscription_status,
+        "daily_ai_count": user.daily_ai_count,
+        "daily_ai_limit": daily_ai_limit,
+        "daily_ai_remaining": max(0, daily_ai_limit - user.daily_ai_count),
+        "daily_sync_count": user.daily_sync_count,
+        "daily_sync_limit": daily_sync_limit,
+        "daily_sync_remaining": max(0, daily_sync_limit - user.daily_sync_count),
+        "total_ai_tokens": user.total_ai_tokens,
+        "total_api_calls": user.total_api_calls,
+        "total_scheduling_count": user.total_scheduling_count,
+        "quota_reset_at": quota_reset_at.isoformat() if quota_reset_at else None,
+        "source": source,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def publish_quota_update(db: AsyncSession, user_id: str, source: str = "usage") -> dict:
+    """Publish a live quota snapshot to websocket subscribers."""
+    user = await get_user_quota(db, user_id)
+    payload = build_quota_snapshot(user, source=source)
+
+    try:
+        await publish_message(
+            f"account_update_{user_id}",
+            {"type": "quota_update", "payload": payload},
+        )
+    except Exception as exc:
+        logger.debug("Quota update publish skipped for %s: %s", user_id, exc)
+
+    return payload
 
 
 def check_usage_limit(feature_key: str):
@@ -158,17 +211,27 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
 
     await db.flush()
 
+    if update_kwargs:
+        await publish_quota_update(db, user_id, source=f"usage.{feature}")
+
 
 async def get_usage_counts(db: AsyncSession, user_id: str) -> dict:
     """Returns basic usage counts for a user."""
     user = await get_user_quota(db, user_id)
+    snapshot = build_quota_snapshot(user)
     return {
-        "daily_ai_count": user.daily_ai_count,
-        "daily_sync_count": user.daily_sync_count,
-        "total_ai_tokens": user.total_ai_tokens,
-        "total_api_calls": user.total_api_calls,
-        "total_scheduling_count": user.total_scheduling_count,
-        "tier": user.tier,
+        "daily_ai_count": snapshot["daily_ai_count"],
+        "daily_sync_count": snapshot["daily_sync_count"],
+        "daily_ai_limit": snapshot["daily_ai_limit"],
+        "daily_sync_limit": snapshot["daily_sync_limit"],
+        "ai_remaining": snapshot["daily_ai_remaining"],
+        "sync_remaining": snapshot["daily_sync_remaining"],
+        "quota_reset_at": snapshot["quota_reset_at"],
+        "total_ai_tokens": snapshot["total_ai_tokens"],
+        "total_api_calls": snapshot["total_api_calls"],
+        "total_scheduling_count": snapshot["total_scheduling_count"],
+        "tier": snapshot["tier"],
+        "subscription_status": snapshot["subscription_status"],
     }
 
 

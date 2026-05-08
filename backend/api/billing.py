@@ -37,6 +37,7 @@ except Exception:
 from backend.api.deps import get_db, get_current_user
 from backend.auth.schemes import require_admin
 from backend.services.mail_service import send_email
+from backend.services.usage import publish_quota_update
 from backend.models.tables import (
     UserTable,
     ManualActivationRequestTable,
@@ -180,6 +181,13 @@ async def get_transaction_history(
     return items
 
 logger = logging.getLogger(__name__)
+
+
+async def _publish_billing_quota_update(db: AsyncSession, user_id: str, source: str) -> None:
+    try:
+        await publish_quota_update(db, user_id, source=source)
+    except Exception:
+        logger.exception("Failed to publish quota update for %s from %s", user_id, source)
 
 # Environment detection for simulation endpoints
 ENV = os.getenv("ENV", "development").lower()
@@ -385,6 +393,7 @@ async def simulate_verification(
 
     await db.commit()
     await db.refresh(current_user)
+    await _publish_billing_quota_update(db, current_user.id, "billing.razorpay.verify-simulation")
 
     return {
         "status": "success",
@@ -412,6 +421,7 @@ async def cancel_subscription(
     current_user.daily_sync_limit = 3
 
     await db.commit()
+    await _publish_billing_quota_update(db, current_user.id, "billing.razorpay.cancel")
     return {
         "status": "success",
         "message": "Subscription cancelled and tier reverted to free.",
@@ -548,6 +558,7 @@ async def verify_razorpay_payment(
 
     await db.commit()
     await db.refresh(current_user)
+    await _publish_billing_quota_update(db, current_user.id, "billing.razorpay.verify")
 
     return {"status": "success", "tier": tier}
 
@@ -626,6 +637,7 @@ async def create_stripe_checkout_session(
             },
         )
 
+        await _publish_billing_quota_update(db, current_user.id, "billing.stripe.checkout")
         return {"checkout_url": checkout_session.url, "session_id": checkout_session.id}
     except stripe.error.StripeError as e:  # type: ignore[attr-defined]
         raise HTTPException(status_code=400, detail=str(e))
@@ -734,6 +746,8 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 user.daily_sync_limit = 50
                 user.trial_active = False
                 await db.commit()
+                await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.checkout_completed")
+                await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.checkout_completed")
 
     elif event["type"] == "customer.subscription.deleted":
         subscription = event["data"]["object"]
@@ -753,6 +767,8 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             user.daily_ai_limit = 10
             user.daily_sync_limit = 3
             await db.commit()
+            await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.subscription_deleted")
+            await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.subscription_deleted")
 
     elif event["type"] == "invoice.payment_succeeded":
         # Payment succeeded - log for analytics
@@ -938,6 +954,7 @@ async def approve_manual_activation_request(
         user.daily_sync_limit = 3
 
     await db.commit()
+    await _publish_billing_quota_update(db, user.id, "billing.manual.approve")
 
     if user.email:
         try:

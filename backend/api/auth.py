@@ -32,13 +32,45 @@ async def revoke_current_session(
     SECURITY: In production, this should use a Redis blocklist or similar
     for immediate revocation across all instances.
     """
-    # Increment token version to invalidate current tokens
+    # SECURITY FIX-C2.1: Use pessimistic locking (SELECT FOR UPDATE)
+    # to prevent race condition during concurrent requests
+    from sqlalchemy import select
+    stmt = select(UserTable).where(UserTable.id == current_user.id).with_for_update()
+    result = await db.execute(stmt)
+    locked_user = result.scalars().first()
+    
+    if not locked_user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    # Increment token version to invalidate current tokens (with row lock held)
     # All tokens with older versions will be rejected
-    current_user.token_version = (current_user.token_version or 0) + 1
+    locked_user.token_version = (locked_user.token_version or 0) + 1
 
     await db.commit()
 
-    logger.info(f"🔒 Session revoked for user {current_user.id[:8]}...")
+    # SECURITY FIX-C2.2: Add token to Redis blacklist for immediate cross-instance effect
+    try:
+        from backend.core.redis import cache_set
+        from backend.auth.config import REFRESH_TOKEN_EXPIRE_DAYS
+        import hashlib
+        
+        # Extract current token
+        auth_header = request.headers.get("Authorization")
+        current_token = None
+        if auth_header and auth_header.startswith("Bearer "):
+            current_token = auth_header.split(" ", 1)[1].strip()
+        else:
+            current_token = request.cookies.get("graftai_access_token")
+        
+        if current_token:
+            token_hash = hashlib.sha256(current_token.encode()).hexdigest()
+            blacklist_key = f"token_blacklist:{token_hash}"
+            await cache_set(blacklist_key, "revoked", expire=REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+            logger.info(f"Token added to blacklist for user {locked_user.id[:8]}...")
+    except Exception as e:
+        logger.error(f"Failed to blacklist token: {e}")
+    
+    logger.info(f"🔒 Session revoked for user {locked_user.id[:8]}...")
 
     return {
         "status": "revoked",

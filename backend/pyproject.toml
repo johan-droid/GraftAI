@@ -67,9 +67,75 @@ pytest-cov = ">=7.1.0"
 black = "^24.0.0"
 
 [tool.ruff]
+line-length = 88
+target-version = "py312"
 
 [tool.ruff.lint]
-ignore = ["E402", "E701", "E712", "F841"]
+# Enable pycodestyle (E), Pyflakes (F), and flake8-bugbear (B) rules
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "YTT", # flake8-2020
+    "S",   # flake8-bandit (security)
+    "BLE", # flake8-blind-except
+    "B",   # flake8-bugbear
+    "A",   # flake8-builtins
+    "COM", # flake8-commas
+    "C4",  # flake8-comprehensions
+    "DTZ", # flake8-datetimez
+    "T10", # flake8-debugger
+    "EM",  # flake8-errmsg
+    "EXE", # flake8-executable
+    "FA",  # flake8-future-annotations
+    "ISC", # flake8-implicit-str-concat
+    "ICN", # flake8-import-conventions
+    "G",   # flake8-logging-format
+    "INP", # flake8-no-pep420
+    "PIE", # flake8-pie
+    "T20", # flake8-print
+    "PYI", # flake8-pyi
+    "PT",  # flake8-pytest-style
+    "Q",   # flake8-quotes
+    "RSE", # flake8-raise
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "TID", # flake8-tidy-imports
+    "TCH", # flake8-type-checking
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+    "ERA", # eradicate
+    "PD",  # pandas-vet
+    "PGH", # pygrep-hooks
+    "PL",  # pylint
+    "TRY", # tryceratops
+    "FLY", # flynt
+    "NPY", # numpy-specific rules
+    "RUF", # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "S101",   # use of assert detected (allowed in tests)
+    "S311",   # standard pseudo-random generators are not suitable for cryptographic purposes
+    "S608",   # possible SQL injection (false positives in SQLAlchemy)
+    "COM812", # missing trailing comma (handled by formatter)
+    "ISC001", # implicitly concatenated string literals on one line (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # imported but unused
+"tests/*" = ["S101", "S311", "S608"]  # test-specific rules
+"migrations/*" = ["N999"]  # migration naming
+"scripts/*" = ["T20", "S603"]  # scripts can use subprocess and print
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.isort]
+known-first-party = ["graftai"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

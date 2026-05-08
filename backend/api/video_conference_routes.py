@@ -103,6 +103,13 @@ async def list_providers():
             "auth_type": "oauth",
             "coming_soon": True,
         },
+        {
+            "id": "jitsi",
+            "name": "Jitsi (meet.jit.si or self-hosted)",
+            "description": "Lightweight Jitsi meetings; supports public meet.jit.si rooms or self-hosted Jitsi with JWT",
+            "features": ["open_source", "no_account_required"],
+            "auth_type": "none_or_jwt",
+        },
     ]
 
 

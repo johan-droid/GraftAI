@@ -1,3 +1,3 @@
-## 2024-05-06 - [Extracted redundant Math.max loop calculation in analytics]
-**Learning:** Found an $O(N^2)$ inefficiency where `Math.max` over all category breakdowns was being recalculated inside a mapping function applied to those exact categories. In Next.js with React Compiler (used by this project), ensuring dependency arrays in `useMemo` strictly match the root objects rather than deeply nested optional chains is necessary to prevent 'Compilation Skipped: Existing memoization could not be preserved' lint errors.
-**Action:** Lift static array reductions outside of loops and verify `useMemo` dependencies against eslint rules for the Next.js React compiler setup.
+## 2024-05-18 - [O(N) Complexity in React Render Loops]
+**Learning:** Re-evaluating large collections (like filtering 100+ events and parsing multiple Date objects) within a grid mapping (like a 35-day calendar grid) creates an O(N*M) time complexity during *each* render frame, drastically reducing UI responsiveness. The calendar view previously executed Date parses thousands of times per re-render.
+**Action:** Always pre-process flat lists into lookup maps (e.g. `Map<number, Event[]>`) using `useMemo` *before* the render loop, achieving O(1) lookups per grid cell.

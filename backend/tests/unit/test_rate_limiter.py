@@ -13,7 +13,6 @@ import backend.utils.rate_limiter as rl
 from backend.utils.rate_limiter import (
     RateLimiter,
     RateLimitStrategy,
-    RateLimitExceeded,
     RateLimitMiddleware,
     rate_limit,
     get_rate_limiter,
@@ -220,6 +219,7 @@ class TestRateLimitMiddleware:
         with pytest.raises(rl.RateLimitExceeded) as exc_info:
             await middleware.dispatch(request, mock_call_next)
         
+        assert exc_info.type.__name__ == "RateLimitExceeded"
         assert exc_info.value.status_code == 429
         assert "30" in exc_info.value.headers.get("Retry-After", "")
 

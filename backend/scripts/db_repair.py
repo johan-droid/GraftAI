@@ -156,12 +156,13 @@ async def repair_database():
             # 2. Check for user profile detailing columns in the 'users' table
             user_columns = ["bio", "job_title", "location"]
             for col in user_columns:
-                check_col_sql = text(f"""
+                # Use parameterized query for safety
+                check_col_sql = text("""
                     SELECT column_name 
                     FROM information_schema.columns 
-                    WHERE table_name = 'users' AND column_name = '{col}';
+                    WHERE table_name = 'users' AND column_name = :col;
                 """)
-                res = await conn.execute(check_col_sql)
+                res = await conn.execute(check_col_sql, {"col": col})
                 if res.fetchone() is None:
                     col_type = "TEXT" if col == "bio" else "VARCHAR(255)"
                     logger.info(
@@ -210,8 +211,9 @@ async def repair_database():
             for col, col_data in security_cols.items():
                 res = await conn.execute(
                     text(
-                        f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"
-                    )
+                        "SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = :col;"
+                    ),
+                    {"col": col}
                 )
                 if res.fetchone() is None:
                     logger.info(
@@ -232,8 +234,9 @@ async def repair_database():
             for col, col_def in audit_cols.items():
                 res = await conn.execute(
                     text(
-                        f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"
-                    )
+                        "SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = :col;"
+                    ),
+                    {"col": col}
                 )
                 if res.fetchone() is None:
                     logger.info(
@@ -277,8 +280,9 @@ async def repair_database():
             for col, col_def in users_compat_cols.items():
                 res = await conn.execute(
                     text(
-                        f"SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{col}';"
-                    )
+                        "SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = :col;"
+                    ),
+                    {"col": col}
                 )
                 if res.fetchone() is None:
                     logger.info(

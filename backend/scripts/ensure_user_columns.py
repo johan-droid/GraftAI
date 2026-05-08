@@ -36,14 +36,31 @@ def sqlite_db_path_from_url(url: str) -> str:
     return str(db_path)
 
 
+import re
+
 def ensure_columns(conn: sqlite3.Connection, table: str, columns_to_add: dict) -> list:
+    # Strictly validate table name to prevent SQL injection in ALTER TABLE
+    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table):
+        raise ValueError(f"Invalid table name: {table}")
+
     cur = conn.cursor()
     cur.execute("SELECT name FROM pragma_table_info(?)", (table,))
     existing = {row[0] for row in cur.fetchall()}
     added = []
     for name, sql in columns_to_add.items():
+        # Validate column name and SQL declaration
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
+            raise ValueError(f"Invalid column name: {name}")
+
+        # Basic check for the SQL declaration part to prevent injection
+        # Allow alphanumeric, spaces, parentheses (for VARCHAR(N)), commas, and single quotes (for DEFAULT values)
+        if not re.match(r"^[a-zA-Z0-9_ (),']+$", sql):
+            raise ValueError(f"Invalid column declaration: {sql}")
+
         if name not in existing:
             print(f"Adding column {name} ...")
+            # SQLite does not support parameterization for identifiers (table/column names)
+            # but we've validated them against a strict whitelist above.
             cur.execute(f"ALTER TABLE {table} ADD COLUMN {sql}")
             added.append(name)
         else:

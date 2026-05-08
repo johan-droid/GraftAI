@@ -13,7 +13,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -81,8 +81,27 @@ export default function HeavyTileCalendar() {
   const calendarGrid = Array(firstDayOfMonth).fill(null).concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
   while (calendarGrid.length % 7 !== 0) calendarGrid.push(null);
 
-  const activeDate = selectedDate ?? new Date();
-  const activeDayBookings = getDayBookings(activeDate, bookings);
+  // Memoize bookings by day (1-31) for O(1) lookup during render instead of O(N) per day tile
+  const bookingsByDay = useMemo(() => {
+    const map = new Map<number, Booking[]>();
+    if (!bookings) return map;
+
+    bookings.forEach((b) => {
+      const bookingDate = new Date(b.start_time);
+      if (
+        bookingDate.getFullYear() === currentMonth.getFullYear() &&
+        bookingDate.getMonth() === currentMonth.getMonth()
+      ) {
+        const day = bookingDate.getDate();
+        if (!map.has(day)) map.set(day, []);
+        map.get(day)!.push(b);
+      }
+    });
+    return map;
+  }, [bookings, currentMonth]);
+
+  const activeDate = useMemo(() => selectedDate ?? new Date(), [selectedDate]);
+  const activeDayBookings = useMemo(() => getDayBookings(activeDate, bookings), [activeDate, bookings]);
   const effectiveViewMode = isMobileScreen ? viewMode : "month";
 
   useEffect(() => {
@@ -246,15 +265,7 @@ export default function HeavyTileCalendar() {
               currentMonth.getMonth() === new Date().getMonth() &&
               currentMonth.getFullYear() === new Date().getFullYear();
 
-            const dayBookings = bookings?.filter((b) => {
-              if (!day) return false;
-              const bookingDate = new Date(b.start_time);
-              return (
-                bookingDate.getFullYear() === currentMonth.getFullYear() &&
-                bookingDate.getMonth() === currentMonth.getMonth() &&
-                bookingDate.getDate() === day
-              );
-            }) || [];
+            const dayBookings = day ? (bookingsByDay.get(day) || []) : [];
 
             return (
               <motion.div
@@ -429,7 +440,7 @@ export default function HeavyTileCalendar() {
                     {selectedDate.toLocaleDateString("default", { weekday: "long", month: "short", day: "numeric" })}
                   </h2>
                   <p className={`text-sm ${onSurfaceVariantColor}`}>
-                    {getDayBookings(selectedDate, bookings).length} events
+                    {activeDayBookings.length} events
                   </p>
                 </div>
                 <motion.button
@@ -449,8 +460,8 @@ export default function HeavyTileCalendar() {
                 px-4 pb-8 overflow-y-auto max-h-[50vh]
                 ${isDark ? "divide-y divide-[#49454F]" : "divide-y divide-[#F1F3F4]"}
               `}>
-                {getDayBookings(selectedDate, bookings).length > 0 ? (
-                  getDayBookings(selectedDate, bookings).map((booking) => (
+                {activeDayBookings.length > 0 ? (
+                  activeDayBookings.map((booking) => (
                     <div key={booking.id} className="py-4 flex items-start gap-3">
                       <div className={`
                         w-12 h-12 rounded-xl flex items-center justify-center shrink-0

@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from backend.utils.db import DATABASE_URL
@@ -40,6 +41,11 @@ async def drop_all():
 
         if tables:
             print(f"Found tables: {', '.join(tables)}")
+            # Strictly validate table names before including them in the SQL
+            for t in tables:
+                if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", t):
+                    raise ValueError(f"Dangerous table name detected: {t}")
+
             # Quote table names and join with commas
             quoted_tables = ", ".join([f'"{t}"' for t in tables])
             # CASCADE drops dependent objects like indexes/foreign keys

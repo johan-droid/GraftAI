@@ -1,20 +1,17 @@
-version: "3.9"
+version: '3.8'
+
 services:
-  postgres:
-    image: postgres:15-alpine
-    restart: unless-stopped
+  db:
+    image: postgres:15
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-graftai}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_ME_CHANGE_IT}
-      POSTGRES_DB: ${POSTGRES_DB:-graftai}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      POSTGRES_USER: graftai
+      POSTGRES_PASSWORD: graftai_password
+      POSTGRES_DB: graftai_db
     ports:
       - "5432:5432"
 
   redis:
-    image: redis:7-alpine
-    restart: unless-stopped
+    image: redis:7
     ports:
       - "6379:6379"
 
@@ -22,55 +19,21 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    restart: unless-stopped
-    deploy:
-      replicas: 3
-    depends_on:
-      - postgres
-      - redis
-    expose:
-      - "8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      start_period: 15s
-      retries: 3
-    env_file:
-      - ./backend/.env
     environment:
-      ENV: production
-      # DATABASE_URL and REDIS_URL are expected to be provided in backend/.env (or environment)
-      FORCE_GROQ: "1"
-      # CORS origins must trust the load balancer and frontend
-      CORS_ORIGINS: http://localhost:8000,http://localhost:3000
-      ENABLED_AUTH_METHODS: "sso,passwordless,mfa"
-      TRUSTED_PROXY_IPS: "127.0.0.1,load_balancer"
-
-  # Custom Load Balancer (Nginx)
-  load_balancer:
-    build: 
-      context: ./nginx
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    depends_on:
-      - backend
-      - frontend
+      DATABASE_URL: postgresql+asyncpg://graftai:graftai_password@db/graftai_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: testsecret
     ports:
-      - "8000:80"
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    restart: unless-stopped
-    deploy:
-      replicas: 3
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_BASE_URL=/api
-
-volumes:
-  postgres_data:
+      NEXT_PUBLIC_API_URL: http://localhost:8000

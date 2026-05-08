@@ -167,11 +167,13 @@ class ApiClient {
             throw new Error(
               "Cannot connect to backend server. Please ensure:\n" +
               "1. Backend is running on http://localhost:8000\n" +
-              "2. Check NEXT_PUBLIC_API_BASE_URL in .env.local"
+              "2. Check NEXT_PUBLIC_API_BASE_URL in .env.local",
+              { cause: error }
             );
           } else {
             throw new Error(
-              "Cannot connect to backend server. The service may be temporarily unavailable."
+              "Cannot connect to backend server. The service may be temporarily unavailable.",
+              { cause: error }
             );
           }
         }

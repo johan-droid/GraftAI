@@ -1,0 +1,24 @@
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - run: yarn install --frozen-lockfile
+      - run: yarn test:e2e --shard=${{ matrix.shard }}
+      - if: failure()
+        run: yarn test:e2e --retries=2 --shard=${{ matrix.shard }}
+      - if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Flaky E2E Test on Shard ${context.matrix.shard}`,
+              body: 'E2E tests failed even after 2 retries.'
+            })

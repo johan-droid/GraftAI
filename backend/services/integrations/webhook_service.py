@@ -1,16 +1,19 @@
 """Webhook service for third-party integrations (Zapier, Slack, Teams)."""
 
-import json
-import hmac
-import hashlib
 import asyncio
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
+import hashlib
+import hmac
+import json
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
+
 import httpx
-from enum import Enum
+
+from backend.utils.ssrf import is_safe_url
 
 
-class WebhookEventType(str, Enum):
+class WebhookEventType(StrEnum):
     """Types of events that can trigger webhooks."""
 
     BOOKING_CREATED = "booking.created"
@@ -25,7 +28,7 @@ class WebhookEventType(str, Enum):
     TEAM_MEMBER_LEFT = "team.member_left"
 
 
-class WebhookProvider(str, Enum):
+class WebhookProvider(StrEnum):
     """Supported webhook providers."""
 
     ZAPIER = "zapier"
@@ -37,12 +40,12 @@ class WebhookProvider(str, Enum):
 class WebhookPayload:
     """Builder for webhook payloads."""
 
-    def __init__(self, event_type: WebhookEventType, data: Dict[str, Any]):
+    def __init__(self, event_type: WebhookEventType, data: dict[str, Any]):
         self.event_type = event_type
         self.data = data
-        self.timestamp = datetime.now(timezone.utc).isoformat()
+        self.timestamp = datetime.now(UTC).isoformat()
 
-    def build(self) -> Dict[str, Any]:
+    def build(self) -> dict[str, Any]:
         return {
             "event": self.event_type.value,
             "timestamp": self.timestamp,
@@ -53,7 +56,7 @@ class WebhookPayload:
 class WebhookService:
     """Service for sending webhooks to third-party integrations."""
 
-    def __init__(self, signing_secret: Optional[str] = None):
+    def __init__(self, signing_secret: str | None = None):
         self.signing_secret = signing_secret
         self.client = httpx.AsyncClient(timeout=30.0)
 
@@ -71,11 +74,14 @@ class WebhookService:
     async def send_webhook(
         self,
         url: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         provider: WebhookProvider = WebhookProvider.CUSTOM,
-        headers: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         """Send a webhook to a URL."""
+
+        if not is_safe_url(url):
+            return {"success": False, "error": "Invalid or blocked URL", "status_code": 403}
 
         # Build request headers
         request_headers = {
@@ -115,8 +121,8 @@ class WebhookService:
             return {"success": False, "error": str(e), "status_code": None}
 
     async def send_batch(
-        self, webhooks: List[Dict[str, Any]], payload: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        self, webhooks: list[dict[str, Any]], payload: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Send webhooks to multiple endpoints concurrently."""
         tasks = [
             self.send_webhook(
@@ -140,7 +146,7 @@ class WebhookService:
 
     def build_booking_payload(
         self, booking: Any, event_type: WebhookEventType
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build payload for booking events."""
         return WebhookPayload(
             event_type=event_type,
@@ -161,7 +167,7 @@ class WebhookService:
 
     def build_user_payload(
         self, user: Any, event_type: WebhookEventType
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build payload for user events."""
         return WebhookPayload(
             event_type=event_type,
@@ -181,7 +187,7 @@ class WebhookService:
         currency: str,
         status: str,
         event_type: WebhookEventType,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build payload for payment events."""
         return WebhookPayload(
             event_type=event_type,
@@ -190,13 +196,13 @@ class WebhookService:
                 "amount": amount,
                 "currency": currency,
                 "status": status,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         ).build()
 
     def build_team_payload(
         self, team: Any, user: Any, event_type: WebhookEventType
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build payload for team events."""
         return WebhookPayload(
             event_type=event_type,
@@ -221,7 +227,7 @@ class SlackWebhookFormatter:
     """Format webhooks for Slack compatibility."""
 
     @staticmethod
-    def format_booking(booking: Any, event_type: WebhookEventType) -> Dict[str, Any]:
+    def format_booking(booking: Any, event_type: WebhookEventType) -> dict[str, Any]:
         """Format booking event for Slack."""
         action = event_type.value.split(".")[-1].upper()
         color = {
@@ -255,7 +261,7 @@ class SlackWebhookFormatter:
                         {"title": "Status", "value": booking.status, "short": True},
                     ],
                     "footer": "GraftAI",
-                    "ts": int(datetime.now(timezone.utc).timestamp()),
+                    "ts": int(datetime.now(UTC).timestamp()),
                 }
             ]
         }
@@ -265,7 +271,7 @@ class TeamsWebhookFormatter:
     """Format webhooks for Microsoft Teams compatibility."""
 
     @staticmethod
-    def format_booking(booking: Any, event_type: WebhookEventType) -> Dict[str, Any]:
+    def format_booking(booking: Any, event_type: WebhookEventType) -> dict[str, Any]:
         """Format booking event for Teams."""
         action = event_type.value.split(".")[-1].upper()
 

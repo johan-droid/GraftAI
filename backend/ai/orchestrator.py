@@ -14,19 +14,6 @@ from backend.ai.memory.vector_store import VectorStore
 from backend.ai.memory.graph_store import GraphStore
 from backend.ai.llm_core import LLaMACore
 
-# Dynamic imports to avoid circular dependencies
-def _import_agents():
-    from backend.ai.agents.booking_agent import BookingAgent
-    from backend.ai.agents.optimization_agent import OptimizationAgent
-    from backend.ai.agents.execution_agent import ExecutionAgent
-    from backend.ai.agents.monitoring_agent import MonitoringAgent
-    return {
-        AgentType.BOOKING: BookingAgent(),
-        AgentType.OPTIMIZATION: OptimizationAgent(),
-        AgentType.EXECUTION: ExecutionAgent(),
-        AgentType.MONITORING: MonitoringAgent(),
-    }
-
 logger = get_logger(__name__)
 
 
@@ -396,12 +383,6 @@ async def get_agent_controller() -> AgentController:
         graph_store = GraphStore()
 
         _controller = AgentController(llm_core, vector_store, graph_store)
-        
-        # Register specialized agents
-        agents = _import_agents()
-        for agent_type, agent in agents.items():
-            _controller.register_agent(agent_type, agent)
-            
         await _controller.start()
 
     return _controller

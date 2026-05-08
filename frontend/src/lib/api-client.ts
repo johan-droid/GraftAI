@@ -26,12 +26,11 @@ class ApiClient {
     try {
       return JSON.parse(text) as Record<string, unknown>;
     } catch (e) {
-      const preview = text.substring(0, 400) + (text.length > 400 ? "..." : "");
       console.warn(`[API] Failed to parse JSON response (Status: ${status || "unknown"}):`, {
         error: e instanceof Error ? e.message : String(e),
-        preview,
+        preview: text.substring(0, 200) + (text.length > 200 ? "..." : "")
       });
-      return { __raw_text: preview };
+      return {};
     }
   }
 
@@ -273,12 +272,10 @@ class ApiClient {
             }
           }
 
-          const rawText = typeof data?.__raw_text === "string" ? data.__raw_text : text.substring(0, 500);
-          const finalMsg = error || detailMsg || message || rawText || statusText;
+          const finalMsg = error || detailMsg || message || statusText;
           console.error(`[API Fetch Error] ${response.status} ${endpoint}:`, {
             data,
-            statusText,
-            rawText,
+            text: text.substring(0, 500)
           });
           throw new Error(String(finalMsg));
         }

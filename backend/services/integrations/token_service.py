@@ -71,7 +71,6 @@ async def ensure_valid_token(
         migrated_plaintext = True
 
     if migrated_plaintext:
-        token_record.updated_at = datetime.now(timezone.utc)
         try:
             await db.commit()
         except Exception:

@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import httpx
 import sentry_sdk
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -22,12 +22,16 @@ from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
 
+from backend.ai.agents.base import AgentTimeoutError
+
+from backend.utils import db as db_utils
 from backend.utils.error_handlers import (
     generic_exception_handler,
     http_exception_handler,
     validation_exception_handler,
 )
 from backend.utils.logger import configure_logging
+from backend.services.migrations import run_migrations
 
 configure_logging()
 
@@ -49,10 +53,6 @@ for dotenv_path in [
 
 # Also load from the current working directory as a fallback.
 load_dotenv()
-
-from backend.ai.agents.base import AgentTimeoutError
-from backend.utils import db as db_utils
-from backend.services.migrations import run_migrations
 
 
 def _parse_comma_separated_env(name: str, default: str = "") -> list[str]:
@@ -134,21 +134,7 @@ async def _self_ping_loop(port: str, interval_seconds: int = 240) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize DB (creates tables if they don't exist in monolith mode)
-    skip_migrations = os.getenv("SKIP_DB_MIGRATIONS", "false").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-    if skip_migrations:
-        logging.info("[STARTUP] SKIP_DB_MIGRATIONS=true — skipping database migrations")
-    elif not db_utils.DATABASE_URL:
-        logging.warning(
-            "[STARTUP] DATABASE_URL not set — skipping database migrations. "
-            "Database features will be disabled."
-        )
-    else:
-        run_migrations()
-
+    run_migrations()
     # Inline schema mutations were removed in favor of Alembic-managed migrations
     # to avoid blocking the main event loop during startup.
 
@@ -471,9 +457,7 @@ def create_app() -> FastAPI:
         expose_headers=["x-xsrf-token", "Location"],
     )
 
-    async def agent_timeout_handler(request: Request, exc: Exception) -> JSONResponse:
-        if not isinstance(exc, AgentTimeoutError):
-            raise exc
+    async def agent_timeout_handler(request, exc: AgentTimeoutError):
         return JSONResponse(
             status_code=504,
             content={

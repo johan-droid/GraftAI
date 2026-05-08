@@ -149,8 +149,7 @@ export default function CopilotPage() {
         setExpandedAgentId(aiResponse.id);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "I'm having trouble responding right now. Please try again.";
-      toast.error(message || "I'm having trouble responding right now. Please try again.");
+      toast.error("I'm having trouble responding right now. Please try again.");
     } finally {
       setIsLoading(false);
     }

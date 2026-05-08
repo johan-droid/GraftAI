@@ -185,15 +185,13 @@ class GoogleCalendarService:
             creds = None
             token_path = f"tokens/{user_email}_token.json"
 
-            if await asyncio.to_thread(os.path.exists, token_path):
-                creds = await asyncio.to_thread(
-                    Credentials.from_authorized_user_file, token_path, SCOPES
-                )
+            if os.path.exists(token_path):
+                creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
             # If no valid credentials, request new ones
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
-                    await asyncio.to_thread(creds.refresh, Request())
+                    creds.refresh(Request())
                 else:
                     # In production, redirect user to OAuth flow
                     # For now, log that auth is needed
@@ -201,18 +199,12 @@ class GoogleCalendarService:
                     return False
 
                 # Save credentials for future runs
-                await asyncio.to_thread(os.makedirs, "tokens", exist_ok=True)
-
-                def _write_token():
-                    with open(token_path, "w") as token:
-                        token.write(creds.to_json())
-
-                await asyncio.to_thread(_write_token)
+                os.makedirs("tokens", exist_ok=True)
+                with open(token_path, "w") as token:
+                    token.write(creds.to_json())
 
             self.credentials = creds
-            self.service = await asyncio.to_thread(
-                build, "calendar", "v3", credentials=creds
-            )
+            self.service = build("calendar", "v3", credentials=creds)
 
             return True
 
@@ -1007,8 +999,7 @@ async def generate_google_auth_url(redirect_uri: Optional[str] = None) -> str:
     if not CalendarConfig.is_google_configured():
         raise Exception("Google Calendar not configured")
 
-    flow = await asyncio.to_thread(
-        InstalledAppFlow.from_client_secrets_file,
+    flow = InstalledAppFlow.from_client_secrets_file(
         "credentials.json",
         SCOPES,
         redirect_uri=redirect_uri or CalendarConfig.GOOGLE_REDIRECT_URI,
@@ -1031,25 +1022,19 @@ async def handle_google_callback(code: str, user_email: str) -> bool:
         Success status
     """
     try:
-        flow = await asyncio.to_thread(
-            InstalledAppFlow.from_client_secrets_file,
-            "credentials.json",
-            SCOPES,
-            redirect_uri=CalendarConfig.GOOGLE_REDIRECT_URI,
+        flow = InstalledAppFlow.from_client_secrets_file(
+            "credentials.json", SCOPES, redirect_uri=CalendarConfig.GOOGLE_REDIRECT_URI
         )
 
-        await asyncio.to_thread(flow.fetch_token, code=code)
+        flow.fetch_token(code=code)
         creds = flow.credentials
 
         # Save token for user
         token_path = f"tokens/{user_email}_token.json"
-        await asyncio.to_thread(os.makedirs, "tokens", exist_ok=True)
+        os.makedirs("tokens", exist_ok=True)
 
-        def _write_token():
-            with open(token_path, "w") as token_file:
-                token_file.write(creds.to_json())
-
-        await asyncio.to_thread(_write_token)
+        with open(token_path, "w") as token_file:
+            token_file.write(creds.to_json())
 
         logger.info(f"Google Calendar auth stored for {user_email}")
         return True
@@ -1131,23 +1116,20 @@ async def revoke_google_auth(user_email: str) -> bool:
     try:
         token_path = f"tokens/{user_email}_token.json"
 
-        if await asyncio.to_thread(os.path.exists, token_path):
+        if os.path.exists(token_path):
             # Load credentials and revoke
-            creds = await asyncio.to_thread(
-                Credentials.from_authorized_user_file, token_path, SCOPES
-            )
+            creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
             import requests
 
-            await asyncio.to_thread(
-                requests.post,
+            requests.post(
                 "https://oauth2.googleapis.com/revoke",
                 params={"token": creds.token},
                 headers={"content-type": "application/x-www-form-urlencoded"},
             )
 
             # Delete token file
-            await asyncio.to_thread(os.remove, token_path)
+            os.remove(token_path)
 
             logger.info(f"Google Calendar auth revoked for {user_email}")
             return True

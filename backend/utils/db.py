@@ -8,23 +8,11 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-ENV_FILES = [
-    ROOT_DIR / ".env",
-    ROOT_DIR / ".env.local",
-    ROOT_DIR / ".env.development",
-    ROOT_DIR / ".env.development.local",
-    BACKEND_DIR / ".env",
-    BACKEND_DIR / ".env.local",
-    BACKEND_DIR / ".env.development",
-    BACKEND_DIR / ".env.development.local",
-]
-
 if not os.environ.get("TESTING"):
-    for dotenv_path in ENV_FILES:
-        if dotenv_path.exists():
-            load_dotenv(dotenv_path=dotenv_path, override=False)
+    load_dotenv(
+        dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"),
+        override=False,
+    )
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 AsyncSessionLocal = None
@@ -100,7 +88,6 @@ if DATABASE_URL:
             _params = parse_qs(_parsed.query)
 
             is_render = os.getenv("RENDER") == "true" or "render.com" in DATABASE_URL
-            is_neon = "neon.tech" in DATABASE_URL
 
             _needs_ssl = (
                 _params.pop("sslmode", [None])[0]
@@ -111,7 +98,6 @@ if DATABASE_URL:
                     "prefer",
                 )
                 or is_render
-                or is_neon
             )
 
             _params.pop("channel_binding", None)
@@ -124,7 +110,7 @@ if DATABASE_URL:
                 "server_settings": {"application_name": "GraftAI-Production"},
             }
             if _needs_ssl:
-                _connect_args["ssl"] = "require" if (is_render or is_neon) else True
+                _connect_args["ssl"] = "require" if is_render else True
 
             # CRITICAL PRODUCTION SETTINGS FOR POSTGRESQL
             # Strict Pool Size: Do not allow an infinite spike of connections

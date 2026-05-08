@@ -52,11 +52,10 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    # Handle SSL for Render/Production/Neon if needed
+    # Handle SSL for Render/Production if needed
     is_render = os.getenv("RENDER") == "true" or "render.com" in (DATABASE_URL or "")
-    is_neon = "neon.tech" in (DATABASE_URL or "")
     connect_args = {}
-    if is_render or is_neon:
+    if is_render:
         connect_args["ssl"] = "require"
 
     # Add any other required asyncpg params here. For sqlite, use the

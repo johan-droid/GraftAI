@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MobileSidebar } from "@/components/dashboard/MobileSidebar";
 import { BottomNav } from "@/components/dashboard/BottomNav";
@@ -19,8 +19,6 @@ export default function DashboardLayout({
   const { status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const skipSetup = searchParams.get("skip_setup") === "true";
   const hasPageMobileNav = pathname.startsWith("/dashboard/book");
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(false);
 
@@ -42,12 +40,10 @@ export default function DashboardLayout({
         setIsCheckingOnboarding(true);
         const setupStatus = await getProfileSetupStatus();
         const hasCompletedInitialSetup = Boolean(
-          setupStatus.profile_setup_completed ||
-          setupStatus.profile_setup_skipped ||
-          setupStatus.onboarding_completed
+          setupStatus.profile_setup_completed || setupStatus.onboarding_completed
         );
 
-        if (!cancelled && !hasCompletedInitialSetup && !skipSetup && !pathname.startsWith("/profile/setup")) {
+        if (!cancelled && !hasCompletedInitialSetup && !pathname.startsWith("/profile/setup")) {
           router.replace("/profile/setup");
         }
       } catch (error) {
@@ -64,7 +60,7 @@ export default function DashboardLayout({
     return () => {
       cancelled = true;
     };
-  }, [status, pathname, router, skipSetup]);
+  }, [status, pathname, router]);
 
   if (status === "loading" || isCheckingOnboarding) {
     return <AppLoadingScreen variant="dashboard" title="Preparing your dashboard" subtitle="Checking your session and onboarding status before rendering live data." />;

@@ -5,6 +5,7 @@ import { addTeamMember } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 import { Team, TeamMemberFull } from "@/types/api";
+import { Loader2 } from "lucide-react";
 
 export default function AddMemberModal({
   open,
@@ -110,7 +111,8 @@ export default function AddMemberModal({
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-200">
               Cancel
             </button>
-            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-lg bg-[#1A73E8] text-white ${loading ? 'opacity-60' : ''}`}>
+            <button type="submit" disabled={loading} className={`flex items-center px-4 py-2 rounded-lg bg-[#1A73E8] text-white ${loading ? 'opacity-60' : ''}`}>
+              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {loading ? 'Adding…' : 'Add Member'}
             </button>
           </div>

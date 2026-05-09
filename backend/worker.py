@@ -56,7 +56,7 @@ async def task_sync_all_users(_ctx):
                 # Note: sync_user_calendar handles its own session/commits if needed
                 # but here we pass the current session.
                 await sync_user_calendar(db, str(user.id))
-            except Exception as e:  # noqa: BLE001 - log and continue background sync
+            except Exception:
                 logger.exception("Sync failed for %s", user.email)
 
 
@@ -66,7 +66,7 @@ async def task_sync_calendar(_ctx, user_id: str):
         try:
             await sync_user_calendar(db, user_id)
             await sync_calendar_for_user(db, user_id)
-        except Exception as e:  # noqa: BLE001 - log and continue background sync
+        except Exception:
             logger.exception("Calendar sync failed for user %s", user_id)
 
 
@@ -96,7 +96,7 @@ async def task_process_reminders(_ctx):
                         f"Hi {user.full_name or 'there'}, your meeting '{event.title}' starts soon at {event.start_time}.",
                     )
                     event.is_reminded = True
-                except Exception as e:  # noqa: BLE001 - best-effort notify
+                except Exception:
                     logger.exception("Failed to send reminder for event %s", event.id)
 
         await db.commit()
@@ -174,7 +174,7 @@ async def task_send_booking_reminders(_ctx):
                 )
                 booking.is_reminder_sent = True
                 sent += 1
-            except Exception as e:  # noqa: BLE001 - best-effort notify
+            except Exception:
                 logger.exception("Failed to send booking reminder for booking %s", booking.id)
 
         if sent:
@@ -213,7 +213,7 @@ async def task_send_email(_ctx, booking_id: str, email_type: str, extra: dict = 
         }
 
         try:
-                if email_type == "confirmation":
+            if email_type == "confirmation":
                 await notify_event_created([booking.email], [], payload)
             elif email_type == "new_booking":
                 organizer_email = payload.get("organizer_email")
@@ -224,10 +224,10 @@ async def task_send_email(_ctx, booking_id: str, email_type: str, extra: dict = 
                         f"A new booking has been scheduled for {event.title} on {payload['start_time']}.",
                         html_body=f"<p>A new booking has been scheduled for <strong>{event.title}</strong> on {payload['start_time']}.</p>",
                     )
-                    else:
-                        logger.warning(
-                            "Missing organizer_email for new_booking job %s", booking_id
-                        )
+                else:
+                    logger.warning(
+                        "Missing organizer_email for new_booking job %s", booking_id
+                    )
             elif email_type == "reminder":
                 await notify_event_updated([booking.email], [], payload)
             elif email_type == "cancellation":
@@ -236,7 +236,7 @@ async def task_send_email(_ctx, booking_id: str, email_type: str, extra: dict = 
                 logger.warning(
                     "Unknown email_type '%s' for booking %s", email_type, booking_id
                 )
-        except Exception as e:  # noqa: BLE001 - log failures in background email tasks
+        except Exception:
             logger.exception("Failed to send %s email for booking %s", email_type, booking_id)
 
 
@@ -291,7 +291,7 @@ async def task_provision_shortlink(_ctx, booking_id: str):
             booking.updated_at = datetime.now(UTC)
             await db.commit()
             logger.info("Shortlink provisioned for booking %s", booking_id)
-        except Exception as e:  # noqa: BLE001 - external service failure
+        except Exception:
             logger.exception("Shortlink provisioning failed for %s", booking_id)
 
 
@@ -342,7 +342,7 @@ async def task_provision_jitsi_meeting(_ctx, booking_id: str):
             booking.updated_at = datetime.now(UTC)
             await db.commit()
             logger.info("Jitsi meeting provisioned for booking %s", booking_id)
-        except Exception as e:  # noqa: BLE001 - external service failure
+        except Exception:
             logger.exception("Jitsi provisioning failed for %s", booking_id)
             return
 
@@ -357,7 +357,7 @@ async def task_provision_jitsi_meeting(_ctx, booking_id: str):
 
         try:
             await notify_event_created([booking.email], [], notification_data)
-        except Exception as e:  # noqa: BLE001 - best-effort notification
+        except Exception:
             logger.exception("Failed to send booking confirmation for %s", booking_id)
 
 
@@ -473,7 +473,7 @@ async def task_create_calendar_event(_ctx, event_id: str):
 
         try:
             await push_event_to_external_calendar(db, event_id)
-        except Exception as e:  # noqa: BLE001 - external calendar errors
+        except Exception:
             logger.exception("Failed to push event %s to external calendar", event_id)
 
 
@@ -487,7 +487,7 @@ async def task_update_calendar_event(_ctx, event_id: str, update_data: dict = No
 
         try:
             await update_event(db, event_id, event.user_id, update_data or {})
-        except Exception as e:  # noqa: BLE001 - external calendar errors
+        except Exception:
             logger.exception("Failed to update calendar event %s", event_id)
 
 
@@ -501,7 +501,7 @@ async def task_delete_calendar_event(_ctx, event_id: str):
 
         try:
             await delete_event(db, event_id, event.user_id)
-        except Exception as e:  # noqa: BLE001 - external calendar errors
+        except Exception:
             logger.exception("Failed to delete calendar event %s", event_id)
 
 

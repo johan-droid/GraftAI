@@ -213,7 +213,7 @@ async def task_send_email(_ctx, booking_id: str, email_type: str, extra: dict = 
         }
 
         try:
-                if email_type == "confirmation":
+            if email_type == "confirmation":
                 await notify_event_created([booking.email], [], payload)
             elif email_type == "new_booking":
                 organizer_email = payload.get("organizer_email")
@@ -224,10 +224,10 @@ async def task_send_email(_ctx, booking_id: str, email_type: str, extra: dict = 
                         f"A new booking has been scheduled for {event.title} on {payload['start_time']}.",
                         html_body=f"<p>A new booking has been scheduled for <strong>{event.title}</strong> on {payload['start_time']}.</p>",
                     )
-                    else:
-                        logger.warning(
-                            "Missing organizer_email for new_booking job %s", booking_id
-                        )
+                else:
+                    logger.warning(
+                        "Missing organizer_email for new_booking job %s", booking_id
+                    )
             elif email_type == "reminder":
                 await notify_event_updated([booking.email], [], payload)
             elif email_type == "cancellation":

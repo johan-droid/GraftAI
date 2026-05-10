@@ -15,25 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from backend.api.deps import get_db, get_current_user
+from backend.auth.schemes import require_admin
 from backend.models.tables import UserTable
 from backend.models.email_template import EmailTemplate
 from backend.services.email_template_service import EmailTemplateService
 
 router = APIRouter(prefix="/email-templates", tags=["email-templates"])
-
-
-def _is_admin(user: UserTable) -> bool:
-    tier = (getattr(user, "tier", "") or "").strip().lower()
-    if tier in {"admin", "elite"}:
-        return True
-
-    preferences = getattr(user, "preferences", None)
-    if isinstance(preferences, dict):
-        role = str(preferences.get("role", "")).strip().lower()
-        if role in {"admin", "elite", "owner"}:
-            return True
-
-    return False
 
 
 # Pydantic Models
@@ -519,16 +506,13 @@ async def get_email_stats(
 @router.get("/system/initialize")
 async def initialize_system_templates(
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user),
+    admin_id: str = Depends(require_admin),
 ):
     """Initialize default system email templates.
 
     This endpoint is primarily for admin use. System templates
     are created automatically when needed.
     """
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
     service = EmailTemplateService(db)
     await service.initialize_system_templates()
 

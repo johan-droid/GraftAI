@@ -7,23 +7,10 @@ from sqlalchemy import select, func, and_
 from pydantic import BaseModel
 
 from backend.api.deps import get_db, get_current_user
+from backend.auth.schemes import require_admin, is_admin_user
 from backend.models.tables import UserTable, BookingTable, EventTypeTable
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
-
-
-def _is_admin(user: UserTable) -> bool:
-    tier = (getattr(user, "tier", "") or "").strip().lower()
-    if tier in {"admin", "elite"}:
-        return True
-
-    preferences = getattr(user, "preferences", None)
-    if isinstance(preferences, dict):
-        role = str(preferences.get("role", "")).strip().lower()
-        if role in {"admin", "elite", "owner"}:
-            return True
-
-    return False
 
 
 class AnalyticsOverview(BaseModel):
@@ -52,13 +39,9 @@ class EventTypeMetrics(BaseModel):
 @router.get("/overview")
 async def get_analytics_overview(
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user),
+    admin_id: str = Depends(require_admin),
 ):
     """Get overall analytics overview."""
-    # Check if user is admin/owner
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
     # Total bookings
     stmt = select(func.count(BookingTable.id))
     total_bookings = (await db.execute(stmt)).scalar() or 0
@@ -100,13 +83,9 @@ async def get_analytics_overview(
 async def get_booking_timeline(
     days: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user),
+    admin_id: str = Depends(require_admin),
 ):
     """Get booking metrics over time."""
-    # Check if user is admin/owner
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Get bookings grouped by day
@@ -139,13 +118,9 @@ async def get_booking_timeline(
 @router.get("/event-types")
 async def get_event_type_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user),
+    admin_id: str = Depends(require_admin),
 ):
     """Get metrics by event type."""
-    # Check if user is admin/owner
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
     # Get event types with booking counts
     stmt = (
         select(
@@ -182,7 +157,7 @@ async def get_user_analytics(
 ):
     """Get analytics for a specific user."""
     # Users can only view their own analytics or if they're admin
-    if current_user.id != user_id and not _is_admin(current_user):
+    if current_user.id != user_id and not is_admin_user(current_user):
         raise HTTPException(status_code=403, detail="Access denied")
 
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
@@ -218,13 +193,9 @@ async def get_user_analytics(
 @router.get("/realtime")
 async def get_realtime_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: UserTable = Depends(get_current_user),
+    admin_id: str = Depends(require_admin),
 ):
     """Get real-time metrics for dashboard."""
-    # Check if user is admin/owner
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
     # Bookings in last hour
     one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
     stmt = select(func.count(BookingTable.id)).where(

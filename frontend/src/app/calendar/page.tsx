@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Container, Typography, Button, IconButton, Grid, Stack } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
@@ -88,16 +88,34 @@ export default function CalendarPage() {
     return days;
   };
 
-  const getEventsForDate = (date: Date) => {
-    return displayEvents.filter((event) => {
+  const EMPTY_EVENTS = useMemo<CalendarEvent[]>(() => [], []);
+
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    displayEvents.forEach(event => {
       const eventDate = new Date(event.start_time);
-      return (
-        eventDate.getDate() === date.getDate() &&
-        eventDate.getMonth() === date.getMonth() &&
-        eventDate.getFullYear() === date.getFullYear()
-      );
+      // Format as YYYY-MM-DD for stable lookup key
+      const year = eventDate.getFullYear();
+      const month = String(eventDate.getMonth() + 1).padStart(2, '0');
+      const day = String(eventDate.getDate()).padStart(2, '0');
+      const dateKey = `${year}-${month}-${day}`;
+
+      if (!map.has(dateKey)) {
+        map.set(dateKey, []);
+      }
+      map.get(dateKey)!.push(event);
     });
-  };
+    return map;
+  }, [displayEvents]);
+
+  const getEventsForDate = useCallback((date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateKey = `${year}-${month}-${day}`;
+
+    return eventsByDate.get(dateKey) || EMPTY_EVENTS;
+  }, [eventsByDate, EMPTY_EVENTS]);
 
   const formatMonthYear = (date: Date) => {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();

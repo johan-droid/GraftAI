@@ -3,10 +3,12 @@ Vector Database Store for GraftAI
 Handles semantic search and embeddings for AI memory
 """
 
-from typing import Dict, Any, List, Optional, Union
-from dataclasses import dataclass
 import hashlib
 import json
+from dataclasses import dataclass
+from typing import Any
+
+import tiktoken
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -18,8 +20,8 @@ class Document:
 
     id: str
     content: str
-    embedding: Optional[List[float]] = None
-    metadata: Dict[str, Any] = None
+    embedding: list[float] | None = None
+    metadata: dict[str, Any] = None
 
 
 class VectorStore:
@@ -39,16 +41,16 @@ class VectorStore:
 
         # In-memory storage (replace with actual vector DB in production)
         # Production: Pinecone, Weaviate, Chroma, pgvector, etc.
-        self._collections: Dict[str, List[Document]] = {}
+        self._collections: dict[str, list[Document]] = {}
 
         logger.info(f"VectorStore initialized with dimension: {embedding_dimension}")
 
     async def add_document(
         self,
         collection: str,
-        document: Dict[str, Any],
-        metadata: Optional[Dict[str, Any]] = None,
-        document_id: Optional[str] = None,
+        document: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
+        document_id: str | None = None,
     ) -> str:
         """
         Add a document to the vector store
@@ -73,6 +75,7 @@ class VectorStore:
         )
 
         # Generate embedding
+        content_str = self._pre_tokenize(content_str)
         embedding = await self._generate_embedding(content_str)
 
         # Create document
@@ -100,10 +103,10 @@ class VectorStore:
     async def search(
         self,
         collection: str,
-        query: Union[str, Dict[str, Any]],
+        query: str | dict[str, Any],
         limit: int = 10,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Search for documents by semantic similarity
 
@@ -122,6 +125,7 @@ class VectorStore:
 
         # Generate query embedding
         query_str = json.dumps(query) if isinstance(query, dict) else str(query)
+        query_str = self._pre_tokenize(query_str)
         query_embedding = await self._generate_embedding(query_str)
 
         # Calculate similarities
@@ -157,7 +161,7 @@ class VectorStore:
 
     async def get_document(
         self, collection: str, document_id: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Get a specific document by ID"""
         if collection not in self._collections:
             return None
@@ -194,8 +198,8 @@ class VectorStore:
         self,
         collection: str,
         document_id: str,
-        document: Dict[str, Any],
-        metadata: Optional[Dict[str, Any]] = None,
+        document: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Update an existing document"""
         # Delete old version
@@ -211,7 +215,7 @@ class VectorStore:
 
     async def get_similar(
         self, collection: str, document_id: str, limit: int = 5
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Find documents similar to a given document"""
         # Get the reference document
         doc = await self.get_document(collection, document_id)
@@ -227,7 +231,7 @@ class VectorStore:
         filtered = [item for item in results if item.get("id") != document_id]
         return filtered[:limit]
 
-    async def count(self, collection: str, filters: Optional[Dict] = None) -> int:
+    async def count(self, collection: str, filters: dict | None = None) -> int:
         """Count documents in a collection"""
         if collection not in self._collections:
             return 0
@@ -251,11 +255,26 @@ class VectorStore:
 
         return False
 
-    async def get_collections(self) -> List[str]:
+    async def get_collections(self) -> list[str]:
         """Get list of all collections"""
         return list(self._collections.keys())
 
-    async def _generate_embedding(self, text: str) -> List[float]:
+
+    def _pre_tokenize(self, text: str) -> str:
+        """Pre-tokenize text to prevent embedding model context length errors."""
+        try:
+            encoding = tiktoken.encoding_for_model("text-embedding-3-small")
+            tokens = encoding.encode(text)
+            max_tokens = 8000
+            if len(tokens) > max_tokens:
+                tokens = tokens[:max_tokens]
+                return encoding.decode(tokens)
+            return text
+        except Exception as e:
+            logger.warning(f"Pre-tokenization failed: {e}. Returning original text.")
+            return text
+
+    async def _generate_embedding(self, text: str) -> list[float]:
         """
         Generate embedding vector for text
 
@@ -280,7 +299,7 @@ class VectorStore:
 
         return embedding
 
-    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def _cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
         """Calculate cosine similarity between two vectors"""
         dot_product = sum(a * b for a, b in zip(vec1, vec2))
         norm1 = sum(a * a for a in vec1) ** 0.5
@@ -292,7 +311,7 @@ class VectorStore:
         return dot_product / (norm1 * norm2)
 
     def _matches_filters(
-        self, metadata: Optional[Dict], filters: Dict[str, Any]
+        self, metadata: dict | None, filters: dict[str, Any]
     ) -> bool:
         """Check if metadata matches filters"""
         if not metadata:
@@ -305,17 +324,12 @@ class VectorStore:
             # Handle operators
             if isinstance(value, dict):
                 for op, op_val in value.items():
-                    if op == "$ne" and metadata[key] == op_val:
+                    if (op == "$ne" and metadata[key] == op_val) or (op == "$gt" and metadata[key] <= op_val):
                         return False
-                    elif op == "$gt" and metadata[key] <= op_val:
+                    if (op == "$lt" and metadata[key] >= op_val) or (op == "$in" and metadata[key] not in op_val):
                         return False
-                    elif op == "$lt" and metadata[key] >= op_val:
-                        return False
-                    elif op == "$in" and metadata[key] not in op_val:
-                        return False
-            else:
-                if metadata[key] != value:
-                    return False
+            elif metadata[key] != value:
+                return False
 
         return True
 
@@ -380,7 +394,7 @@ class VectorStore:
 
 
 # Global instance
-_vector_store: Optional[VectorStore] = None
+_vector_store: VectorStore | None = None
 
 
 async def get_vector_store() -> VectorStore:

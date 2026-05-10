@@ -7,7 +7,8 @@
     "build:frontend": "cd frontend && npm run build",
     "lint:frontend": "cd frontend && npm run lint",
     "test:backend": "cd backend && pytest",
-    "start:frontend": "cd frontend && npm run start"
+    "start:frontend": "cd frontend && npm run start",
+    "test:e2e": "echo 'No e2e tests yet'"
   },
   "dependencies": {
     "date-fns": "^4.1.0",

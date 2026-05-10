@@ -40,6 +40,7 @@ def _mask_phone(phone: str) -> str:
 def _validate_webhook_url(url: str, allow_localhost: bool = False) -> bool:
     try:
         from urllib.parse import urlparse
+        from backend.utils.ssrf import is_safe_url
 
         parsed = urlparse(url)
         if parsed.scheme not in {"https", "http"}:
@@ -51,6 +52,8 @@ def _validate_webhook_url(url: str, allow_localhost: bool = False) -> bool:
             return False
         if allow_localhost and host in {"localhost", "127.0.0.1", "::1"}:
             return True
+        if not allow_localhost and not is_safe_url(url):
+            return False
         return bool(host)
     except Exception:
         return False
@@ -64,7 +67,10 @@ def _validate_teams_webhook_url(url: str) -> bool:
         if parsed.scheme != "https":
             return False
         host = parsed.hostname or ""
-        return host.endswith("office.com") or host.endswith("microsoft.com")
+        return (
+            host == "office.com" or host.endswith(".office.com") or
+            host == "microsoft.com" or host.endswith(".microsoft.com")
+        )
     except Exception:
         return False
 

@@ -1,4 +1,4 @@
-## 2025-05-08 - Added SSRF protection for outgoing webhooks
-**Vulnerability:** The application was making outbound HTTP requests (webhooks) without validating the destination IP. This could allow an attacker to target internal services on the local network (e.g. `localhost` or private network IPs).
-**Learning:** Initial SSRF validation logic relied solely on IPv4 resolution, which could be bypassed using IPv6 (e.g., `http://[::1]`).
-**Prevention:** To effectively mitigate SSRF, URLs must be validated by resolving hostnames to *all* IP addresses (both IPv4 and IPv6) using `socket.getaddrinfo`, then checking each against loopback, private, and reserved ranges using Python's `ipaddress` module.
+## 2026-05-10 - Teams Webhook Domain Validation Bypass
+**Vulnerability:** The function `_validate_teams_webhook_url` in `backend/services/dlq_handlers.py` used `.endswith("office.com")` and `.endswith("microsoft.com")` to validate the webhook URL. This allowed malicious domains like `malicious-office.com` or `malicious-microsoft.com` to bypass the validation.
+**Learning:** Using `.endswith` on string-based domains is insufficient to prevent domain prefix spoofing, leaving systems open to SSRF or phishing vectors when making outbound requests to third parties.
+**Prevention:** Always check for exact domain matches (e.g. `host == "office.com"`) or specific subdomain boundaries (e.g. `host.endswith(".office.com")`).

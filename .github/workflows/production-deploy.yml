@@ -7,6 +7,8 @@ on:
 jobs:
   quality-gates:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
       - name: Setup pnpm
@@ -28,6 +30,8 @@ jobs:
   security-scan:
     needs: quality-gates
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
       - run: pnpm snyk test --severity-threshold=high
@@ -37,6 +41,8 @@ jobs:
   canary-deploy:
     needs: security-scan
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     environment: production-canary
     steps:
       - uses: actions/checkout@v4

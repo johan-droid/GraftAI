@@ -12,6 +12,7 @@ jobs:
   build-frontend:
     runs-on: ubuntu-latest
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       NODE_OPTIONS: "--trace-warnings"
       NEXTAUTH_URL: "http://localhost:3000"
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"

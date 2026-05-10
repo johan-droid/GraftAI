@@ -87,6 +87,7 @@ export function Modal({
                   {title}
                 </Typography>
                 <IconButton
+                  aria-label="Close modal"
                   onClick={onClose}
                   sx={{
                     color: "#5F6368",

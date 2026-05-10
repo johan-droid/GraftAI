@@ -26,6 +26,7 @@ export function MobileSidebar() {
     <>
       {/* Mobile Menu Button */}
       <IconButton
+        aria-label="Open mobile menu"
         onClick={toggleDrawer}
         sx={{
           position: "fixed",
@@ -97,6 +98,7 @@ export function MobileSidebar() {
             </Box>
 
             <IconButton
+              aria-label="Close mobile menu"
               onClick={() => setOpen(false)}
               sx={{
                 color: "#5F6368",

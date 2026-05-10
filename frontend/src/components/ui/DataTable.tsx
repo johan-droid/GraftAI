@@ -545,6 +545,7 @@ export function DataTable<T>({
               {filters && filters.length > 0 && (
                 <Tooltip title="Toggle Filters">
                   <IconButton
+                    aria-label="Toggle Filters"
                     onClick={() => setShowFilters(!showFilters)}
                     color={showFilters ? "primary" : "default"}
                     size="small"
@@ -557,7 +558,7 @@ export function DataTable<T>({
               {/* Refresh */}
               {onRefresh && (
                 <Tooltip title="Refresh">
-                  <IconButton onClick={onRefresh} size="small">
+                  <IconButton aria-label="Refresh" onClick={onRefresh} size="small">
                     <RefreshCw size={20} />
                   </IconButton>
                 </Tooltip>

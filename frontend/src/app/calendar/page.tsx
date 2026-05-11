@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Container, Typography, Button, IconButton, Grid, Stack } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,6 +27,8 @@ import { SkeletonText } from "@/components/ui/Skeleton";
 
 // Calendar view types
 type ViewType = "MONTH" | "WEEK" | "DAY";
+
+const EMPTY_EVENTS: CalendarEvent[] = [];
 
 // Event type
 interface CalendarEvent {
@@ -88,16 +90,21 @@ export default function CalendarPage() {
     return days;
   };
 
-  const getEventsForDate = (date: Date) => {
-    return displayEvents.filter((event) => {
-      const eventDate = new Date(event.start_time);
-      return (
-        eventDate.getDate() === date.getDate() &&
-        eventDate.getMonth() === date.getMonth() &&
-        eventDate.getFullYear() === date.getFullYear()
-      );
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    displayEvents.forEach(event => {
+      const dateKey = new Date(event.start_time).toDateString();
+      if (!map.has(dateKey)) {
+        map.set(dateKey, []);
+      }
+      map.get(dateKey)!.push(event);
     });
-  };
+    return map;
+  }, [displayEvents]);
+
+  const getEventsForDate = useCallback((date: Date) => {
+    return eventsByDate.get(date.toDateString()) || EMPTY_EVENTS;
+  }, [eventsByDate]);
 
   const formatMonthYear = (date: Date) => {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();

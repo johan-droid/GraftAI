@@ -36,6 +36,7 @@ export function ThemeToggle() {
     <>
       <IconButton
         onClick={handleClick}
+        aria-label="Toggle theme"
         sx={{
           width: 40,
           height: 40,

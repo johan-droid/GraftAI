@@ -146,10 +146,10 @@ export default function CalendarPage() {
                 {/* Grid Header Controls */}
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", p: 2, borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-hover)" }}>
                    <Stack direction="row" spacing={1}>
-                     <IconButton onClick={() => navigateCalendar("prev")} sx={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)", p: 1 }}>
+                     <IconButton onClick={() => navigateCalendar("prev")} aria-label="Previous month" sx={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)", p: 1 }}>
                         <ChevronLeft size={20} />
                      </IconButton>
-                     <IconButton onClick={() => navigateCalendar("next")} sx={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)", p: 1 }}>
+                     <IconButton onClick={() => navigateCalendar("next")} aria-label="Next month" sx={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)", p: 1 }}>
                         <ChevronRight size={20} />
                      </IconButton>
                    </Stack>

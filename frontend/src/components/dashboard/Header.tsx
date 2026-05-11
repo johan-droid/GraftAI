@@ -110,6 +110,7 @@ export function Header({ userName, userEmail, userAvatar, notificationCount = 0 
 
         {/* Notifications */}
         <IconButton
+          aria-label="Notifications"
           sx={{
             width: 40,
             height: 40,

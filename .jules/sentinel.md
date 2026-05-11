@@ -1,4 +1,4 @@
-## 2025-05-08 - Added SSRF protection for outgoing webhooks
-**Vulnerability:** The application was making outbound HTTP requests (webhooks) without validating the destination IP. This could allow an attacker to target internal services on the local network (e.g. `localhost` or private network IPs).
-**Learning:** Initial SSRF validation logic relied solely on IPv4 resolution, which could be bypassed using IPv6 (e.g., `http://[::1]`).
-**Prevention:** To effectively mitigate SSRF, URLs must be validated by resolving hostnames to *all* IP addresses (both IPv4 and IPv6) using `socket.getaddrinfo`, then checking each against loopback, private, and reserved ranges using Python's `ipaddress` module.
+## 2025-03-08 - Fixed SSRF in Workflow Engine Webhooks
+**Vulnerability:** The application was using `httpx` to send HTTP requests to user-provided webhook URLs in `backend/services/workflow_engine.py`, `backend/tasks/workflow_tasks.py`, and `backend/utils/audit_logger.py` without validating if the URL was safe. This allowed for Server-Side Request Forgery (SSRF), enabling attackers to potentially scan internal networks or access internal services.
+**Learning:** External or user-provided URLs were directly passed into HTTP clients. Even for internal tools like security audit loggers, assuming the configured URL is safe can be dangerous if the environment configuration is compromised.
+**Prevention:** Always validate URLs using `backend.utils.ssrf.is_safe_url` to block private, loopback, and reserved IPs before making outbound HTTP requests with libraries like `httpx` or `requests`.

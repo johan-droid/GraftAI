@@ -19,6 +19,7 @@ from backend.utils.logger import get_logger
 from backend.utils.db import AsyncSessionLocal
 from backend.core.celery_app import celery_app
 from backend.utils.dead_letter_queue import get_dlq
+from backend.utils.ssrf import is_safe_url
 
 logger = get_logger(__name__)
 
@@ -392,6 +393,9 @@ class WorkflowEngine:
         
         if not url:
             raise ValueError("No webhook URL specified")
+
+        if not is_safe_url(url):
+            raise ValueError("Invalid or unsafe webhook URL")
         
         payload = {
             "event": event_data.get("trigger_type"),
@@ -424,6 +428,9 @@ class WorkflowEngine:
         
         if not webhook_url:
             raise ValueError("No Slack webhook URL specified")
+
+        if not is_safe_url(webhook_url):
+            raise ValueError("Invalid or unsafe Slack webhook URL")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -449,6 +456,9 @@ class WorkflowEngine:
         
         if not webhook_url:
             raise ValueError("No Teams webhook URL specified")
+
+        if not is_safe_url(webhook_url):
+            raise ValueError("Invalid or unsafe Teams webhook URL")
         
         # Microsoft Teams adaptive card format
         card = {

@@ -83,6 +83,10 @@ def send_workflow_slack(self, step_config: dict, event_data: dict):
 
         # Send Slack message
         import httpx
+        from backend.utils.ssrf import is_safe_url
+
+        if not is_safe_url(webhook_url):
+            raise ValueError("Invalid or unsafe Slack webhook URL")
 
         async def _send():
             async with httpx.AsyncClient() as client:

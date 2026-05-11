@@ -420,10 +420,15 @@ class AuditLogger:
         """Send security alert via webhook (Slack/Discord) for critical events."""
         import os
         import httpx
+        from backend.utils.ssrf import is_safe_url
 
         webhook_url = os.getenv("SECURITY_WEBHOOK_URL")
         if not webhook_url:
             return  # No webhook configured, skip silently
+
+        if not is_safe_url(webhook_url):
+            logger.error("SECURITY_WEBHOOK_URL is unsafe, skipping.")
+            return
 
         try:
             # Format alert payload

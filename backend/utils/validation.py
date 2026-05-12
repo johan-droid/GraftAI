@@ -326,8 +326,7 @@ def validate_and_sanitize_input(input_data: str | dict | list, schema_class: typ
             return SecurityValidator.sanitize_string(input_data)
         if isinstance(input_data, dict):
             return {
-                SecurityValidator.sanitize_string(str(k)):
-                SecurityValidator.sanitize_string(str(v))
+                SecurityValidator.sanitize_string(str(k)): SecurityValidator.sanitize_string(str(v))
                 for k, v in input_data.items()
             }
         if isinstance(input_data, list):

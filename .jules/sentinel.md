@@ -1,4 +1,4 @@
-## 2024-05-27 - [Mass Assignment / Privilege Escalation in Profile Update]
-**Vulnerability:** A standard user could assign themselves a `role` (like "admin" or "owner") and elevated privileges by supplying a modified `preferences` payload when calling the update profile endpoint. The user preferences dictionary contained authorization-critical fields (like `role` or `tier`) and the payload filtering process did not blacklist them.
-**Learning:** Mass assignment vulnerabilities occur when user input is blindly applied to data models. In this project, `preferences` is used flexibly for many attributes, including role-based access. Exposing dict structures to arbitrary user updates without strict schema validation or explicit allowlisting is inherently risky.
-**Prevention:** Always maintain a strict allowlist or a comprehensive blacklist of internal and security-critical keys (such as `role`, `tier`, `is_superuser`, `subscription_status`) before updating arbitrary JSON fields or columns via user payloads.
+## 2025-05-08 - Added SSRF protection for outgoing webhooks
+**Vulnerability:** The application was making outbound HTTP requests (webhooks) without validating the destination IP. This could allow an attacker to target internal services on the local network (e.g. `localhost` or private network IPs).
+**Learning:** Initial SSRF validation logic relied solely on IPv4 resolution, which could be bypassed using IPv6 (e.g., `http://[::1]`).
+**Prevention:** To effectively mitigate SSRF, URLs must be validated by resolving hostnames to *all* IP addresses (both IPv4 and IPv6) using `socket.getaddrinfo`, then checking each against loopback, private, and reserved ranges using Python's `ipaddress` module.

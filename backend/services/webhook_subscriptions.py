@@ -1,8 +1,9 @@
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Mapping, Optional
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, insert, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.tables import WebhookSubscriptionTable, WebhookLogTable
@@ -204,29 +205,46 @@ async def enqueue_webhook_notifications_for_event(
     result = await db.execute(stmt)
     subscriptions = result.scalars().all()
 
+    # Phase 1: Filter subscriptions and prepare bulk logs
+    matching_subs = [s for s in subscriptions if event in (s.events or [])]
+    if not matching_subs:
+        return 0
+
+    logs_to_create = []
+    created_at = datetime.now(timezone.utc)
+    webhook_body = {
+        "event": event,
+        "createdAt": created_at.isoformat(),
+        "data": payload,
+    }
+
+    sub_log_map = []  # List of (subscription, log_id)
+    for subscription in matching_subs:
+        log_id = str(uuid.uuid4())
+        logs_to_create.append(
+            {
+                "id": log_id,
+                "webhook_id": subscription.id,
+                "event": event,
+                "payload": webhook_body,
+                "request_status": 0,
+                "attempts": 1,
+                "created_at": created_at,
+            }
+        )
+        sub_log_map.append((subscription, log_id))
+
+    # Phase 2: Perform bulk insert
+    try:
+        await db.execute(insert(WebhookLogTable).values(logs_to_create))
+        await db.commit()
+    except Exception as exc:
+        logger.error("Failed to perform bulk insert of webhook logs: %s", exc, exc_info=True)
+        return 0
+
+    # Phase 3: Enqueue jobs
     queued = 0
-    for subscription in subscriptions:
-        if event not in (subscription.events or []):
-            continue
-
-        webhook_body = {
-            "event": event,
-            "createdAt": datetime.now(timezone.utc).isoformat(),
-            "data": payload,
-        }
-
-        try:
-            log = await create_webhook_log(db, subscription.id, event, webhook_body)
-        except Exception as exc:
-            logger.error(
-                "Failed to create webhook log for subscription=%s event=%s: %s",
-                subscription.id,
-                event,
-                exc,
-                exc_info=True,
-            )
-            continue
-
+    for subscription, log_id in sub_log_map:
         try:
             await enqueue_job(
                 "task_send_webhook",
@@ -234,7 +252,7 @@ async def enqueue_webhook_notifications_for_event(
                 event=event,
                 data=payload,
                 webhook_id=subscription.id,
-                log_id=log.id,
+                log_id=log_id,
                 secret=subscription.secret,
             )
             queued += 1
@@ -247,13 +265,16 @@ async def enqueue_webhook_notifications_for_event(
                 exc_info=True,
             )
             try:
-                async with db.begin():
-                    log.request_error = str(exc)
-                    log.attempts = max(log.attempts or 1, 1)
+                await db.execute(
+                    update(WebhookLogTable)
+                    .where(WebhookLogTable.id == log_id)
+                    .values(request_error=str(exc), attempts=1)
+                )
+                await db.commit()
             except Exception:
                 logger.warning(
-                    "Unable to update webhook log after enqueue failure for subscription=%s",
-                    subscription.id,
+                    "Unable to update webhook log after enqueue failure for log_id=%s",
+                    log_id,
                 )
             continue
 

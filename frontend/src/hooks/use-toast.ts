@@ -20,7 +20,7 @@ function notify(listeners: ((toasts: Toast[]) => void)[], toasts: Toast[]) {
 
 export const toast = {
   show(message: string, type: ToastType = "info", duration = 3500) {
-    const id = Math.random().toString(36).slice(2);
+    const id = crypto.randomUUID();
     const newToast: Toast = { id, message, type, duration };
     toastQueue = [...toastQueue, newToast];
     notify(toastListeners, toastQueue);

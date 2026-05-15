@@ -163,7 +163,7 @@ class OfflineQueue {
   add(item: Omit<RequestQueueItem, "id" | "timestamp" | "retryCount">): string {
     const queueItem: RequestQueueItem = {
       ...item,
-      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: crypto.randomUUID(),
       timestamp: Date.now(),
       retryCount: 0,
     };

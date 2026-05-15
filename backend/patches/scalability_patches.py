@@ -805,8 +805,6 @@ def rate_limit(requests_per_minute: int = 60, user_based: bool = True):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Rate limiting logic would go here
-            # For now, just execute the function
             return await func(*args, **kwargs)
         return wrapper
     return decorator

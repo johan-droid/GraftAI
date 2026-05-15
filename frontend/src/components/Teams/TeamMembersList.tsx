@@ -77,6 +77,7 @@ export default function TeamMembersList({ teamId }: { teamId: string }) {
               }}
               className="p-2 rounded-full text-red-600 hover:bg-red-50"
               title="Remove member"
+              aria-label="Remove member"
             >
               <Trash2 size={16} />
             </button>

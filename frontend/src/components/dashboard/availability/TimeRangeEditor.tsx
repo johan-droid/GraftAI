@@ -102,7 +102,7 @@ export function TimeRangeEditor({ dayName, initialRanges, onChange }: { dayName:
                 {TIME_SLOTS.map(time => <option key={`end-${time}`} value={time}>{time}</option>)}
               </select>
               
-              <button onClick={() => removeRange(index)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
+              <button onClick={() => removeRange(index)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" aria-label="Remove time range">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>

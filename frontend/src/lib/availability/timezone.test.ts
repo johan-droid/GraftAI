@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { convertSlotToTimezone } from './timezone';
-import type { TimeSlot } from './compute';
+import { convertSlotToTimezone } from './timezone.ts';
+import type { TimeSlot } from './compute.ts';
 
 test('convertSlotToTimezone - basic conversion UTC to America/New_York (EST)', () => {
   const slot: TimeSlot = {

@@ -1,3 +1,7 @@
 ## 2024-05-18 - [O(N) Complexity in React Render Loops]
 **Learning:** Re-evaluating large collections (like filtering 100+ events and parsing multiple Date objects) within a grid mapping (like a 35-day calendar grid) creates an O(N*M) time complexity during *each* render frame, drastically reducing UI responsiveness. The calendar view previously executed Date parses thousands of times per re-render.
 **Action:** Always pre-process flat lists into lookup maps (e.g. `Map<number, Event[]>`) using `useMemo` *before* the render loop, achieving O(1) lookups per grid cell.
+
+## 2024-06-25 - [Redundant Filter Computations in Child State Derivatives]
+**Learning:** Even when a parent lookup map (`Map<number, Event[]>`) is correctly memoized to achieve O(1) rendering, creating derived UI states (like `activeDayBookings` based on `activeDate`) by re-executing full collection iteration/filtering (`getDayBookings(activeDate, bookings)`) negates the optimization. This is an anti-pattern where a pre-computed map is bypassed for a specific selection state, causing unnecessary O(N) operations and Date parsing on every re-render or selection change.
+**Action:** When a UI selection (like a selected day) targets a subset of a dataset already pre-processed into a lookup map, always derive the selection directly from the map (`bookingsByDay.get(day)`) rather than running a fresh filter operation across the raw data list.

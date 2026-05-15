@@ -101,7 +101,18 @@ export default function HeavyTileCalendar() {
   }, [bookings, currentMonth]);
 
   const activeDate = useMemo(() => selectedDate ?? new Date(), [selectedDate]);
-  const activeDayBookings = useMemo(() => getDayBookings(activeDate, bookings), [activeDate, bookings]);
+
+  // Bolt Optimization: Retrieve bookings for the active date directly from the pre-computed bookingsByDay map (O(1))
+  // instead of iterating through all bookings and parsing Date objects again with getDayBookings (O(N)).
+  const activeDayBookings = useMemo(() => {
+    // Only use the map if the active date is in the current viewed month,
+    // otherwise fallback to getDayBookings for cross-month safety
+    if (activeDate.getFullYear() === currentMonth.getFullYear() && activeDate.getMonth() === currentMonth.getMonth()) {
+      return bookingsByDay.get(activeDate.getDate()) || [];
+    }
+    return getDayBookings(activeDate, bookings);
+  }, [activeDate, bookingsByDay, currentMonth, bookings]);
+
   const effectiveViewMode = isMobileScreen ? viewMode : "month";
 
   useEffect(() => {

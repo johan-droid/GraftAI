@@ -81,7 +81,7 @@ async def task_process_reminders(_ctx):
             and_(
                 EventTable.start_time >= now,
                 EventTable.start_time <= lookahead,
-                EventTable.is_reminded == False,
+                EventTable.is_reminded.is_(False),
             )
         )
         events = (await db.execute(stmt)).scalars().all()
@@ -123,7 +123,7 @@ async def task_send_booking_reminders(_ctx):
                     BookingTable.status.in_(["confirmed", "rescheduled", "accepted"]),
                     BookingTable.start_time >= window_start,
                     BookingTable.start_time <= window_end,
-                    BookingTable.is_reminder_sent == False,
+                    BookingTable.is_reminder_sent.is_(False),
                 )
             )
         )

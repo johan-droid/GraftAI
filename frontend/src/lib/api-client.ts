@@ -1,5 +1,6 @@
 import { getSession, signOut } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
+import { parseJsonSafe } from "./json-utils";
 
 // Normalize API base URL so frontend endpoint calls (which use paths like
 // "/analytics/summary") target the backend API prefix `/api/v1` even when
@@ -18,23 +19,6 @@ interface RequestOptions extends RequestInit {
 }
 
 class ApiClient {
-  private parseJsonSafe(text: string, status?: number): Record<string, unknown> {
-    if (!text || text.trim() === "") {
-      return {};
-    }
-
-    try {
-      return JSON.parse(text) as Record<string, unknown>;
-    } catch (e) {
-      const preview = text.substring(0, 400) + (text.length > 400 ? "..." : "");
-      console.warn(`[API] Failed to parse JSON response (Status: ${status || "unknown"}):`, {
-        error: e instanceof Error ? e.message : String(e),
-        preview,
-      });
-      return { __raw_text: preview };
-    }
-  }
-
   private async getHeaders(): Promise<HeadersInit> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -103,7 +87,7 @@ class ApiClient {
         }
 
         const responseText = await response.text();
-        const responseData = this.parseJsonSafe(responseText, response.status);
+        const responseData = parseJsonSafe(responseText, response.status);
 
         if (!response.ok) {
           if (response.status === 429) {
@@ -248,7 +232,7 @@ class ApiClient {
         }
 
         const text = await response.text();
-        const data = this.parseJsonSafe(text, response.status);
+        const data = parseJsonSafe(text, response.status);
 
         if (!response.ok) {
           const error = typeof data.error === "string" ? data.error : undefined;

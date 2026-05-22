@@ -31,10 +31,7 @@ jobs:
         working-directory: ./backend
         run: |
           uv venv .venv --python 3.12
-          uv pip install --python .venv/bin/python -r requirements.txt pytest-cov ruff
-      - name: Lint with Ruff
-        working-directory: ./backend
-        run: .venv/bin/ruff check .
+          uv pip install --python .venv/bin/python -r requirements.txt pytest-cov
       - name: Run Tests
         working-directory: ./
         run: backend/.venv/bin/python -m pytest backend/tests

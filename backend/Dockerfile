@@ -8,13 +8,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
 # Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
 # Copy dependency files first for caching
 COPY pyproject.toml requirements.txt* /app/
 # Install dependencies into /app/.venv
 RUN uv sync --no-dev --no-install-project
+
+# Lint stage: run ruff to enforce Python linting during Docker/Render builds
+FROM python:3.12-slim AS linter
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY . /app
+RUN python -m pip install --no-cache-dir ruff && ruff check .
 
 # 2. Production Runner
 FROM python:3.12-slim-bookworm AS runner

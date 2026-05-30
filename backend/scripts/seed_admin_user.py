@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import os
 import sys
-from typing import Optional
 
 from sqlalchemy import select
 
@@ -20,7 +19,7 @@ def parse_args():
     return parser.parse_args()
 
 
-async def seed_admin(email: str, username: Optional[str] = None) -> None:
+async def seed_admin(email: str, username: str | None = None) -> None:
     SessionLocal = get_async_session_maker()
     async with SessionLocal() as session:
         existing = await session.execute(
@@ -33,7 +32,7 @@ async def seed_admin(email: str, username: Optional[str] = None) -> None:
         user = UserTable(
             email=email,
             username=username,
-            full_name=username or email.split("@")[0],
+            full_name=username or email.split("@", maxsplit=1)[0],
             hashed_password=None,
             email_verified=True,
             tier="elite",

@@ -1,8 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { AuthLayout } from "@/components/auth/AuthLayout";
-import { OAuthButtons } from "@/components/auth/OAuthButtons";
+
+const OAuthButtons = dynamic(
+  () => import("@/components/auth/OAuthButtons").then((mod) => mod.OAuthButtons),
+  { ssr: false },
+);
 
 export default function SignupPage() {
   return (

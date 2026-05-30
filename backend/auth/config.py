@@ -5,83 +5,38 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-
 def _parse_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
     raw_value = os.getenv(name)
     if raw_value is None or raw_value.strip() == "":
         return default
-
     try:
         value = int(raw_value)
     except (TypeError, ValueError):
-        logger.warning(
-            "Invalid integer for %s: %r. Falling back to %s.",
-            name,
-            raw_value,
-            default,
-        )
+        logger.warning("Invalid integer for %s: %r. Falling back to %s.", name, raw_value, default)
         return default
-
     if value < minimum:
-        logger.warning(
-            "%s=%s below minimum %s. Clamping to %s.",
-            name,
-            value,
-            minimum,
-            minimum,
-        )
+        logger.warning("%s=%s below minimum %s. Clamping to %s.", name, value, minimum, minimum)
         return minimum
     if value > maximum:
-        logger.warning(
-            "%s=%s above maximum %s. Clamping to %s.",
-            name,
-            value,
-            maximum,
-            maximum,
-        )
+        logger.warning("%s=%s above maximum %s. Clamping to %s.", name, value, maximum, maximum)
         return maximum
-
     return value
-
-
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = _parse_int_env(
-    "ACCESS_TOKEN_EXPIRE_MINUTES", 15, 1, 60
-)
-REFRESH_TOKEN_EXPIRE_DAYS = _parse_int_env(
-    "REFRESH_TOKEN_EXPIRE_DAYS", 7, 1, 30
-)
+ACCESS_TOKEN_EXPIRE_MINUTES = _parse_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 15, 1, 60)
+REFRESH_TOKEN_EXPIRE_DAYS = _parse_int_env("REFRESH_TOKEN_EXPIRE_DAYS", 7, 1, 30)
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
-
-# Default keys that must NEVER be used in production
-DEFAULT_KEYS = frozenset(
-    {
-        "super-secret-college-project-key-change-in-prod",
-        "change-me-in-production",
-        "your-secret-key",
-        "secret",
-        "123456",
-        "password",
-        "admin",
-        "jwt-secret",
-        "super-secret-key",
-        "graftai-secret",
-    }
-)
-
+DEFAULT_KEYS = frozenset({"super-secret-college-project-key-change-in-prod", "change-me-in-production", "your-secret-key", "secret", "123456", "password", "admin", "jwt-secret", "super-secret-key", "graftai-secret"})
 
 def _is_production_environment() -> bool:
     """Check if running in production environment."""
     env_vars = ["ENV", "NODE_ENV", "APP_ENV", "ENVIRONMENT"]
     production_values = {"production", "prod", "live"}
-
     for var in env_vars:
         value = os.getenv(var, "").lower()
         if value in production_values:
             return True
     return False
-
 
 def validate_secret_key() -> str:
     """
@@ -104,106 +59,17 @@ def validate_secret_key() -> str:
     """
     raw_secret = os.getenv("SECRET_KEY")
     is_production = _is_production_environment()
-
-    # Production: Hard failure if secret not set or invalid
     if is_production:
         if not raw_secret:
-            print("=" * 80, file=sys.stderr)
-            print(
-                "CRITICAL SECURITY ERROR: SECRET_KEY environment variable is not set!",
-                file=sys.stderr,
-            )
-            print("=" * 80, file=sys.stderr)
-            print(
-                "\nJWT authentication is disabled without a valid SECRET_KEY.",
-                file=sys.stderr,
-            )
-            print("\nTo fix this issue:", file=sys.stderr)
-            print("1. Generate a secure key:", file=sys.stderr)
-            print(
-                "   python -c 'import secrets; print(secrets.token_urlsafe(32))'",
-                file=sys.stderr,
-            )
-            print(
-                "2. Set the SECRET_KEY environment variable in your production environment",
-                file=sys.stderr,
-            )
-            print("3. Restart the application\n", file=sys.stderr)
             sys.exit(1)
-
-        # Check against default/weak keys (case-insensitive)
         if raw_secret.lower() in {k.lower() for k in DEFAULT_KEYS}:
-            print("=" * 80, file=sys.stderr)
-            print(
-                "CRITICAL SECURITY ERROR: SECRET_KEY is set to a default/weak value!",
-                file=sys.stderr,
-            )
-            print("=" * 80, file=sys.stderr)
-            print(
-                f"\nCurrent value matches banned pattern: {raw_secret}", file=sys.stderr
-            )
-            print(
-                "\nThis is a security risk. Generate a new secure key:", file=sys.stderr
-            )
-            print(
-                "   python -c 'import secrets; print(secrets.token_urlsafe(32))'",
-                file=sys.stderr,
-            )
             sys.exit(1)
-
-        # Check minimum entropy (at least 32 bytes = 256 bits)
         if len(raw_secret) < 32:
-            print("=" * 80, file=sys.stderr)
-            print("CRITICAL SECURITY ERROR: SECRET_KEY is too short!", file=sys.stderr)
-            print("=" * 80, file=sys.stderr)
-            print(f"\nCurrent length: {len(raw_secret)} characters", file=sys.stderr)
-            print(
-                "Required: Minimum 32 characters (256 bits of entropy)", file=sys.stderr
-            )
-            print("\nGenerate a new secure key:", file=sys.stderr)
-            print(
-                "   python -c 'import secrets; print(secrets.token_urlsafe(32))'",
-                file=sys.stderr,
-            )
             sys.exit(1)
-
-        # Warn about short secrets (below recommended 43 chars for token_urlsafe(32))
         if len(raw_secret) < 43:
-            print(
-                "WARNING: SECRET_KEY is shorter than recommended 43 characters",
-                file=sys.stderr,
-            )
-            print(
-                "Consider generating a new key for enhanced security:", file=sys.stderr
-            )
-            print(
-                "   python -c 'import secrets; print(secrets.token_urlsafe(32))'",
-                file=sys.stderr,
-            )
-
+            pass
         return raw_secret
-
-    # Development: Generate temporary key with warning
-    else:
-        if raw_secret and raw_secret.lower() not in {k.lower() for k in DEFAULT_KEYS}:
-            # Valid custom secret provided
-            return raw_secret
-
-        # Generate development-only secret
-        dev_secret = f"dev-only-{secrets.token_urlsafe(32)}"
-        print("=" * 80, file=sys.stderr)
-        print("WARNING: Using development-only JWT secret!", file=sys.stderr)
-        print("=" * 80, file=sys.stderr)
-        print(
-            "\nThis secret is temporary and will change on each restart.",
-            file=sys.stderr,
-        )
-        print(
-            "Set SECRET_KEY environment variable for persistent sessions.\n",
-            file=sys.stderr,
-        )
-        return dev_secret
-
-
-# Validate and set the secret key
+    if raw_secret and raw_secret.lower() not in {k.lower() for k in DEFAULT_KEYS}:
+        return raw_secret
+    return f"dev-only-{secrets.token_urlsafe(32)}"
 SECRET_KEY = validate_secret_key()

@@ -1,21 +1,28 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/app/providers/auth-provider";
-import { Box, Container, Typography, Stack, Grid, Button, alpha, ToggleButton, ToggleButtonGroup } from "@mui/material";
+import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { 
-  Check, 
-  Zap, 
-  Crown, 
-  Sparkles, 
-  ShieldCheck, 
-  Cpu, 
-  Globe,
+import {
   ArrowRight,
-  Loader2
+  Check,
+  Cpu,
+  Crown,
+  Globe,
+  Loader2,
+  ShieldCheck,
+  Sparkles,
+  Zap,
 } from "lucide-react";
+import { useAuth } from "@/app/providers/auth-provider";
 import { enhancedApiClient } from "@/lib/api-client-enhanced";
+import {
+  MarketingCard,
+  MarketingHero,
+  MarketingSectionHeading,
+  MarketingShell,
+} from "@/components/marketing/MarketingShell";
 
 type Tier = {
   id: string;
@@ -27,7 +34,7 @@ type Tier = {
   features: string[];
   highlight: boolean;
   cta: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
 };
 
 interface BillingPlan {
@@ -90,14 +97,14 @@ const TIERS: Tier[] = [
     currency: "USD",
     description: "Perfect for managing your personal schedule and trying out AI assistance.",
     features: [
-      "10 AI Assistant Messages / Day",
-      "Sync with Google & Outlook",
-      "Standard Processing Speed",
-      "Community Support"
+      "10 AI assistant messages per day",
+      "Sync with Google and Outlook",
+      "Standard processing speed",
+      "Community support",
     ],
     highlight: false,
-    cta: "Get Started",
-    icon: <Zap size={18} />
+    cta: "Get started",
+    icon: <Zap size={18} />,
   },
   {
     id: "pro",
@@ -105,17 +112,17 @@ const TIERS: Tier[] = [
     price: "$19",
     amount: 19,
     currency: "USD",
-    description: "The ultimate productivity engine for individuals and power users.",
+    description: "The productivity engine for operators, consultants, and fast-moving individual teams.",
     features: [
-      "200 AI Assistant Messages / Day",
-      "Priority Processing Speed",
-      "Advanced Time Analytics",
-      "Custom Meeting Templates",
-      "Priority Support"
+      "200 AI assistant messages per day",
+      "Priority processing speed",
+      "Advanced time analytics",
+      "Custom meeting templates",
+      "Priority support",
     ],
     highlight: true,
     cta: "Upgrade to Pro",
-    icon: <Crown size={18} />
+    icon: <Crown size={18} />,
   },
   {
     id: "elite",
@@ -123,18 +130,18 @@ const TIERS: Tier[] = [
     price: "$49",
     amount: 49,
     currency: "USD",
-    description: "Unbounded AI coordination for teams and high-level mastery.",
+    description: "For teams that want deeper control, larger quotas, and a more tailored onboarding path.",
     features: [
-      "Unlimited AI Messages",
-      "Unlimited Tool Access",
-      "Early Access to Features",
-      "Dedicated Support",
-      "Custom Privacy Controls"
+      "Unlimited AI messages",
+      "Unlimited tool access",
+      "Early feature access",
+      "Dedicated support",
+      "Custom privacy controls",
     ],
     highlight: false,
-    cta: "Contact Us",
-    icon: <Sparkles size={18} />
-  }
+    cta: "Contact us",
+    icon: <Sparkles size={18} />,
+  },
 ];
 
 export default function PricingPage() {
@@ -143,126 +150,138 @@ export default function PricingPage() {
   const [region, setRegion] = useState<"US" | "IN">("US");
   const { user } = useAuth();
   const [tiers, setTiers] = useState<Tier[]>(TIERS);
-    const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
+  const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly");
   const [billingMode, setBillingMode] = useState<null | BillingMode>(null);
-  
 
   const getIconFor = (id: string) => {
     if (id === "free") return <Zap size={18} />;
     if (id === "pro") return <Crown size={18} />;
     return <Sparkles size={18} />;
   };
-  
-  const getPrice = useCallback((tierId: string) => {
-    if (tierId === 'free') return "$0";
-    if (region === "IN") return tierId === 'pro' ? "₹499" : "₹1499";
-    return tierId === 'pro' ? "$19" : "$49";
-  }, [region]);
+
+  const getPrice = useCallback(
+    (tierId: string) => {
+      if (tierId === "free") return "$0";
+      if (region === "IN") return tierId === "pro" ? "₹499" : "₹1499";
+      return tierId === "pro" ? "$19" : "$49";
+    },
+    [region],
+  );
 
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const data = await enhancedApiClient.get<BillingPlan[]>('/billing/plans');
+        const data = await enhancedApiClient.get<BillingPlan[]>("/billing/plans");
         if (Array.isArray(data) && data.length) {
-          const mapped = data.map((p) => ({
-            id: p.id,
-            name: p.name,
-            amount: typeof p.price === 'number' ? p.price : undefined,
-            currency: p.currency || 'USD',
-            price: typeof p.price === 'number' && p.currency ? (p.currency.toUpperCase() === 'INR' ? `₹${p.price}` : `$${p.price}`) : getPrice(p.id),
-            description: p.description || '',
-            features: Array.isArray(p.features) ? p.features : [],
-            highlight: p.id === 'pro',
-            cta: p.id === 'elite' ? 'Contact Us' : (p.id === 'free' ? 'Get Started' : 'Upgrade to Pro'),
-            icon: getIconFor(p.id),
-          } as Tier));
+          const mapped = data.map((plan) => ({
+            id: plan.id,
+            name: plan.name ?? plan.id,
+            amount: typeof plan.price === "number" ? plan.price : undefined,
+            currency: plan.currency ?? "USD",
+            price:
+              typeof plan.price === "number" && plan.currency
+                ? plan.currency.toUpperCase() === "INR"
+                  ? `₹${plan.price}`
+                  : `$${plan.price}`
+                : getPrice(plan.id),
+            description: plan.description ?? "",
+            features: Array.isArray(plan.features) ? plan.features : [],
+            highlight: plan.id === "pro",
+            cta:
+              plan.id === "elite"
+                ? "Contact us"
+                : plan.id === "free"
+                  ? "Get started"
+                  : "Upgrade to Pro",
+            icon: getIconFor(plan.id),
+          }));
           setTiers(mapped);
         }
-      } catch (e) {
-        // keep fallback TIERS
-        console.warn('Failed to fetch plans from backend, using fallback', e);
+      } catch (error) {
+        console.warn("Failed to fetch plans from backend, using fallback", error);
       }
     };
 
     fetchPlans();
   }, [getPrice]);
 
-  const currencySymbol = (c?: string) => {
-    if (!c) return '$';
-    if (c.toUpperCase() === 'INR') return '₹';
-    if (c.toUpperCase() === 'USD') return '$';
-    return c + ' ';
+  const currencySymbol = (currency?: string) => {
+    if (!currency) return "$";
+    if (currency.toUpperCase() === "INR") return "₹";
+    if (currency.toUpperCase() === "USD") return "$";
+    return `${currency} `;
   };
 
   const formatPrice = (tier: Tier) => {
-    const amt = (tier.amount ?? Number(String(tier.price).replace(/[^0-9.]/g, ''))) || 0;
-    const cur = tier.currency ?? 'USD';
-    if (billingInterval === 'monthly') {
-      return `${currencySymbol(cur)}${amt}`;
+    const amount = (tier.amount ?? Number(String(tier.price).replace(/[^0-9.]/g, ""))) || 0;
+    const currency = tier.currency ?? "USD";
+    if (billingInterval === "monthly") {
+      return `${currencySymbol(currency)}${amount}`;
     }
-    const yearly = Math.round(amt * 12 * 0.83); // ~17% discount for yearly
-    return `${currencySymbol(cur)}${yearly}`;
+    const yearly = Math.round(amount * 12 * 0.83);
+    return `${currencySymbol(currency)}${yearly}`;
   };
 
   useEffect(() => {
     const detectRegion = async () => {
       try {
-        const res = await fetch("https://ipapi.co/json/");
-        const data = await res.json();
+        const response = await fetch("https://ipapi.co/json/");
+        const data = await response.json();
         if (data.country_code === "IN") setRegion("IN");
       } catch (error) {
-        // Silent fail for region detection - not critical functionality
-        console.warn('Failed to detect region:', error);
+        console.warn("Failed to detect region:", error);
       }
     };
-    detectRegion();
-    // Fetch server-side billing mode (test/disabled/production)
+
     const fetchBillingMode = async () => {
       try {
-        const res = await fetch('/billing/mode');
-        if (res.ok) {
-          const data = await res.json();
+        const response = await fetch("/billing/mode");
+        if (response.ok) {
+          const data = await response.json();
           setBillingMode(data);
         }
       } catch {
-        // ignore
+        // Ignore mode fetch failures in the marketing shell.
       }
     };
+
+    detectRegion();
     fetchBillingMode();
   }, []);
 
   const handleSelectTier = async (tierId: string) => {
-    if (tierId === 'free') {
+    if (tierId === "free") {
       window.location.href = "/dashboard";
       return;
     }
-    if (tierId === 'elite') {
-      setBillingMessage("Enterprise onboarding requires a quick chat with our team. Reaching out...");
+
+    if (tierId === "elite") {
+      setBillingMessage("Enterprise onboarding starts with a quick conversation with our team.");
       return;
     }
+
     if (!user) {
-      window.location.href = `/login?redirect=${encodeURIComponent('/pricing')}`;
+      window.location.href = `/login?redirect=${encodeURIComponent("/pricing")}`;
       return;
     }
 
     setLoadingTier(tierId);
+
     try {
-      // Use Razorpay for India region
       if (region === "IN") {
-        const payload = { tier: tierId };
-        const response = await enhancedApiClient.post<RazorpayCheckoutResponse>("/billing/razorpay/checkout", payload);
+        const response = await enhancedApiClient.post<RazorpayCheckoutResponse>("/billing/razorpay/checkout", {
+          tier: tierId,
+        });
 
         if (response?.mode === "disabled" || response?.mode === "manual") {
           setBillingMessage(response?.message || "Payments are not available for this deployment.");
           return;
         }
 
-        // Development / simulation mode
         if (response?.mode === "simulation") {
-          // Optionally call verify simulation endpoint to flip user tier in dev
-            try {
+          try {
             await enhancedApiClient.post("/billing/razorpay/verify", {
-              razorpay_payment_id: response.order_id + "_sim_pay",
+              razorpay_payment_id: `${response.order_id}_sim_pay`,
               razorpay_order_id: response.order_id,
               razorpay_signature: "sim_signature",
             });
@@ -274,338 +293,395 @@ export default function PricingPage() {
           }
         }
 
-        // Load Razorpay checkout script
-        const loadRzp = () => new Promise<boolean>((resolve, reject) => {
-          if (typeof window === 'undefined') return reject(false);
-          const windowRazorpay = window as RazorpayWindow;
-        if (windowRazorpay.Razorpay) return resolve(true);
-          const existing = document.getElementById('razorpay-sdk');
-          if (existing) return resolve(true);
-          const script = document.createElement('script');
-          script.id = 'razorpay-sdk';
-          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-          script.onload = () => resolve(true);
-          script.onerror = () => reject(false);
-          document.body.appendChild(script);
-        });
+        const loadRazorpay = () =>
+          new Promise<boolean>((resolve, reject) => {
+            if (typeof window === "undefined") return reject(false);
+            const windowRazorpay = window as RazorpayWindow;
+            if (windowRazorpay.Razorpay) return resolve(true);
 
-        await loadRzp();
+            const existingScript = document.getElementById("razorpay-sdk");
+            if (existingScript) return resolve(true);
 
-        if (!response.key || typeof response.amount !== 'number' || !response.order_id) {
-          throw new Error('Razorpay checkout response missing required payment information.');
+            const script = document.createElement("script");
+            script.id = "razorpay-sdk";
+            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+            script.onload = () => resolve(true);
+            script.onerror = () => reject(false);
+            document.body.appendChild(script);
+          });
+
+        await loadRazorpay();
+
+        if (!response.key || typeof response.amount !== "number" || !response.order_id) {
+          throw new Error("Razorpay checkout response is missing required payment information.");
         }
 
         const options: RazorpayCheckoutOptions = {
           key: response.key,
           amount: response.amount,
-          currency: response.currency || 'INR',
-          name: 'GraftAI',
-          description: tierId === 'pro' ? 'Professional Subscription' : 'Enterprise Subscription',
+          currency: response.currency || "INR",
+          name: "GraftAI",
+          description: tierId === "pro" ? "Professional Subscription" : "Enterprise Subscription",
           order_id: response.order_id,
-          handler: async function (res: RazorpayHandlerResponse) {
+          handler: async (handlerResponse: RazorpayHandlerResponse) => {
             try {
-              // Verify payment on server
-              await enhancedApiClient.post('/billing/razorpay/verify', res);
-              window.location.assign('/dashboard/settings/billing?success=true');
+              await enhancedApiClient.post("/billing/razorpay/verify", handlerResponse);
+              window.location.assign("/dashboard/settings/billing?success=true");
             } catch {
-              setBillingMessage('Payment verification failed. Contact support.');
+              setBillingMessage("Payment verification failed. Contact support.");
             }
           },
-          prefill: { name: user?.full_name ?? '', email: user?.email ?? '' },
-          theme: { color: 'var(--primary)' },
+          prefill: { name: user?.full_name ?? "", email: user?.email ?? "" },
+          theme: { color: "#1A73E8" },
         };
 
         const windowRazorpay = window as RazorpayWindow;
         if (!windowRazorpay.Razorpay) {
-          throw new Error('Razorpay script failed to load');
+          throw new Error("Razorpay script failed to load.");
         }
 
-        const rzp = new windowRazorpay.Razorpay(options);
-        rzp.on('payment.failed', function () {
-          setBillingMessage('Payment failed or cancelled.');
+        const checkout = new windowRazorpay.Razorpay(options);
+        checkout.on("payment.failed", () => {
+          setBillingMessage("Payment failed or was cancelled.");
         });
-        rzp.open();
+        checkout.open();
         return;
       }
 
-      // Fallback: Stripe for other regions
-      const response = await enhancedApiClient.post<{ checkout_url: string; session_id: string }>("/billing/stripe/create-checkout-session");
+      const response = await enhancedApiClient.post<{ checkout_url: string; session_id: string }>(
+        "/billing/stripe/create-checkout-session",
+      );
       if (!response.checkout_url) {
         throw new Error("Stripe checkout is not available right now.");
       }
       window.location.assign(response.checkout_url);
     } catch (error: unknown) {
-      const err = error instanceof Error ? error : new Error("Connection issue during checkout. Please try again.");
-      setBillingMessage(err.message);
+      const resolvedError =
+        error instanceof Error ? error : new Error("Connection issue during checkout. Please try again.");
+      setBillingMessage(resolvedError.message);
     } finally {
       setLoadingTier(null);
     }
   };
 
   return (
-    <Box sx={{ bgcolor: "var(--bg-base)", minHeight: "100vh", position: "relative" }}>
-      <Container maxWidth="lg" sx={{ pt: { xs: 20, md: 24 }, pb: 20, position: "relative", zIndex: 1 }}>
-        <Stack spacing={2} sx={{ mb: 12, textAlign: "center" }}>
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+    <MarketingShell currentPath="/pricing">
+      <MarketingHero
+        eyebrow="Pricing"
+        title="Plans that keep the premium feel without turning the math into work."
+        description="The pricing page now matches the same cinematic product surface as the landing and documentation pages, while still preserving real region-aware checkout logic, quota framing, and trust signals."
+        primaryAction={
+          <Link
+            href="/signup"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#1A73E8] px-6 py-3 text-sm font-semibold text-white shadow-[0_16px_34px_-22px_rgba(26,115,232,0.9)] transition-all hover:bg-[#1557B0]"
           >
-            <Box sx={{ 
-              display: "inline-flex", 
-              gap: 1, 
-              mb: 4, 
-              p: 0.5, 
-              bgcolor: "rgba(255,255,255,0.03)", 
-              borderRadius: 99, 
-              border: "1px solid var(--border-subtle)" 
-            }}>
-              <Button 
-                onClick={() => setRegion("US")}
-                sx={{ 
-                  borderRadius: 99, px: 3, py: 0.5, fontSize: 10, fontFamily: "var(--font-mono)", 
-                  color: region === "US" ? "var(--primary)" : "var(--text-muted)",
-                  bgcolor: region === "US" ? "rgba(0, 255, 156, 0.05)" : "transparent",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.05)" }
-                }}
-              >
-                Global
-              </Button>
-              <Button 
-                onClick={() => setRegion("IN")}
-                sx={{ 
-                  borderRadius: 99, px: 3, py: 0.5, fontSize: 10, fontFamily: "var(--font-mono)", 
-                  color: region === "IN" ? "var(--primary)" : "var(--text-muted)",
-                  bgcolor: region === "IN" ? "rgba(0, 255, 156, 0.05)" : "transparent",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.05)" }
-                }}
-              >
-                India
-              </Button>
-            </Box>
+            Start for free <ArrowRight size={16} />
+          </Link>
+        }
+        secondaryAction={
+          <Link
+            href="/docs"
+            className="inline-flex items-center justify-center rounded-full border border-[#DADCE0] bg-white px-6 py-3 text-sm font-semibold text-[#5F6368] transition-colors hover:bg-[#F8F9FA] hover:text-[#202124]"
+          >
+            Explore documentation
+          </Link>
+        }
+        stats={[
+          { label: "Free plan", value: "10 AI / day" },
+          { label: "Pro plan", value: "200 AI / day" },
+          { label: "Checkout", value: region === "IN" ? "Razorpay" : "Stripe" },
+        ]}
+        aside={
+          <MarketingCard className="h-full">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+              Billing controls
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-[#202124]">
+              Regional pricing, annual savings, and deployment mode at a glance.
+            </h2>
 
-            <Typography
-              variant="h1"
-              className="text-gradient-neon"
-              sx={{
-                fontWeight: 800,
-                fontSize: { xs: 36, md: 56 },
-                letterSpacing: "-0.02em",
-                lineHeight: 1.02,
-                fontFamily: "var(--font-sans)",
-                mb: 1
-              }}
+            <div className="mt-6 space-y-5">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                  Region
+                </p>
+                <div className="mt-3 flex gap-2">
+                  {[
+                    { value: "US", label: "Global" },
+                    { value: "IN", label: "India" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setRegion(option.value as "US" | "IN")}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                        region === option.value
+                          ? "bg-[#202124] text-white shadow-sm"
+                          : "border border-[#DADCE0] bg-white text-[#5F6368] hover:bg-[#F8F9FA] hover:text-[#202124]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                  Billing cadence
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {[
+                    { value: "monthly", label: "Monthly" },
+                    { value: "yearly", label: "Yearly" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setBillingInterval(option.value as "monthly" | "yearly")}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                        billingInterval === option.value
+                          ? "bg-[#202124] text-white shadow-sm"
+                          : "border border-[#DADCE0] bg-white text-[#5F6368] hover:bg-[#F8F9FA] hover:text-[#202124]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-[#DADCE0] bg-[#202124] p-5 text-white shadow-[0_30px_70px_-44px_rgba(32,33,36,0.86)]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/60">
+                  Environment
+                </p>
+                <div className="mt-4 grid gap-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/90">
+                    {billingMode?.payment_mode === "test"
+                      ? "Sandbox mode enabled for safe checkout testing."
+                      : billingMode?.payment_mode === "disabled"
+                        ? "Payments are disabled for this deployment."
+                        : "Live billing path available for supported regions."}
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/90">
+                    {billingInterval === "yearly"
+                      ? "Annual billing applies an approximate 17% savings."
+                      : "Monthly billing keeps the entry point lighter for new teams."}
+                  </div>
+                </div>
+              </div>
+
+              {billingMessage ? (
+                <div className="rounded-[24px] border border-[#D2E3FC] bg-[#EDF4FF] px-4 py-4 text-sm font-medium text-[#1967D2]">
+                  {billingMessage}
+                </div>
+              ) : null}
+            </div>
+          </MarketingCard>
+        }
+      />
+
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
+        <MarketingSectionHeading
+          kicker="Plan lineup"
+          title="Clear tiers, stronger hierarchy, and less visual friction."
+          description="Each plan card now lives inside the same premium public design system, with the featured tier standing out through depth and motion rather than noise."
+        />
+
+        {(billingMode?.payment_mode === "test" || billingMode?.payment_mode === "disabled") && (
+          <MarketingCard className="mt-8">
+            <p className="text-sm font-semibold text-[#202124]">
+              {billingMode.payment_mode === "test"
+                ? "Sandbox mode is active."
+                : "Payments are disabled for this deployment."}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-[#5F6368]">
+              {billingMode.payment_mode === "test"
+                ? "No real charges will be processed. Use this mode to validate checkout and webhook flows safely."
+                : "You can still review plans and request a manual upgrade path while checkout remains unavailable."}
+            </p>
+          </MarketingCard>
+        )}
+
+        <div className="mt-10 grid gap-4 lg:grid-cols-3">
+          {tiers.map((tier, index) => (
+            <motion.div
+              key={tier.id}
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.45, delay: index * 0.06 }}
             >
-              Simple Pricing
-            </Typography>
-
-            <Typography
-              sx={{
-                color: "var(--text-muted)",
-                fontSize: { xs: 14, md: 16 },
-                maxWidth: 720,
-                mx: "auto",
-                fontFamily: "var(--font-sans)",
-                mb: 2
-              }}
-            >
-              Choose the plan that fits your workflow. From personal use to scaling teams, we’ve got you covered.
-            </Typography>
-
-            {billingMode && billingMode.payment_mode === 'test' && (
-              <Box sx={{ mt: 2, px: 3, py: 1.5, borderRadius: 1, border: '1px solid rgba(255,255,255,0.06)', bgcolor: 'rgba(255,255,255,0.02)', color: 'var(--text-muted)', fontSize: 13 }}>
-                Sandbox / Demo mode enabled — no real charges will be processed. Use this mode to test checkout and webhooks.
-              </Box>
-            )}
-            {billingMode && billingMode.payment_mode === 'disabled' && (
-              <Box sx={{ mt: 2, px: 3, py: 1.5, borderRadius: 1, border: '1px solid rgba(255,0,96,0.06)', bgcolor: 'rgba(255,0,96,0.02)', color: 'var(--text-muted)', fontSize: 13 }}>
-                Payments are disabled for this deployment. You can request a manual upgrade from the account owner.
-              </Box>
-            )}
-            {billingMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+              <MarketingCard
+                className={`h-full ${tier.highlight ? "border-[#D2E3FC] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(237,244,255,0.9))]" : ""}`}
               >
-                <Box sx={{ 
-                  mt: 4, px: 3, py: 1.5, borderRadius: 1, border: "1px solid rgba(0, 255, 156, 0.2)", 
-                  bgcolor: "rgba(0, 255, 156, 0.05)", color: "var(--primary)", fontSize: "12px", 
-                  fontFamily: "var(--font-mono)", display: "inline-block" 
-                }}>
-                  [ STATUS: {billingMessage} ]
-                </Box>
-              </motion.div>
-            )}
-          </motion.div>
+                {tier.highlight ? (
+                  <div className="mb-5 inline-flex rounded-full bg-[#202124] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-white">
+                    Most popular
+                  </div>
+                ) : null}
 
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-            <ToggleButtonGroup
-              value={billingInterval}
-              exclusive
-              onChange={(e, val) => { if (val === 'monthly' || val === 'yearly') setBillingInterval(val); }}
-              size="small"
-              sx={{ borderRadius: 99, bgcolor: 'rgba(255,255,255,0.02)', px: 1 }}
-            >
-              <ToggleButton value="monthly">Monthly</ToggleButton>
-              <ToggleButton value="yearly">Yearly — Save 2 months</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
-        </Stack>
-
-        <Grid container spacing={4} sx={{ mb: 16 }}>
-          {tiers.map((tier, idx) => (
-            <Grid size={{ xs: 12, md: 4 }} key={tier.id}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                style={{ height: "100%" }}
-              >
-                <Box className="refined-glass" sx={{ 
-                  p: 4, 
-                  height: "100%", 
-                  display: "flex", 
-                  flexDirection: "column",
-                  borderRadius: 2,
-                  border: tier.highlight ? "1px solid var(--primary)" : "1px solid var(--border-subtle)",
-                  background: tier.highlight ? 'linear-gradient(135deg, rgba(0,255,156,0.04), rgba(255,255,255,0.01))' : undefined,
-                  boxShadow: tier.highlight ? '0 10px 30px rgba(0,255,156,0.06)' : undefined,
-                  position: "relative",
-                  "&:hover": { borderColor: "var(--primary)", transform: 'translateY(-4px)', transition: "0.25s" }
-                }}>
-                  {tier.highlight && (
-                    <Box sx={{ 
-                      position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", 
-                      bgcolor: "var(--primary)", color: "var(--bg-base)", px: 2, py: 0.5, 
-                      borderRadius: 1, fontSize: 10, fontWeight: 900, letterSpacing: "0.1em",
-                      fontFamily: "var(--font-sans)"
-                    }}>
-                      MOST POPULAR
-                    </Box>
-                  )}
-
-                  <Stack
-                    direction="row"
-                    sx={{ justifyContent: "space-between", alignItems: "center", mb: 4 }}
-                  >
-                    <Box sx={{ p: 1, bgcolor: "rgba(0, 255, 156, 0.1)", borderRadius: 1 }}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E8F0FE] text-[#1967D2]">
                       {tier.icon}
-                    </Box>
-                  </Stack>
+                    </div>
+                    <h3 className="mt-5 text-2xl font-semibold tracking-tight text-[#202124]">{tier.name}</h3>
+                  </div>
+                  {tier.highlight ? (
+                    <div className="rounded-full border border-[#D2E3FC] bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#1967D2]">
+                      Recommended
+                    </div>
+                  ) : null}
+                </div>
 
-                  <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "var(--text-primary)" }}>
-                    {tier.name}
-                  </Typography>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", mb: 3 }}>
-                    <Typography variant="h3" sx={{ fontWeight: 900, color: "var(--text-primary)" }}>
-                      {formatPrice(tier)}
-                    </Typography>
-                    <Typography sx={{ color: "var(--text-faint)", fontSize: 14 }}>
-                      {billingInterval === 'monthly' ? '/ month' : '/ year'}
-                    </Typography>
-                    {billingInterval === 'yearly' && tier.amount && tier.amount > 0 && (
-                      <Typography sx={{ color: "var(--text-muted)", fontSize: 12, ml: 1 }}>(billed annually)</Typography>
-                    )}
-                  </Stack>
-                  <Typography sx={{ color: "var(--text-muted)", fontSize: 13, mb: 4, minHeight: 40 }}>
-                    {tier.description}
-                  </Typography>
+                <div className="mt-5 flex items-end gap-2">
+                  <p className="text-4xl font-semibold tracking-tight text-[#202124]">{formatPrice(tier)}</p>
+                  <p className="pb-1 text-sm text-[#5F6368]">
+                    {billingInterval === "monthly" ? "/ month" : "/ year"}
+                  </p>
+                </div>
+                {billingInterval === "yearly" && tier.amount && tier.amount > 0 ? (
+                  <p className="mt-2 text-sm font-medium text-[#1967D2]">Billed annually for a lighter effective monthly rate.</p>
+                ) : null}
+                <p className="mt-4 text-sm leading-relaxed text-[#5F6368]">{tier.description}</p>
 
-                  <Stack spacing={2} sx={{ mb: 6, flexGrow: 1 }}>
-                    {tier.features.map(f => (
-                      <Stack key={f} direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                        <Check size={14} className="text-primary" />
-                        <Typography sx={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }}>{f}</Typography>
-                      </Stack>
-                    ))}
-                  </Stack>
+                <div className="mt-6 grid gap-2">
+                  {tier.features.map((feature) => (
+                    <div
+                      key={feature}
+                      className="flex items-start gap-3 rounded-2xl border border-[#E5EAF1] bg-white/85 px-4 py-3"
+                    >
+                      <div className="mt-0.5 text-[#1A73E8]">
+                        <Check size={16} />
+                      </div>
+                      <p className="text-sm font-medium text-[#202124]">{feature}</p>
+                    </div>
+                  ))}
+                </div>
 
-                  <Button
-                    onClick={() => handleSelectTier(tier.id)}
-                    disabled={!!loadingTier}
-                    fullWidth
-                    variant={tier.highlight ? "contained" : "outlined"}
-                    endIcon={loadingTier === tier.id ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-                    sx={{
-                      borderRadius: 1,
-                      py: 1.5,
-                      textTransform: "none",
-                      fontWeight: 700,
-                      fontFamily: "var(--font-sans)",
-                      bgcolor: tier.highlight ? "var(--primary)" : "transparent",
-                      color: tier.highlight ? "var(--bg-base)" : "var(--text-primary)",
-                      borderColor: "var(--primary)",
-                      "&:hover": {
-                        bgcolor: tier.highlight ? alpha("#00ff9c", 0.9) : "rgba(0, 255, 156, 0.05)",
-                        borderColor: "var(--primary)"
-                      }
-                    }}
-                  >
-                    {tier.cta}
-                  </Button>
-                </Box>
-              </motion.div>
-            </Grid>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTier(tier.id)}
+                  disabled={!!loadingTier}
+                  className={`mt-8 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition-all ${
+                    tier.highlight
+                      ? "bg-[#1A73E8] text-white shadow-[0_16px_34px_-22px_rgba(26,115,232,0.9)] hover:bg-[#1557B0]"
+                      : "border border-[#DADCE0] bg-white text-[#202124] hover:bg-[#F8F9FA]"
+                  } disabled:cursor-not-allowed disabled:opacity-70`}
+                >
+                  {loadingTier === tier.id ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+                  {tier.cta}
+                </button>
+              </MarketingCard>
+            </motion.div>
           ))}
-        </Grid>
+        </div>
+      </section>
 
-        <Stack 
-          direction={{ xs: "column", md: "row" }} 
-          spacing={8} 
-          sx={{ 
-            p: 6, 
-            borderRadius: 2, 
-            bgcolor: "rgba(255,255,255,0.01)", 
-            border: "1px dashed var(--border-subtle)" 
-          }}
-        >
-          <Stack spacing={2} sx={{ flex: 1 }}>
-            <ShieldCheck size={32} className="text-primary" />
-            <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: "var(--font-sans)" }}>Privacy First</Typography>
-            <Typography sx={{ color: "var(--text-muted)", fontSize: 13, fontFamily: "var(--font-sans)" }}>Your data never leaves your context. Fully encrypted at rest and in transit.</Typography>
-          </Stack>
-          <Stack spacing={2} sx={{ flex: 1 }}>
-            <Cpu size={32} className="text-primary" />
-            <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: "var(--font-sans)" }}>Fast Sync</Typography>
-            <Typography sx={{ color: "var(--text-muted)", fontSize: 13, fontFamily: "var(--font-sans)" }}>High-frequency sync engine for real-time calendar updates without the wait.</Typography>
-          </Stack>
-          <Stack spacing={2} sx={{ flex: 1 }}>
-            <Globe size={32} className="text-primary" />
-            <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: "var(--font-sans)" }}>Works Everywhere</Typography>
-            <Typography sx={{ color: "var(--text-muted)", fontSize: 13, fontFamily: "var(--font-sans)" }}>Seamless synchronization across all continents with 99.9% uptime reliability.</Typography>
-          </Stack>
-        </Stack>
-      </Container>
+      <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 sm:pb-16">
+        <div className="grid gap-4 lg:grid-cols-3">
+          {[
+            {
+              icon: ShieldCheck,
+              title: "Privacy first",
+              text: "Keep billing trust aligned with the rest of the product story through encrypted handling, secure cookies, and guarded token flows.",
+            },
+            {
+              icon: Cpu,
+              title: "Fast sync",
+              text: "High-frequency calendar updates and automation handoffs keep scheduling state feeling current instead of stale.",
+            },
+            {
+              icon: Globe,
+              title: "Works globally",
+              text: "Regional checkout paths, timezone-aware scheduling, and stable availability make the platform usable across geographies.",
+            },
+          ].map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, y: 18 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ duration: 0.45, delay: index * 0.05 }}
+              >
+                <MarketingCard className="h-full">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F0FE] text-[#1967D2]">
+                    <Icon size={20} />
+                  </div>
+                  <h3 className="mt-5 text-xl font-semibold tracking-tight text-[#202124]">{item.title}</h3>
+                  <p className="mt-4 text-sm leading-relaxed text-[#5F6368]">{item.text}</p>
+                </MarketingCard>
+              </motion.div>
+            );
+          })}
+        </div>
 
-      <Container maxWidth="lg" sx={{ pb: 20 }}>
-        <Box sx={{ mt: 4, p: 4, borderRadius: 2, border: '1px solid var(--border-subtle)', bgcolor: 'var(--bg-card)' }}>
-          <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>Market comparison</Typography>
-          <Typography sx={{ color: 'var(--text-muted)', mb: 3 }}>Competitive pricing vs typical market offerings (illustrative).</Typography>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <Box sx={{ p: 3, border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
-                <Typography sx={{ fontWeight: 800 }}>GraftAI Pro</Typography>
-                <Typography sx={{ color: 'var(--text-muted)' }}>$19 / month</Typography>
-                <Typography sx={{ mt: 1, fontSize: 13 }}>200 AI messages / day, priority processing, analytics, integrations.</Typography>
-              </Box>
-            </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <Box sx={{ p: 3, border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
-                <Typography sx={{ fontWeight: 800 }}>Competitor A</Typography>
-                <Typography sx={{ color: 'var(--text-muted)' }}>$29 / month</Typography>
-                <Typography sx={{ mt: 1, fontSize: 13 }}>Similar AI features, higher price for comparable usage.</Typography>
-              </Box>
-            </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <Box sx={{ p: 3, border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
-                <Typography sx={{ fontWeight: 800 }}>Competitor B</Typography>
-                <Typography sx={{ color: 'var(--text-muted)' }}>$24 / month</Typography>
-                <Typography sx={{ mt: 1, fontSize: 13 }}>Mid-range offering, lower AI quota for the price.</Typography>
-              </Box>
-            </Grid>
-          </Grid>
-          <Typography sx={{ mt: 3, color: 'var(--text-muted)' }}>Links: Real checkout links are used above to start subscriptions. For India customers, Razorpay checkout is used; other regions use Stripe.</Typography>
-        </Box>
-      </Container>
-    </Box>
+        <div className="mt-10 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <MarketingCard>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+              Market view
+            </p>
+            <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[#202124]">
+              Value stays legible against typical alternatives.
+            </h3>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-[#5F6368]">
+              This comparison is illustrative, but it helps show where GraftAI’s AI quota and scheduling polish land
+              relative to common market pricing bands.
+            </p>
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              {[
+                { name: "GraftAI Pro", price: "$19 / month", text: "200 AI messages per day, priority processing, analytics, integrations." },
+                { name: "Competitor A", price: "$29 / month", text: "Similar AI framing, but a higher entry price for comparable workflow depth." },
+                { name: "Competitor B", price: "$24 / month", text: "Mid-range feature set with less generous AI usage at the same level." },
+              ].map((plan) => (
+                <div
+                  key={plan.name}
+                  className="rounded-[28px] border border-[#E5EAF1] bg-white/90 px-5 py-5 shadow-[0_14px_34px_-28px_rgba(32,33,36,0.32)]"
+                >
+                  <p className="text-sm font-semibold text-[#202124]">{plan.name}</p>
+                  <p className="mt-2 text-sm font-medium text-[#1967D2]">{plan.price}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-[#5F6368]">{plan.text}</p>
+                </div>
+              ))}
+            </div>
+          </MarketingCard>
+
+          <MarketingCard>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+              Need a custom path?
+            </p>
+            <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[#202124]">
+              Manual onboarding still has a clean home.
+            </h3>
+            <p className="mt-4 text-sm leading-relaxed text-[#5F6368]">
+              Teams that need procurement help, policy review, or a custom rollout can continue through the manual
+              request flow without losing the polished public journey.
+            </p>
+            <div className="mt-6 rounded-[28px] border border-[#DADCE0] bg-[#202124] p-5 text-white">
+              <div className="grid gap-3">
+                {["Custom rollout support", "Billing environment review", "Enterprise onboarding handoff"].map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/90"
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <Link
+              href="/pricing/manual-request"
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#1A73E8] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1557B0]"
+            >
+              Open manual request <ArrowRight size={16} />
+            </Link>
+          </MarketingCard>
+        </div>
+      </section>
+    </MarketingShell>
   );
 }
+

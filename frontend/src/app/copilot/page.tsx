@@ -119,6 +119,9 @@ export default function CopilotPage() {
         message: finalContent,
         conversation_id: conversationId || undefined,
       });
+      const safeContent = typeof response.content === "string" && response.content.trim().length > 0
+        ? response.content
+        : "I processed your request, but no response text was returned. Please try again.";
       
       const phasesArray: AgentPhase[] = response.phases
         ? Object.entries(response.phases).map(([name, phase]) => ({
@@ -131,7 +134,7 @@ export default function CopilotPage() {
       const aiResponse: Message = {
         id: response.id || Date.now().toString(),
         role: "assistant",
-        content: response.content,
+        content: safeContent,
         timestamp: new Date(response.timestamp || Date.now()),
         agentExecuted: response.agent_executed,
         agentType: response.agent_type,

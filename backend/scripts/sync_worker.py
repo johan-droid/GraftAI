@@ -1,16 +1,16 @@
 import asyncio
 import logging
-import time
 import os
 import sys
+import time
 from pathlib import Path
 
 # Fix module resolution
 ROOT_DIR = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT_DIR))
 
-from sqlalchemy import select
 from dotenv import load_dotenv
+from sqlalchemy import select
 
 # Setup logging
 from backend.utils.logger import configure_logging
@@ -28,9 +28,12 @@ from backend.services.sync_engine import sync_google_events, sync_ms_graph_event
 # Connection logic for Neon (SSL)
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL not found")
+    msg = "DATABASE_URL not found"
+    raise RuntimeError(msg)
 
 # Use existing engine if available, or create new specialized worker engine
+import contextlib
+
 from backend.utils.db import AsyncSessionLocal
 
 SYNC_INTERVAL_SECONDS = 300  # 5 minutes
@@ -48,7 +51,7 @@ async def perform_sync_cycle():
     active_tokens = []
     async with AsyncSessionLocal() as db:
         stmt = select(UserTokenTable.id, UserTokenTable.provider).where(
-            UserTokenTable.is_active == True
+            UserTokenTable.is_active
         )
         result = await db.execute(stmt)
         active_tokens = result.all()  # Returns list of (id, provider)
@@ -83,7 +86,7 @@ async def perform_sync_cycle():
 
         except Exception as e:
             error_msg = str(e).lower()
-            logger.error(f"❌ Failed to sync {provider} (ID: {token_id}): {e}")
+            logger.exception(f"❌ Failed to sync {provider} (ID: {token_id}): {e}")
 
             # If it's a connection-level error, we might want to dispose the engine pool
             if "connection was closed" in error_msg or "interfaceerror" in error_msg:
@@ -108,8 +111,9 @@ async def worker_loop():
     logger.info("🚀 GraftAI Smart Sync Worker started.")
     # Ensure compatibility with older DB schemas (add description column if missing)
     try:
-        from backend.utils.db import engine, DATABASE_URL
         from sqlalchemy import text
+
+        from backend.utils.db import DATABASE_URL, engine
 
         if engine is not None and DATABASE_URL is not None:
             async with engine.begin() as conn:
@@ -153,14 +157,12 @@ async def worker_loop():
 
             logger.info(f"💤 Sleeping for {SYNC_INTERVAL_SECONDS} seconds...")
             # Wait for sleep OR stop event
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop_event.wait(), timeout=SYNC_INTERVAL_SECONDS)
-            except asyncio.TimeoutError:
-                pass
     finally:
         logger.info("🧹 Performing final cleanup...")
-        from backend.utils.db import engine
         from backend.utils.cache import get_redis_client
+        from backend.utils.db import engine
 
         # Dispose engine pool
         await engine.dispose()
@@ -179,4 +181,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        logger.error(f"Unexpected exit: {e}")
+        logger.exception(f"Unexpected exit: {e}")

@@ -54,8 +54,9 @@ async def migrate_oauth_token_encryption() -> None:
             elif access_needs_upgrade and access_plain:
                 encrypted_access_token = encrypt_token_value(access_plain)
                 if encrypted_access_token is None:
+                    msg = f"Failed to encrypt access_token for token ID {record.id}"
                     raise RuntimeError(
-                        f"Failed to encrypt access_token for token ID {record.id}"
+                        msg
                     )
                 record.access_token = encrypted_access_token
                 changed = True
@@ -68,8 +69,9 @@ async def migrate_oauth_token_encryption() -> None:
             elif refresh_needs_upgrade and refresh_plain:
                 encrypted_refresh_token = encrypt_token_value(refresh_plain)
                 if encrypted_refresh_token is None:
+                    msg = f"Failed to encrypt refresh_token for token ID {record.id}"
                     raise RuntimeError(
-                        f"Failed to encrypt refresh_token for token ID {record.id}"
+                        msg
                     )
                 record.refresh_token = encrypted_refresh_token
                 changed = True

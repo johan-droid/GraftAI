@@ -55,7 +55,9 @@ if (googleOAuth.clientId && googleOAuth.clientSecret) {
             "https://www.googleapis.com/auth/calendar.events",
           ].join(" "),
           access_type: "offline",
-          prompt: "consent",
+          // Avoid forcing consent on every login. This keeps returning users in
+          // a normal sign-in path while preserving existing refresh tokens.
+          prompt: "select_account",
         },
       },
     })

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import os
 import sqlite3
-from pathlib import Path
 import sys
+from pathlib import Path
 
 
 def get_database_url():
@@ -19,8 +19,7 @@ def get_database_url():
                     continue
                 if line.startswith("DATABASE_URL="):
                     val = line.split("=", 1)[1]
-                    val = val.strip().strip('"').strip("'")
-                    return val
+                    return val.strip().strip('"').strip("'")
     return None
 
 
@@ -30,7 +29,8 @@ def sqlite_db_path_from_url(url: str) -> str:
     elif url.startswith("sqlite:///"):
         path = url[len("sqlite:///"):]
     else:
-        raise ValueError(f"Not a sqlite URL: {url}")
+        msg = f"Not a sqlite URL: {url}"
+        raise ValueError(msg)
     base = Path(__file__).resolve().parents[1]
     db_path = (base / path).resolve()
     return str(db_path)
@@ -38,10 +38,12 @@ def sqlite_db_path_from_url(url: str) -> str:
 
 import re
 
+
 def ensure_columns(conn: sqlite3.Connection, table: str, columns_to_add: dict) -> list:
     # Strictly validate table name to prevent SQL injection in ALTER TABLE
     if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table):
-        raise ValueError(f"Invalid table name: {table}")
+        msg = f"Invalid table name: {table}"
+        raise ValueError(msg)
 
     cur = conn.cursor()
     cur.execute("SELECT name FROM pragma_table_info(?)", (table,))
@@ -50,12 +52,14 @@ def ensure_columns(conn: sqlite3.Connection, table: str, columns_to_add: dict) -
     for name, sql in columns_to_add.items():
         # Validate column name and SQL declaration
         if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
-            raise ValueError(f"Invalid column name: {name}")
+            msg = f"Invalid column name: {name}"
+            raise ValueError(msg)
 
         # Basic check for the SQL declaration part to prevent injection
         # Allow alphanumeric, spaces, parentheses (for VARCHAR(N)), commas, and single quotes (for DEFAULT values)
         if not re.match(r"^[a-zA-Z0-9_ (),']+$", sql):
-            raise ValueError(f"Invalid column declaration: {sql}")
+            msg = f"Invalid column declaration: {sql}"
+            raise ValueError(msg)
 
         if name not in existing:
             print(f"Adding column {name} ...")
@@ -100,5 +104,5 @@ def main():
     conn.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

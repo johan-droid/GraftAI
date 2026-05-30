@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/auth/AuthLayout";
-import { OAuthButtons } from "@/components/auth/OAuthButtons";
+
+const OAuthButtons = dynamic(
+  () => import("@/components/auth/OAuthButtons").then((mod) => mod.OAuthButtons),
+  { ssr: false },
+);
 
 function isValidCallbackUrl(value: string | null): value is string {
   if (!value || value.trim() === "") return false;

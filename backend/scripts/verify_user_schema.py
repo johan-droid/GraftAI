@@ -6,24 +6,23 @@ compares them with SQLite's PRAGMA table_info, and issues ALTER TABLE statements
 to add any missing columns (development convenience only).
 
 Run from repository root:
-  .venv\Scripts\python.exe backend\scripts\verify_user_schema.py
+  .venv\\Scripts\\python.exe backend\\scripts\verify_user_schema.py
 """
-from pathlib import Path
-import sys
-import sqlite3
-import traceback
 import re
-
+import sqlite3
+import sys
+import traceback
+from pathlib import Path
 
 # Ensure repo root is on sys.path so `import backend.models.tables` works
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from typing import List
 
 try:
+    from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text
+
     from backend.models.tables import UserTable, UserTokenTable
-    from sqlalchemy import String, Text, Integer, Boolean, DateTime, JSON, Float
 except Exception as e:
     print("Failed to import models:", e)
     raise
@@ -33,7 +32,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 DB_PATH = BACKEND_DIR / "dev.db"
 
 
-def get_actual_columns(conn: sqlite3.Connection, table: str) -> List[str]:
+def get_actual_columns(conn: sqlite3.Connection, table: str) -> list[str]:
     cur = conn.cursor()
     cur.execute("SELECT name FROM pragma_table_info(?)", (table,))
     rows = cur.fetchall()
@@ -53,10 +52,7 @@ def add_column_sqlalchemy_column(col) -> str:
     default_clause = ""
 
     try:
-        if isinstance(ctype, Boolean):
-            sql_type = "INTEGER"
-            default_clause = "DEFAULT 0" if not col.nullable else ""
-        elif isinstance(ctype, Integer):
+        if isinstance(ctype, (Boolean, Integer)):
             sql_type = "INTEGER"
             default_clause = "DEFAULT 0" if not col.nullable else ""
         elif isinstance(ctype, DateTime):
@@ -70,8 +66,7 @@ def add_column_sqlalchemy_column(col) -> str:
     except Exception:
         sql_type = "TEXT"
 
-    decl = f"{colname} {sql_type} {default_clause}".strip()
-    return decl
+    return f"{colname} {sql_type} {default_clause}".strip()
 
 
 def verify_and_fix():
@@ -108,10 +103,12 @@ def verify_and_fix():
                     decl = add_column_sqlalchemy_column(col)
                     # Strictly validate to prevent injection in ALTER TABLE
                     if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", tbl_name):
-                        raise ValueError(f"Invalid table name: {tbl_name}")
+                        msg = f"Invalid table name: {tbl_name}"
+                        raise ValueError(msg)
                     # Allow alphanumeric, spaces, parentheses, commas, and single quotes
                     if not re.match(r"^[a-zA-Z0-9_ (),']+$", decl):
-                        raise ValueError(f"Invalid column declaration: {decl}")
+                        msg = f"Invalid column declaration: {decl}"
+                        raise ValueError(msg)
 
                     sql = f"ALTER TABLE {tbl_name} ADD COLUMN {decl};"
                     print("    Executing:", sql)
@@ -152,4 +149,4 @@ def verify_and_fix():
 
 
 if __name__ == "__main__":
-    exit(verify_and_fix())
+    sys.exit(verify_and_fix())

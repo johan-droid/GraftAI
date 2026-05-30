@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import text
+
 from backend.utils.db import get_async_session_maker
 
 
@@ -23,9 +24,9 @@ async def migrate_calendar_schema():
         try:
             # Check if columns already exist
             check_query = text("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'events' 
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'events'
                 AND column_name IN ('description', 'location')
             """)
             result = await db.execute(check_query)
@@ -40,7 +41,7 @@ async def migrate_calendar_schema():
                 print("📝 Adding 'description' column...")
                 await db.execute(
                     text("""
-                    ALTER TABLE events 
+                    ALTER TABLE events
                     ADD COLUMN IF NOT EXISTS description TEXT
                 """)
                 )
@@ -51,7 +52,7 @@ async def migrate_calendar_schema():
                 print("📍 Adding 'location' column...")
                 await db.execute(
                     text("""
-                    ALTER TABLE events 
+                    ALTER TABLE events
                     ADD COLUMN IF NOT EXISTS location VARCHAR
                 """)
                 )

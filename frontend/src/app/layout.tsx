@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Outfit, Permanent_Marker, Plus_Jakarta_Sans } from "next/font/google";
-import { SessionProvider } from "next-auth/react";
 import { AuthProvider } from "./providers/auth-provider";
 import { QueryProvider } from "./providers/query-provider";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import ThemeRegistry from "@/theme/ThemeRegistry";
 import { Toaster } from "@/components/ui/Toast";
+import { auth } from "@/auth";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -37,29 +37,29 @@ export const metadata: Metadata = {
   description: "Scheduling, simplified by AI.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await auth();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${plusJakartaSans.variable} ${jetBrainsMono.variable} ${outfit.variable} ${permanentMarker.variable} min-h-dvh overflow-x-hidden font-sans antialiased text-[#202124] bg-[#F8F9FA]`}
       >
-        <SessionProvider>
-          <AuthProvider>
-            <QueryProvider>
-              <ThemeProvider>
-                <ThemeRegistry>
-                  {children}
-                  {/* Global Toast Notifications */}
-                  <Toaster />
-                </ThemeRegistry>
-              </ThemeProvider>
-            </QueryProvider>
-          </AuthProvider>
-        </SessionProvider>
+        <AuthProvider initialSession={session}>
+          <QueryProvider>
+            <ThemeProvider>
+              <ThemeRegistry>
+                {children}
+                {/* Global Toast Notifications */}
+                <Toaster />
+              </ThemeRegistry>
+            </ThemeProvider>
+          </QueryProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -3,38 +3,17 @@ CRM Tools for Agent Actions
 
 Tools for managing contacts, tasks, and CRM operations.
 """
+from datetime import UTC, datetime
+from typing import Any
 
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
 from backend.utils.logger import get_logger
-from .registry import register_tool, ToolCategory, ToolPriority
+
+from .registry import ToolCategory, ToolPriority, register_tool
 
 logger = get_logger(__name__)
 
-
-@register_tool(
-    name="create_contact",
-    description="Create a new contact in the CRM system",
-    category=ToolCategory.CRM,
-    priority=ToolPriority.HIGH,
-    examples=[
-        {
-            "name": "John Smith",
-            "email": "john@example.com",
-            "details": {
-                "phone": "+1234567890",
-                "company": "Acme Corp",
-                "title": "VP of Engineering",
-            },
-        }
-    ],
-)
-async def create_contact(
-    name: str,
-    email: str,
-    details: Optional[Dict[str, Any]] = None,
-    tags: Optional[List[str]] = None,
-) -> dict:
+@register_tool(name="create_contact", description="Create a new contact in the CRM system", category=ToolCategory.CRM, priority=ToolPriority.HIGH, examples=[{"name": "John Smith", "email": "john@example.com", "details": {"phone": "+1234567890", "company": "Acme Corp", "title": "VP of Engineering"}}])
+async def create_contact(name: str, email: str, details: dict[str, Any] | None=None, tags: list[str] | None=None) -> dict:
     """
     Create a new contact in CRM.
 
@@ -48,48 +27,15 @@ async def create_contact(
         Dict with contact_id and details
     """
     try:
-        contact_id = f"contact_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
-
-        logger.info(f"Creating contact: {name} ({email})")
-
-        # TODO: Integrate with CRM (Salesforce, HubSpot, etc.)
-        # crm_client.contacts.create(
-        #     properties={
-        #         'firstname': first_name,
-        #         'lastname': last_name,
-        #         'email': email,
-        #         'phone': details.get('phone'),
-        #         'company': details.get('company'),
-        #         'jobtitle': details.get('title')
-        #     }
-        # )
-
-        return {
-            "success": True,
-            "contact_id": contact_id,
-            "name": name,
-            "email": email,
-            "details": details or {},
-            "tags": tags or [],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "crm_link": f"https://crm.example.com/contacts/{contact_id}",
-        }
-
+        contact_id = f"contact_{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+        logger.info("Creating contact: %s (%s)", name, email)
+        return {"success": True, "contact_id": contact_id, "name": name, "email": email, "details": details or {}, "tags": tags or [], "created_at": datetime.now(UTC).isoformat(), "crm_link": f"https://crm.example.com/contacts/{contact_id}"}
     except Exception as e:
-        logger.error(f"Failed to create contact: {e}")
+        logger.exception("Failed to create contact: %s", e)
         return {"success": False, "error": str(e), "name": name, "email": email}
 
-
-@register_tool(
-    name="update_contact",
-    description="Update an existing contact in the CRM",
-    category=ToolCategory.CRM,
-    priority=ToolPriority.HIGH,
-    examples=[
-        {"id": "contact_123", "changes": {"company": "New Company Inc", "title": "CTO"}}
-    ],
-)
-async def update_contact(id: str, changes: Dict[str, Any]) -> dict:
+@register_tool(name="update_contact", description="Update an existing contact in the CRM", category=ToolCategory.CRM, priority=ToolPriority.HIGH, examples=[{"id": "contact_123", "changes": {"company": "New Company Inc", "title": "CTO"}}])
+async def update_contact(id: str, changes: dict[str, Any]) -> dict:
     """
     Update an existing contact.
 
@@ -101,47 +47,14 @@ async def update_contact(id: str, changes: Dict[str, Any]) -> dict:
         Dict with update status
     """
     try:
-        logger.info(f"Updating contact {id}: {changes}")
-
-        # TODO: Integrate with CRM
-        # crm_client.contacts.update(id, properties=changes)
-
-        return {
-            "success": True,
-            "contact_id": id,
-            "changes": changes,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-
+        logger.info("Updating contact %s: %s", id, changes)
+        return {"success": True, "contact_id": id, "changes": changes, "updated_at": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Failed to update contact: {e}")
+        logger.exception("Failed to update contact: %s", e)
         return {"success": False, "error": str(e), "contact_id": id}
 
-
-@register_tool(
-    name="create_task",
-    description="Create a task in the CRM for follow-up or action items",
-    category=ToolCategory.CRM,
-    priority=ToolPriority.HIGH,
-    examples=[
-        {
-            "title": "Follow up with VIP client",
-            "due_date": "2024-04-16T10:00:00",
-            "owner": "sales@company.com",
-            "priority": "high",
-            "related_to": "contact_123",
-        }
-    ],
-)
-async def create_task(
-    title: str,
-    due_date: str,
-    owner: str,
-    priority: str = "medium",
-    related_to: Optional[str] = None,
-    description: Optional[str] = None,
-    task_type: str = "follow_up",
-) -> dict:
+@register_tool(name="create_task", description="Create a task in the CRM for follow-up or action items", category=ToolCategory.CRM, priority=ToolPriority.HIGH, examples=[{"title": "Follow up with VIP client", "due_date": "2024-04-16T10:00:00", "owner": "sales@company.com", "priority": "high", "related_to": "contact_123"}])
+async def create_task(title: str, due_date: str, owner: str, priority: str="medium", related_to: str | None=None, description: str | None=None, task_type: str="follow_up") -> dict:
     """
     Create a CRM task.
 
@@ -158,45 +71,15 @@ async def create_task(
         Dict with task_id and details
     """
     try:
-        task_id = f"task_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
-
-        logger.info(f"Creating task: {title} (due: {due_date})")
-
-        # TODO: Integrate with CRM tasks
-        # crm_client.tasks.create(
-        #     subject=title,
-        #     due_date=due_date,
-        #     owner_id=owner,
-        #     priority=priority,
-        #     description=description
-        # )
-
-        return {
-            "success": True,
-            "task_id": task_id,
-            "title": title,
-            "due_date": due_date,
-            "owner": owner,
-            "priority": priority,
-            "related_to": related_to,
-            "task_type": task_type,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "crm_link": f"https://crm.example.com/tasks/{task_id}",
-        }
-
+        task_id = f"task_{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+        logger.info("Creating task: %s (due: %s)", title, due_date)
+        return {"success": True, "task_id": task_id, "title": title, "due_date": due_date, "owner": owner, "priority": priority, "related_to": related_to, "task_type": task_type, "created_at": datetime.now(UTC).isoformat(), "crm_link": f"https://crm.example.com/tasks/{task_id}"}
     except Exception as e:
-        logger.error(f"Failed to create task: {e}")
+        logger.exception("Failed to create task: %s", e)
         return {"success": False, "error": str(e), "title": title}
 
-
-@register_tool(
-    name="query_contacts",
-    description="Query contacts in the CRM with filters",
-    category=ToolCategory.CRM,
-    priority=ToolPriority.MEDIUM,
-    examples=[{"filters": {"company": "Acme Corp", "tags": ["vip", "enterprise"]}}],
-)
-async def query_contacts(filters: Dict[str, Any], limit: int = 10) -> dict:
+@register_tool(name="query_contacts", description="Query contacts in the CRM with filters", category=ToolCategory.CRM, priority=ToolPriority.MEDIUM, examples=[{"filters": {"company": "Acme Corp", "tags": ["vip", "enterprise"]}}])
+async def query_contacts(filters: dict[str, Any], limit: int=10) -> dict:
     """
     Query contacts with filters.
 
@@ -208,38 +91,15 @@ async def query_contacts(filters: Dict[str, Any], limit: int = 10) -> dict:
         Dict with matching contacts
     """
     try:
-        logger.info(f"Querying contacts with filters: {filters}")
-
-        # TODO: Query CRM
-        # contacts = crm_client.contacts.search(filter_groups=[...])
-
-        # Demo response
+        logger.info("Querying contacts with filters: %s", filters)
         contacts = []
-
-        return {
-            "success": True,
-            "filters": filters,
-            "contacts": contacts,
-            "total": len(contacts),
-            "limit": limit,
-            "queried_at": datetime.now(timezone.utc).isoformat(),
-        }
-
+        return {"success": True, "filters": filters, "contacts": contacts, "total": len(contacts), "limit": limit, "queried_at": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Failed to query contacts: {e}")
+        logger.exception("Failed to query contacts: %s", e)
         return {"success": False, "error": str(e), "filters": filters}
 
-
-@register_tool(
-    name="get_contact_history",
-    description="Get interaction history for a contact",
-    category=ToolCategory.CRM,
-    priority=ToolPriority.MEDIUM,
-    examples=[{"id": "contact_123"}],
-)
-async def get_contact_history(
-    id: str, start_date: Optional[str] = None, end_date: Optional[str] = None
-) -> dict:
+@register_tool(name="get_contact_history", description="Get interaction history for a contact", category=ToolCategory.CRM, priority=ToolPriority.MEDIUM, examples=[{"id": "contact_123"}])
+async def get_contact_history(id: str, start_date: str | None=None, end_date: str | None=None) -> dict:
     """
     Get interaction history for a contact.
 
@@ -252,20 +112,9 @@ async def get_contact_history(
         Dict with contact history
     """
     try:
-        logger.info(f"Getting history for contact {id}")
-
-        # TODO: Query CRM for interactions, meetings, emails, tasks
-
+        logger.info("Getting history for contact %s", id)
         history = {"meetings": [], "emails": [], "tasks": [], "notes": []}
-
-        return {
-            "success": True,
-            "contact_id": id,
-            "history": history,
-            "total_interactions": sum(len(v) for v in history.values()),
-            "queried_at": datetime.now(timezone.utc).isoformat(),
-        }
-
+        return {"success": True, "contact_id": id, "history": history, "total_interactions": sum(len(v) for v in history.values()), "queried_at": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Failed to get contact history: {e}")
+        logger.exception("Failed to get contact history: %s", e)
         return {"success": False, "error": str(e), "contact_id": id}

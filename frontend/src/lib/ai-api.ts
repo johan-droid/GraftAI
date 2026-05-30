@@ -1,6 +1,7 @@
 "use client";
 
 import { enhancedApiClient } from "./api-client-enhanced";
+import { BACKEND_BASE_URL } from "./backend";
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES - AI Automation API
@@ -159,6 +160,24 @@ export interface AIChatResponse {
   entities?: Record<string, unknown>;
 }
 
+interface ApiEnvelope<T> {
+  success: boolean;
+  message?: string;
+  data: T;
+}
+
+function unwrapApiEnvelope<T>(payload: T | ApiEnvelope<T>): T {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    "success" in payload
+  ) {
+    return (payload as ApiEnvelope<T>).data;
+  }
+  return payload as T;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // AI AUTOMATION API
 // ═══════════════════════════════════════════════════════════════════
@@ -211,11 +230,25 @@ export const aiAutomationApi = {
 
   // AI Chat
   async sendChatMessage(data: AIChatRequest): Promise<AIChatResponse> {
-    return enhancedApiClient.post<AIChatResponse>("/ai/chat", data);
+    const payload = await enhancedApiClient.post<
+      AIChatResponse | ApiEnvelope<AIChatResponse>
+    >("/ai/chat", data);
+    return unwrapApiEnvelope(payload);
   },
 
   async getChatHistory(conversationId: string): Promise<AIChatMessage[]> {
-    return enhancedApiClient.get<AIChatMessage[]>(`/ai/chat/${conversationId}/history`);
+    const payload = await enhancedApiClient.get<
+      | AIChatMessage[]
+      | ApiEnvelope<{ items?: AIChatMessage[] }>
+      | { items?: AIChatMessage[] }
+    >(`/ai/conversations/${conversationId}/messages`);
+
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+
+    const unwrapped = unwrapApiEnvelope(payload as ApiEnvelope<{ items?: AIChatMessage[] }> | { items?: AIChatMessage[] });
+    return Array.isArray(unwrapped.items) ? unwrapped.items : [];
   },
 
   // Health Check
@@ -345,7 +378,8 @@ export class WebSocketClient {
         socketUrl.searchParams.set("token", this.authToken);
       }
 
-      console.log("WebSocket connecting to:", socketUrl.toString());
+      const connectionUrl = socketUrl.toString();
+      console.log("WebSocket connecting to:", connectionUrl);
       this.ws = new WebSocket(socketUrl.toString());
       
       this.ws.onopen = () => {
@@ -368,8 +402,12 @@ export class WebSocketClient {
       };
       
       this.ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        this.callbacks.onError?.(new Error("WebSocket connection error"));
+        console.warn("WebSocket connection issue:", {
+          url: connectionUrl,
+          readyState: this.ws?.readyState,
+          eventType: error instanceof Event ? error.type : "unknown",
+        });
+        this.callbacks.onError?.(new Error(`WebSocket connection issue for ${connectionUrl}`));
       };
     } catch (error) {
       this.callbacks.onError?.(error as Error);
@@ -541,9 +579,11 @@ export function useWebSocket(url?: string, token?: string | null) {
     const wsUrl = normalizeWebSocketUrl(
       url ||
       process.env.NEXT_PUBLIC_WS_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
       process.env.NEXT_PUBLIC_API_BASE_URL ||
-      "https://graftai.onrender.com"
+      process.env.NEXT_PUBLIC_API_URL ||
+      BACKEND_BASE_URL ||
+      "http://127.0.0.1:8000"
     );
     const client = new WebSocketClient(wsUrl, token ?? null);
     wsRef.current = client;
@@ -555,7 +595,7 @@ export function useWebSocket(url?: string, token?: string | null) {
       onMetricsUpdate: setMetricsUpdate,
       onNotification: setNotification,
       onQuotaUpdate: setQuotaUpdate,
-      onError: (err) => console.error("WebSocket error:", err),
+      onError: (err) => console.warn("WebSocket error:", err.message),
     });
 
     return () => {

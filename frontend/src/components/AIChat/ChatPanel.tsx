@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Send, X, Calendar, Clock, Users, Sparkles, Bot, Loader2 } from "lucide-react";
-import { sendAiChat, getEvents } from "@/lib/api";
+import { sendAiChat, getEvents, type CalendarEvent } from "@/lib/api";
 import MarkdownRenderer from "@/components/AIChat/MarkdownRenderer";
 
 interface Message {
@@ -16,14 +16,6 @@ interface QuickAction {
   label: string;
   icon: ReactNode;
   prompt: string;
-}
-
-interface CalendarEvent {
-  id: string | number;
-  title: string;
-  start_time: string;
-  end_time: string;
-  status: string;
 }
 
 export default function ChatPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {

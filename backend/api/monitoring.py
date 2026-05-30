@@ -3,90 +3,68 @@ Monitoring and Metrics API Endpoints
 
 Provides endpoints for Prometheus metrics, health checks, and monitoring dashboard.
 """
-
-from typing import Dict, Any, Optional
 import asyncio
-from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect
-from starlette.websockets import WebSocketState
-from pydantic import BaseModel
+from datetime import UTC, datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
+from backend.services.auth_service import decode_jwt_token
+from pydantic import BaseModel
 from sqlalchemy import select, text
+from starlette.websockets import WebSocketState
 
-# Try to import prometheus_client
 try:
-    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, REGISTRY
-
+    from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
+import contextlib
 
+from backend.ai.monitoring import LogAnalyzer, get_agent_metrics
 from backend.api.deps import get_current_user
 from backend.auth.config import ALGORITHM, SECRET_KEY
 from backend.auth.schemes import require_admin
 from backend.models.tables import UserTable
-from backend.ai.monitoring import get_agent_metrics, LogAnalyzer
 from backend.services.messaging import get_recent_messages
 from backend.services.redis_client import get_redis_client
 from backend.services.usage import build_quota_snapshot, get_user_quota
 from backend.utils.db import get_async_session_maker
-from backend.utils.serialization import serializer
 from backend.utils.logger import get_logger
+from backend.utils.serialization import serializer
 
 
-async def _check_database() -> Dict[str, Any]:
+async def _check_database() -> dict[str, Any]:
     try:
         session_maker = get_async_session_maker()
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         async with session_maker() as db:
             await db.execute(text("SELECT 1"))
-        latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
-        return {
-            "status": "healthy",
-            "latency_ms": latency_ms,
-        }
+        latency_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
+        return {"status": "healthy", "latency_ms": latency_ms}
     except Exception as exc:
-        return {
-            "status": "unhealthy",
-            "error": str(exc),
-        }
+        return {"status": "unhealthy", "error": str(exc)}
 
-
-async def _check_redis() -> Dict[str, Any]:
+async def _check_redis() -> dict[str, Any]:
     try:
         redis_client = await get_redis_client()
         if redis_client is None:
-            raise RuntimeError("Redis client unavailable")
-
-        start = datetime.now(timezone.utc)
+            msg = "Redis client unavailable"
+            raise RuntimeError(msg)
+        start = datetime.now(UTC)
         await redis_client.ping()
-        latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
-
-        return {
-            "status": "healthy",
-            "latency_ms": latency_ms,
-        }
+        latency_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
+        return {"status": "healthy", "latency_ms": latency_ms}
     except Exception as exc:
-        return {
-            "status": "unhealthy",
-            "error": str(exc),
-        }
-
+        return {"status": "unhealthy", "error": str(exc)}
 logger = get_logger(__name__)
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
-
-
-# ═══════════════════════════════════════════════════════════════════
-# RESPONSE SCHEMAS
-# ═══════════════════════════════════════════════════════════════════
-
 
 class SystemHealthResponse(BaseModel):
     status: str
     timestamp: str
-    components: Dict[str, Any]
-    metrics_summary: Dict[str, Any]
-
+    components: dict[str, Any]
+    metrics_summary: dict[str, Any]
 
 class AutomationSummaryResponse(BaseModel):
     total_automations: int
@@ -97,101 +75,81 @@ class AutomationSummaryResponse(BaseModel):
     average_execution_time_ms: float
     time_window_hours: int
 
-
 class MetricsResponse(BaseModel):
-    bookings_automated: Dict[str, int]
+    bookings_automated: dict[str, int]
     automation_success_rate: float
     active_automations: int
-    tool_execution_summary: Dict[str, Any]
+    tool_execution_summary: dict[str, Any]
     timestamp: str
 
-
-def _decode_stream_payload(raw_payload: Any) -> Dict[str, Any]:
+def _decode_stream_payload(raw_payload: Any) -> dict[str, Any]:
     if raw_payload is None:
         return {}
-
     if isinstance(raw_payload, bytes):
         try:
             decoded = serializer.from_binary(raw_payload)
             return decoded if isinstance(decoded, dict) else {"message": decoded}
         except Exception:
             return {}
-
     if isinstance(raw_payload, str):
         try:
             decoded = serializer.from_binary(raw_payload.encode("utf-8"))
             return decoded if isinstance(decoded, dict) else {"message": decoded}
         except Exception:
             return {"message": raw_payload}
-
     if isinstance(raw_payload, dict):
         return raw_payload
-
     return {"message": str(raw_payload)}
 
-
-def _stream_event_to_notification(event: Dict[str, Any]) -> Dict[str, Any]:
+def _stream_event_to_notification(event: dict[str, Any]) -> dict[str, Any]:
     metadata = event.get("metadata") or {}
     milestone = metadata.get("milestone") or metadata.get("kind") or "action complete"
     title = str(milestone).replace("_", " ").strip().title()
     message = str(event.get("message") or "").strip()
-
     if len(message) > 180:
         message = f"{message[:177].rstrip()}..."
-
     if not message:
         message = "A background action finished successfully."
+    return {"type": "success" if metadata.get("kind") in {"ai_milestone", "chat_milestone"} else "info", "title": title or "Live update", "message": message, "metadata": metadata, "timestamp": event.get("timestamp") or datetime.now(UTC).isoformat()}
 
-    return {
-        "type": "success"
-        if metadata.get("kind") in {"ai_milestone", "chat_milestone"}
-        else "info",
-        "title": title or "Live update",
-        "message": message,
-        "metadata": metadata,
-        "timestamp": event.get("timestamp") or datetime.now(timezone.utc).isoformat(),
-    }
+async def _safe_send_json(websocket: WebSocket, payload: dict[str, Any], context: str) -> bool:
+    """Send JSON only while the websocket is still open."""
+    if websocket.client_state == WebSocketState.DISCONNECTED:
+        return False
+    try:
+        await websocket.send_json(payload)
+        return True
+    except RuntimeError as exc:
+        logger.debug("Skipping websocket send during %s: %s", context, exc)
+        return False
+    except Exception as exc:
+        logger.debug("Websocket send failed during %s: %s", context, exc)
+        return False
 
-
-async def _resolve_websocket_user_id(token: Optional[str]) -> Optional[str]:
+async def _resolve_websocket_user_id(token: str | None) -> str | None:
     if not token:
         return None
-
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = await decode_jwt_token(token)
         user_id = payload.get("sub")
         return str(user_id) if user_id else None
     except JWTError:
         return None
 
-
-async def _validate_websocket_user(token: Optional[str]) -> Optional[str]:
+async def _validate_websocket_user(token: str | None) -> str | None:
     user_id = await _resolve_websocket_user_id(token)
     if not user_id:
         return None
-
     try:
         session_maker = get_async_session_maker()
     except Exception:
         return None
-
     async with session_maker() as db:
         stmt = select(UserTable.id).where(UserTable.id == user_id)
         result = await db.execute(stmt)
-        confirmed_user_id = result.scalar_one_or_none()
-        return confirmed_user_id
+        return result.scalar_one_or_none()
 
-
-# ═══════════════════════════════════════════════════════════════════
-# PROMETHEUS METRICS ENDPOINT
-# ═══════════════════════════════════════════════════════════════════
-
-
-@router.get(
-    "/metrics",
-    summary="Prometheus metrics endpoint",
-    description="Returns Prometheus-formatted metrics for scraping",
-)
+@router.get("/metrics", summary="Prometheus metrics endpoint", description="Returns Prometheus-formatted metrics for scraping")
 async def prometheus_metrics():
     """
     Prometheus metrics endpoint
@@ -200,32 +158,15 @@ async def prometheus_metrics():
     Configure your Prometheus server to scrape this endpoint.
     """
     if not PROMETHEUS_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Prometheus client not installed. Install with: pip install prometheus-client",
-        )
-
+        raise HTTPException(status_code=503, detail="Prometheus client not installed. Install with: pip install prometheus-client")
     try:
         from fastapi import Response
-
-        return Response(
-            content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST
-        )
+        return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
     except Exception as e:
-        logger.error(f"Error generating metrics: {e}")
+        logger.exception("Error generating metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ═══════════════════════════════════════════════════════════════════
-# HEALTH CHECK ENDPOINT
-# ═══════════════════════════════════════════════════════════════════
-
-
-@router.get(
-    "/health",
-    summary="System health check",
-    description="Returns overall system health status",
-)
+@router.get("/health", summary="System health check", description="Returns overall system health status")
 async def health_check() -> SystemHealthResponse:
     """
     System health check endpoint
@@ -240,60 +181,21 @@ async def health_check() -> SystemHealthResponse:
         Health status for each component
     """
     try:
-        metrics = get_agent_metrics()
-
+        get_agent_metrics()
         db_health = await _check_database()
         redis_health = await _check_redis()
-
-        components = {
-            "agent_system": "healthy",
-            "metrics_system": "healthy",
-            "logging_system": "healthy",
-            "database": db_health,
-            "redis": redis_health,
-        }
-
+        components = {"agent_system": "healthy", "metrics_system": "healthy", "logging_system": "healthy", "database": db_health, "redis": redis_health}
         overall_status = "healthy"
         if db_health["status"] != "healthy" or redis_health["status"] != "healthy":
             overall_status = "unhealthy"
-
-        metrics_summary = {
-            "active_automations": 0,  # Would get from gauge
-            "total_automations_today": 0,  # Would calculate from counter
-            "error_rate_1h": 0.0,
-        }
-
-        return SystemHealthResponse(
-            status=overall_status,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            components=components,
-            metrics_summary=metrics_summary,
-        )
-
+        metrics_summary = {"active_automations": 0, "total_automations_today": 0, "error_rate_1h": 0.0}
+        return SystemHealthResponse(status=overall_status, timestamp=datetime.now(UTC).isoformat(), components=components, metrics_summary=metrics_summary)
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return SystemHealthResponse(
-            status="unhealthy",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            components={"error": str(e)},
-            metrics_summary={},
-        )
+        logger.exception("Health check failed: %s", e)
+        return SystemHealthResponse(status="unhealthy", timestamp=datetime.now(UTC).isoformat(), components={"error": str(e)}, metrics_summary={})
 
-
-# ═══════════════════════════════════════════════════════════════════
-# AUTOMATION DASHBOARD ENDPOINTS
-# ═══════════════════════════════════════════════════════════════════
-
-
-@router.get(
-    "/automations/summary",
-    response_model=AutomationSummaryResponse,
-    summary="Get automation summary",
-    description="Get summary statistics for booking automations",
-)
-async def get_automation_summary(
-    hours: int = 24, current_user: UserTable = Depends(get_current_user)
-) -> AutomationSummaryResponse:
+@router.get("/automations/summary", response_model=AutomationSummaryResponse, summary="Get automation summary", description="Get summary statistics for booking automations")
+async def get_automation_summary(hours: int=24, current_user: UserTable=Depends(get_current_user)) -> AutomationSummaryResponse:
     """
     Get automation summary for dashboard
 
@@ -308,33 +210,15 @@ async def get_automation_summary(
         - Average execution time
     """
     try:
-        # Use LogAnalyzer to get statistics
         analyzer = LogAnalyzer()
         summary = analyzer.get_automation_summary(hours=hours)
-
-        return AutomationSummaryResponse(
-            total_automations=summary["total_automations"],
-            completed=summary["completed"],
-            failed=summary["failed"],
-            success_rate=summary["success_rate"],
-            average_decision_score=summary["average_decision_score"],
-            average_execution_time_ms=1200.0,  # Would calculate from logs
-            time_window_hours=hours,
-        )
-
+        return AutomationSummaryResponse(total_automations=summary["total_automations"], completed=summary["completed"], failed=summary["failed"], success_rate=summary["success_rate"], average_decision_score=summary["average_decision_score"], average_execution_time_ms=1200.0, time_window_hours=hours)
     except Exception as e:
-        logger.error(f"Error getting automation summary: {e}")
+        logger.exception("Error getting automation summary: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.get(
-    "/automations/recent",
-    summary="Get recent automations",
-    description="Get list of recent automation runs",
-)
-async def get_recent_automations(
-    limit: int = 10, current_user: UserTable = Depends(get_current_user)
-) -> Dict[str, Any]:
+@router.get("/automations/recent", summary="Get recent automations", description="Get list of recent automation runs")
+async def get_recent_automations(limit: int=10, current_user: UserTable=Depends(get_current_user)) -> dict[str, Any]:
     """
     Get recent automation runs
 
@@ -347,36 +231,15 @@ async def get_recent_automations(
     try:
         analyzer = LogAnalyzer()
         logs = analyzer.parse_logs()
-
-        # Filter automation events
-        automations = [
-            log
-            for log in logs
-            if log.get("event_type") in ["automation_start", "automation_complete"]
-        ]
-
-        # Get most recent
+        automations = [log for log in logs if log.get("event_type") in ["automation_start", "automation_complete"]]
         recent = automations[-limit:] if len(automations) > limit else automations
-
-        return {
-            "automations": recent,
-            "count": len(recent),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
+        return {"automations": recent, "count": len(recent), "timestamp": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Error getting recent automations: {e}")
+        logger.exception("Error getting recent automations: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.get(
-    "/automations/errors",
-    summary="Get error summary",
-    description="Get summary of recent errors",
-)
-async def get_error_summary(
-    hours: int = 24, current_user: UserTable = Depends(get_current_user)
-) -> Dict[str, Any]:
+@router.get("/automations/errors", summary="Get error summary", description="Get summary of recent errors")
+async def get_error_summary(hours: int=24, current_user: UserTable=Depends(get_current_user)) -> dict[str, Any]:
     """
     Get error summary for monitoring
 
@@ -389,33 +252,13 @@ async def get_error_summary(
     try:
         analyzer = LogAnalyzer()
         errors = analyzer.get_error_summary(hours=hours)
-
-        return {
-            "total_errors": errors["total_errors"],
-            "error_breakdown": errors["error_breakdown"],
-            "time_window_hours": hours,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
+        return {"total_errors": errors["total_errors"], "error_breakdown": errors["error_breakdown"], "time_window_hours": hours, "timestamp": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Error getting error summary: {e}")
+        logger.exception("Error getting error summary: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ═══════════════════════════════════════════════════════════════════
-# REAL-TIME METRICS ENDPOINTS
-# ═══════════════════════════════════════════════════════════════════
-
-
-@router.get(
-    "/metrics/current",
-    response_model=MetricsResponse,
-    summary="Get current metrics",
-    description="Get real-time metrics snapshot",
-)
-async def get_current_metrics(
-    current_user: UserTable = Depends(get_current_user),
-) -> MetricsResponse:
+@router.get("/metrics/current", response_model=MetricsResponse, summary="Get current metrics", description="Get real-time metrics snapshot")
+async def get_current_metrics(current_user: UserTable=Depends(get_current_user)) -> MetricsResponse:
     """
     Get current system metrics
 
@@ -427,34 +270,13 @@ async def get_current_metrics(
         - Tool execution summary
     """
     try:
-        # This would read from actual Prometheus metrics in production
-        # For now, return placeholder data structure
-
-        return MetricsResponse(
-            bookings_automated={"completed": 0, "partial": 0, "failed": 0},
-            automation_success_rate=0.0,
-            active_automations=0,
-            tool_execution_summary={
-                "total_executions": 0,
-                "successful": 0,
-                "failed": 0,
-            },
-            timestamp=datetime.now(timezone.utc).isoformat(),
-        )
-
+        return MetricsResponse(bookings_automated={"completed": 0, "partial": 0, "failed": 0}, automation_success_rate=0.0, active_automations=0, tool_execution_summary={"total_executions": 0, "successful": 0, "failed": 0}, timestamp=datetime.now(UTC).isoformat())
     except Exception as e:
-        logger.error(f"Error getting metrics: {e}")
+        logger.exception("Error getting metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.get(
-    "/metrics/decision-scores",
-    summary="Get decision score distribution",
-    description="Get histogram of automation decision scores",
-)
-async def get_decision_score_distribution(
-    hours: int = 24, current_user: UserTable = Depends(get_current_user)
-) -> Dict[str, Any]:
+@router.get("/metrics/decision-scores", summary="Get decision score distribution", description="Get histogram of automation decision scores")
+async def get_decision_score_distribution(hours: int=24, current_user: UserTable=Depends(get_current_user)) -> dict[str, Any]:
     """
     Get decision score distribution
 
@@ -465,38 +287,13 @@ async def get_decision_score_distribution(
         Histogram of decision scores
     """
     try:
-        # This would aggregate from logs/metrics
-        return {
-            "distribution": {
-                "0-20": 0,
-                "21-40": 0,
-                "41-60": 0,
-                "61-80": 0,
-                "81-90": 0,
-                "91-100": 0,
-            },
-            "time_window_hours": hours,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
+        return {"distribution": {"0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-90": 0, "91-100": 0}, "time_window_hours": hours, "timestamp": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Error getting decision scores: {e}")
+        logger.exception("Error getting decision scores: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ═══════════════════════════════════════════════════════════════════
-# DASHBOARD DATA ENDPOINTS
-# ═══════════════════════════════════════════════════════════════════
-
-
-@router.get(
-    "/dashboard",
-    summary="Get dashboard data",
-    description="Get all data needed for monitoring dashboard",
-)
-async def get_dashboard_data(
-    current_user: UserTable = Depends(get_current_user),
-) -> Dict[str, Any]:
+@router.get("/dashboard", summary="Get dashboard data", description="Get all data needed for monitoring dashboard")
+async def get_dashboard_data(current_user: UserTable=Depends(get_current_user)) -> dict[str, Any]:
     """
     Get complete dashboard data
 
@@ -508,40 +305,16 @@ async def get_dashboard_data(
         - System health
     """
     try:
-        # Get all metrics
         summary = await get_automation_summary(hours=24, current_user=current_user)
         errors = await get_error_summary(hours=24, current_user=current_user)
         health = await health_check()
-
-        return {
-            "overview": {
-                "total_automations_24h": summary.total_automations,
-                "success_rate_24h": summary.success_rate,
-                "avg_decision_score": summary.average_decision_score,
-                "avg_execution_time_ms": summary.average_execution_time_ms,
-                "active_automations": 0,  # Would get from gauge
-                "system_health": health.status,
-            },
-            "recent_activity": {
-                "errors_24h": errors["total_errors"],
-                "error_breakdown": errors["error_breakdown"],
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
+        return {"overview": {"total_automations_24h": summary.total_automations, "success_rate_24h": summary.success_rate, "avg_decision_score": summary.average_decision_score, "avg_execution_time_ms": summary.average_execution_time_ms, "active_automations": 0, "system_health": health.status}, "recent_activity": {"errors_24h": errors["total_errors"], "error_breakdown": errors["error_breakdown"]}, "timestamp": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Error getting dashboard data: {e}")
+        logger.exception("Error getting dashboard data: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.get(
-    "/dashboard/tools",
-    summary="Get tool usage stats",
-    description="Get tool execution statistics for dashboard",
-)
-async def get_tool_stats(
-    hours: int = 24, current_user: UserTable = Depends(get_current_user)
-) -> Dict[str, Any]:
+@router.get("/dashboard/tools", summary="Get tool usage stats", description="Get tool execution statistics for dashboard")
+async def get_tool_stats(hours: int=24, current_user: UserTable=Depends(get_current_user)) -> dict[str, Any]:
     """
     Get tool usage statistics
 
@@ -552,33 +325,10 @@ async def get_tool_stats(
         Tool execution counts, success rates, average durations
     """
     try:
-        # This would aggregate from logs/metrics
-        return {
-            "tools": {
-                "send_email": {
-                    "executions": 0,
-                    "success_rate": 0.0,
-                    "avg_duration_ms": 0,
-                },
-                "create_calendar_event": {
-                    "executions": 0,
-                    "success_rate": 0.0,
-                    "avg_duration_ms": 0,
-                },
-            },
-            "time_window_hours": hours,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
+        return {"tools": {"send_email": {"executions": 0, "success_rate": 0.0, "avg_duration_ms": 0}, "create_calendar_event": {"executions": 0, "success_rate": 0.0, "avg_duration_ms": 0}}, "time_window_hours": hours, "timestamp": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Error getting tool stats: {e}")
+        logger.exception("Error getting tool stats: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ═══════════════════════════════════════════════════════════════════
-# WEBSOCKET ENDPOINT FOR REAL-TIME UPDATES
-# ═══════════════════════════════════════════════════════════════════
-
 
 @router.websocket("/ws")
 async def monitoring_websocket(websocket: WebSocket):
@@ -590,99 +340,59 @@ async def monitoring_websocket(websocket: WebSocket):
     - New errors
     - Metric updates
     """
-    token = websocket.query_params.get("token") or websocket.cookies.get(
-        "graftai_access_token"
-    )
+    token = websocket.query_params.get("token") or websocket.cookies.get("graftai_access_token")
     user_id = await _validate_websocket_user(token)
     redis = await get_redis_client() if user_id else None
     pubsub = None
     channel_name = None
     quota_channel_name = None
     last_metrics_sent_at = 0.0
-
     try:
         await websocket.accept()
-
         if user_id and redis:
             channel_name = f"chat_message_{user_id}"
             quota_channel_name = f"account_update_{user_id}"
             pubsub = redis.pubsub()
             await pubsub.subscribe(channel_name, quota_channel_name)
-
             try:
                 session_maker = get_async_session_maker()
                 async with session_maker() as db:
                     user = await get_user_quota(db, user_id)
-                    await websocket.send_json(
-                        {
-                            "type": "quota_update",
-                            "payload": build_quota_snapshot(user, source="websocket.seed"),
-                        }
-                    )
+                    if not await _safe_send_json(websocket, {"type": "quota_update", "payload": build_quota_snapshot(user, source="websocket.seed")}, "quota snapshot seed"):
+                        return
             except Exception as exc:
-                logger.warning(
-                    "Failed to seed monitoring websocket with quota snapshot: %s", exc
-                )
-
+                logger.warning("Failed to seed monitoring websocket with quota snapshot: %s", exc)
             try:
                 recent_messages = await get_recent_messages(user_id, count=3)
                 for event in reversed(recent_messages):
-                    await websocket.send_json(
-                        {
-                            "type": "notification",
-                            "payload": _stream_event_to_notification(event),
-                        }
-                    )
+                    if not await _safe_send_json(websocket, {"type": "notification", "payload": _stream_event_to_notification(event)}, "recent message seed"):
+                        return
             except Exception as exc:
-                logger.warning(
-                    "Failed to seed monitoring websocket with recent messages: %s", exc
-                )
-
+                logger.warning("Failed to seed monitoring websocket with recent messages: %s", exc)
         while True:
             if pubsub:
-                message = await pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=1.0
-                )
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
                 if message and message.get("type") == "message":
                     decoded = _decode_stream_payload(message.get("data"))
                     if decoded:
                         if decoded.get("type") == "quota_update":
-                            await websocket.send_json(
-                                {
-                                    "type": "quota_update",
-                                    "payload": decoded.get("payload", decoded),
-                                }
-                            )
-                        else:
-                            await websocket.send_json(
-                                {
-                                    "type": "notification",
-                                    "payload": _stream_event_to_notification(decoded),
-                                }
-                            )
+                            if not await _safe_send_json(websocket, {"type": "quota_update", "payload": decoded.get("payload", decoded)}, "quota update stream"):
+                                break
+                        elif not await _safe_send_json(websocket, {"type": "notification", "payload": _stream_event_to_notification(decoded)}, "notification stream"):
+                            break
                 else:
                     await asyncio.sleep(0.1)
             else:
                 await asyncio.sleep(0.1)
-
-            now = datetime.now(timezone.utc).timestamp()
+            now = datetime.now(UTC).timestamp()
             if now - last_metrics_sent_at >= 5:
-                await websocket.send_json(
-                    {
-                        "type": "metrics_update",
-                        "payload": {
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "active_automations": 0,
-                            "recent_automations": [],
-                        },
-                    }
-                )
+                if not await _safe_send_json(websocket, {"type": "metrics_update", "payload": {"timestamp": datetime.now(UTC).isoformat(), "active_automations": 0, "recent_automations": []}}, "metrics heartbeat"):
+                    break
                 last_metrics_sent_at = now
-
     except WebSocketDisconnect:
         logger.info("Monitoring websocket client disconnected")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.exception("WebSocket error: %s", e)
     finally:
         if pubsub and channel_name:
             try:
@@ -692,31 +402,16 @@ async def monitoring_websocket(websocket: WebSocket):
                 await pubsub.unsubscribe(*unsubscribe_channels)
             except Exception:
                 pass
-            try:
+            with contextlib.suppress(Exception):
                 await pubsub.close()
-            except Exception:
-                pass
         try:
             if websocket.client_state != WebSocketState.DISCONNECTED:
                 await websocket.close()
         except RuntimeError:
-            # Connection can already be closing/closed depending on client timing.
             pass
 
-
-# ═══════════════════════════════════════════════════════════════════
-# ADMIN ENDPOINTS
-# ═══════════════════════════════════════════════════════════════════
-
-
-@router.post(
-    "/admin/reset-metrics",
-    summary="Reset metrics (admin only)",
-    description="Reset all Prometheus counters and gauges",
-)
-async def reset_metrics(
-    admin_id: str = Depends(require_admin),
-) -> Dict[str, str]:
+@router.post("/admin/reset-metrics", summary="Reset metrics (admin only)", description="Reset all Prometheus counters and gauges")
+async def reset_metrics(admin_id: str=Depends(require_admin)) -> dict[str, str]:
     """
     Reset all metrics (admin only)
 
@@ -725,26 +420,14 @@ async def reset_metrics(
     """
     try:
         if PROMETHEUS_AVAILABLE:
-            # Reset counters (set to 0)
-            # Note: This is not standard Prometheus practice
-            # Usually you'd restart the process or use new labels
             pass
-
-        return {"status": "metrics reset", "timestamp": datetime.now(timezone.utc).isoformat()}
-
+        return {"status": "metrics reset", "timestamp": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Error resetting metrics: {e}")
+        logger.exception("Error resetting metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.get(
-    "/admin/logs",
-    summary="Get agent logs (admin only)",
-    description="Download agent activity logs",
-)
-async def get_logs(
-    lines: int = 100, admin_id: str = Depends(require_admin)
-) -> Dict[str, Any]:
+@router.get("/admin/logs", summary="Get agent logs (admin only)", description="Download agent activity logs")
+async def get_logs(lines: int=100, admin_id: str=Depends(require_admin)) -> dict[str, Any]:
     """
     Get recent agent logs
 
@@ -757,17 +440,8 @@ async def get_logs(
     try:
         analyzer = LogAnalyzer()
         logs = analyzer.parse_logs()
-
-        # Get last N lines
         recent_logs = logs[-lines:] if len(logs) > lines else logs
-
-        return {
-            "logs": recent_logs,
-            "total_lines": len(logs),
-            "returned_lines": len(recent_logs),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
+        return {"logs": recent_logs, "total_lines": len(logs), "returned_lines": len(recent_logs), "timestamp": datetime.now(UTC).isoformat()}
     except Exception as e:
-        logger.error(f"Error getting logs: {e}")
+        logger.exception("Error getting logs: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

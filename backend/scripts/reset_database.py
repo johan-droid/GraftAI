@@ -1,11 +1,11 @@
 import argparse
 import asyncio
 import os
+import re
 import subprocess
 import sys
 from urllib.parse import urlparse, urlunparse
 
-import re
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -18,7 +18,8 @@ def quote_identifier(name: str) -> str:
 
 async def drop_all_tables(url: str) -> None:
     if not url:
-        raise RuntimeError("DATABASE_URL not set.")
+        msg = "DATABASE_URL not set."
+        raise RuntimeError(msg)
 
     if url.startswith("postgresql://"):
         async_url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
@@ -41,7 +42,8 @@ async def drop_all_tables(url: str) -> None:
             if tables:
                 for t in tables:
                     if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", t):
-                        raise ValueError(f"Dangerous table name detected: {t}")
+                        msg = f"Dangerous table name detected: {t}"
+                        raise ValueError(msg)
                 quoted_tables = ", ".join(quote_identifier(t) for t in tables)
                 await conn.execute(
                     text(f"DROP TABLE IF EXISTS {quoted_tables} CASCADE")
@@ -64,7 +66,8 @@ async def drop_all_tables(url: str) -> None:
             if tables:
                 for table in tables:
                     if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table):
-                        raise ValueError(f"Dangerous table name detected: {table}")
+                        msg = f"Dangerous table name detected: {table}"
+                        raise ValueError(msg)
                     await conn.execute(
                         text(f"DROP TABLE IF EXISTS {quote_identifier(table)}")
                     )
@@ -74,7 +77,8 @@ async def drop_all_tables(url: str) -> None:
         await engine.dispose()
 
     else:
-        raise RuntimeError("Unsupported DATABASE_URL scheme for reset_database.py")
+        msg = "Unsupported DATABASE_URL scheme for reset_database.py"
+        raise RuntimeError(msg)
 
 
 def run_alembic_upgrade_head() -> None:
@@ -84,7 +88,8 @@ def run_alembic_upgrade_head() -> None:
         cwd=os.path.join(os.path.dirname(__file__), ".."),
     )
     if result.returncode != 0:
-        raise RuntimeError("Alembic migration failed")
+        msg = "Alembic migration failed"
+        raise RuntimeError(msg)
     print("✅ Alembic migrations applied successfully.")
 
 

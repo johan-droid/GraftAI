@@ -1,8 +1,10 @@
 import asyncio
 import os
 import re
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+
 from backend.utils.db import DATABASE_URL
 
 
@@ -33,7 +35,7 @@ async def drop_all():
         # Get all tables in the public schema
         result = await conn.execute(
             text("""
-            SELECT tablename FROM pg_catalog.pg_tables 
+            SELECT tablename FROM pg_catalog.pg_tables
             WHERE schemaname = 'public'
         """)
         )
@@ -44,7 +46,8 @@ async def drop_all():
             # Strictly validate table names before including them in the SQL
             for t in tables:
                 if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", t):
-                    raise ValueError(f"Dangerous table name detected: {t}")
+                    msg = f"Dangerous table name detected: {t}"
+                    raise ValueError(msg)
 
             # Quote table names and join with commas
             quoted_tables = ", ".join([f'"{t}"' for t in tables])

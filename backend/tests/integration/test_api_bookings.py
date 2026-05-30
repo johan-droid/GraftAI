@@ -2,10 +2,10 @@
 Integration tests for Booking API endpoints.
 Tests the complete booking flow from creation to confirmation.
 """
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
-from datetime import datetime, timezone, timedelta
-from uuid import uuid4
 from dateutil import parser as date_parser
 
 
@@ -17,20 +17,10 @@ class TestBookingAPI:
     @pytest.mark.asyncio
     async def test_create_booking(self, async_client, test_event):
         """Test creating a new booking."""
-        booking_data = {
-            "title": "Test Booking",
-            "description": "Integration test booking",
-            "attendees": ["booker@example.com"],
-            "start_time": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-            "duration_minutes": 60,
-            "meeting_type": "consultation",
-        }
-        
+        booking_data = {"title": "Test Booking", "description": "Integration test booking", "attendees": ["booker@example.com"], "start_time": (datetime.now(UTC) + timedelta(days=1)).isoformat(), "duration_minutes": 60, "meeting_type": "consultation"}
         response = await async_client.post("/api/v1/bookings", json=booking_data)
-        
         assert response.status_code in [200, 201]
         data = response.json()
-        
         assert "data" in data
         assert "booking_id" in data["data"]
         assert data["data"]["status"] in ["created", "confirmed"]
@@ -39,11 +29,8 @@ class TestBookingAPI:
     async def test_list_bookings(self, async_client, test_booking):
         """Test listing bookings."""
         response = await async_client.get("/api/v1/bookings")
-        
         assert response.status_code == 200
         data = response.json()
-        
-        # Should return list of bookings wrapped in data
         assert "data" in data
         assert isinstance(data["data"], list)
         assert len(data["data"]) > 0
@@ -52,7 +39,6 @@ class TestBookingAPI:
     async def test_get_booking(self, async_client, test_booking):
         """Test getting a specific booking."""
         response = await async_client.get(f"/api/v1/bookings/{test_booking.id}")
-        
         assert response.status_code == 200
         data = response.json()
         assert "data" in data
@@ -63,16 +49,8 @@ class TestBookingAPI:
     @pytest.mark.asyncio
     async def test_update_booking(self, async_client, test_booking):
         """Test updating a booking."""
-        update_data = {
-            "full_name": "Updated Name",
-            "email": "updated@example.com",
-        }
-
-        response = await async_client.patch(
-            f"/api/v1/bookings/{test_booking.id}",
-            json=update_data
-        )
-
+        update_data = {"full_name": "Updated Name", "email": "updated@example.com"}
+        response = await async_client.patch(f"/api/v1/bookings/{test_booking.id}", json=update_data)
         assert response.status_code == 200
         data = response.json()
         assert "data" in data
@@ -83,58 +61,36 @@ class TestBookingAPI:
     async def test_cancel_booking(self, async_client, test_booking):
         """Test cancelling a booking."""
         response = await async_client.delete(f"/api/v1/bookings/{test_booking.id}")
-        
         assert response.status_code in [200, 204]
-        
-        # Verify booking is cancelled
         get_response = await async_client.get(f"/api/v1/bookings/{test_booking.id}")
         if get_response.status_code == 200:
             data = get_response.json()
-            # Support both cancelled and scheduled if soft delete is not fully implemented
             assert data["data"]["status"] in ["cancelled", "canceled", "scheduled", "rescheduled"]
 
     @pytest.mark.asyncio
     async def test_reschedule_booking(self, async_client, test_booking):
         """Test rescheduling a booking."""
-        new_start = datetime.now(timezone.utc) + timedelta(days=2)
+        new_start = datetime.now(UTC) + timedelta(days=2)
         new_end = new_start + timedelta(hours=1)
-        
-        reschedule_data = {
-            "start_time": new_start.isoformat(),
-            "end_time": new_end.isoformat(),
-        }
-        
-        response = await async_client.patch(
-            f"/api/v1/bookings/{test_booking.id}/reschedule",
-            json=reschedule_data
-        )
-
-        # Reschedule endpoint may not exist, check status
+        reschedule_data = {"start_time": new_start.isoformat(), "end_time": new_end.isoformat()}
+        response = await async_client.patch(f"/api/v1/bookings/{test_booking.id}/reschedule", json=reschedule_data)
         assert response.status_code == 200
         data = response.json()
-        
-        # Parse times for comparison to avoid string format issues (+00:00 vs Z)
         actual_start = date_parser.parse(data["data"]["start_time"])
         expected_start = date_parser.parse(reschedule_data["start_time"])
-        
         if actual_start.tzinfo is None:
-            actual_start = actual_start.replace(tzinfo=timezone.utc)
+            actual_start = actual_start.replace(tzinfo=UTC)
         if expected_start.tzinfo is None:
-            expected_start = expected_start.replace(tzinfo=timezone.utc)
-            
+            expected_start = expected_start.replace(tzinfo=UTC)
         assert actual_start == expected_start
-        
         actual_end = date_parser.parse(data["data"]["end_time"])
         expected_end = date_parser.parse(reschedule_data["end_time"])
-        
         if actual_end.tzinfo is None:
-            actual_end = actual_end.replace(tzinfo=timezone.utc)
+            actual_end = actual_end.replace(tzinfo=UTC)
         if expected_end.tzinfo is None:
-            expected_end = expected_end.replace(tzinfo=timezone.utc)
-            
+            expected_end = expected_end.replace(tzinfo=UTC)
         assert actual_end == expected_end
         assert data["data"]["id"] == test_booking.id
-
 
 @pytest.mark.integration
 @pytest.mark.api
@@ -144,57 +100,30 @@ class TestBookingValidation:
     @pytest.mark.asyncio
     async def test_create_booking_missing_required_fields(self, async_client):
         """Test that creating a booking without required fields fails."""
-        incomplete_data = {
-            "full_name": "Test Booker",
-            # Missing email, start_time, end_time
-        }
-        
+        incomplete_data = {"full_name": "Test Booker"}
         response = await async_client.post("/api/v1/bookings", json=incomplete_data)
-        
-        # Should return validation error
         assert response.status_code in [200, 201, 400, 422]
 
     @pytest.mark.asyncio
     async def test_create_booking_invalid_email(self, async_client, test_event):
         """Test that invalid email is rejected."""
-        booking_data = {
-            "title": "Test Booking",
-            "description": "Invalid email test",
-            "attendees": ["not-an-email"],
-            "start_time": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-            "duration_minutes": 60,
-        }
-        
+        booking_data = {"title": "Test Booking", "description": "Invalid email test", "attendees": ["not-an-email"], "start_time": (datetime.now(UTC) + timedelta(days=1)).isoformat(), "duration_minutes": 60}
         response = await async_client.post("/api/v1/bookings", json=booking_data)
-        
-        # Should return validation error (or 200/201 if the system allows past bookings)
         assert response.status_code in [200, 201, 400, 422]
 
     @pytest.mark.asyncio
     async def test_create_booking_past_date(self, async_client, test_event):
         """Test that booking in the past is rejected."""
-        booking_data = {
-            "title": "Test Booking",
-            "description": "Past date test",
-            "attendees": ["booker@example.com"],
-            "start_time": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
-            "duration_minutes": 60,
-        }
-        
+        booking_data = {"title": "Test Booking", "description": "Past date test", "attendees": ["booker@example.com"], "start_time": (datetime.now(UTC) - timedelta(days=1)).isoformat(), "duration_minutes": 60}
         response = await async_client.post("/api/v1/bookings", json=booking_data)
-        
-        # Should return validation error (or 200/201 if the system allows past bookings)
         assert response.status_code in [200, 201, 400, 422]
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_booking(self, async_client):
         """Test getting a booking that doesn't exist."""
         fake_id = str(uuid4())
-        
         response = await async_client.get(f"/api/v1/bookings/{fake_id}")
-        
         assert response.status_code == 404
-
 
 @pytest.mark.integration
 @pytest.mark.api
@@ -204,11 +133,8 @@ class TestBookingPublicAPI:
     @pytest.mark.asyncio
     async def test_public_booking_page(self, async_client, test_user):
         """Test accessing public booking page."""
-        # Use the actual test_user's username
         response = await async_client.get(f"/api/public/users/{test_user.username}")
-        
         assert response.status_code in [200, 307, 308]
-
 
 @pytest.mark.integration
 @pytest.mark.api
@@ -218,21 +144,9 @@ class TestBookingWorkflowIntegration:
     @pytest.mark.asyncio
     async def test_booking_triggers_workflow(self, async_client, test_event):
         """Test that creating a booking triggers workflow."""
-        booking_data = {
-            "title": "Workflow Test Booking",
-            "description": "Trigger test",
-            "attendees": ["workflow-test@example.com"],
-            "start_time": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-            "duration_minutes": 60,
-        }
-        
+        booking_data = {"title": "Workflow Test Booking", "description": "Trigger test", "attendees": ["workflow-test@example.com"], "start_time": (datetime.now(UTC) + timedelta(days=1)).isoformat(), "duration_minutes": 60}
         response = await async_client.post("/api/v1/bookings", json=booking_data)
-        
         assert response.status_code in [200, 201]
-        
-        # Workflow should have been triggered (async, so can't verify immediately)
-        # But booking creation should succeed
-
 
 @pytest.mark.integration
 @pytest.mark.api
@@ -243,11 +157,8 @@ class TestBookingPagination:
     async def test_list_bookings_with_pagination(self, async_client):
         """Test that booking list supports pagination."""
         response = await async_client.get("/api/v1/bookings?size=10&page=1")
-        
         assert response.status_code == 200
         data = response.json()
-        
-        # Should return list wrapped in data
         assert "data" in data
         assert isinstance(data["data"], list)
 
@@ -255,15 +166,11 @@ class TestBookingPagination:
     async def test_list_bookings_with_limit(self, async_client):
         """Test limiting number of bookings returned."""
         response = await async_client.get("/api/v1/bookings?size=5")
-        
         assert response.status_code == 200
         data = response.json()
-        
-        # Should return at most 5 items in data list
         assert len(data["data"]) <= 5
         assert "data" in data
         assert len(data["data"]) <= 5
-
 
 @pytest.mark.integration
 @pytest.mark.api
@@ -274,11 +181,8 @@ class TestBookingFilters:
     async def test_filter_by_status(self, async_client):
         """Test filtering bookings by status."""
         response = await async_client.get("/api/v1/bookings?status=confirmed")
-        
         assert response.status_code == 200
         data = response.json()
-        
-        # All returned bookings should have confirmed status
         assert "data" in data
         for booking in data["data"]:
             assert booking["status"] == "confirmed"
@@ -286,15 +190,9 @@ class TestBookingFilters:
     @pytest.mark.asyncio
     async def test_filter_by_date_range(self, async_client):
         """Test filtering bookings by date range."""
-        start_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        end_date = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        
-        response = await async_client.get(
-            f"/api/v1/bookings?start_date={start_date}&end_date={end_date}"
-        )
-        
+        start_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_date = (datetime.now(UTC) + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        response = await async_client.get(f"/api/v1/bookings?start_date={start_date}&end_date={end_date}")
         assert response.status_code == 200
-
-
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -1,14 +1,11 @@
-import bleach
 import logging
 from typing import Any
 
-# Initialize logger
-logger = logging.getLogger(__name__)
+import bleach
 
-# Allowed tags and attributes for sanitization (minimal set for basics)
+logger = logging.getLogger(__name__)
 ALLOWED_TAGS = ["p", "br", "strong", "em", "u", "ul", "ol", "li"]
 ALLOWED_ATTRS = {}
-
 
 def sanitize_text(text: str) -> str:
     """
@@ -16,16 +13,11 @@ def sanitize_text(text: str) -> str:
     """
     if not text or not isinstance(text, str):
         return text
-
     try:
-        return bleach.clean(
-            text, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS, strip=True
-        )
+        return bleach.clean(text, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS, strip=True)
     except Exception as e:
-        logger.error(f"Sanitization failed: {e}")
-        # Fallback to absolute minimum if bleach fails
+        logger.exception("Sanitization failed: %s", e)
         return text.replace("<", "&lt;").replace(">", "&gt;")
-
 
 def sanitize_recursive(data: Any) -> Any:
     """
@@ -33,8 +25,8 @@ def sanitize_recursive(data: Any) -> Any:
     """
     if isinstance(data, str):
         return sanitize_text(data)
-    elif isinstance(data, dict):
+    if isinstance(data, dict):
         return {k: sanitize_recursive(v) for k, v in data.items()}
-    elif isinstance(data, list):
+    if isinstance(data, list):
         return [sanitize_recursive(item) for item in data]
     return data

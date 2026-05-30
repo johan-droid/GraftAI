@@ -1,3 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+
+# Byte-compiled / build
+build/
+dist/
+*.egg-info/
+
+# Pytest / test outputs
+.pytest_cache/
+pytest_test_results.txt
+backend/pytest_test_results.txt
+backend/test_out.txt
+test_out.txt
+test_output*.txt
+test_results.txt
+test_metadata_error*.txt
+
+# Redis dump (dev)
+dump.rdb
+
+# Logs
+logs/
+*.log
+
+# Editor/IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets and env files
+.env
+.env.*
+secrets/
+*.pem
+*.key
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Misc / local dev
+uploads/
+scratch/pip-outdated.json
+pip-outdated.json
+.env
+.env.*
+.env.local
+credentials.json
+.secrets.baseline
+*.pem
+*.key
+venv/
+env/
+__pycache__/
+dist/
+build/
+node_modules/
+.pytest_cache/
+/.venv
+/.idea
+/.vscode
 # =============================================================================
 # GraftAI — Root .gitignore
 # =============================================================================
@@ -80,6 +159,8 @@ build_log*.txt
 *.sqlite
 *.sqlite3
 dev.db
+*.rdb
+dump.rdb
 
 # =============================================================================
 # Logs & Temp Files
@@ -196,6 +277,7 @@ graftai_fullstack_audit.md
 FINAL_SECURITY_FIXES.md
 NPLUS1_AND_TESTING_FIXES.md
 TASK_QUEUE_AND_INFRASTRUCTURE_HARDENING.md
+/AGENTS.md
 
 # Test output artifacts
 test_*.txt
@@ -210,12 +292,17 @@ scratch/
 brain/
 .gemini/
 claude.md
+.Jules/
+
+# Root-level temporary python scripts
+/test_*.py
+/fix_*.py
 
 # =============================================================================
 # Miscellaneous
 # =============================================================================
 # Root-level stray files
-# (AuthLayout.tsx removed as it is deleted)
+/AuthLayout.tsx
 
 # Pyre configuration (type checker)
 .pyre_configuration

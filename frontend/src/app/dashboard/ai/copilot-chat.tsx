@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { sendAiChat, getEvents } from "@/lib/api";
+import { sendAiChat, getEvents, type CalendarEvent } from "@/lib/api";
 import { useAuth } from "@/app/providers/auth-provider";
 import { useSyncEngine } from "@/hooks/useSyncEngine";
 
@@ -35,15 +35,6 @@ interface SuggestedAction {
   description: string;
   icon?: "calendar" | "lightbulb" | "chart" | "zap" | "clock";
   data?: Record<string, unknown>;
-}
-
-interface CalendarEvent {
-  id: string | number;
-  title: string;
-  start_time: string;
-  end_time: string;
-  category: string;
-  status: string;
 }
 
 // --- Helpers ---

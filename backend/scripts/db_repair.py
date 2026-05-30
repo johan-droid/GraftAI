@@ -1,5 +1,7 @@
 import logging
+
 from sqlalchemy import text
+
 from backend.utils.db import engine
 
 logger = logging.getLogger(__name__)
@@ -23,8 +25,8 @@ async def repair_database():
             # 1. Check for 'title' column in 'notifications' table
             # We use information_schema which is standard for PostgreSQL
             check_column_sql = text("""
-                SELECT column_name 
-                FROM information_schema.columns 
+                SELECT column_name
+                FROM information_schema.columns
                 WHERE table_name = 'notifications' AND column_name = 'title';
             """)
 
@@ -45,8 +47,8 @@ async def repair_database():
                 )
             # 1b. Check for 'data' column in 'notifications' table
             check_data_sql = text("""
-                SELECT column_name 
-                FROM information_schema.columns 
+                SELECT column_name
+                FROM information_schema.columns
                 WHERE table_name = 'notifications' AND column_name = 'data';
             """)
             result = await conn.execute(check_data_sql)
@@ -70,8 +72,8 @@ async def repair_database():
 
             # 1c. Check for 'is_read' column in 'notifications' table
             check_is_read_sql = text("""
-                SELECT column_name 
-                FROM information_schema.columns 
+                SELECT column_name
+                FROM information_schema.columns
                 WHERE table_name = 'notifications' AND column_name = 'is_read';
             """)
             result = await conn.execute(check_is_read_sql)
@@ -158,8 +160,8 @@ async def repair_database():
             for col in user_columns:
                 # Use parameterized query for safety
                 check_col_sql = text("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
+                    SELECT column_name
+                    FROM information_schema.columns
                     WHERE table_name = 'users' AND column_name = :col;
                 """)
                 res = await conn.execute(check_col_sql, {"col": col})

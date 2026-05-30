@@ -2,11 +2,9 @@
 Soft delete mixin for SQLAlchemy models.
 Provides soft delete functionality with query filtering.
 """
+from datetime import UTC, datetime, timedelta
 
-from datetime import datetime, timezone
-from typing import Optional, List, Type
-
-from sqlalchemy import DateTime, Boolean, select
+from sqlalchemy import Boolean, DateTime, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,18 +32,10 @@ class SoftDeleteMixin:
         # Get all records (including deleted)
         await MyModel.get_all(db)
     """
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None, index=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True, default=None, index=True
-    )
-
-    is_deleted: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, index=True
-    )
-
-    async def soft_delete(
-        self, db: AsyncSession, deleted_by: Optional[str] = None
-    ) -> None:
+    async def soft_delete(self, db: AsyncSession, deleted_by: str | None=None) -> None:
         """
         Soft delete this record.
 
@@ -53,13 +43,10 @@ class SoftDeleteMixin:
             db: Database session
             deleted_by: Optional user ID who performed the deletion
         """
-        self.deleted_at = datetime.now(timezone.utc)
+        self.deleted_at = datetime.now(UTC)
         self.is_deleted = True
-
-        # Optionally track who deleted
         if deleted_by and hasattr(self, "deleted_by"):
             self.deleted_by = deleted_by
-
         db.add(self)
         await db.commit()
 
@@ -67,10 +54,8 @@ class SoftDeleteMixin:
         """Restore a soft-deleted record."""
         self.deleted_at = None
         self.is_deleted = False
-
         if hasattr(self, "deleted_by"):
             self.deleted_by = None
-
         db.add(self)
         await db.commit()
 
@@ -80,9 +65,7 @@ class SoftDeleteMixin:
         await db.commit()
 
     @classmethod
-    async def get_active(
-        cls: Type["SoftDeleteMixin"], db: AsyncSession, **filters
-    ) -> List:
+    async def get_active(cls: type["SoftDeleteMixin"], db: AsyncSession, **filters) -> list:
         """
         Get all non-deleted (active) records.
 
@@ -93,19 +76,15 @@ class SoftDeleteMixin:
         Returns:
             List of active records
         """
-        query = select(cls).where(cls.is_deleted == False)
-
+        query = select(cls).where(cls.is_deleted.is_(False))
         for key, value in filters.items():
             if hasattr(cls, key):
                 query = query.where(getattr(cls, key) == value)
-
         result = await db.execute(query)
         return result.scalars().all()
 
     @classmethod
-    async def get_deleted(
-        cls: Type["SoftDeleteMixin"], db: AsyncSession, **filters
-    ) -> List:
+    async def get_deleted(cls: type["SoftDeleteMixin"], db: AsyncSession, **filters) -> list:
         """
         Get all soft-deleted records.
 
@@ -116,22 +95,15 @@ class SoftDeleteMixin:
         Returns:
             List of deleted records
         """
-        query = select(cls).where(cls.is_deleted == True)
-
+        query = select(cls).where(cls.is_deleted.is_(True))
         for key, value in filters.items():
             if hasattr(cls, key):
                 query = query.where(getattr(cls, key) == value)
-
         result = await db.execute(query)
         return result.scalars().all()
 
     @classmethod
-    async def get_all(
-        cls: Type["SoftDeleteMixin"],
-        db: AsyncSession,
-        include_deleted: bool = False,
-        **filters,
-    ) -> List:
+    async def get_all(cls: type["SoftDeleteMixin"], db: AsyncSession, include_deleted: bool=False, **filters) -> list:
         """
         Get all records, optionally including soft-deleted ones.
 
@@ -146,22 +118,15 @@ class SoftDeleteMixin:
         if include_deleted:
             query = select(cls)
         else:
-            query = select(cls).where(cls.is_deleted == False)
-
+            query = select(cls).where(cls.is_deleted.is_(False))
         for key, value in filters.items():
             if hasattr(cls, key):
                 query = query.where(getattr(cls, key) == value)
-
         result = await db.execute(query)
         return result.scalars().all()
 
     @classmethod
-    async def find_by_id(
-        cls: Type["SoftDeleteMixin"],
-        db: AsyncSession,
-        record_id: str,
-        include_deleted: bool = False,
-    ) -> Optional:
+    async def find_by_id(cls: type["SoftDeleteMixin"], db: AsyncSession, record_id: str, include_deleted: bool=False) -> object | None:
         """
         Find a record by ID.
 
@@ -173,24 +138,15 @@ class SoftDeleteMixin:
         Returns:
             Record if found, None otherwise
         """
-        # Get primary key column name
         pk_column = cls.__mapper__.primary_key[0].name
-
         query = select(cls).where(getattr(cls, pk_column) == record_id)
-
         if not include_deleted:
-            query = query.where(cls.is_deleted == False)
-
+            query = query.where(cls.is_deleted.is_(False))
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
     @classmethod
-    async def bulk_soft_delete(
-        cls: Type["SoftDeleteMixin"],
-        db: AsyncSession,
-        ids: List[str],
-        deleted_by: Optional[str] = None,
-    ) -> int:
+    async def bulk_soft_delete(cls: type["SoftDeleteMixin"], db: AsyncSession, ids: list[str], deleted_by: str | None=None) -> int:
         """
         Soft delete multiple records by ID.
 
@@ -203,30 +159,21 @@ class SoftDeleteMixin:
             Number of records deleted
         """
         pk_column = cls.__mapper__.primary_key[0].name
-
-        # Find records
-        query = select(cls).where(
-            getattr(cls, pk_column).in_(ids), cls.is_deleted == False
-        )
+        query = select(cls).where(getattr(cls, pk_column).in_(ids), cls.is_deleted.is_(False))
         result = await db.execute(query)
         records = result.scalars().all()
-
-        # Soft delete each record
-        deleted_at = datetime.now(timezone.utc)
+        deleted_at = datetime.now(UTC)
         for record in records:
             record.deleted_at = deleted_at
             record.is_deleted = True
             if deleted_by and hasattr(record, "deleted_by"):
                 record.deleted_by = deleted_by
             db.add(record)
-
         await db.commit()
         return len(records)
 
     @classmethod
-    async def bulk_restore(
-        cls: Type["SoftDeleteMixin"], db: AsyncSession, ids: List[str]
-    ) -> int:
+    async def bulk_restore(cls: type["SoftDeleteMixin"], db: AsyncSession, ids: list[str]) -> int:
         """
         Restore multiple soft-deleted records.
 
@@ -238,29 +185,20 @@ class SoftDeleteMixin:
             Number of records restored
         """
         pk_column = cls.__mapper__.primary_key[0].name
-
-        # Find deleted records
-        query = select(cls).where(
-            getattr(cls, pk_column).in_(ids), cls.is_deleted == True
-        )
+        query = select(cls).where(getattr(cls, pk_column).in_(ids), cls.is_deleted.is_(True))
         result = await db.execute(query)
         records = result.scalars().all()
-
-        # Restore each record
         for record in records:
             record.deleted_at = None
             record.is_deleted = False
             if hasattr(record, "deleted_by"):
                 record.deleted_by = None
             db.add(record)
-
         await db.commit()
         return len(records)
 
     @classmethod
-    async def cleanup_deleted(
-        cls: Type["SoftDeleteMixin"], db: AsyncSession, days: int = 30
-    ) -> int:
+    async def cleanup_deleted(cls: type["SoftDeleteMixin"], db: AsyncSession, days: int=30) -> int:
         """
         Permanently delete records that have been soft-deleted for specified days.
 
@@ -271,19 +209,13 @@ class SoftDeleteMixin:
         Returns:
             Number of records permanently deleted
         """
-        from datetime import timedelta
-
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
-
-        query = select(cls).where(cls.is_deleted == True, cls.deleted_at <= cutoff_date)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
+        query = select(cls).where(cls.is_deleted.is_(True), cls.deleted_at <= cutoff_date)
         result = await db.execute(query)
         records = result.scalars().all()
-
-        # Hard delete each record
         count = 0
         for record in records:
             await db.delete(record)
             count += 1
-
         await db.commit()
         return count

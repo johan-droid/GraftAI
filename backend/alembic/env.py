@@ -1,16 +1,17 @@
 import asyncio
-import os
 import logging
+import os
 from logging.config import fileConfig
-from sqlalchemy import pool
-from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
-from alembic import context
 from urllib.parse import urlparse, urlunparse
 
 # Import your models here
 from backend.models import Base
 from backend.utils.db import DATABASE_URL
+from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import async_engine_from_config
+
+from alembic import context
 
 logger = logging.getLogger("alembic.env")
 

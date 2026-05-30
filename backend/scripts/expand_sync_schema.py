@@ -1,10 +1,11 @@
-import os
 import asyncio
+import os
+from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
+from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-from dotenv import load_dotenv
-from pathlib import Path
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 # Load environment variables
 env_path = Path(__file__).resolve().parents[1] / ".env"
@@ -12,7 +13,8 @@ load_dotenv(env_path)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL not found in .env")
+    msg = "DATABASE_URL not found in .env"
+    raise RuntimeError(msg)
 
 
 async def migrate():

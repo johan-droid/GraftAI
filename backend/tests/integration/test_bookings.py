@@ -3,37 +3,23 @@ Core Booking Engine Integration Test
 
 This is the "Canary in the Coal Mine." If this fails, the app is broken.
 """
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from datetime import datetime, timezone, timedelta
 from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
 async def test_create_booking_flow(async_client: AsyncClient, db_session):
     """
-    Ensures the core booking endpoint returns the correct status and 
+    Ensures the core booking endpoint returns the correct status and
     triggers the AI automation without crashing.
     """
-    # 1. Define the payload matching BookingCreateRequest
-    payload = {
-        "title": "Quarterly Sync",
-        "description": "Discuss roadmap and action items.",
-        "start_time": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-        "duration_minutes": 30,
-        "attendees": ["jane@example.com"],
-        "meeting_type": "consultation",
-        "location": "Zoom"
-    }
-
-    # 2. Hit the endpoint
+    payload = {"title": "Quarterly Sync", "description": "Discuss roadmap and action items.", "start_time": (datetime.now(UTC) + timedelta(days=1)).isoformat(), "duration_minutes": 30, "attendees": ["jane@example.com"], "meeting_type": "consultation", "location": "Zoom"}
     response = await async_client.post("/api/v1/bookings", json=payload)
-
-    # 3. Assertions
     assert response.status_code in [200, 201], f"Expected 200/201, got {response.status_code}"
     payload_response = response.json()
     assert payload_response["success"] is True
     data = payload_response["data"]
-    
     assert "booking_id" in data, "Response should contain booking_id"
     assert data["status"] in ["created", "confirmed"], "Status should be 'created' or 'confirmed'"

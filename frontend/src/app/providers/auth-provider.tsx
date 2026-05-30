@@ -6,6 +6,7 @@ import { ReactNode } from "react";
 
 interface AuthProviderProps {
   children: ReactNode;
+  initialSession?: Session | null;
 }
 
 type AuthUser = {
@@ -25,13 +26,15 @@ type AuthUser = {
   [key: string]: string | number | boolean | undefined;
 };
 
-export function AuthProvider({ children }: AuthProviderProps) {
+export function AuthProvider({ children, initialSession }: AuthProviderProps) {
   return (
     <SessionProvider
-      // Re-fetch session every 5 minutes to keep it fresh
-      refetchInterval={5 * 60}
-      // Refetch when the user switches tabs back to the app
-      refetchOnWindowFocus={true}
+      session={initialSession ?? undefined}
+      // Seeded from the server layout to avoid an extra session round-trip.
+      // We keep refetching disabled for speed; token refresh is handled by
+      // the NextAuth JWT callback/server-side backend token rotation.
+      refetchInterval={0}
+      refetchOnWindowFocus={false}
     >
       {children}
     </SessionProvider>

@@ -1,0 +1,26 @@
+# Project Global System Prompt
+
+You are an expert, security-conscious senior developer. While writing code, you must prioritize security over speed. Never hardcode API keys or secrets. Always validate and sanitize user input. Prefer established managed services (like Supabase/Firebase) over custom authentication. Flag any potentially insecure architectural decisions before writing the code.
+
+# Codebase Audit Prompts
+
+1. Find Leaked Secrets
+- Scan all frontend and client-side files for hardcoded API keys, secrets, or tokens. If found, refactor the code to fetch these securely from the server using environment variables.
+
+2. Audit Input Sanitization (XSS & SQLi)
+- Review all API controllers and database queries. Identify any areas where user input is executed or saved without sanitization or parameterization. Rewrite these sections to strictly prevent SQL injection and XSS.
+
+3. Implement Rate Limiting
+- Analyze API routes, especially endpoints that hit external AI models. Implement robust rate-limiting middleware to prevent scraping and billing abuse.
+
+4. Check Auth Architecture
+- Review authentication implementation. If custom session management or password hashing is used, propose migration to a managed solution like Supabase, Clerk, or Firebase Auth.
+
+5. Enforce API Versioning
+- Refactor routes to follow `/api/v1/` conventions, ensuring internal logic remains intact.
+
+6. Secure File Uploads
+- Audit upload logic to enforce MIME checks, size limits, and non-executable storage.
+
+7. Dependency Check
+- Review `requirements.txt` and `package.json` for insecure or outdated libraries; suggest maintained alternatives.

@@ -24,13 +24,11 @@ import {
   Loader2,
   X,
   Clock,
-  User,
-  CheckCircle2
+  MapPin
 } from "lucide-react";
 import { useCalendar } from "@/hooks/useCalendar";
-import { Booking } from "@/types/api";
+import type { CalendarEvent } from "@/lib/api";
 import { useTheme } from "@/contexts/ThemeContext";
-import BookingStatusPill from "@/components/ui/BookingStatusPill";
 
 // M3 Motion tokens
 const m3Motion = {
@@ -48,7 +46,7 @@ export default function HeavyTileCalendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<CalendarView>("month");
-  const { bookings, isLoading } = useCalendar(currentMonth);
+  const { events, isLoading } = useCalendar(currentMonth);
   const router = useRouter();
   const { mode } = useTheme();
   const isDark = mode === "dark";
@@ -81,27 +79,26 @@ export default function HeavyTileCalendar() {
   const calendarGrid = Array(firstDayOfMonth).fill(null).concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
   while (calendarGrid.length % 7 !== 0) calendarGrid.push(null);
 
-  // Memoize bookings by day (1-31) for O(1) lookup during render instead of O(N) per day tile
-  const bookingsByDay = useMemo(() => {
-    const map = new Map<number, Booking[]>();
-    if (!bookings) return map;
+  const eventsByDay = useMemo(() => {
+    const map = new Map<number, CalendarEvent[]>();
+    if (!events) return map;
 
-    bookings.forEach((b) => {
-      const bookingDate = new Date(b.start_time);
+    events.forEach((event) => {
+      const eventDate = new Date(event.start_time);
       if (
-        bookingDate.getFullYear() === currentMonth.getFullYear() &&
-        bookingDate.getMonth() === currentMonth.getMonth()
+        eventDate.getFullYear() === currentMonth.getFullYear() &&
+        eventDate.getMonth() === currentMonth.getMonth()
       ) {
-        const day = bookingDate.getDate();
+        const day = eventDate.getDate();
         if (!map.has(day)) map.set(day, []);
-        map.get(day)!.push(b);
+        map.get(day)!.push(event);
       }
     });
     return map;
-  }, [bookings, currentMonth]);
+  }, [events, currentMonth]);
 
   const activeDate = useMemo(() => selectedDate ?? new Date(), [selectedDate]);
-  const activeDayBookings = useMemo(() => getDayBookings(activeDate, bookings), [activeDate, bookings]);
+  const activeDayEvents = useMemo(() => getDayEvents(activeDate, events), [activeDate, events]);
   const effectiveViewMode = isMobileScreen ? viewMode : "month";
 
   useEffect(() => {
@@ -241,7 +238,7 @@ export default function HeavyTileCalendar() {
           ${isDark ? "bg-[#1C1B1F] border-[#49454F]" : "bg-[#F8F9FA] border-[#DADCE0]"}
           shrink-0
         `}>
-          {(typeof window !== 'undefined' && window.innerWidth < 640 ? DAYS_OF_WEEK_SHORT : DAYS_OF_WEEK_FULL).map((day) => (
+          {(isMobileScreen ? DAYS_OF_WEEK_SHORT : DAYS_OF_WEEK_FULL).map((day) => (
             <div 
               key={day} 
               className={`
@@ -265,7 +262,7 @@ export default function HeavyTileCalendar() {
               currentMonth.getMonth() === new Date().getMonth() &&
               currentMonth.getFullYear() === new Date().getFullYear();
 
-            const dayBookings = day ? (bookingsByDay.get(day) || []) : [];
+            const dayEvents = day ? (eventsByDay.get(day) || []) : [];
 
             return (
               <motion.div
@@ -297,41 +294,39 @@ export default function HeavyTileCalendar() {
                       >
                         {day}
                       </span>
-                      {dayBookings.length > 0 && (
+                      {dayEvents.length > 0 && (
                         <span className={`
                           text-[10px] font-medium px-1.5 py-0.5 rounded-full
                           ${isDark ? "bg-[#004878] text-[#AAC7FF]" : "bg-[#E8F0FE] text-[#1A73E8]"}
                         `}>
-                          {dayBookings.length}
+                          {dayEvents.length}
                         </span>
                       )}
                     </div>
 
-                    {/* Event Pills - Limited on mobile */}
                     <div className="flex flex-col gap-1 overflow-hidden">
-                      {dayBookings.slice(0, 2).map((booking) => (
+                      {dayEvents.slice(0, 2).map((event) => (
                         <div
-                          key={booking.id}
+                          key={event.id}
                           className={`
                             px-1.5 sm:px-2 py-1 rounded-md 
                             text-[10px] sm:text-xs font-medium 
                             truncate shadow-sm
-                            ${getTileColor(booking.status, isDark)}
+                            ${getEventAccentClasses(event, isDark)}
                           `}
                         >
-                          <span className="hidden sm:inline opacity-80 mr-1">{formatTime(booking.start_time)}</span>
+                          <span className="hidden sm:inline opacity-80 mr-1">{formatTime(event.start_time)}</span>
                           <span className="inline-flex min-w-0 items-center gap-1 truncate">
-                            {booking.status === "confirmed" ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : null}
-                            <span className="truncate">{booking.attendee_name}</span>
+                            <span className="truncate">{getEventTitle(event)}</span>
                           </span>
                         </div>
                       ))}
-                      {dayBookings.length > 2 && (
+                      {dayEvents.length > 2 && (
                         <div className={`
                           text-[10px] text-center py-0.5 rounded
                           ${isDark ? "text-[#938F99]" : "text-[#5F6368]"}
                         `}>
-                          +{dayBookings.length - 2} more
+                          +{dayEvents.length - 2} more
                         </div>
                       )}
                     </div>
@@ -351,22 +346,24 @@ export default function HeavyTileCalendar() {
                 {activeDate.toLocaleDateString("default", { weekday: "long", month: "short", day: "numeric" })}
               </div>
               <div className={`text-xs ${onSurfaceVariantColor}`}>
-                {activeDayBookings.length} event{activeDayBookings.length === 1 ? "" : "s"}
+                {activeDayEvents.length} event{activeDayEvents.length === 1 ? "" : "s"}
               </div>
             </div>
 
-            {activeDayBookings.length > 0 ? (
+            {activeDayEvents.length > 0 ? (
               <div className="space-y-3">
-                {activeDayBookings.map((booking) => (
-                  <div key={booking.id} className={`rounded-3xl border p-4 ${surfaceVariantColor} ${outlineColor}`}>
+                {activeDayEvents.map((event) => (
+                  <div key={event.id} className={`rounded-3xl border p-4 ${surfaceVariantColor} ${outlineColor}`}>
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div>
-                        <p className={`text-sm font-semibold ${onSurfaceColor}`}>{booking.attendee_name}</p>
-                        <p className={`text-xs ${onSurfaceVariantColor}`}>{formatTime(booking.start_time)} - {formatTime(booking.end_time)}</p>
+                        <p className={`text-sm font-semibold ${onSurfaceColor}`}>{getEventTitle(event)}</p>
+                        <p className={`text-xs ${onSurfaceVariantColor}`}>{formatTime(event.start_time)} - {formatTime(event.end_time)}</p>
                       </div>
-                      <span className={`text-[10px] font-semibold uppercase px-2 py-1 rounded-full ${getTileColor(booking.status, isDark)}`}>{booking.status}</span>
+                      <span className={`text-[10px] font-semibold uppercase px-2 py-1 rounded-full ${getEventAccentClasses(event, isDark)}`}>
+                        {getEventBadgeLabel(event)}
+                      </span>
                     </div>
-                    <p className={`text-xs ${onSurfaceVariantColor}`}>{booking.attendee_email}</p>
+                    <p className={`text-xs ${onSurfaceVariantColor}`}>{getEventMeta(event)}</p>
                   </div>
                 ))}
               </div>
@@ -440,7 +437,7 @@ export default function HeavyTileCalendar() {
                     {selectedDate.toLocaleDateString("default", { weekday: "long", month: "short", day: "numeric" })}
                   </h2>
                   <p className={`text-sm ${onSurfaceVariantColor}`}>
-                    {activeDayBookings.length} events
+                    {activeDayEvents.length} events
                   </p>
                 </div>
                 <motion.button
@@ -460,28 +457,30 @@ export default function HeavyTileCalendar() {
                 px-4 pb-8 overflow-y-auto max-h-[50vh]
                 ${isDark ? "divide-y divide-[#49454F]" : "divide-y divide-[#F1F3F4]"}
               `}>
-                {activeDayBookings.length > 0 ? (
-                  activeDayBookings.map((booking) => (
-                    <div key={booking.id} className="py-4 flex items-start gap-3">
+                {activeDayEvents.length > 0 ? (
+                  activeDayEvents.map((event) => (
+                    <div key={event.id} className="py-4 flex items-start gap-3">
                       <div className={`
                         w-12 h-12 rounded-xl flex items-center justify-center shrink-0
-                        ${getTileColor(booking.status, isDark)}
+                        ${getEventAccentClasses(event, isDark)}
                       `}>
-                        {booking.status === "confirmed" ? <CheckCircle2 size={20} /> : <Clock size={20} />}
+                        <Clock size={20} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className={`font-semibold truncate ${onSurfaceColor}`}>
-                          {booking.attendee_name}
+                          {getEventTitle(event)}
                         </h3>
                         <p className={`text-sm ${onSurfaceVariantColor}`}>
-                          {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
+                          {formatTime(event.start_time)} - {formatTime(event.end_time)}
                         </p>
                         <p className={`text-xs mt-1 ${onSurfaceVariantColor}`}>
-                          <User size={12} className="inline mr-1" />
-                          {booking.attendee_name}
+                          <MapPin size={12} className="inline mr-1" />
+                          {getEventMeta(event)}
                         </p>
                       </div>
-                      <BookingStatusPill status={booking.status} isDark={isDark} className="shrink-0" />
+                      <span className={`text-[10px] font-semibold uppercase px-2 py-1 rounded-full shrink-0 ${getEventAccentClasses(event, isDark)}`}>
+                        {getEventBadgeLabel(event)}
+                      </span>
                     </div>
                   ))
                 ) : (
@@ -528,41 +527,48 @@ export default function HeavyTileCalendar() {
   );
 }
 
-// Helper function to get bookings for a specific date
-function getDayBookings(date: Date, bookings: Booking[] | undefined): Booking[] {
-  if (!bookings) return [];
-  return bookings.filter((b) => {
-    const bookingDate = new Date(b.start_time);
+function getDayEvents(date: Date, events: CalendarEvent[] | undefined): CalendarEvent[] {
+  if (!events) return [];
+  return events.filter((event) => {
+    const eventDate = new Date(event.start_time);
     return (
-      bookingDate.getFullYear() === date.getFullYear() &&
-      bookingDate.getMonth() === date.getMonth() &&
-      bookingDate.getDate() === date.getDate()
+      eventDate.getFullYear() === date.getFullYear() &&
+      eventDate.getMonth() === date.getMonth() &&
+      eventDate.getDate() === date.getDate()
     );
   });
 }
 
-// Updated tile color function with dark mode support
-function getTileColor(status: Booking["status"], isDark: boolean): string {
-  switch (status) {
-    case "confirmed":
-      return isDark 
-        ? "bg-[#004878] text-[#D7E3FC]" 
-        : "bg-[#1A73E8] text-white";
-    case "pending":
-      return isDark 
-        ? "bg-[#5C3B00] text-[#FFDEA2]" 
-        : "bg-[#E37400] text-white";
-    case "cancelled":
-      return isDark 
-        ? "bg-[#49454F] text-[#938F99] line-through" 
-        : "bg-[#F1F3F4] text-[#5F6368] line-through";
-    case "rescheduled":
-      return isDark 
-        ? "bg-[#580B74] text-[#F3D7FF]" 
-        : "bg-[#9334E6] text-white";
+function getEventTitle(event: CalendarEvent): string {
+  const title = event.title?.trim();
+  return title && title.length > 0 ? title : "Untitled event";
+}
+
+function getEventMeta(event: CalendarEvent): string {
+  return event.location?.trim() || event.meeting_provider || event.source || "calendar";
+}
+
+function getEventBadgeLabel(event: CalendarEvent): string {
+  return event.source || (event.is_meeting ? "meeting" : "event");
+}
+
+function getEventAccentClasses(event: CalendarEvent, isDark: boolean): string {
+  switch (event.source) {
+    case "google":
+      return isDark
+        ? "bg-[#173042] text-[#A8C7FA]"
+        : "bg-[#E8F0FE] text-[#1A73E8]";
+    case "microsoft":
+      return isDark
+        ? "bg-[#0F3A2A] text-[#7DFFB2]"
+        : "bg-[#E6F4EA] text-[#137333]";
+    case "zoom":
+      return isDark
+        ? "bg-[#2E255E] text-[#D7CCFF]"
+        : "bg-[#EEF0FF] text-[#5B5FC7]";
     default:
-      return isDark 
-        ? "bg-[#004878] text-[#D7E3FC]" 
-        : "bg-[#1A73E8] text-white";
+      return isDark
+        ? "bg-[#49454F] text-[#E6E1E5]"
+        : "bg-[#F1F3F4] text-[#5F6368]";
   }
 }

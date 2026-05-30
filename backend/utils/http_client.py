@@ -4,35 +4,27 @@ Provides a single long-lived AsyncClient to reuse connections and a
 ClientProxy that exposes `get/post/patch/delete` helpers while
 preserving a context-manager interface (no-op for the shared client).
 """
-
 import logging
-from typing import Optional, Dict, Any
+from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
-
-_client: Optional[httpx.AsyncClient] = None
-
+_client: httpx.AsyncClient | None = None
 
 def _default_timeout() -> httpx.Timeout:
     return httpx.Timeout(10.0, connect=5.0)
 
-
 def _default_limits() -> httpx.Limits:
     return httpx.Limits(max_keepalive_connections=20, max_connections=100)
-
 
 async def get_client() -> httpx.AsyncClient:
     """Return a shared AsyncClient instance (create lazily)."""
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(
-            timeout=_default_timeout(), limits=_default_limits()
-        )
+        _client = httpx.AsyncClient(timeout=_default_timeout(), limits=_default_limits())
         logger.info("Initialized shared httpx.AsyncClient singleton")
     return _client
-
 
 class ClientProxy:
     """Lightweight proxy that uses the shared AsyncClient for requests.
@@ -42,34 +34,19 @@ class ClientProxy:
     code using ``async with`` keeps working (no-op exit).
     """
 
-    def __init__(
-        self, base_url: Optional[str] = None, headers: Optional[Dict[str, str]] = None
-    ):
+    def __init__(self, base_url: str | None=None, headers: dict[str, str] | None=None):
         self.base_url = base_url
         self.headers = headers or {}
 
-    async def request(
-        self,
-        method: str,
-        url: str,
-        headers: Optional[Dict[str, str]] = None,
-        **kwargs: Any,
-    ) -> httpx.Response:
+    async def request(self, method: str, url: str, headers: dict[str, str] | None=None, **kwargs: Any) -> httpx.Response:
         client = await get_client()
         merged = dict(self.headers)
         if headers:
             merged.update(headers)
-
-        # Respect absolute urls; otherwise join with base_url if provided
-        if (
-            self.base_url
-            and not url.startswith("http://")
-            and not url.startswith("https://")
-        ):
+        if self.base_url and (not url.startswith("http://")) and (not url.startswith("https://")):
             target = f"{self.base_url.rstrip('/')}/{url.lstrip('/')}"
         else:
             target = url
-
         return await client.request(method, target, headers=merged, **kwargs)
 
     async def get(self, url: str, **kwargs: Any) -> httpx.Response:
@@ -91,9 +68,7 @@ class ClientProxy:
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
-        # Intentionally do not close the shared AsyncClient here
         return False
-
 
 async def aclose() -> None:
     """Close the shared AsyncClient. Useful for graceful shutdown in tests.

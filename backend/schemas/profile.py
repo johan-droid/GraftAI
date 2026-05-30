@@ -1,14 +1,15 @@
 from __future__ import annotations
-import pytz
+
 import re
-from typing import Literal
-from datetime import datetime
+from typing import TYPE_CHECKING, Literal
+
+import pytz
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
-HEX_COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
-SLUG_PATTERN = re.compile(r"^[a-z0-9-]+$")
-
+if TYPE_CHECKING:
+    from datetime import datetime
+HEX_COLOR_PATTERN = re.compile("^#[0-9A-Fa-f]{6}$")
+SLUG_PATTERN = re.compile("^[a-z0-9-]+$")
 
 class ProfileBase(BaseModel):
     display_name: str = Field(..., min_length=2, max_length=100)
@@ -22,7 +23,6 @@ class ProfileBase(BaseModel):
     brand_color_light: str = Field(default="#3b82f6")
     brand_color_dark: str = Field(default="#1e40af")
     booking_layout: Literal["daily", "weekly", "monthly"] = Field(default="monthly")
-
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("brand_color_light", "brand_color_dark")
@@ -31,7 +31,8 @@ class ProfileBase(BaseModel):
         if value is None:
             return value
         if not HEX_COLOR_PATTERN.match(value):
-            raise ValueError("brand colors must be 6-digit hex values like #1a2b3c")
+            msg = "brand colors must be 6-digit hex values like #1a2b3c"
+            raise ValueError(msg)
         return value
 
     @field_validator("timezone")
@@ -40,15 +41,12 @@ class ProfileBase(BaseModel):
         if value is None:
             return value
         if not value or value not in pytz.all_timezones:
-            raise ValueError(
-                "timezone must be a valid IANA timezone like America/New_York or UTC"
-            )
+            msg = "timezone must be a valid IANA timezone like America/New_York or UTC"
+            raise ValueError(msg)
         return value
-
 
 class ProfileCreate(ProfileBase):
     pass
-
 
 class ProfileUpdate(ProfileBase):
     display_name: str | None = Field(default=None, min_length=2, max_length=100)
@@ -58,7 +56,6 @@ class ProfileUpdate(ProfileBase):
     brand_color_light: str | None = None
     brand_color_dark: str | None = None
     booking_layout: Literal["daily", "weekly", "monthly"] | None = None
-
 
 class ProfileResponse(ProfileBase):
     id: int

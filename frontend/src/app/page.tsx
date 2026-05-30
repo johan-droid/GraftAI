@@ -5,9 +5,11 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
+  BookOpenText,
   Calendar,
   CheckCircle2,
   Clock,
+  Code2,
   Menu,
   MessageSquare,
   ShieldCheck,
@@ -60,6 +62,36 @@ const marqueePills = [
   "Live sync", "Capsule UI", "One-link scheduling", "Instant confirmation",
   "Mobile-first", "Calendar-aware", "Polite follow-up", "AI copilot",
 ];
+
+const exploreSurfaces = [
+  {
+    href: "/docs",
+    label: "Documentation",
+    title: "Explore the product system",
+    text: "Architecture, security, booking flows, and implementation notes now live inside a calmer cinematic shell.",
+    accent: "blue" as const,
+    icon: BookOpenText,
+    stats: ["Architecture", "Booking lifecycle", "Operational guidance"],
+  },
+  {
+    href: "/developers",
+    label: "Developer hub",
+    title: "Move from concept to code faster",
+    text: "Code examples, auth flow guidance, API thinking, and integration lanes are easier to find and easier to trust.",
+    accent: "green" as const,
+    icon: Code2,
+    stats: ["Examples", "Auth exchange", "Celery workflows"],
+  },
+  {
+    href: "/pricing",
+    label: "Pricing",
+    title: "Compare plans without leaving the mood",
+    text: "Region-aware checkout, clearer plan hierarchy, and better trust framing now feel like part of the same product story.",
+    accent: "amber" as const,
+    icon: BarChart3,
+    stats: ["10 / 200 AI messages", "Stripe or Razorpay", "Manual onboarding"],
+  },
+] as const;
 
 /* ─── Helpers ──────────────────────────────────────────────────────── */
 
@@ -114,10 +146,11 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(26,115,232,0.1),transparent_28%),radial-gradient(circle_at_top_right,rgba(52,168,83,0.06),transparent_24%),linear-gradient(180deg,#F8F9FA_0%,#FFFFFF_52%,#F8F9FA_100%)] text-[#202124] font-sans selection:bg-[#D2E3FC]">
+    <div className="relative min-h-dvh overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(26,115,232,0.14),transparent_28%),radial-gradient(circle_at_top_right,rgba(52,168,83,0.1),transparent_24%),radial-gradient(circle_at_18%_82%,rgba(217,48,37,0.06),transparent_18%),linear-gradient(180deg,#EEF4FF_0%,#FFFFFF_52%,#F7FAFF_100%)] text-[#202124] font-sans selection:bg-[#D2E3FC]">
 
       {/* ─── Ambient Glows ─── */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:120px_120px] opacity-30" />
         <motion.div
           animate={shouldReduceMotion ? undefined : { x: [0, 18, 0], y: [0, 10, 0], opacity: [0.08, 0.14, 0.08] }}
           transition={shouldReduceMotion ? undefined : { duration: 18, repeat: Infinity, ease: "easeInOut" }}
@@ -127,6 +160,11 @@ export default function LandingPage() {
           animate={shouldReduceMotion ? undefined : { x: [0, -14, 0], y: [0, 16, 0], opacity: [0.06, 0.12, 0.06] }}
           transition={shouldReduceMotion ? undefined : { duration: 22, repeat: Infinity, ease: "easeInOut" }}
           className="absolute right-[-6rem] top-40 h-72 w-72 rounded-full bg-[#34A853]/10 blur-3xl"
+        />
+        <motion.div
+          animate={shouldReduceMotion ? undefined : { x: [0, 12, 0], y: [0, -14, 0], opacity: [0.04, 0.08, 0.04] }}
+          transition={shouldReduceMotion ? undefined : { duration: 24, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute bottom-[-8rem] left-1/3 h-80 w-80 rounded-full bg-[#D93025]/8 blur-3xl"
         />
       </div>
 
@@ -148,6 +186,7 @@ export default function LandingPage() {
                 { href: "#proof", label: "Proof" },
                 { href: "#automation", label: "Automation" },
                 { href: "#faq", label: "FAQ" },
+                { href: "/docs", label: "Docs" },
                 { href: "/pricing", label: "Pricing" },
               ].map((link) => (
                 <Link key={link.href} href={link.href} className="rounded-full px-4 py-2 transition-colors hover:bg-white hover:text-[#202124] hover:shadow-sm">
@@ -160,7 +199,7 @@ export default function LandingPage() {
               <Link href="/login" className="hidden sm:inline-flex rounded-full border border-[#DADCE0] bg-white px-4 py-2 text-sm font-medium text-[#1A73E8] shadow-sm transition-colors hover:bg-[#F8F9FA]">
                 Sign in
               </Link>
-              <Link href="/signup" className="inline-flex items-center gap-1.5 rounded-full bg-[#1A73E8] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#1557B0] sm:px-5">
+              <Link href="/signup" className="hidden items-center gap-1.5 rounded-full bg-[#1A73E8] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#1557B0] sm:inline-flex sm:px-5">
                 Get started
               </Link>
               {/* Mobile hamburger */}
@@ -190,7 +229,9 @@ export default function LandingPage() {
                     { href: "#proof", label: "Proof" },
                     { href: "#automation", label: "Automation" },
                     { href: "#faq", label: "FAQ" },
+                    { href: "/docs", label: "Docs" },
                     { href: "/pricing", label: "Pricing" },
+                    { href: "/signup", label: "Get started" },
                     { href: "/login", label: "Sign in" },
                   ].map((link) => (
                     <Link
@@ -251,6 +292,19 @@ export default function LandingPage() {
               </Link>
             </div>
 
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                { label: "Pages refined", value: "4 public surfaces" },
+                { label: "Visual rhythm", value: "Bento + cinematic motion" },
+                { label: "Primary tone", value: "Calm, premium, readable" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-[0_18px_36px_-30px_rgba(32,33,36,0.35)] backdrop-blur-xl">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#5F6368]">{item.label}</p>
+                  <p className="mt-2 text-sm font-medium text-[#202124]">{item.value}</p>
+                </div>
+              ))}
+            </div>
+
             {/* Live Signal Card */}
             <div className="rounded-3xl border border-[#DADCE0] bg-white/90 p-5 shadow-[0_2px_12px_-4px_rgba(32,33,36,0.12)] backdrop-blur-sm">
               <div className="flex items-center justify-between gap-3 mb-4">
@@ -298,8 +352,15 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.08 }}
-            className="lg:col-span-7"
+            className="relative lg:col-span-7"
           >
+            <motion.div
+              animate={shouldReduceMotion ? undefined : { y: [0, -8, 0] }}
+              transition={shouldReduceMotion ? undefined : { duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              className="pointer-events-none absolute -right-2 -top-4 z-10 hidden rounded-full border border-white/80 bg-white/88 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#1967D2] shadow-[0_16px_40px_-28px_rgba(26,115,232,0.7)] backdrop-blur-xl sm:inline-flex"
+            >
+              Cinematic public surface
+            </motion.div>
             {/* 2×2 Dynamic Bento Grid */}
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
 
@@ -623,6 +684,68 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section id="explore" className="py-16 sm:py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <SectionHeader
+            kicker="Explore the system"
+            title="The story continues beyond the landing page."
+            description="Documentation, developers, and pricing now share the same refined atmosphere, so the public product journey feels deliberate from first glance to deeper research."
+          />
+
+          <div className="mt-10 grid gap-4 lg:grid-cols-3">
+            {exploreSurfaces.map((surface, index) => {
+              const SurfaceIcon = surface.icon;
+              return (
+                <motion.div
+                  key={surface.href}
+                  {...fadeUp}
+                  transition={{ duration: 0.4, delay: index * 0.06 }}
+                >
+                  <Link
+                    href={surface.href}
+                    className="group relative block overflow-hidden rounded-[32px] border border-white/70 bg-white/82 p-6 shadow-[0_28px_80px_-56px_rgba(32,33,36,0.42)] backdrop-blur-2xl transition-all hover:-translate-y-1 hover:shadow-[0_36px_90px_-54px_rgba(32,33,36,0.36)]"
+                  >
+                    <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(26,115,232,0.55),transparent)]" />
+                    <div className="relative z-10">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                            {surface.label}
+                          </p>
+                          <h3 className="mt-3 text-xl font-medium tracking-tight text-[#202124]">
+                            {surface.title}
+                          </h3>
+                        </div>
+                        <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${signalAccentStyles[surface.accent].badge}`}>
+                          <SurfaceIcon size={18} />
+                        </div>
+                      </div>
+
+                      <p className="mt-4 text-sm leading-relaxed text-[#5F6368]">
+                        {surface.text}
+                      </p>
+
+                      <div className="mt-5 grid gap-2">
+                        {surface.stats.map((item) => (
+                          <div key={item} className="rounded-2xl border border-[#E5EAF1] bg-[#F8FBFF] px-4 py-3 text-sm font-medium text-[#202124]">
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-[#1A73E8]">
+                        Open page
+                        <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </div>
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* ════════════════════════════════════════════════════════════
            FAQ — Bento Cards
          ════════════════════════════════════════════════════════════ */}
@@ -715,6 +838,9 @@ export default function LandingPage() {
             <span className="text-xs font-medium">© {new Date().getFullYear()} GraftAI. Built for calmer scheduling.</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-[#5F6368] md:justify-end">
+            <Link href="/docs" className="transition-colors hover:text-[#202124]">Docs</Link>
+            <Link href="/developers" className="transition-colors hover:text-[#202124]">Developers</Link>
+            <Link href="/pricing" className="transition-colors hover:text-[#202124]">Pricing</Link>
             <Link href="/terms" className="transition-colors hover:text-[#202124]">Terms</Link>
             <Link href="/privacy" className="transition-colors hover:text-[#202124]">Privacy Policy</Link>
             <div className="flex items-center gap-1">

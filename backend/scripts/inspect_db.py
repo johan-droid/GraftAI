@@ -1,5 +1,5 @@
-import sqlite3
 import os
+import sqlite3
 
 
 def inspect_db():
@@ -10,10 +10,10 @@ def inspect_db():
 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = cursor.fetchall()
-    
+
     print("Tables in database:")
     for table in tables:
         print(f"- {table[0]}")
@@ -21,7 +21,7 @@ def inspect_db():
         columns = cursor.fetchall()
         for col in columns:
             print(f"  - {col[1]} ({col[2]})")
-    
+
     conn.close()
 
 if __name__ == "__main__":

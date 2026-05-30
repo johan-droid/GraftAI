@@ -1,172 +1,79 @@
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
+
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.schemes import get_current_user_id
 from backend.core.redis import publish_message
+from backend.core.saas_config import Feature, get_limit, has_feature
 from backend.models.tables import UserTable
-from backend.utils.db import get_db
-from backend.core.saas_config import get_limit, Feature, has_feature
 from backend.services.audit import log_activity
+from backend.utils.db import get_db
 
 logger = logging.getLogger(__name__)
-
 
 async def get_user_quota(db: AsyncSession, user_id: str) -> UserTable:
     result = await db.execute(select(UserTable).where(UserTable.id == user_id))
     user = result.scalars().first()
-
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    now = datetime.now(timezone.utc)
-    
-    # Handle potentially naive datetimes from SQLite
+    now = datetime.now(UTC)
     reset_at = user.quota_reset_at
     if reset_at and reset_at.tzinfo is None:
-        reset_at = reset_at.replace(tzinfo=timezone.utc)
-
-    # Reset quotas if quota_reset_at is passed or not set
+        reset_at = reset_at.replace(tzinfo=UTC)
     if not reset_at or now >= reset_at:
         user.daily_ai_count = 0
         user.daily_sync_count = 0
-
-        # Calculate next midnight UTC
-        next_midnight = now.replace(
-            hour=0, minute=0, second=0, microsecond=0
-        ) + timedelta(days=1)
+        next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
         user.quota_reset_at = next_midnight
-
-        # Quotas reset is a state change that should be visible to other queries in same session
         await db.flush()
         await db.refresh(user)
-
     return user
 
-
-def build_quota_snapshot(user: UserTable, source: str = "usage") -> dict:
+def build_quota_snapshot(user: UserTable, source: str="usage") -> dict:
     """Build a normalized quota snapshot for websocket clients and audit stats."""
-    daily_ai_limit = (
-        user.daily_ai_limit
-        if user.daily_ai_limit is not None
-        else get_limit(user.tier, "daily_ai_messages")
-    )
-    daily_sync_limit = (
-        user.daily_sync_limit
-        if user.daily_sync_limit is not None
-        else get_limit(user.tier, "daily_calendar_syncs")
-    )
-
+    daily_ai_limit = user.daily_ai_limit if user.daily_ai_limit is not None else get_limit(user.tier, "daily_ai_messages")
+    daily_sync_limit = user.daily_sync_limit if user.daily_sync_limit is not None else get_limit(user.tier, "daily_calendar_syncs")
     quota_reset_at = user.quota_reset_at
     if quota_reset_at and quota_reset_at.tzinfo is None:
-        quota_reset_at = quota_reset_at.replace(tzinfo=timezone.utc)
+        quota_reset_at = quota_reset_at.replace(tzinfo=UTC)
+    return {"user_id": user.id, "tier": user.tier, "subscription_status": user.subscription_status, "daily_ai_count": user.daily_ai_count, "daily_ai_limit": daily_ai_limit, "daily_ai_remaining": max(0, daily_ai_limit - user.daily_ai_count), "daily_sync_count": user.daily_sync_count, "daily_sync_limit": daily_sync_limit, "daily_sync_remaining": max(0, daily_sync_limit - user.daily_sync_count), "total_ai_tokens": user.total_ai_tokens, "total_api_calls": user.total_api_calls, "total_scheduling_count": user.total_scheduling_count, "quota_reset_at": quota_reset_at.isoformat() if quota_reset_at else None, "source": source, "updated_at": datetime.now(UTC).isoformat()}
 
-    return {
-        "user_id": user.id,
-        "tier": user.tier,
-        "subscription_status": user.subscription_status,
-        "daily_ai_count": user.daily_ai_count,
-        "daily_ai_limit": daily_ai_limit,
-        "daily_ai_remaining": max(0, daily_ai_limit - user.daily_ai_count),
-        "daily_sync_count": user.daily_sync_count,
-        "daily_sync_limit": daily_sync_limit,
-        "daily_sync_remaining": max(0, daily_sync_limit - user.daily_sync_count),
-        "total_ai_tokens": user.total_ai_tokens,
-        "total_api_calls": user.total_api_calls,
-        "total_scheduling_count": user.total_scheduling_count,
-        "quota_reset_at": quota_reset_at.isoformat() if quota_reset_at else None,
-        "source": source,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-async def publish_quota_update(db: AsyncSession, user_id: str, source: str = "usage") -> dict:
+async def publish_quota_update(db: AsyncSession, user_id: str, source: str="usage") -> dict:
     """Publish a live quota snapshot to websocket subscribers."""
     user = await get_user_quota(db, user_id)
     payload = build_quota_snapshot(user, source=source)
-
     try:
-        await publish_message(
-            f"account_update_{user_id}",
-            {"type": "quota_update", "payload": payload},
-        )
+        await publish_message(f"account_update_{user_id}", {"type": "quota_update", "payload": payload})
     except Exception as exc:
         logger.debug("Quota update publish skipped for %s: %s", user_id, exc)
-
     return payload
-
 
 def check_usage_limit(feature_key: str):
     """Enforces limits based on user's tier and declarative SaaS config."""
 
-    async def _check_limit(
-        user_id: str = Depends(get_current_user_id),
-        db: AsyncSession = Depends(get_db),
-    ) -> bool:
+    async def _check_limit(user_id: str=Depends(get_current_user_id), db: AsyncSession=Depends(get_db)) -> bool:
         user = await get_user_quota(db, user_id)
-        
-        # 1. Check Feature Gate first
-        feature_map = {
-            "ai_messages": Feature.AI_COPILOT,
-            "calendar_syncs": Feature.CALENDAR_SYNC,
-            "team_management": Feature.TEAM_MANAGEMENT,
-            "analytics": Feature.ADVANCED_ANALYTICS,
-        }
-        
+        feature_map = {"ai_messages": Feature.AI_COPILOT, "calendar_syncs": Feature.CALENDAR_SYNC, "team_management": Feature.TEAM_MANAGEMENT, "analytics": Feature.ADVANCED_ANALYTICS}
         target_feature = feature_map.get(feature_key)
-        if target_feature and not has_feature(user.tier, target_feature):
-            await log_activity(
-                db, 
-                action="feature.denied", 
-                user_id=user_id, 
-                metadata={"feature": feature_key, "tier": user.tier},
-                status="denied"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=f"The {feature_key} feature is not available on your {user.tier} plan. Please upgrade.",
-            )
-
-        # 2. Check Numeric Limits
-        limit_map = {
-            "ai_messages": ("daily_ai_messages", user.daily_ai_count),
-            "calendar_syncs": ("daily_calendar_syncs", user.daily_sync_count),
-        }
-        
+        if target_feature and (not has_feature(user.tier, target_feature)):
+            await log_activity(db, action="feature.denied", user_id=user_id, metadata={"feature": feature_key, "tier": user.tier}, status="denied")
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=f"The {feature_key} feature is not available on your {user.tier} plan. Please upgrade.")
+        limit_map = {"ai_messages": ("daily_ai_messages", user.daily_ai_count), "calendar_syncs": ("daily_calendar_syncs", user.daily_sync_count)}
         if feature_key in limit_map:
             limit_name, current_val = limit_map[feature_key]
-            
-            # Explicit override in DB takes precedence, otherwise use tier default
-            limit = (
-                user.daily_ai_limit if feature_key == "ai_messages" and user.daily_ai_limit is not None
-                else user.daily_sync_limit if feature_key == "calendar_syncs" and user.daily_sync_limit is not None
-                else get_limit(user.tier, limit_name)
-            )
-            
+            limit = user.daily_ai_limit if feature_key == "ai_messages" and user.daily_ai_limit is not None else user.daily_sync_limit if feature_key == "calendar_syncs" and user.daily_sync_limit is not None else get_limit(user.tier, limit_name)
             if current_val >= limit:
-                await log_activity(
-                    db, 
-                    action="quota.exceeded", 
-                    user_id=user_id, 
-                    metadata={"feature": feature_key, "usage": current_val, "limit": limit},
-                    status="denied"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Daily usage limit for {feature_key} reached. Upgrade your plan for higher limits.",
-                )
-
+                await log_activity(db, action="quota.exceeded", user_id=user_id, metadata={"feature": feature_key, "usage": current_val, "limit": limit}, status="denied")
+                raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"Daily usage limit for {feature_key} reached. Upgrade your plan for higher limits.")
         return True
-
     return _check_limit
 
-
-async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: int = 1):
+async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: int=1):
     """Increment usage and log the activity for auditing."""
     from sqlalchemy import update
-
     update_kwargs = {}
     if feature == "ai_messages":
         update_kwargs = {"daily_ai_count": UserTable.daily_ai_count + amount}
@@ -179,74 +86,34 @@ async def increment_usage(db: AsyncSession, user_id: str, feature: str, amount: 
     elif feature == "scheduling":
         update_kwargs = {"total_scheduling_count": UserTable.total_scheduling_count + amount}
     else:
-        logger.debug(f"Unknown usage feature: {feature}")
-
+        logger.debug("Unknown usage feature: %s", feature)
     if update_kwargs:
-        await db.execute(
-            update(UserTable).where(UserTable.id == user_id).values(**update_kwargs)
-        )
-
-    # SaaS Audit Logging for significant actions
+        await db.execute(update(UserTable).where(UserTable.id == user_id).values(**update_kwargs))
     if feature in ["ai_messages", "scheduling", "calendar_syncs"]:
-        # Fetch user for accurate metadata logging
         user = await get_user_quota(db, user_id)
-        
-        # SEC-09: Map feature names to their corresponding field parts in UserTable
-        feature_map = {
-            "ai_messages": "ai",
-            "calendar_syncs": "sync",
-            "scheduling": "scheduling",
-        }
-        feature_part = feature_map.get(feature, feature.split('_')[1] if '_' in feature else feature)
-        
-        await log_activity(
-            db, 
-            action=f"usage.{feature}", 
-            user_id=user_id, 
-            metadata={
-                "increment": amount, 
-                "total_daily": getattr(user, f"daily_{feature_part}_count", None) if feature_part != "scheduling" else getattr(user, "total_scheduling_count", None)
-            }
-        )
-
+        feature_map = {"ai_messages": "ai", "calendar_syncs": "sync", "scheduling": "scheduling"}
+        feature_part = feature_map.get(feature, feature.split("_")[1] if "_" in feature else feature)
+        await log_activity(db, action=f"usage.{feature}", user_id=user_id, metadata={"increment": amount, "total_daily": getattr(user, f"daily_{feature_part}_count", None) if feature_part != "scheduling" else getattr(user, "total_scheduling_count", None)})
     await db.flush()
-
     if update_kwargs:
         await publish_quota_update(db, user_id, source=f"usage.{feature}")
-
 
 async def get_usage_counts(db: AsyncSession, user_id: str) -> dict:
     """Returns basic usage counts for a user."""
     user = await get_user_quota(db, user_id)
     snapshot = build_quota_snapshot(user)
-    return {
-        "daily_ai_count": snapshot["daily_ai_count"],
-        "daily_sync_count": snapshot["daily_sync_count"],
-        "daily_ai_limit": snapshot["daily_ai_limit"],
-        "daily_sync_limit": snapshot["daily_sync_limit"],
-        "ai_remaining": snapshot["daily_ai_remaining"],
-        "sync_remaining": snapshot["daily_sync_remaining"],
-        "quota_reset_at": snapshot["quota_reset_at"],
-        "total_ai_tokens": snapshot["total_ai_tokens"],
-        "total_api_calls": snapshot["total_api_calls"],
-        "total_scheduling_count": snapshot["total_scheduling_count"],
-        "tier": snapshot["tier"],
-        "subscription_status": snapshot["subscription_status"],
-    }
-
+    return {"daily_ai_count": snapshot["daily_ai_count"], "daily_sync_count": snapshot["daily_sync_count"], "daily_ai_limit": snapshot["daily_ai_limit"], "daily_sync_limit": snapshot["daily_sync_limit"], "ai_remaining": snapshot["daily_ai_remaining"], "sync_remaining": snapshot["daily_sync_remaining"], "quota_reset_at": snapshot["quota_reset_at"], "total_ai_tokens": snapshot["total_ai_tokens"], "total_api_calls": snapshot["total_api_calls"], "total_scheduling_count": snapshot["total_scheduling_count"], "tier": snapshot["tier"], "subscription_status": snapshot["subscription_status"]}
 
 def get_next_quota_reset() -> datetime:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-
 
 def get_trial_days_left(created_at: datetime) -> int:
     if created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=timezone.utc)
+        created_at = created_at.replace(tzinfo=UTC)
     else:
-        created_at = created_at.astimezone(timezone.utc)
-
+        created_at = created_at.astimezone(UTC)
     trial_end = created_at + timedelta(days=14)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     diff = (trial_end - now).days
     return max(0, diff)

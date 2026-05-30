@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { getProviders, signIn } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 
@@ -35,6 +35,9 @@ const providers = [
   { id: "microsoft-entra-id", name: "Microsoft", icon: MicrosoftIcon },
   { id: "zoom", name: "Zoom", icon: ZoomIcon },
 ];
+
+const OAUTH_BUTTON_CLASS =
+  "group relative flex w-full items-center justify-center gap-3 rounded-full border border-[#DADCE0] bg-white px-6 py-3.5 text-[15px] font-medium text-[#3C4043] shadow-[0_1px_3px_rgba(60,64,67,0.08)] transition-all duration-200 ease-out hover:bg-[#F8F9FA] hover:border-[#D2E3FC] hover:shadow-[0_4px_12px_rgba(26,115,232,0.12)] active:scale-[0.99] active:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A73E8] focus-visible:ring-offset-2";
 
 interface OAuthButtonsProps {
   callbackURL?: string;
@@ -93,18 +96,7 @@ export function OAuthButtons({ callbackURL = "/dashboard", actionText = "Sign in
           key={provider.id}
           onClick={() => handleOAuth(provider.id, Date.now())}
           type="button"
-          className="
-            group relative flex w-full items-center justify-center gap-3
-            rounded-full border border-[#DADCE0] bg-white
-            px-6 py-3.5
-            text-[15px] font-medium text-[#3C4043]
-            shadow-[0_1px_3px_rgba(60,64,67,0.08)]
-            transition-all duration-200 ease-out
-            hover:bg-[#F8F9FA] hover:border-[#D2E3FC]
-            hover:shadow-[0_4px_12px_rgba(26,115,232,0.12)]
-            active:scale-[0.99] active:shadow-sm
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A73E8] focus-visible:ring-offset-2
-          "
+          className={OAUTH_BUTTON_CLASS}
         >
           <provider.icon />
           <span>{actionText} with {provider.name}</span>

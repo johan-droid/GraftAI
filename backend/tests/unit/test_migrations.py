@@ -1,4 +1,4 @@
-import backend.services.migrations as migrations
+from backend.services import migrations
 
 
 def test_run_migrations_skips_when_database_url_missing(monkeypatch):

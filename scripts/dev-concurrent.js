@@ -25,41 +25,70 @@ function log(service, message) {
 function waitForHealthCheck(host, port, service, timeoutMs = 60000) {
   const start = Date.now();
   return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    };
+
     const check = () => {
+      if (settled) return;
+
       const options = {
         hostname: host,
         port,
         path: "/health",
         method: "GET",
         timeout: 2000,
+        headers: {
+          "User-Agent": "graftai-dev-concurrent/1.0",
+          Connection: "close",
+        },
+        agent: false,
       };
 
-      const req = http.request(options, (res) => {
-        if (res.statusCode === 200) {
-          res.resume();
-          log(service, `✓ Service ready at http://${host}:${port}`);
-          resolve();
-        } else {
-          res.resume();
-          retry();
-        }
-      });
+      let retryScheduled = false;
 
-      req.on("error", retry);
-      req.on("timeout", () => {
-        req.destroy();
-        retry();
-      });
-      req.end();
-
-      function retry() {
+      const scheduleRetry = () => {
+        if (settled || retryScheduled) return;
+        retryScheduled = true;
         if (Date.now() - start >= timeoutMs) {
-          reject(new Error(`Timeout waiting for ${service} at http://${host}:${port}/health`));
+          finish(new Error(`Timeout waiting for ${service} at http://${host}:${port}/health`));
         } else {
           setTimeout(check, 500);
         }
-      }
+      };
+
+      const req = http.request(options, (res) => {
+        if (settled) {
+          res.resume();
+          return;
+        }
+
+        if (res.statusCode === 200) {
+          res.resume();
+          log(service, `✓ Service ready at http://${host}:${port}`);
+          finish();
+        } else {
+          res.resume();
+          scheduleRetry();
+        }
+      });
+
+      req.once("error", scheduleRetry);
+      req.on("timeout", () => {
+        req.destroy();
+        scheduleRetry();
+      });
+      req.end();
     };
+
     check();
   });
 }

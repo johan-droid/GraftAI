@@ -8,11 +8,11 @@ payload = {
     "email": "test@example.com",
 }
 
-print('POST', url)
+print("POST", url)
 with httpx.Client() as client:
     r = client.post(url, json=payload, timeout=10.0)
-    print('status:', r.status_code)
+    print("status:", r.status_code)
     try:
-        print('body:', r.json())
+        print("body:", r.json())
     except Exception:
-        print('body (text):', r.text)
+        print("body (text):", r.text)

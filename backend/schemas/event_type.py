@@ -1,18 +1,19 @@
 from __future__ import annotations
-import re
+
 import html
-from datetime import datetime
+import re
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-
-SLUG_PATTERN = re.compile(r"^[a-z0-9-]+$")
-
+if TYPE_CHECKING:
+    from datetime import datetime
+SLUG_PATTERN = re.compile("^[a-z0-9-]+$")
 
 def _generate_slug(name: str) -> str:
     slug = name.strip().lower()
-    slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
+    slug = re.sub("[^a-z0-9]+", "-", slug).strip("-")
     return slug or "event-type"
-
 
 class EventTypeBase(BaseModel):
     name: str = Field(..., min_length=3, max_length=120)
@@ -24,10 +25,9 @@ class EventTypeBase(BaseModel):
     color: str = Field(default="#3b82f6")
     is_hidden: bool = Field(default=False)
     is_default: bool = Field(default=False)
-
     model_config = ConfigDict(from_attributes=True)
 
-    @field_validator('name', 'description', 'location', mode='before')
+    @field_validator("name", "description", "location", mode="before")
     @classmethod
     def sanitize_html(cls, v: str | None) -> str | None:
         """Neutralizes malicious script tags into harmless plain text."""
@@ -41,16 +41,16 @@ class EventTypeBase(BaseModel):
         if value is None:
             return value
         if not SLUG_PATTERN.match(value):
-            raise ValueError(
-                "slug may only contain lowercase letters, numbers, and hyphens"
-            )
+            msg = "slug may only contain lowercase letters, numbers, and hyphens"
+            raise ValueError(msg)
         return value
 
     @field_validator("color")
     @classmethod
     def validate_color(cls, value: str) -> str:
-        if not re.fullmatch(r"^#[0-9A-Fa-f]{6}$", value):
-            raise ValueError("color must be a valid hex value like #1a2b3c")
+        if not re.fullmatch("^#[0-9A-Fa-f]{6}$", value):
+            msg = "color must be a valid hex value like #1a2b3c"
+            raise ValueError(msg)
         return value
 
     @model_validator(mode="before")
@@ -60,10 +60,8 @@ class EventTypeBase(BaseModel):
             values["slug"] = _generate_slug(values["name"])
         return values
 
-
 class EventTypeCreate(EventTypeBase):
     pass
-
 
 class EventTypeUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=3, max_length=120)
@@ -75,7 +73,6 @@ class EventTypeUpdate(BaseModel):
     color: str | None = None
     is_hidden: bool | None = None
     is_default: bool | None = None
-
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("slug")
@@ -84,9 +81,8 @@ class EventTypeUpdate(BaseModel):
         if value is None:
             return value
         if not SLUG_PATTERN.match(value):
-            raise ValueError(
-                "slug may only contain lowercase letters, numbers, and hyphens"
-            )
+            msg = "slug may only contain lowercase letters, numbers, and hyphens"
+            raise ValueError(msg)
         return value
 
     @field_validator("color")
@@ -94,10 +90,10 @@ class EventTypeUpdate(BaseModel):
     def validate_color(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        if not re.fullmatch(r"^#[0-9A-Fa-f]{6}$", value):
-            raise ValueError("color must be a valid hex value like #1a2b3c")
+        if not re.fullmatch("^#[0-9A-Fa-f]{6}$", value):
+            msg = "color must be a valid hex value like #1a2b3c"
+            raise ValueError(msg)
         return value
-
 
 class EventTypeResponse(EventTypeBase):
     id: int

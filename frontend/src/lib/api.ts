@@ -675,18 +675,22 @@ export async function getUsageStats() {
 // ──────────────────────────────────────
 export interface CalendarEvent {
   id: number | string;
-  user_id: string;
+  user_id?: string;
   title: string;
   description?: string;
-  category: "meeting" | "event" | "birthday" | "task";
+  category?: "meeting" | "event" | "birthday" | "task";
   color?: string;
   start_time: string;
   end_time: string;
-  is_remote: boolean;
-  status: string;
+  is_remote?: boolean;
+  status?: string;
+  is_meeting?: boolean;
+  location?: string;
+  meeting_provider?: string;
+  meeting_url?: string;
   meeting_platform?: string;
   meeting_link?: string;
-  attendees?: string[];
+  attendees?: Array<string | Record<string, unknown>>;
   metadata_payload?: Record<string, unknown>;
   source?: string; // google, microsoft, zoom, local
   external_id?: string;
@@ -728,7 +732,7 @@ export async function getAvailableSlots(date: string, duration: number = 60, tar
   const params: Record<string, string> = { date, duration: String(duration) };
   if (targetTimezone) params.target_timezone = targetTimezone;
   return enhancedApiClient.get<{start: string; end: string; local_label?: string; guest_label?: string}[]>(
-    "/calendar/slots", 
+    "/calendar/availability/free-slots", 
     { params }
   );
 }

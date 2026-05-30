@@ -6,52 +6,28 @@ For self-hosted deployments requiring JWT, provide `jwt_secret` in config and
 the code will attach a placeholder token generation hook (caller must implement
 proper JWT claims according to their Jitsi installation).
 """
-from datetime import datetime, timezone
 import secrets
-from typing import Optional, Dict
+from datetime import datetime
 
 
 class JitsiService:
+
     def __init__(self, db=None):
-        # db is optional; kept for parity with other services
         self.db = db
 
-    async def create_meeting(
-        self,
-        topic: str,
-        start_time: Optional[datetime] = None,
-        duration_minutes: int = 30,
-        booking_id: Optional[str] = None,
-        config: Optional[Dict] = None,
-    ) -> Dict:
+    async def create_meeting(self, topic: str, start_time: datetime | None=None, duration_minutes: int=30, booking_id: str | None=None, config: dict | None=None) -> dict:
         """Create a lightweight Jitsi meeting descriptor.
 
         Returns a dict with `join_url`, `room_name`, and `metadata`.
         This does not contact an external API when using meet.jit.si.
         """
-        # Room name: prefer booking_id for traceability, else random
         base = (booking_id or secrets.token_urlsafe(8)).replace("/", "-")
         room_name = f"graftai-{base}"
-
-        # If the caller provided a domain (self-hosted), use it; otherwise use public
         domain = "meet.jit.si"
         if config and config.get("domain"):
             domain = config.get("domain")
-
         join_url = f"https://{domain}/{room_name}"
-
-        metadata = {
-            "provider": "jitsi",
-            "room_name": room_name,
-            "domain": domain,
-            "topic": topic,
-            "start_time": start_time.isoformat() if start_time else None,
-            "duration_minutes": duration_minutes,
-        }
-
-        # If self-hosted JWT secret present, add placeholder token (implementation-specific)
+        metadata = {"provider": "jitsi", "room_name": room_name, "domain": domain, "topic": topic, "start_time": start_time.isoformat() if start_time else None, "duration_minutes": duration_minutes}
         if config and config.get("jwt_secret"):
-            # Real JWT creation should be done following Jitsi's expected claims.
             metadata["jwt_hint"] = "self-hosted-jwt-configured"
-
         return {"join_url": join_url, "host_url": None, "password": None, "metadata": metadata}

@@ -1,4 +1,4 @@
-import { getSession, signOut } from "next-auth/react";
+import { getSession } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 
 // Normalize API base URL so frontend endpoint calls (which use paths like
@@ -84,13 +84,6 @@ class ApiClient {
 
         const response = await fetch(url, config);
 
-        if (response.status === 401) {
-          if (typeof window !== "undefined") {
-            await signOut({ callbackUrl: "/login" });
-          }
-          throw new Error("Unauthorized - Session Expired");
-        }
-
         const isServerError = response.status >= 500 && response.status < 600;
 
         if (isServerError && retries < maxRetries) {
@@ -106,10 +99,13 @@ class ApiClient {
         const responseData = this.parseJsonSafe(responseText, response.status);
 
         if (!response.ok) {
+          const requestId = response.headers.get("x-request-id") || undefined;
           if (response.status === 429) {
             toast.info("Rate limit reached. Retrying in the background.");
           } else if (response.status === 503 || response.status === 502) {
             toast.info("The service is busy right now. We are retrying automatically.");
+          } else if (response.status === 401) {
+            toast.warning("Session needs refresh. Please retry once.");
           }
 
           const error = typeof responseData.error === "string" ? responseData.error : undefined;
@@ -137,11 +133,18 @@ class ApiClient {
             }
           }
 
-          const finalMsg = error || detailMsg || message || statusText;
+          const rawText = typeof responseData?.__raw_text === "string" ? responseData.__raw_text : responseText.substring(0, 500);
+          const finalMsg = error || detailMsg || message || rawText || statusText;
           console.error(`[API Error] ${response.status} ${endpoint}:`, {
             data: responseData,
-            text: responseText.substring(0, 500)
+            text: responseText.substring(0, 500),
+            requestId,
           });
+          if (!error && !detailMsg && !message && !rawText) {
+            console.error(
+              `[API Error] Empty response body for ${endpoint}. Request ID: ${requestId || "unavailable"}`
+            );
+          }
           throw new Error(String(finalMsg));
         }
 
@@ -251,6 +254,7 @@ class ApiClient {
         const data = this.parseJsonSafe(text, response.status);
 
         if (!response.ok) {
+          const requestId = response.headers.get("x-request-id") || undefined;
           const error = typeof data.error === "string" ? data.error : undefined;
           const message = typeof data.message === "string" ? data.message : undefined;
           const statusText = response.statusText || `Request failed with status ${response.status}`;
@@ -281,7 +285,13 @@ class ApiClient {
             data,
             statusText,
             rawText,
+            requestId,
           });
+          if (!error && !detailMsg && !message && !rawText) {
+            console.error(
+              `[API Fetch Error] Empty response body for ${endpoint}. Request ID: ${requestId || "unavailable"}`
+            );
+          }
           throw new Error(String(finalMsg));
         }
 

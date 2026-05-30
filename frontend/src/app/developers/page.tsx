@@ -1,527 +1,422 @@
-/**
- * Developer Hub Page
- * 
-- Full documentation browser
-- Code examples and snippets
-- API explorer
-- Quick start guides
- */
+"use client";
 
-'use client';
-
-import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
-import Link from 'next/link';
-import { 
-  Code2, FileText, BookOpen, 
-  Zap, GitBranch, Cpu, Layers, ArrowRight,
-  Copy, CheckCircle2, Search,
-  ChevronRight, ChevronDown, Menu, X,
+import { useState } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import {
+  ArrowRight,
+  BookOpenText,
+  CheckCircle2,
+  Code2,
+  Copy,
+  ExternalLink,
+  GitBranch,
+  Layers3,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  TerminalSquare,
   Webhook,
-  Palette, Box
-} from 'lucide-react';
+} from "lucide-react";
+import {
+  MarketingCard,
+  MarketingHero,
+  MarketingSectionHeading,
+  MarketingShell,
+} from "@/components/marketing/MarketingShell";
 
 const docSections = [
   {
-    id: 'getting-started',
-    title: 'Getting Started',
-    icon: <Zap className="w-5 h-5" />,
-    items: [
-      { title: 'Quick Start Guide', href: '#quick-start', description: 'Get up and running in 5 minutes' },
-      { title: 'Installation', href: '#installation', description: 'Setup your development environment' },
-      { title: 'Authentication', href: '#authentication', description: 'Standard OAuth 2.0 flow' },
-      { title: 'First API Call', href: '#first-call', description: 'Make your first booking' },
-    ]
+    id: "surface",
+    label: "Platform surface",
+    title: "Core scheduling APIs",
+    description: "Booking creation, availability intelligence, public links, and calendar state transitions.",
+    tags: ["Bookings", "Availability", "Public links"],
   },
   {
-    id: 'api-reference',
-    title: 'API Reference',
-    icon: <Webhook className="w-5 h-5" />,
-    items: [
-      { title: 'Bookings API', href: '#bookings', description: 'Create, update, delete bookings' },
-      { title: 'Calendar Sync', href: '#calendar', description: 'Google & Outlook integration' },
-      { title: 'Team Management', href: '#teams', description: 'Round-robin and collective scheduling' },
-      { title: 'Analytics', href: '#analytics', description: 'Metrics and reporting endpoints' },
-      { title: 'Webhooks', href: '#webhooks', description: 'Real-time event notifications' },
-    ]
+    id: "auth",
+    label: "Authentication",
+    title: "Dual-token architecture",
+    description: "Auth.js manages the frontend session while the backend issues and rotates its own JWT pair.",
+    tags: ["NextAuth", "backendToken", "refresh rotation"],
   },
   {
-    id: 'frontend',
-    title: 'Frontend Docs',
-    icon: <Palette className="w-5 h-5" />,
-    items: [
-      { title: 'Component Library', href: '#components', description: 'React components and hooks' },
-      { title: 'Design System', href: '#design', description: 'Colors, typography, spacing' },
-      { title: 'Animations', href: '#animations', description: 'Framer Motion patterns' },
-      { title: 'Offline Mode', href: '#offline', description: 'IndexedDB and sync patterns' },
-    ]
+    id: "automation",
+    label: "Automation",
+    title: "AI with safe fallbacks",
+    description: "The orchestration path moves from AI agent to rules to manual review instead of relying on one brittle layer.",
+    tags: ["Agent controller", "Rule engine", "Audit trail"],
   },
   {
-    id: 'sdks',
-    title: 'SDKs & Tools',
-    icon: <Box className="w-5 h-5" />,
-    items: [
-      { title: 'JavaScript SDK', href: '#js-sdk', description: 'npm install @graftai/sdk' },
-      { title: 'Python SDK', href: '#python-sdk', description: 'pip install graftai' },
-      { title: 'CLI Tool', href: '#cli', description: 'Command line interface' },
-      { title: 'Postman Collection', href: '#postman', description: 'Pre-configured API tests' },
-    ]
+    id: "embed",
+    label: "Embeds",
+    title: "Public booking embeds",
+    description: "Drop booking surfaces into external sites without losing availability, confirmation, or reschedule behavior.",
+    tags: ["iframe route", "public booking", "responsive UX"],
   },
   {
-    id: 'advanced',
-    title: 'Advanced Topics',
-    icon: <Cpu className="w-5 h-5" />,
-    items: [
-      { title: 'Rate Limiting', href: '#rate-limits', description: 'Understanding API limits' },
-      { title: 'Error Handling', href: '#errors', description: 'Best practices for resilience' },
-      { title: 'Security', href: '#security', description: 'GDPR, encryption, compliance' },
-      { title: 'Performance', href: '#performance', description: 'Optimization techniques' },
-    ]
+    id: "security",
+    label: "Security",
+    title: "Protected scheduling flows",
+    description: "Signed actions, strict validation, rate limits, and operational safeguards protect user-facing scheduling routes.",
+    tags: ["Rate limiting", "signed tokens", "forbid extra fields"],
+  },
+  {
+    id: "ops",
+    label: "Operations",
+    title: "Background tasks and sync",
+    description: "Use Celery for reminders, sync, automation, and webhook dispatch so work survives retries and restarts.",
+    tags: ["Celery", "Redis", "worker durability"],
+  },
+];
+
+const capabilityCards = [
+  {
+    icon: Layers3,
+    title: "Architecture clarity",
+    text: "Understand the FastAPI, Next.js, Celery, Redis, and calendar-provider layers as one system instead of five separate tools.",
+  },
+  {
+    icon: Webhook,
+    title: "Integration thinking",
+    text: "Move from booking events to downstream actions with patterns that account for retries, quotas, and auditable outcomes.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Safer defaults",
+    text: "Build with the same transaction, auth, and validation conventions the product relies on in production paths.",
   },
 ];
 
 const codeExamples = {
-  javascript: `import { GraftAI } from '@graftai/sdk';
+  javascript: `import { apiClient } from "@/lib/api-client";
 
-const graft = new GraftAI({
-  accessToken: 'your_access_token'
-});
-
-// Create a booking
-const booking = await graft.bookings.create({
-  title: 'Team Sync',
-  startTime: '2025-04-15T10:00:00Z',
-  endTime: '2025-04-15T11:00:00Z',
-  attendee: {
-    email: 'colleague@company.com',
-    name: 'Jane Smith'
-  }
-});
-
-console.log('Booking created:', booking.id);`,
-
-  python: `from graftai import GraftAI
-
-graft = GraftAI(access_token='your_access_token')
-
-# Create a booking
-booking = graft.bookings.create(
-    title='Team Sync',
-    start_time='2025-04-15T10:00:00Z',
-    end_time='2025-04-15T11:00:00Z',
-    attendee={
-        'email': 'colleague@company.com',
-        'name': 'Jane Smith'
-    }
-)
-
-print(f'Booking created: {booking.id}')`,
-
-  curl: `curl -X POST https://api.graftai.com/v1/bookings \\
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \\
+const booking = await apiClient.post("/bookings", {
+  event_type_id: "team-sync",
+  timezone: "America/Los_Angeles",
+  attendee_email: "jane@company.com",
+  attendee_name: "Jane Smith",
+});`,
+  python: `async with async_session() as db:
+    booking = await booking_service.create_booking(
+        db=db,
+        event_type_id="team-sync",
+        attendee_email="jane@company.com",
+        timezone="America/Los_Angeles",
+        idempotency_key="calm-flow-001",
+    )`,
+  curl: `curl -X POST https://api.graftai.com/api/v1/bookings \\
+  -H "Authorization: Bearer <backendToken>" \\
+  -H "X-Idempotency-Key: calm-flow-001" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "title": "Team Sync",
-    "start_time": "2025-04-15T10:00:00Z",
-    "end_time": "2025-04-15T11:00:00Z",
-    "attendee_email": "colleague@company.com"
-  }'`
-};
+    "event_type_id": "team-sync",
+    "timezone": "America/Los_Angeles",
+    "attendee_email": "jane@company.com"
+  }'`,
+} as const;
+
+type ExampleTab = keyof typeof codeExamples;
 
 export default function DevelopersPage() {
-  const [activeSection, setActiveSection] = useState('getting-started');
-  const [expandedSections, setExpandedSections] = useState<string[]>(['getting-started']);
-  const [activeTab, setActiveTab] = useState<'javascript' | 'python' | 'curl'>('javascript');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<ExampleTab>("javascript");
   const [copied, setCopied] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
-  const toggleSection = (id: string) => {
-    setExpandedSections(prev => 
-      prev.includes(id) 
-        ? prev.filter(s => s !== id)
-        : [...prev, id]
-    );
-  };
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredSections = !normalizedQuery
+    ? docSections
+    : docSections.filter((section) => {
+        const haystack = [section.label, section.title, section.description, ...section.tags]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedQuery);
+      });
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(codeExamples[activeTab]);
+  const copyCode = async () => {
+    await navigator.clipboard.writeText(codeExamples[activeTab]);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    window.setTimeout(() => setCopied(false), 2000);
   };
-
-  const filteredSections = docSections.map(section => ({
-    ...section,
-    items: section.items.filter(item => 
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  })).filter(section => section.items.length > 0);
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                <Code2 className="w-5 h-5 text-white" />
+    <MarketingShell currentPath="/developers">
+      <MarketingHero
+        eyebrow="Developer hub"
+        title="Build on the same calm system the product is selling."
+        description="This page now feels like part of the same cinematic marketing journey, but it still gives engineers what they actually need: architecture signals, code examples, integration lanes, and trustworthy platform constraints."
+        primaryAction={
+          <Link
+            href="/docs"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#1A73E8] px-6 py-3 text-sm font-semibold text-white shadow-[0_16px_34px_-22px_rgba(26,115,232,0.9)] transition-all hover:bg-[#1557B0]"
+          >
+            Read platform docs <ArrowRight size={16} />
+          </Link>
+        }
+        secondaryAction={
+          <a
+            href="https://github.com/graftai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-[#DADCE0] bg-white px-6 py-3 text-sm font-semibold text-[#5F6368] transition-colors hover:bg-[#F8F9FA] hover:text-[#202124]"
+          >
+            View GitHub <ExternalLink size={16} />
+          </a>
+        }
+        stats={[
+          { label: "Auth model", value: "Dual token" },
+          { label: "Scheduling", value: "Atomic + idempotent" },
+          { label: "Workers", value: "Celery-backed" },
+        ]}
+        aside={
+          <MarketingCard className="h-full">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                  Build surface
+                </p>
+                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-[#202124]">
+                  Practical entry points for real integrations.
+                </h2>
               </div>
-              <span className="text-white font-bold">GraftAI</span>
-              <span className="text-slate-500 text-sm">| Developers</span>
-            </Link>
-
-            {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-6">
-              <Link href="/docs/api" className="text-slate-400 hover:text-white transition-colors text-sm">API</Link>
-              <Link href="/docs/guide" className="text-slate-400 hover:text-white transition-colors text-sm">Guide</Link>
-              <Link href="/docs/frontend" className="text-slate-400 hover:text-white transition-colors text-sm">Frontend</Link>
-              <a 
-                href="https://github.com/graftai" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors text-sm"
-              >
-                <GitBranch className="w-4 h-4" />
-                GitHub
-              </a>
-            </nav>
-
-            <div className="hidden md:flex items-center gap-3">
-              <Link href="/login">
-                <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-sm font-medium transition-colors">
-                  Sign In
-                </button>
-              </Link>
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E8F0FE] text-[#1967D2]">
+                <Code2 size={20} />
+              </div>
             </div>
 
-            {/* Mobile Menu Button */}
-            <button 
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 text-slate-400 hover:text-white"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Menu */}
-        <AnimatePresence>
-          {mobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden border-t border-slate-800 bg-slate-900"
-            >
-              <div className="px-4 py-4 space-y-3">
-                <Link href="/docs/api" className="block text-slate-300 hover:text-white py-2">API Reference</Link>
-                <Link href="/docs/guide" className="block text-slate-300 hover:text-white py-2">Developer Guide</Link>
-                <Link href="/docs/frontend" className="block text-slate-300 hover:text-white py-2">Frontend Docs</Link>
-                <a 
-                  href="https://github.com/graftai" 
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-slate-300 hover:text-white py-2"
-                >
-                  GitHub
-                </a>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Hero Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
-        >
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4">
-            Build with{' '}
-            <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              GraftAI
-            </span>
-          </h1>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto mb-8">
-            Comprehensive documentation, API references, and developer tools to integrate 
-            intelligent scheduling into your applications.
-          </p>
-
-          {/* Search */}
-          <div className="max-w-xl mx-auto relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search documentation..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-        </motion.div>
-
-        <div className="grid lg:grid-cols-[280px,1fr] gap-8">
-          {/* Sidebar Navigation */}
-          <motion.aside
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="hidden lg:block"
-          >
-            <div className="sticky top-24 space-y-2">
-              {filteredSections.map((section) => (
-                <div key={section.id} className="rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => toggleSection(section.id)}
-                    className="w-full flex items-center justify-between p-3 text-left hover:bg-slate-900/50 rounded-lg transition-colors"
+            <div className="mt-6 grid gap-3">
+              {capabilityCards.map((card, index) => {
+                const Icon = card.icon;
+                return (
+                  <motion.div
+                    key={card.title}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.12 + index * 0.08 }}
+                    className="rounded-[28px] border border-[#E5EAF1] bg-[#F8FBFF] px-5 py-4"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-indigo-400">{section.icon}</span>
-                      <span className="font-medium text-slate-300">{section.title}</span>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#1A73E8] shadow-sm">
+                        <Icon size={18} />
+                      </div>
+                      <p className="text-sm font-semibold text-[#202124]">{card.title}</p>
                     </div>
-                    <ChevronDown 
-                      className={`w-4 h-4 text-slate-500 transition-transform ${
-                        expandedSections.includes(section.id) ? 'rotate-180' : ''
-                      }`} 
-                    />
-                  </button>
-                  
-                  <AnimatePresence>
-                    {expandedSections.includes(section.id) && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="pl-10 pr-2 pb-2 space-y-1">
-                          {section.items.map((item) => (
-                            <button
-                              key={item.href}
-                              onClick={() => setActiveSection(item.href)}
-                              className={`w-full text-left p-2 rounded-lg text-sm transition-colors ${
-                                activeSection === item.href
-                                  ? 'bg-indigo-500/10 text-indigo-400'
-                                  : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                              }`}
-                            >
-                              {item.title}
-                            </button>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
+                    <p className="mt-3 text-sm leading-relaxed text-[#5F6368]">{card.text}</p>
+                  </motion.div>
+                );
+              })}
             </div>
-          </motion.aside>
+          </MarketingCard>
+        }
+      />
 
-          {/* Main Content */}
-          <main className="min-h-[600px]">
-            {/* Code Example Section */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="mb-12"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-white">Quick Start</h2>
-                <Link 
-                  href="/docs/guide/quick-start" 
-                  className="text-indigo-400 hover:text-indigo-300 text-sm flex items-center gap-1"
-                >
-                  View full guide <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <MarketingSectionHeading
+            kicker="Search the platform"
+            title="A developer page that helps you orient fast."
+            description="Instead of a generic dark docs browser, this hub now leads with the real platform primitives contributors care about."
+          />
 
-              {/* Code Tabs */}
-              <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-                <div className="flex items-center border-b border-slate-800">
-                  {(['javascript', 'python', 'curl'] as const).map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`px-4 py-3 text-sm font-medium capitalize transition-colors ${
-                        activeTab === tab
-                          ? 'text-indigo-400 border-b-2 border-indigo-400 bg-indigo-500/5'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {tab === 'curl' ? 'cURL' : tab}
-                    </button>
-                  ))}
-                  <div className="flex-1" />
-                  <button
-                    onClick={copyCode}
-                    className="px-4 py-3 text-slate-400 hover:text-white flex items-center gap-2 text-sm transition-colors"
-                  >
-                    {copied ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 text-green-400" />
-                        <span className="text-green-400">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        Copy
-                      </>
-                    )}
-                  </button>
-                </div>
-                
-                <div className="p-4 overflow-x-auto">
-                  <pre className="text-sm font-mono text-slate-300 leading-relaxed">
-                    <code>{codeExamples[activeTab]}</code>
-                  </pre>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Documentation Cards */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="grid sm:grid-cols-2 gap-4"
-            >
-              {filteredSections.flatMap(s => s.items).slice(0, 6).map((item, index) => (
-                <motion.div
-                  key={item.href}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 + index * 0.1 }}
-                >
-                  <Link href={item.href}>
-                    <motion.div
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      className="group p-5 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-indigo-500/30 transition-all"
-                    >
-                      <h3 className="font-semibold text-white mb-1 group-hover:text-indigo-400 transition-colors">
-                        {item.title}
-                      </h3>
-                      <p className="text-slate-400 text-sm">{item.description}</p>
-                      <div className="mt-3 flex items-center gap-1 text-indigo-400 text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                        Read more <ChevronRight className="w-4 h-4" />
-                      </div>
-                    </motion.div>
-                  </Link>
-                </motion.div>
-              ))}
-            </motion.div>
-
-            {/* Resources Grid */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="mt-12"
-            >
-              <h2 className="text-xl font-bold text-white mb-4">Developer Resources</h2>
-              <div className="grid sm:grid-cols-3 gap-4">
-                {[
-                  { 
-                    icon: <FileText className="w-6 h-6" />, 
-                    title: 'API Reference',
-                    desc: 'Complete endpoint documentation',
-                    href: '/docs/api',
-                    color: 'from-blue-500 to-cyan-500'
-                  },
-                  { 
-                    icon: <BookOpen className="w-6 h-6" />, 
-                    title: 'Developer Guide',
-                    desc: 'Integration tutorials',
-                    href: '/docs/guide',
-                    color: 'from-purple-500 to-pink-500'
-                  },
-                  { 
-                    icon: <Layers className="w-6 h-6" />, 
-                    title: 'Frontend Docs',
-                    desc: 'Component library & design',
-                    href: '/docs/frontend',
-                    color: 'from-orange-500 to-red-500'
-                  },
-                ].map((resource) => (
-                  <Link key={resource.title} href={resource.href}>
-                    <motion.div
-                      whileHover={{ scale: 1.05 }}
-                      className="group p-4 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-slate-700 transition-all"
-                    >
-                      <div className={`inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-r ${resource.color} mb-3`}>
-                        {resource.icon}
-                      </div>
-                      <h3 className="font-semibold text-white mb-1">{resource.title}</h3>
-                      <p className="text-slate-400 text-sm">{resource.desc}</p>
-                    </motion.div>
-                  </Link>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Support CTA */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-              className="mt-12 p-6 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-xl"
-            >
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-semibold text-white mb-1">Need help?</h3>
-                  <p className="text-slate-400 text-sm">
-                    Join our developer community or reach out to our support team.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <a 
-                    href="https://github.com/graftai/discussions" 
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white text-sm font-medium transition-colors"
-                  >
-                    GitHub Discussions
-                  </a>
-                  <a 
-                    href="mailto:dev@graftai.com"
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-sm font-medium transition-colors"
-                  >
-                    Contact Support
-                  </a>
-                </div>
-              </div>
-            </motion.div>
-          </main>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-800 mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-slate-500 text-sm">
-              © 2024 GraftAI. All rights reserved.
-            </p>
-            <div className="flex items-center gap-6">
-              <Link href="/privacy" className="text-slate-500 hover:text-white text-sm transition-colors">Privacy</Link>
-              <Link href="/terms" className="text-slate-500 hover:text-white text-sm transition-colors">Terms</Link>
-              <a 
-                href="https://status.graftai.com" 
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-500 hover:text-white text-sm transition-colors flex items-center gap-1"
-              >
-                <span className="w-2 h-2 bg-green-500 rounded-full" />
-                API Status
-              </a>
-            </div>
+          <div className="relative w-full max-w-md">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5F6368]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search auth, booking, embed, security..."
+              className="w-full rounded-full border border-white/70 bg-white/82 py-3 pl-11 pr-4 text-sm text-[#202124] shadow-[0_20px_50px_-38px_rgba(32,33,36,0.4)] outline-none backdrop-blur-xl placeholder:text-[#5F6368] focus:border-[#D2E3FC]"
+            />
           </div>
         </div>
-      </footer>
-    </div>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filteredSections.map((section, index) => (
+            <motion.div
+              key={section.id}
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.45, delay: index * 0.05 }}
+            >
+              <MarketingCard className="h-full">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                  {section.label}
+                </p>
+                <h3 className="mt-3 text-xl font-semibold tracking-tight text-[#202124]">
+                  {section.title}
+                </h3>
+                <p className="mt-4 text-sm leading-relaxed text-[#5F6368]">{section.description}</p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {section.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full border border-[#DADCE0] bg-[#F8FBFF] px-3 py-1 text-[11px] font-semibold text-[#5F6368]"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </MarketingCard>
+            </motion.div>
+          ))}
+        </div>
+
+        {!filteredSections.length && (
+          <MarketingCard className="mt-6">
+            <p className="text-lg font-semibold text-[#202124]">No matches yet.</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#5F6368]">
+              Try searching for booking, tokens, automation, embeds, or security.
+            </p>
+          </MarketingCard>
+        )}
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 sm:pb-16">
+        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.45 }}
+          >
+            <MarketingCard className="h-full">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                    Quick start
+                  </p>
+                  <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[#202124]">
+                    Code examples with less filler.
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={copyCode}
+                  className="inline-flex items-center gap-2 rounded-full border border-[#DADCE0] bg-white px-4 py-2 text-sm font-semibold text-[#5F6368] transition-colors hover:bg-[#F8F9FA] hover:text-[#202124]"
+                >
+                  {copied ? <CheckCircle2 size={16} className="text-[#34A853]" /> : <Copy size={16} />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                {(["javascript", "python", "curl"] as ExampleTab[]).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold capitalize transition-all ${
+                      activeTab === tab
+                        ? "bg-[#202124] text-white shadow-sm"
+                        : "border border-[#DADCE0] bg-white text-[#5F6368] hover:bg-[#F8F9FA] hover:text-[#202124]"
+                    }`}
+                  >
+                    {tab === "curl" ? "cURL" : tab}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-[28px] border border-[#DADCE0] bg-[#202124] shadow-[0_30px_70px_-44px_rgba(32,33,36,0.86)]">
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/60">
+                    <TerminalSquare size={12} />
+                    Example
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">
+                    {activeTab}
+                  </div>
+                </div>
+                <pre className="overflow-x-auto px-5 py-5 text-sm leading-relaxed text-[#D2E3FC]">
+                  <code>{codeExamples[activeTab]}</code>
+                </pre>
+              </div>
+            </MarketingCard>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.45, delay: 0.08 }}
+          >
+            <MarketingCard className="h-full">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                Implementation lanes
+              </p>
+              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[#202124]">
+                The parts most teams ask about first.
+              </h3>
+              <div className="mt-6 grid gap-3">
+                {[
+                  {
+                    icon: BookOpenText,
+                    title: "Public booking",
+                    text: "Share a clean route, preserve local time, and keep booking changes self-serve for guests.",
+                  },
+                  {
+                    icon: ShieldCheck,
+                    title: "Auth exchange",
+                    text: "Convert the frontend session into a backend token through the social exchange flow and protect server-side actions.",
+                  },
+                  {
+                    icon: Sparkles,
+                    title: "Automation handoff",
+                    text: "Send durable work to Celery and preserve readable audit signals when AI or external integrations act.",
+                  },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={item.title}
+                      className="rounded-[28px] border border-[#E5EAF1] bg-[#F8FBFF] px-5 py-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#1A73E8] shadow-sm">
+                          <Icon size={18} />
+                        </div>
+                        <p className="text-sm font-semibold text-[#202124]">{item.title}</p>
+                      </div>
+                      <p className="mt-3 text-sm leading-relaxed text-[#5F6368]">{item.text}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 rounded-[28px] border border-[#DADCE0] bg-white px-5 py-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                  Continue exploring
+                </p>
+                <div className="mt-4 grid gap-3">
+                  <Link
+                    href="/docs"
+                    className="group flex items-center justify-between rounded-2xl border border-[#E5EAF1] bg-[#F8FBFF] px-4 py-3 text-sm font-medium text-[#202124] transition-all hover:-translate-y-0.5 hover:bg-white"
+                  >
+                    Documentation overview
+                    <ArrowRight size={16} className="text-[#1A73E8] transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                  <Link
+                    href="/pricing"
+                    className="group flex items-center justify-between rounded-2xl border border-[#E5EAF1] bg-[#F8FBFF] px-4 py-3 text-sm font-medium text-[#202124] transition-all hover:-translate-y-0.5 hover:bg-white"
+                  >
+                    Pricing and quotas
+                    <ArrowRight size={16} className="text-[#1A73E8] transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                  <a
+                    href="https://github.com/graftai"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center justify-between rounded-2xl border border-[#E5EAF1] bg-[#F8FBFF] px-4 py-3 text-sm font-medium text-[#202124] transition-all hover:-translate-y-0.5 hover:bg-white"
+                  >
+                    GitHub organization
+                    <GitBranch size={16} className="text-[#1A73E8] transition-transform group-hover:translate-x-0.5" />
+                  </a>
+                </div>
+              </div>
+            </MarketingCard>
+          </motion.div>
+        </div>
+      </section>
+    </MarketingShell>
   );
 }

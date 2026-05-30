@@ -1,0 +1,111 @@
+openapi: 3.0.3
+info:
+  title: GraftAI Auth Service (subset)
+  version: 1.0.0
+  description: |
+    Authentication service API. Minimal surface for token management, refresh, introspection, JWKS, and API-key verification.
+servers:
+  - url: /api/v1/auth
+paths:
+  /token:
+    post:
+      summary: Issue token pair (access + refresh)
+      description: Issue an access and refresh token for an authenticated user. In the monolith this is produced after successful login or OAuth exchange.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+      responses:
+        '200':
+          description: Token pair
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+  /refresh:
+    post:
+      summary: Refresh token
+      description: Rotate refresh token and return a new access token and refresh token pair. Requires presenting a valid refresh token.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: New tokens
+  /introspect:
+    post:
+      summary: Token introspection
+      description: Introspect a token (RFC7662-like). Returns active=true and token claims if valid.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Introspection result
+  /jwks:
+    get:
+      summary: JSON Web Key Set
+      description: Returns public keys used to verify JWTs issued by the auth service.
+      responses:
+        '200':
+          description: JWKS
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+  /jwks/rotate:
+    post:
+      summary: Rotate signing key
+      description: Generate a new signing key and publish its public key to the JWKS set. Protected endpoint for admin use.
+      responses:
+        '200':
+          description: Rotation result
+  /api-key/verify:
+    post:
+      summary: Verify API key
+      description: Verify an API key and return the associated tenant/user and tier. Supports prefix-indexed fast-path and DB fallback.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key:
+                  type: string
+      responses:
+        '200':
+          description: Verification result
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

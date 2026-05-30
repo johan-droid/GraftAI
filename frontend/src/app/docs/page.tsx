@@ -1,225 +1,303 @@
 "use client";
 
-import { Box, Container, Typography, Stack, Grid, Button, alpha } from "@mui/material";
-import { motion } from "framer-motion";
 import Link from "next/link";
-import { 
-  ArrowLeft, 
-  BookOpenText, 
-  CalendarClock, 
-  Code2, 
-  ShieldCheck, 
+import { motion } from "framer-motion";
+import {
+  ArrowRight,
+  BookOpenText,
+  Code2,
+  Layers3,
+  ShieldCheck,
+  Sparkles,
+  TerminalSquare,
   Workflow,
-  Terminal,
-  ChevronRight
 } from "lucide-react";
+import {
+  MarketingCard,
+  MarketingHero,
+  MarketingSectionHeading,
+  MarketingShell,
+} from "@/components/marketing/MarketingShell";
 
-const sections = [
+const docTracks = [
   {
-    icon: <Workflow className="text-primary" />,
-    title: "Kernel Architecture",
-    code: "KERN_ARCH_v1",
-    body: "GraftAI runs as a high-performance monolith: FastAPI backend, Next.js frontend, async SQLAlchemy models, and worker-driven async jobs for non-blocking workflows.",
-    bullets: [
-      "FastAPI + SQLAlchemy async models",
-      "Public booking routes with signed action tokens",
-      "Worker cron for calendar and booking reminders",
-    ],
+    icon: Workflow,
+    label: "Product flow",
+    title: "Booking lifecycle",
+    description:
+      "Understand how public links, availability, confirmation, reminders, and rescheduling fit together as one journey.",
+    bullets: ["Time-zone aware slots", "Clear guest handoffs", "Reliable follow-up states"],
   },
   {
-    icon: <CalendarClock className="text-primary" />,
-    title: "Orchestration Flow",
-    code: "ORCH_LOGIC_v3",
-    body: "Public booking supports availability calculation, conflict prevention, confirmations, reschedule, and cancellation with email lifecycle updates.",
-    bullets: [
-      "Timezone-aware slot generation",
-      "Tokenized attendee management links",
-      "Calendar event synchronization updates",
-    ],
+    icon: Layers3,
+    label: "System shape",
+    title: "Platform architecture",
+    description:
+      "See how the FastAPI backend, worker queue, frontend shell, and calendar sync layers stay coordinated under load.",
+    bullets: ["Async API routes", "Celery background work", "Shared design and auth patterns"],
   },
   {
-    icon: <ShieldCheck className="text-primary" />,
-    title: "Security Protocols",
-    code: "SEC_BASE_v2",
-    body: "Security headers, trusted host checks, auth token validation, and per-route rate limiting protect critical API workflows.",
-    bullets: [
-      "HSTS and strict frame policies",
-      "HMAC action token verification",
-      "Rate limits for booking endpoints",
-    ],
+    icon: ShieldCheck,
+    label: "Trust layer",
+    title: "Security and policy",
+    description:
+      "Review the operational defaults that keep scheduling flows protected, rate-limited, and auditable.",
+    bullets: ["JWT and session boundaries", "Protected action tokens", "Operational guardrails"],
   },
   {
-    icon: <Code2 className="text-primary" />,
-    title: "Embed Modules",
-    code: "EMBED_LOADER_v1",
-    body: "Embed booking directly into external websites through the GraftAI embed loader and dedicated iframe route.",
-    bullets: [
-      "Drop-in script: /graftai-embed.js",
-      "Autoload via data-graftai-embed",
-      "Direct username-based route support",
-    ],
+    icon: Code2,
+    label: "Build surface",
+    title: "Developer handoff",
+    description:
+      "Jump from product docs into implementation guidance, code examples, and API-oriented thinking without losing context.",
+    bullets: ["Starter snippets", "Integration patterns", "Delivery-oriented references"],
   },
+];
+
+const implementationCards = [
+  {
+    title: "Frontend conventions",
+    text: "Use the singleton API client, prefer server components by default, and keep public routes visually calm and fast to scan.",
+  },
+  {
+    title: "Backend conventions",
+    text: "Use async sessions, explicit HTTP exceptions, idempotency on booking creation, and Celery for durable background work.",
+  },
+  {
+    title: "Automation model",
+    text: "Treat AI as one layer in a fallback chain, not the only decision-maker. Every automated action should remain explainable later.",
+  },
+];
+
+const quickLinks = [
+  { href: "/developers", label: "Open developer hub" },
+  { href: "/pricing", label: "See plans and quotas" },
+  { href: "/privacy", label: "Review privacy policy" },
 ];
 
 export default function DocsPage() {
   return (
-    <Box sx={{ bgcolor: "var(--bg-base)", minHeight: "100vh", position: "relative" }}>
-      <Container maxWidth="lg" sx={{ pt: { xs: 20, md: 24 }, pb: 20, position: "relative", zIndex: 1 }}>
-        <Stack spacing={2} sx={{ mb: 12 }}>
-          <Button
-            component={Link}
-            href="/"
-            startIcon={<ArrowLeft size={16} />}
-            sx={{ 
-              alignSelf: "start", 
-              color: "var(--text-faint)", 
-              fontSize: 12, 
-              fontFamily: "var(--font-mono)",
-              "&:hover": { color: "var(--primary)" }
-            }}
+    <MarketingShell currentPath="/docs">
+      <MarketingHero
+        eyebrow="Documentation hub"
+        title="Explore the system without losing the product feel."
+        description="The docs experience now mirrors the same calm, premium atmosphere as the landing page while giving visitors a clearer path into architecture, workflows, and implementation details."
+        primaryAction={
+          <Link
+            href="/developers"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#1A73E8] px-6 py-3 text-sm font-semibold text-white shadow-[0_16px_34px_-22px_rgba(26,115,232,0.9)] transition-all hover:bg-[#1557B0]"
           >
-            RETURN_TO_CORE
-          </Button>
-
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={4}
-            sx={{ alignItems: "flex-start", justifyContent: "space-between" }}
+            Explore developer hub <ArrowRight size={16} />
+          </Link>
+        }
+        secondaryAction={
+          <Link
+            href="/pricing"
+            className="inline-flex items-center justify-center rounded-full border border-[#DADCE0] bg-white px-6 py-3 text-sm font-semibold text-[#5F6368] transition-colors hover:bg-[#F8F9FA] hover:text-[#202124]"
           >
-            <Box>
-              <Typography
-                variant="h1"
-                className="text-gradient-neon"
-                sx={{
-                  fontWeight: 900,
-                  fontSize: { xs: 42, md: 64 },
-                  letterSpacing: "-0.04em",
-                  lineHeight: 1,
-                  mb: 2
-                }}
-              >
-                Kernel Docs
-              </Typography>
-              <Typography sx={{ color: "var(--text-muted)", fontSize: 16, maxWidth: 600 }}>
-                System-level documentation for the GraftAI orchestration track. Architecture, operational safety, and rollout conventions.
-              </Typography>
-            </Box>
-            
-            <Box className="refined-glass" sx={{ p: 2, borderRadius: 2, display: "flex", gap: 2, alignItems: "center" }}>
-              <Box className="system-status-dot" />
-              <Typography sx={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--primary)", fontWeight: 800 }}>
-                DOCS_LIVE_v3.0.82
-              </Typography>
-            </Box>
-          </Stack>
-        </Stack>
+            Compare plans
+          </Link>
+        }
+        stats={[
+          { label: "System", value: "FastAPI + Next.js" },
+          { label: "Scheduling", value: "Atomic booking flow" },
+          { label: "Automation", value: "AI with fallbacks" },
+        ]}
+        aside={
+          <MarketingCard className="h-full">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                  Reader mode
+                </p>
+                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-[#202124]">
+                  Start at the right altitude.
+                </h2>
+              </div>
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E8F0FE] text-[#1967D2]">
+                <BookOpenText size={20} />
+              </div>
+            </div>
 
-        <Grid container spacing={3} sx={{ mb: 12 }}>
-          {sections.map((section, idx) => (
-            <Grid size={{ xs: 12, md: 6 }} key={section.title}>
+            <div className="mt-6 space-y-3">
+              {quickLinks.map((link, index) => (
+                <motion.div
+                  key={link.href}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.12 + index * 0.08 }}
+                >
+                  <Link
+                    href={link.href}
+                    className="group flex items-center justify-between rounded-3xl border border-[#E5EAF1] bg-[#F8FBFF] px-4 py-4 transition-all hover:-translate-y-0.5 hover:border-[#D2E3FC] hover:bg-white"
+                  >
+                    <span className="text-sm font-medium text-[#202124]">{link.label}</span>
+                    <ArrowRight
+                      size={16}
+                      className="text-[#1A73E8] transition-transform group-hover:translate-x-0.5"
+                    />
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="mt-6 rounded-[28px] border border-[#DADCE0] bg-[#202124] p-5 text-white shadow-[0_26px_50px_-36px_rgba(32,33,36,0.9)]">
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/60">
+                <Sparkles size={12} />
+                Live excerpt
+              </div>
+              <pre className="mt-4 overflow-x-auto text-sm leading-relaxed text-[#D2E3FC]">
+{`POST /api/v1/bookings
+X-Idempotency-Key: calm-flow-001
+
+{
+  "event_type_id": "strategy-intro",
+  "timezone": "America/Los_Angeles",
+  "attendee_email": "guest@example.com"
+}`}
+              </pre>
+            </div>
+          </MarketingCard>
+        }
+      />
+
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
+        <MarketingSectionHeading
+          kicker="Documentation tracks"
+          title="A clearer way to move from product story to implementation detail."
+          description="Instead of splitting the experience into disconnected dark microsites, the documentation now behaves like a guided surface with crisp hierarchy, motion, and stronger wayfinding."
+        />
+
+        <div className="mt-10 grid gap-4 md:grid-cols-2">
+          {docTracks.map((track, index) => {
+            const Icon = track.icon;
+            return (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                style={{ height: "100%" }}
+                key={track.title}
+                initial={{ opacity: 0, y: 18 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ duration: 0.45, delay: index * 0.06 }}
               >
-                <Box className="refined-glass" sx={{ 
-                  p: 4, 
-                  height: "100%", 
-                  borderRadius: 2,
-                  display: "flex",
-                  flexDirection: "column",
-                  "&:hover": { borderColor: "var(--primary)", transition: "0.3s" }
-                }}>
-                  <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 3 }}>
-                    <Box sx={{ p: 1, bgcolor: "rgba(0, 255, 156, 0.05)", borderRadius: 1 }}>
-                      {section.icon}
-                    </Box>
-                    <Typography sx={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-faint)" }}>
-                      {`// ${section.code}`}
-                    </Typography>
-                  </Stack>
-
-                  <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, color: "var(--text-primary)" }}>
-                    {section.title}
-                  </Typography>
-                  <Typography sx={{ color: "var(--text-muted)", fontSize: 13, mb: 4, lineHeight: 1.6 }}>
-                    {section.body}
-                  </Typography>
-
-                  <Stack spacing={1.5} sx={{ mt: "auto" }}>
-                    {section.bullets.map((bullet) => (
-                      <Stack key={bullet} direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                        <ChevronRight size={12} className="text-primary opacity-50" />
-                        <Typography sx={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }}>{bullet}</Typography>
-                      </Stack>
+                <MarketingCard className="h-full">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F0FE] text-[#1967D2]">
+                      <Icon size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                        {track.label}
+                      </p>
+                      <h3 className="mt-2 text-xl font-semibold tracking-tight text-[#202124]">
+                        {track.title}
+                      </h3>
+                    </div>
+                  </div>
+                  <p className="mt-4 text-sm leading-relaxed text-[#5F6368]">{track.description}</p>
+                  <div className="mt-5 grid gap-2">
+                    {track.bullets.map((bullet) => (
+                      <div
+                        key={bullet}
+                        className="rounded-2xl border border-[#E5EAF1] bg-[#F8FBFF] px-4 py-3 text-sm font-medium text-[#202124]"
+                      >
+                        {bullet}
+                      </div>
                     ))}
-                  </Stack>
-                </Box>
+                  </div>
+                </MarketingCard>
               </motion.div>
-            </Grid>
-          ))}
-        </Grid>
+            );
+          })}
+        </div>
+      </section>
 
-        <Box sx={{ 
-          p: 6, 
-          borderRadius: 2, 
-          bgcolor: "rgba(255,255,255,0.01)", 
-          border: "1px dashed var(--border-subtle)",
-          position: "relative",
-          overflow: "hidden"
-        }}>
-          <Box sx={{ position: "relative", zIndex: 1 }}>
-            <Typography variant="h4" sx={{ fontWeight: 900, mb: 4, display: "flex", alignItems: "center", gap: 2 }}>
-              <Terminal size={24} className="text-primary" /> System Implementation
-            </Typography>
-            
-            <Grid container spacing={6}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Typography sx={{ color: "var(--text-muted)", fontSize: 14, mb: 4, lineHeight: 1.6 }}>
-                  For production readiness, ensure neural reminders remain enabled in workers, monitor synchronization delivery logs, and verify public action token flows after any kernel refactor.
-                </Typography>
-                <Stack direction="row" spacing={2}>
-                  <Button
-                    component={Link}
-                    href="/pricing"
-                    variant="contained"
-                    sx={{ bgcolor: "var(--primary)", color: "var(--bg-base)", fontWeight: 800, px: 3, "&:hover": { bgcolor: "var(--primary)", opacity: 0.9 } }}
+      <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 sm:pb-16">
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.45 }}
+          >
+            <MarketingCard className="h-full">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FDE7E9] text-[#D93025]">
+                  <TerminalSquare size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                    Implementation note
+                  </p>
+                  <h3 className="mt-2 text-xl font-semibold tracking-tight text-[#202124]">
+                    Operational guidance stays close to the product.
+                  </h3>
+                </div>
+              </div>
+              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-[#5F6368]">
+                GraftAI’s strongest documentation isn’t just a reference list. It ties UI choices, API behavior,
+                background task expectations, and security rules into one readable system so contributors can make
+                changes confidently.
+              </p>
+              <div className="mt-6 grid gap-3">
+                {implementationCards.map((card) => (
+                  <div
+                    key={card.title}
+                    className="rounded-[28px] border border-[#E5EAF1] bg-white/90 px-5 py-4 shadow-[0_14px_34px_-28px_rgba(32,33,36,0.32)]"
                   >
-                    PLAN_SUBSCRIPTION
-                  </Button>
-                  <Button
-                    component={Link}
-                    href="/privacy"
-                    variant="outlined"
-                    sx={{ borderColor: "var(--border-subtle)", color: "var(--text-primary)", px: 3 }}
-                  >
-                    SECURITY_SPEC
-                  </Button>
-                </Stack>
-              </Grid>
+                    <p className="text-sm font-semibold text-[#202124]">{card.title}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-[#5F6368]">{card.text}</p>
+                  </div>
+                ))}
+              </div>
+            </MarketingCard>
+          </motion.div>
 
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ 
-                  p: 3, 
-                  bgcolor: "rgba(0,0,0,0.5)", 
-                  borderRadius: 1, 
-                  border: "1px solid var(--border-subtle)",
-                  fontFamily: "var(--font-mono)"
-                }}>
-                  <Typography sx={{ fontSize: 10, color: "var(--text-faint)", mb: 2, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                    {"// EMBED_PROMPT_v1.0"}
-                  </Typography>
-                  <Box component="pre" sx={{ fontSize: 12, color: "var(--primary)", overflowX: "auto", m: 0 }}>
-{`<div data-graftai-embed data-user="OPERATIVE_ID"></div>
-<script src="https://graftai.tech/relay.js" defer></script>`}
-                  </Box>
-                </Box>
-              </Grid>
-            </Grid>
-          </Box>
-        </Box>
-      </Container>
-    </Box>
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.45, delay: 0.08 }}
+          >
+            <MarketingCard className="h-full">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5F6368]">
+                Next stop
+              </p>
+              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[#202124]">
+                Ready for code, SDKs, and integration patterns?
+              </h3>
+              <p className="mt-4 text-sm leading-relaxed text-[#5F6368]">
+                The developer hub now inherits the same public theme, but it goes deeper into examples, architecture
+                surfaces, and implementation-ready entry points.
+              </p>
+
+              <div className="mt-6 rounded-[28px] border border-[#DADCE0] bg-[#202124] p-5 text-white">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/60">
+                  <Code2 size={12} />
+                  Focus areas
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {["Quick-start snippets", "Architecture maps", "API capability overview", "Support and handoff paths"].map((item) => (
+                    <div
+                      key={item}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/90"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Link
+                href="/developers"
+                className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#1A73E8] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1557B0]"
+              >
+                Continue to developers <ArrowRight size={16} />
+              </Link>
+            </MarketingCard>
+          </motion.div>
+        </div>
+      </section>
+    </MarketingShell>
   );
 }
+

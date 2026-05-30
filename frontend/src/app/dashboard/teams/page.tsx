@@ -43,7 +43,8 @@ export default function TeamsPage() {
     createTeam({
       name: `New Team ${Date.now()}`,
       slug: `team-${Date.now()}`,
-      routing_logic: "round_robin",
+      // Backend currently supports host-only booking defaults.
+      routing_logic: "strict",
     });
   };
 

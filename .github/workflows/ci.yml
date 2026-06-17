@@ -33,28 +33,9 @@ jobs:
       - name: Install native binary for CI platform (lockfile only has Windows)
         run: npm install --no-save lightningcss-linux-x64-gnu
         working-directory: frontend
-      - name: Debug — versions & native modules
-        run: |
-          node --version
-          npm --version
-          ls -la node_modules/lightningcss* 2>/dev/null || true
-          node -e "try{require('lightningcss').browserslistToTargets;}catch(e){console.error('lightningcss load failed:',e.message)}"
-        working-directory: frontend
-        continue-on-error: true
-      - name: Lint
-        run: npm run lint
-        working-directory: frontend
-        continue-on-error: true
       - name: Build
-        run: npx next build --webpack 2>&1 | tee /tmp/next-build.log
+        run: npm run build 2>&1 | tail -50
         working-directory: frontend
-      - name: Dump build log on failure
-        if: failure()
-        run: |
-          echo "## Build output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          head -c 15000 /tmp/next-build.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
 
   docker:
     name: Docker Build

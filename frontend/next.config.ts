@@ -111,7 +111,6 @@ const nextConfig: NextConfig = {
       ],
     };
   },
-  turbopack: {},
 };
 
 export default withSerwist(nextConfig);

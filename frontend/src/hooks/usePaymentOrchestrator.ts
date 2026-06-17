@@ -20,7 +20,7 @@ interface UsePaymentOrchestratorReturn extends PaymentOrchestratorState {
   reset: () => void;
 }
 
-function isPaymentDisabledResponse(resp: unknown): resp is { payment_intent_id: string; status: string } {
+function isPaymentDisabledResponse(resp: unknown): boolean {
   if (!resp || typeof resp !== "object") return false;
   const r = resp as Record<string, unknown>;
   return r.payment_intent_id === "" || r.mode === "disabled" || r.status === "disabled";

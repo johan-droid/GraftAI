@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from datetime import UTC, datetime
@@ -20,16 +21,16 @@ async def get_ms_graph_client(db: AsyncSession, user_id: str) -> ClientProxy | N
         return None
     return ClientProxy(base_url="https://graph.microsoft.com/v1.0", headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"})
 
-def get_ms_graph_token(token_data: dict) -> str:
+async def get_ms_graph_token(token_data: dict) -> str:
     """Refreshes and returns a Microsoft Graph access token."""
-    app = ConfidentialClientApplication(MICROSOFT_CLIENT_ID, authority=MICROSOFT_AUTHORITY, client_credential=MICROSOFT_CLIENT_SECRET)
+    app = await asyncio.to_thread(lambda: ConfidentialClientApplication(MICROSOFT_CLIENT_ID, authority=MICROSOFT_AUTHORITY, client_credential=MICROSOFT_CLIENT_SECRET))
     scopes = token_data.get("scopes") or ""
     if isinstance(scopes, str):
         scopes = [scope.strip() for scope in scopes.split(",") if scope.strip()]
-    result = app.acquire_token_by_refresh_token(token_data.get("refresh_token"), scopes=scopes)
+    result = await asyncio.to_thread(app.acquire_token_by_refresh_token, token_data.get("refresh_token"), scopes=scopes)
     if "access_token" in result:
         return result["access_token"]
-    logger.error("❌ MS Graph token refresh failed: %s", result.get("error_description"))
+    logger.error(" MS Graph token refresh failed: %s", result.get("error_description"))
     msg = f"Microsoft token refresh failed: {result.get('error')}"
     raise RuntimeError(msg)
 
@@ -39,22 +40,22 @@ async def create_teams_meeting(token_data: dict, event_details: dict) -> str:
     Returns the join URL.
     """
     try:
-        access_token = get_ms_graph_token(token_data)
+        access_token = await get_ms_graph_token(token_data)
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
         meeting_payload = {"subject": event_details.get("title", "GraftAI Teams Meeting"), "startDateTime": event_details["start_time"].isoformat(), "endDateTime": event_details["end_time"].isoformat(), "isEntryExitAnnounced": True, "allowedPresenters": "everyone", "lobbyBypassSettings": {"scope": "everyone"}}
         client = await get_client()
         proxy = ClientProxy(client=client, base_url="https://graph.microsoft.com/v1.0", headers=headers)
         resp = await proxy.post("/me/onlineMeetings", json=meeting_payload)
         if resp.status_code != 201:
-            logger.error("❌ MS Graph API Error: %s - %s", resp.status_code, resp.text)
+            logger.error(" MS Graph API Error: %s - %s", resp.status_code, resp.text)
             msg = f"MS Graph API returned status {resp.status_code}"
             raise RuntimeError(msg)
         meeting_data = resp.json()
         join_url = meeting_data.get("joinWebUrl")
-        logger.info("✅ Teams meeting created: %s", join_url)
+        logger.info(" Teams meeting created: %s", join_url)
         return join_url
     except Exception as e:
-        logger.exception("❌ Unexpected error in Teams meeting creation: %s", e)
+        logger.exception(" Unexpected error in Teams meeting creation: %s", e)
         raise
 
 async def list_ms_events(access_token: str, delta_link: str | None=None) -> dict:
@@ -77,7 +78,7 @@ async def list_ms_events(access_token: str, delta_link: str | None=None) -> dict
         while url:
             resp = await proxy.get(url)
             if resp.status_code == 410:
-                logger.warning("🔄 Microsoft Delta link expired (410), restarting full-sync delta sequence.")
+                logger.warning(" Microsoft Delta link expired (410), restarting full-sync delta sequence.")
                 from datetime import timedelta
                 start = (datetime.now(UTC) - timedelta(days=30)).isoformat()
                 end = (datetime.now(UTC) + timedelta(days=90)).isoformat()
@@ -86,7 +87,7 @@ async def list_ms_events(access_token: str, delta_link: str | None=None) -> dict
                 delta_link_result = None
                 continue
             if resp.status_code != 200:
-                logger.error("❌ MS Graph list_events error: %s - %s", resp.status_code, resp.text)
+                logger.error(" MS Graph list_events error: %s - %s", resp.status_code, resp.text)
                 msg = f"MS Graph list_events failed: {resp.status_code}"
                 raise RuntimeError(msg)
             data = resp.json()
@@ -95,7 +96,7 @@ async def list_ms_events(access_token: str, delta_link: str | None=None) -> dict
             url = data.get("@odata.nextLink")
         return {"value": items, "@odata.deltaLink": delta_link_result}
     except Exception as e:
-        logger.exception("❌ Unexpected error in MS Graph list_events: %s", e)
+        logger.exception(" Unexpected error in MS Graph list_events: %s", e)
         raise
 
 async def get_ms_user_principal_name(access_token: str) -> str | None:
@@ -119,7 +120,7 @@ async def get_ms_busy_times(access_token: str, user_principal_name: str, start_t
         payload = {"schedules": [user_principal_name], "startTime": {"dateTime": start_time.isoformat(), "timeZone": "UTC"}, "endTime": {"dateTime": end_time.isoformat(), "timeZone": "UTC"}, "availabilityViewInterval": 30}
         resp = await proxy.post("/me/calendar/getSchedule", json=payload)
         if resp.status_code != 200:
-            logger.error("❌ MS Graph busy-time fetch failed: %s - %s", resp.status_code, resp.text)
+            logger.error(" MS Graph busy-time fetch failed: %s - %s", resp.status_code, resp.text)
             msg = f"MS Graph busy-time fetch failed: {resp.status_code}"
             raise RuntimeError(msg)
         data = resp.json()
@@ -130,7 +131,7 @@ async def get_ms_busy_times(access_token: str, user_principal_name: str, start_t
                     busy_times.append({"start": slot.get("start", {}).get("dateTime"), "end": slot.get("end", {}).get("dateTime"), "provider": "microsoft"})
         return busy_times
     except Exception as e:
-        logger.exception("❌ Microsoft busy-time fetch failed: %s", e)
+        logger.exception(" Microsoft busy-time fetch failed: %s", e)
         raise
 
 async def create_ms_event(token_data: dict, event_details: dict) -> dict:
@@ -138,7 +139,7 @@ async def create_ms_event(token_data: dict, event_details: dict) -> dict:
     Creates a Microsoft Graph calendar event with optional Teams link.
     """
     try:
-        access_token = get_ms_graph_token(token_data)
+        access_token = await get_ms_graph_token(token_data)
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json", "Prefer": 'outlook.timezone="UTC"'}
         is_meeting = event_details.get("is_meeting", False)
         payload = {"subject": event_details.get("title", "GraftAI Event"), "body": {"contentType": "HTML", "content": event_details.get("description", "")}, "start": {"dateTime": event_details["start_time"].isoformat(), "timeZone": "UTC"}, "end": {"dateTime": event_details["end_time"].isoformat(), "timeZone": "UTC"}, "isOnlineMeeting": is_meeting, "onlineMeetingProvider": "teamsForBusiness" if is_meeting else "unknown"}
@@ -146,18 +147,18 @@ async def create_ms_event(token_data: dict, event_details: dict) -> dict:
         proxy = ClientProxy(client=client, base_url="https://graph.microsoft.com/v1.0", headers=headers)
         resp = await proxy.post("/me/events", json=payload)
         if resp.status_code != 201:
-            logger.error("❌ MS Graph create_event failed: %s - %s", resp.status_code, resp.text)
+            logger.error(" MS Graph create_event failed: %s - %s", resp.status_code, resp.text)
             msg = f"MS Graph create_event returned {resp.status_code}"
             raise RuntimeError(msg)
         return resp.json()
     except Exception as e:
-        logger.exception("❌ Unexpected error in Microsoft event creation: %s", e)
+        logger.exception(" Unexpected error in Microsoft event creation: %s", e)
         raise
 
 async def update_ms_event(token_data: dict, external_id: str, event_details: dict) -> dict:
     """Updates an existing Microsoft Graph calendar event."""
     try:
-        access_token = get_ms_graph_token(token_data)
+        access_token = await get_ms_graph_token(token_data)
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json", "Prefer": 'outlook.timezone="UTC"'}
         payload = {"subject": event_details.get("title"), "body": {"contentType": "HTML", "content": event_details.get("description")}, "start": {"dateTime": event_details["start_time"].isoformat(), "timeZone": "UTC"} if "start_time" in event_details else None, "end": {"dateTime": event_details["end_time"].isoformat(), "timeZone": "UTC"} if "end_time" in event_details else None}
         payload = {k: v for k, v in payload.items() if v is not None}
@@ -165,28 +166,28 @@ async def update_ms_event(token_data: dict, external_id: str, event_details: dic
         proxy = ClientProxy(client=client, base_url="https://graph.microsoft.com/v1.0", headers=headers)
         resp = await proxy.patch(f"/me/events/{external_id}", json=payload)
         if resp.status_code != 200:
-            logger.error("❌ MS Graph Update Error: %s - %s", resp.status_code, resp.text)
+            logger.error(" MS Graph Update Error: %s - %s", resp.status_code, resp.text)
             msg = f"MS Graph API returned status {resp.status_code}"
             raise RuntimeError(msg)
-        logger.info("✅ Microsoft Event updated: %s", external_id)
+        logger.info(" Microsoft Event updated: %s", external_id)
         return resp.json()
     except Exception as e:
-        logger.exception("❌ MS Graph update failed for %s: %s", external_id, e)
+        logger.exception(" MS Graph update failed for %s: %s", external_id, e)
         raise
 
 async def delete_ms_event(token_data: dict, external_id: str) -> None:
     """Deletes a Microsoft Graph calendar event."""
     try:
-        access_token = get_ms_graph_token(token_data)
+        access_token = await get_ms_graph_token(token_data)
         headers = {"Authorization": f"Bearer {access_token}"}
         client = await get_client()
         proxy = ClientProxy(client=client, base_url="https://graph.microsoft.com/v1.0", headers=headers)
         resp = await proxy.delete(f"/me/events/{external_id}")
         if resp.status_code != 204:
-            logger.error("❌ MS Graph Delete Error: %s - %s", resp.status_code, resp.text)
+            logger.error(" MS Graph Delete Error: %s - %s", resp.status_code, resp.text)
             msg = f"MS Graph API returned status {resp.status_code}"
             raise RuntimeError(msg)
-        logger.info("✅ Microsoft Event deleted: %s", external_id)
+        logger.info(" Microsoft Event deleted: %s", external_id)
     except Exception as e:
-        logger.exception("❌ MS Graph delete failed for %s: %s", external_id, e)
+        logger.exception(" MS Graph delete failed for %s: %s", external_id, e)
         raise

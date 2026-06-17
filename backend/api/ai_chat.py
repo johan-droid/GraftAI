@@ -36,6 +36,7 @@ class ChatMessageSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Request schema for sending a message."""
     message: str | None = None
     prompt: str | None = None
@@ -51,6 +52,7 @@ class ChatRequest(BaseModel):
         return self
 
 class ChatResponseData(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Response schema for AI chat."""
     id: str
     role: str
@@ -69,12 +71,14 @@ class ChatResponseData(BaseModel):
     milestone: str | None = None
 
 class ChatResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Standardized chat response."""
     success: bool = True
     message: str = "Message processed"
     data: ChatResponseData
 
 class ConversationListSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Schema for listing conversations."""
     id: str
     title: str
@@ -82,18 +86,21 @@ class ConversationListSchema(BaseModel):
     message_count: int
 
 class ConversationListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Standardized conversation list response."""
     success: bool = True
     message: str = "Conversations retrieved"
     data: list[ConversationListSchema]
 
 class PaginatedChatResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Standardized paginated chat response."""
     success: bool = True
     message: str = "Messages retrieved"
     data: PaginatedResponse[ChatMessageSchema]
 
 class ChatDeleteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Standardized chat delete response."""
     success: bool = True
     message: str = "Conversation deleted"

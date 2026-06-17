@@ -157,10 +157,14 @@ export default function PublicBookingPage() {
         if (!paymentConfirmed) {
           throw new Error("Please confirm payment before booking this paid event.");
         }
-        payload.metadata = {
+        const meta: Record<string, unknown> = {
           payment_status: "paid",
           payment_verified: true,
         };
+        if (paymentIntent?.payment_intent_id) {
+          meta["payment_intent_id"] = paymentIntent.payment_intent_id;
+        }
+        payload.metadata = meta;
       }
 
       const bookingResponse = await bookPublicEvent(params.username, params.event_type, payload);

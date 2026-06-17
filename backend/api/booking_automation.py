@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,12 +26,14 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/bookings", tags=["booking-automation"])
 
 class TriggerAutomationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Request to trigger automation for a booking"""
     booking_id: str = Field(..., description="ID of the booking to automate")
     user_id: str | None = Field(None, description="User ID (defaults to current user)")
     trigger_source: str = Field("api", description="Source of trigger (scheduler, api, webhook)")
 
 class AutomationActionResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Result of a single automation action"""
     tool_name: str
     success: bool
@@ -43,6 +45,7 @@ class AutomationActionResult(BaseModel):
     error: str | None = None
 
 class AgentDecisionInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Information about agent decisions"""
     actions: list[str]
     reasoning: str
@@ -53,6 +56,7 @@ class AgentDecisionInfo(BaseModel):
     human_review_reason: str | None = None
 
 class AutomationStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Response for automation status"""
     booking_id: str
     status: str
@@ -66,6 +70,7 @@ class AutomationStatusResponse(BaseModel):
     automation_summary: str
 
 class AutomationHistoryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Response for automation history"""
     booking_id: str
     automation_count: int

@@ -111,7 +111,7 @@ class GoogleCalendarService:
     def __init__(self, credentials_path: str | None=None):
         self.service = None
         self.credentials = None
-        self.credentials_path = credentials_path or "credentials.json"
+        self.credentials_path = credentials_path or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "") or "credentials.json"
 
     async def authenticate(self, user_email: str) -> bool:
         """
@@ -431,7 +431,8 @@ async def generate_google_auth_url(redirect_uri: str | None=None) -> str:
     if not CalendarConfig.is_google_configured():
         msg = "Google Calendar not configured"
         raise Exception(msg)
-    flow = await asyncio.to_thread(InstalledAppFlow.from_client_secrets_file, "credentials.json", SCOPES, redirect_uri=redirect_uri or CalendarConfig.GOOGLE_REDIRECT_URI)
+    creds_file = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "credentials.json")
+    flow = await asyncio.to_thread(InstalledAppFlow.from_client_secrets_file, creds_file, SCOPES, redirect_uri=redirect_uri or CalendarConfig.GOOGLE_REDIRECT_URI)
     auth_url, _ = flow.authorization_url(prompt="consent")
     return auth_url
 
@@ -447,7 +448,8 @@ async def handle_google_callback(code: str, user_email: str) -> bool:
         Success status
     """
     try:
-        flow = await asyncio.to_thread(InstalledAppFlow.from_client_secrets_file, "credentials.json", SCOPES, redirect_uri=CalendarConfig.GOOGLE_REDIRECT_URI)
+        creds_file = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "credentials.json")
+        flow = await asyncio.to_thread(InstalledAppFlow.from_client_secrets_file, creds_file, SCOPES, redirect_uri=CalendarConfig.GOOGLE_REDIRECT_URI)
         await asyncio.to_thread(flow.fetch_token, code=code)
         creds = flow.credentials
         token_path = f"tokens/{user_email}_token.json"

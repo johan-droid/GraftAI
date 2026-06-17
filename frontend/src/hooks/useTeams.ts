@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { enhancedApiClient } from "@/lib/api-client-enhanced";
 import { Team } from "@/types/api";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 
 export function useTeams() {
   const queryClient = useQueryClient();

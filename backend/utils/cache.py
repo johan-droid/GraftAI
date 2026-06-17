@@ -146,6 +146,63 @@ async def invalidate_user_cache_pattern(user_id: str, prefix: str) -> None:
         _fallback_cache.pop(k, None)
     return None
 
+async def get_or_renew(key: str, ttl: int, fetch_func, stale_ttl: int | None = None, lock_timeout: int = 10, retry_delay: float = 0.05, max_retries: int = 5):
+    """
+    Cache-aside with stampede protection.
+
+    Attempts fast-path cache read. On miss, uses `cache_set_if_not_exists` (SETNX)
+    to acquire a regeneration lock. Only the lock holder calls `fetch_func` to
+    recompute the value. Other callers wait and retry, or return stale data if
+    `stale_ttl` is provided.
+
+    Args:
+        key: Cache key.
+        ttl: TTL for fresh cache entry.
+        fetch_func: Async callable that returns the value to cache.
+        stale_ttl: If set, allow returning stale data while regeneration is in progress.
+        lock_timeout: Seconds before the regeneration lock auto-releases.
+        retry_delay: Seconds to wait between retries.
+        max_retries: Maximum number of retries before falling through to fetch_func.
+
+    Returns:
+        The cached or freshly-computed value.
+    """
+    cached = await cache_get(key)
+    if cached is not None:
+        return cached
+
+    # Attempt to acquire regeneration lock via SETNX
+    lock_key = f"renew_lock:{key}"
+    if await cache_set_if_not_exists(lock_key, "1", expire=lock_timeout):
+        try:
+            value = await fetch_func()
+            await cache_set(key, value, expire=ttl)
+            return value
+        except Exception:
+            raise
+        finally:
+            await cache_delete(lock_key)
+
+    # Lock held by another worker — retry with optional stale fallback
+    for attempt in range(max_retries):
+        await asyncio.sleep(retry_delay * (attempt + 1))
+        cached = await cache_get(key)
+        if cached is not None:
+            return cached
+        if stale_ttl and attempt == max_retries - 1:
+            stale = _fallback_retrieve(key)
+            if stale is not None:
+                try:
+                    return json.loads(stale)
+                except json.JSONDecodeError:
+                    return stale
+
+    # Timeout — call fetch_func directly (degraded but safe)
+    value = await fetch_func()
+    await cache_set(key, value, expire=ttl)
+    return value
+
+
 async def get_redis_client():
     """Attempt to return an async redis client from available helpers, else None."""
     try:

@@ -14,7 +14,7 @@ from backend.utils.db import get_db
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 @router.post("/revoke-current-session")
 async def revoke_current_session(request: Request, db: AsyncSession=Depends(get_db), current_user: UserTable=Depends(get_current_user)) -> dict:

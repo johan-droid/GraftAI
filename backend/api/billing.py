@@ -10,7 +10,7 @@ from typing import Any, cast
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import desc, insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,14 +27,17 @@ from backend.auth.schemes import require_admin
 from backend.models.tables import (
     AuditLogTable,
     ManualActivationRequestTable,
+    PaymentIntentTable,
     UserTable,
     WebhookLogTable,
 )
 from backend.services.mail_service import send_email
+from backend.services.payment import confirm_payment_intent, create_payment_intent, fail_pending_payment_intents_by_gateway, update_payment_intent_gateway_id
 from backend.services.usage import publish_quota_update
 
 
 class PlanInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     id: str
     name: str
     price: float
@@ -51,6 +54,7 @@ async def get_plans():
     return [PlanInfo(id="free", name="Standard", price=0.0, currency="USD", ai_limit=10, sync_limit=3, description="Perfect for managing your personal schedule and trying out AI assistance.", features=["10 AI Assistant Messages / Day", "Sync with Google & Outlook", "Standard Processing Speed", "Community Support"]), PlanInfo(id="pro", name="Professional", price=19.0, currency="USD", ai_limit=200, sync_limit=50, description="The ultimate productivity engine for individuals and power users.", features=["200 AI Assistant Messages / Day", "Priority Processing Speed", "Advanced Time Analytics", "Custom Meeting Templates", "Priority Support"]), PlanInfo(id="elite", name="Enterprise", price=49.0, currency="USD", ai_limit=2000, sync_limit=500, description="Unbounded AI coordination for teams and high-level mastery.", features=["Unlimited AI Messages", "Unlimited Tool Access", "Early Access to Features", "Dedicated Support", "Custom Privacy Controls"])]
 
 class UsageHistoryItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     date: str
     ai_count: int
     sync_count: int
@@ -68,6 +72,7 @@ async def get_usage_history(days: int=Query(30, ge=1, le=365), db: AsyncSession=
     return list(reversed(usage))
 
 class TransactionHistoryItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     id: str
     timestamp: datetime
     method: str
@@ -157,6 +162,77 @@ async def create_checkout_session(request: Request, db: AsyncSession=Depends(get
         return {"order_id": "order_simulated_" + current_user.id[:8], "key": RAZORPAY_KEY_ID or "rzp_test_dummy", "amount": 1900, "currency": "USD", "mode": "simulation", "warning": "This is a simulated checkout. No real payment will be processed."}
     return {"mode": "disabled", "message": "Payments are not configured for this deployment. Please contact the account owner to enable payments."}
 
+class CreatePaymentIntentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    tier: str = "pro"
+    gateway: str | None = None
+    currency: str | None = None
+    booking_id: str | None = None
+    event_type_id: str | None = None
+
+class CreatePaymentIntentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    payment_intent_id: str
+    gateway: str
+    gateway_order_id: str | None = None
+    gateway_key: str | None = None
+    amount: float
+    currency: str
+    client_secret: str | None = None
+    mode: str
+    status: str = "initiated"
+
+@router.post("/create-intent", response_model=CreatePaymentIntentResponse)
+async def create_payment_intent_endpoint(payload: CreatePaymentIntentRequest, db: AsyncSession=Depends(get_db), current_user: UserTable=Depends(get_current_user)):
+    """Unified payment intent creation. Routes to Stripe or Razorpay based on availability and region."""
+    tier = payload.tier.lower()
+    preferred_gateway = payload.gateway
+    if PAYMENT_MODE == "disabled":
+        return CreatePaymentIntentResponse(payment_intent_id="", gateway="disabled", amount=0.0, currency="USD", client_secret=None, mode="disabled", status="disabled")
+    gateway: str | None = None
+    gateway_order_id: str | None = None
+    gateway_key: str | None = None
+    gateway_client_secret: str | None = None
+    amount_cents: int = 0
+    resolved_currency: str = "USD"
+    razorpay_tier_amounts = {"pro": 49900, "elite": 149900}
+    stripe_tier_amounts = {"pro": 1900, "elite": 4900}
+    if preferred_gateway == "razorpay" or (not preferred_gateway and (payload.currency and payload.currency.upper() == "INR")):
+        if _get_razorpay_client():
+            gateway = "razorpay"
+            resolved_currency = "INR"
+            amount_cents = razorpay_tier_amounts.get(tier, 49900)
+            try:
+                order = _get_razorpay_client().order.create({"amount": amount_cents, "currency": resolved_currency, "receipt": f"rcpt_{current_user.id[:8]}_{tier}", "notes": {"user_id": current_user.id, "tier": tier}})
+                gateway_order_id = order.get("id")
+                gateway_key = RAZORPAY_KEY_ID
+            except Exception:
+                logger.exception("Failed to create Razorpay order for unified intent")
+                raise HTTPException(status_code=500, detail="Failed to create Razorpay order")
+        else:
+            raise HTTPException(status_code=503, detail="Razorpay gateway not configured")
+    if not gateway and (preferred_gateway == "stripe" or not preferred_gateway):
+        if STRIPE_SECRET_KEY:
+            gateway = "stripe"
+            resolved_currency = payload.currency or "USD"
+            amount_cents = stripe_tier_amounts.get(tier, 1900)
+            try:
+                checkout_session = stripe.checkout.Session.create(payment_method_types=["card"], line_items=[{"price_data": {"currency": resolved_currency.lower(), "product_data": {"name": f"GraftAI {tier.capitalize()} Subscription", "description": f"{tier.capitalize()} tier subscription"}, "unit_amount": amount_cents, "recurring": {"interval": "month"}}, "quantity": 1}], mode="subscription", success_url=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/dashboard/settings/billing?session_id={{CHECKOUT_SESSION_ID}}", cancel_url=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/dashboard/settings/billing?canceled=true", client_reference_id=current_user.id, metadata={"user_id": current_user.id, "tier": tier})
+                gateway_order_id = checkout_session.id
+                gateway_client_secret = checkout_session.url
+                gateway_key = STRIPE_PUBLISHABLE_KEY
+            except stripe.error.StripeError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        else:
+            raise HTTPException(status_code=503, detail="Stripe gateway not configured")
+    if not gateway:
+        raise HTTPException(status_code=503, detail="No payment gateway available")
+    intent = await create_payment_intent(db, user_id=current_user.id, gateway=gateway, amount=float(amount_cents) / 100, currency=resolved_currency, booking_id=payload.booking_id, event_type_id=payload.event_type_id, metadata_payload={"tier": tier})
+    if gateway_order_id:
+        await update_payment_intent_gateway_id(db, intent.id, gateway_order_id, client_secret=gateway_client_secret)
+    await db.commit()
+    return CreatePaymentIntentResponse(payment_intent_id=intent.id, gateway=gateway, gateway_order_id=gateway_order_id, gateway_key=gateway_key, amount=float(amount_cents) / 100, currency=resolved_currency, client_secret=gateway_client_secret, mode=PAYMENT_MODE, status=intent.status)
+
 @router.post("/razorpay/verify-simulation")
 async def simulate_verification(request: Request, db: AsyncSession=Depends(get_db), current_user: UserTable=Depends(get_current_user)):
     """
@@ -210,16 +286,74 @@ async def razorpay_webhook(request: Request, db: AsyncSession=Depends(get_db)):
     signature = request.headers.get("x-razorpay-signature")
     request_host = request.client.host if request.client is not None else "unknown"
     if not signature or not verify_razorpay_signature(body, signature, RAZORPAY_WEBHOOK_SECRET):
-        logger.warning("❌ Invalid Razorpay webhook signature from %s", request_host)
+        logger.warning("Invalid Razorpay webhook signature from %s", request_host)
         raise HTTPException(status_code=403, detail="Invalid webhook signature")
     try:
         event = json.loads(body)
         evt_type = event.get("event")
-        event.get("payload", {})
+        payload = event.get("payload", {})
+        payment = payload.get("payment", {}) or payload.get("subscription", {})
+        entity = payload.get("subscription", {}) or payload.get("payment", {})
         if evt_type in {"subscription.activated", "subscription.charged"}:
-            pass
+            razorpay_sub_id = entity.get("id") or payment.get("id")
+            if not razorpay_sub_id:
+                logger.warning("Razorpay webhook missing subscription ID")
+                return {"status": "ignored"}
+            notes = entity.get("notes", {}) or payment.get("notes", {})
+            user_id = notes.get("user_id")
+            tier = notes.get("tier", "pro")
+            if not user_id:
+                logger.warning("Razorpay webhook missing user_id in notes")
+                return {"status": "ignored"}
+            amount = float(entity.get("amount", 49900) or 49900) / 100
+            currency = (entity.get("currency", "INR") or "INR").upper()
+            intent = await create_payment_intent(db, user_id=user_id, gateway="razorpay", amount=amount, currency=currency, metadata_payload={"razorpay_subscription_id": razorpay_sub_id, "event": evt_type, "notes": notes})
+            await confirm_payment_intent(db, intent.id, gateway_payment_intent_id=razorpay_sub_id)
+            stmt = select(UserTable).where(UserTable.id == user_id)
+            result = await db.execute(stmt)
+            user = result.scalars().first()
+            if user:
+                user.razorpay_subscription_id = razorpay_sub_id or user.razorpay_subscription_id
+                await db.commit()
+                await _publish_billing_quota_update(db, user.id, f"billing.razorpay.webhook.{evt_type}")
+        elif evt_type == "payment.failed":
+            payment_id = payment.get("id") or entity.get("id")
+            if payment_id:
+                error_reason = payment.get("error_reason") or payment.get("error_description", "unknown")
+                await fail_pending_payment_intents_by_gateway(db, payment_id, f"Razorpay payment failed: {error_reason}")
+                await db.commit()
+        elif evt_type == "subscription.halted":
+            razorpay_sub_id = entity.get("id")
+            if razorpay_sub_id:
+                notes = entity.get("notes", {})
+                user_id = notes.get("user_id")
+                if user_id:
+                    stmt = select(UserTable).where(UserTable.id == user_id)
+                    result = await db.execute(stmt)
+                    user = result.scalars().first()
+                    if user:
+                        user.subscription_status = "past_due"
+                        await db.commit()
+                        await _publish_billing_quota_update(db, user_id, "billing.razorpay.webhook.subscription_halted")
+        elif evt_type == "subscription.cancelled":
+            razorpay_sub_id = entity.get("id")
+            if razorpay_sub_id:
+                notes = entity.get("notes", {})
+                user_id = notes.get("user_id")
+                if user_id:
+                    stmt = select(UserTable).where(UserTable.id == user_id)
+                    result = await db.execute(stmt)
+                    user = result.scalars().first()
+                    if user:
+                        user.tier = "free"
+                        user.subscription_status = "canceled"
+                        user.razorpay_subscription_id = None
+                        user.daily_ai_limit = 10
+                        user.daily_sync_limit = 3
+                        await db.commit()
+                        await _publish_billing_quota_update(db, user_id, "billing.razorpay.webhook.subscription_cancelled")
     except Exception as e:
-        logger.error("Webhook error: %s", e, exc_info=True)
+        logger.error("Razorpay webhook error: %s", e, exc_info=True)
     return {"status": "processed"}
 
 @router.post("/razorpay/verify")
@@ -247,10 +381,14 @@ async def verify_razorpay_payment(request: Request, db: AsyncSession=Depends(get
             logger.warning("Invalid Razorpay signature for order %s", order_id)
             raise HTTPException(status_code=403, detail="Invalid signature")
     tier = "pro"
+    amount = 49900
+    currency = "INR"
     try:
         if (client := _get_razorpay_client()):
             order = client.order.fetch(order_id)
             tier = order.get("notes", {}).get("tier", "pro")
+            amount = order.get("amount", 49900)
+            currency = order.get("currency", "INR")
     except Exception:
         logger.exception("Could not fetch Razorpay order to determine tier")
     if (client := _get_razorpay_client()):
@@ -265,24 +403,15 @@ async def verify_razorpay_payment(request: Request, db: AsyncSession=Depends(get
         except Exception:
             logger.exception("Failed to verify Razorpay payment %s", payment_id)
             raise HTTPException(status_code=500, detail="Failed to verify payment with Razorpay")
-    current_user.tier = tier
-    current_user.subscription_status = "active"
+    intent = await create_payment_intent(db, user_id=current_user.id, gateway="razorpay", amount=float(amount) / 100, currency=currency, metadata_payload={"order_id": order_id, "payment_id": payment_id, "tier": tier})
+    await confirm_payment_intent(db, intent.id, gateway_payment_intent_id=payment_id)
     current_user.razorpay_subscription_id = payment_id
-    if tier == "elite":
-        current_user.daily_ai_limit = 2000
-        current_user.daily_sync_limit = 500
-    elif tier == "pro":
-        current_user.daily_ai_limit = 200
-        current_user.daily_sync_limit = 50
-    else:
-        current_user.daily_ai_limit = 10
-        current_user.daily_sync_limit = 3
     await db.commit()
-    await db.refresh(current_user)
     await _publish_billing_quota_update(db, current_user.id, "billing.razorpay.verify")
     return {"status": "success", "tier": tier}
 
 class PresignRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     filename: str
     content_type: str | None = None
 
@@ -293,7 +422,7 @@ async def presign_manual_upload(payload: PresignRequest, db: AsyncSession=Depend
     extension = Path(payload.filename).suffix or ".dat"
     secure_filename = f"{uuid.uuid4()}{extension}"
     remote_path = f"{current_user.id}/{secure_filename}"
-    presign = storage.get_presigned_upload_url(remote_path, content_type=payload.content_type)
+    presign = await storage.get_presigned_upload_url(remote_path, content_type=payload.content_type)
     if not presign:
         raise HTTPException(status_code=500, detail="Could not generate presigned upload URL")
     return presign
@@ -364,15 +493,13 @@ async def stripe_webhook(request: Request, db: AsyncSession=Depends(get_db)):
             result = await db.execute(stmt)
             user = result.scalars().first()
             if user:
-                user.tier = "pro"
-                user.subscription_status = "active"
-                user.stripe_customer_id = session.get("customer")
-                user.stripe_subscription_id = session.get("subscription")
-                user.daily_ai_limit = 200
-                user.daily_sync_limit = 50
-                user.trial_active = False
+                amount = (session.get("amount_total", 1900) or 1900) / 100
+                currency = (session.get("currency", "usd") or "usd").upper()
+                intent = await create_payment_intent(db, user_id=user_id, gateway="stripe", amount=amount, currency=currency, metadata_payload={"session_id": session.get("id"), "customer": session.get("customer"), "subscription": session.get("subscription")})
+                await confirm_payment_intent(db, intent.id, gateway_payment_intent_id=session.get("payment_intent") or session.get("id"))
+                user.stripe_customer_id = session.get("customer") or user.stripe_customer_id
+                user.stripe_subscription_id = session.get("subscription") or user.stripe_subscription_id
                 await db.commit()
-                await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.checkout_completed")
                 await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.checkout_completed")
     elif event["type"] == "customer.subscription.deleted":
         subscription = event["data"]["object"]
@@ -388,9 +515,52 @@ async def stripe_webhook(request: Request, db: AsyncSession=Depends(get_db)):
             user.daily_sync_limit = 3
             await db.commit()
             await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.subscription_deleted")
-            await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.subscription_deleted")
-    elif event["type"] == "invoice.payment_succeeded" or event["type"] == "invoice.payment_failed":
-        pass
+    elif event["type"] == "invoice.payment_succeeded":
+        subscription = event["data"]["object"]
+        customer_id = subscription.get("customer")
+        stmt = select(UserTable).where(UserTable.stripe_customer_id == customer_id)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
+        if user:
+            amount = (subscription.get("amount_paid", 1900) or 1900) / 100
+            currency = (subscription.get("currency", "usd") or "usd").upper()
+            intent = await create_payment_intent(db, user_id=user.id, gateway="stripe", amount=amount, currency=currency, metadata_payload={"invoice_id": subscription.get("id"), "subscription": subscription.get("subscription"), "event": "invoice.payment_succeeded"})
+            await confirm_payment_intent(db, intent.id, gateway_payment_intent_id=subscription.get("payment_intent"))
+            user.stripe_subscription_id = subscription.get("subscription") or user.stripe_subscription_id
+            await db.commit()
+            await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.invoice_payment_succeeded")
+    elif event["type"] == "invoice.payment_failed":
+        subscription = event["data"]["object"]
+        customer_id = subscription.get("customer")
+        intent_id = subscription.get("payment_intent")
+        if intent_id:
+            await fail_pending_payment_intents_by_gateway(db, intent_id, "Stripe invoice payment failed")
+            await db.commit()
+        stmt = select(UserTable).where(UserTable.stripe_customer_id == customer_id)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
+        if user:
+            await _publish_billing_quota_update(db, user.id, "billing.stripe.webhook.invoice_payment_failed")
+    elif event["type"] == "customer.subscription.updated":
+        subscription = event["data"]["object"]
+        status = subscription.get("status")
+        customer_id = subscription.get("customer")
+        stmt = select(UserTable).where(UserTable.stripe_customer_id == customer_id)
+        result = await db.execute(stmt)
+        user = result.scalars().first()
+        if user:
+            user.stripe_subscription_id = subscription.get("id") or user.stripe_subscription_id
+            if status == "past_due":
+                user.subscription_status = "past_due"
+            elif status in ("canceled", "unpaid", "incomplete_expired"):
+                user.subscription_status = "canceled"
+                user.tier = "free"
+                user.daily_ai_limit = 10
+                user.daily_sync_limit = 3
+            elif status == "active":
+                user.subscription_status = "active"
+            await db.commit()
+            await _publish_billing_quota_update(db, user.id, f"billing.stripe.webhook.subscription_updated_{status}")
     return {"status": "success"}
 
 @router.get("/stripe/config")
@@ -403,12 +573,14 @@ async def get_stripe_config():
     return {"publishable_key": STRIPE_PUBLISHABLE_KEY}
 
 class ManualActivationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     requested_tier: str = "pro"
     proof_key: str | None = None
     proof_url: str | None = None
     notes: str | None = None
 
 class ManualActivationAdminNotes(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     admin_notes: str | None = None
 
 @router.post("/manual/request")

@@ -11,14 +11,8 @@ from enum import Enum
 from typing import Any
 
 from backend.utils.logger import get_logger
-from groq import AsyncGroq
 
-try:
-    from openai import AsyncOpenAI
-    _OPENAI_AVAILABLE = True
-except Exception:
-    AsyncOpenAI = None
-    _OPENAI_AVAILABLE = False
+from backend.ai.providers import LLMRouter, ProviderResponse, create_llm_router
 from backend.ai.prompts import (
     AGENT_SYSTEM_PROMPT,
     BOOKING_DECISION_SYSTEM_PROMPT,
@@ -64,19 +58,11 @@ class LLaMACore:
     - Response generation
     """
 
-    def __init__(self, model: LLaMAModel=LLaMAModel.LLAMA_3_1_70B):
-        self.model = model
+    def __init__(self):
         self.system_prompt = HUMANIZED_SYSTEM_PROMPT
         self.tools: list[dict[str, Any]] = []
-        self.client = None
-        try:
-            groq_key = os.getenv("GROQ_API_KEY")
-            if groq_key:
-                self.client = AsyncGroq(api_key=groq_key)
-                logger.info("AsyncGroq client initialized for model: %s", self.model)
-        except Exception as e:
-            logger.warning("Failed to initialize AsyncGroq client: %s", e)
-        logger.info("LLaMACore initialized with model: %s", model.value)
+        self.router = create_llm_router()
+        logger.info("LLaMACore initialized with provider router")
 
     def _load_system_prompt(self) -> str:
         """Load the system prompt for the scheduling assistant"""
@@ -176,36 +162,30 @@ class LLaMACore:
         messages_cm.extend(history)
         messages_cm.append(ConversationMessage(role="user", content=user_message))
         full_response = ""
-        if self.client is not None:
-            try:
-                formatted_messages = [{"role": m.role, "content": m.content} for m in messages_cm]
-                stream = await self.client.chat.completions.create(model=self.model.value, messages=formatted_messages, stream=True, temperature=0.7)
-                async for chunk in stream:
-                    try:
-                        delta = chunk.choices[0].delta
-                        if hasattr(delta, "content") and delta.content:
-                            text = delta.content
-                        elif isinstance(delta, dict):
-                            text = delta.get("content")
-                        else:
-                            text = None
-                    except Exception:
+        try:
+            formatted_messages = [{"role": m.role, "content": m.content} for m in messages_cm]
+            stream = await self.router.complete_stream(formatted_messages)
+            async for chunk in stream:
+                try:
+                    delta = chunk.choices[0].delta
+                    if hasattr(delta, "content") and delta.content:
+                        text = delta.content
+                    elif isinstance(delta, dict):
+                        text = delta.get("content")
+                    else:
                         text = None
-                    if text:
-                        full_response += text
-                        yield text
-            except Exception as e:
-                full_response = ""
-                logger.warning("Groq streaming failed, falling back to local streamer: %s", e)
+                except Exception:
+                    text = None
+                if text:
+                    full_response += text
+                    yield text
+        except Exception as e:
+            full_response = ""
+            logger.warning("Streaming failed, falling back to local streamer: %s", e)
         if not full_response:
             async for chunk in self._stream_llm(messages_cm):
                 full_response += chunk
                 yield chunk
-        if conversation_id:
-            if conversation_id not in self.conversation_history:
-                self.conversation_history[conversation_id] = []
-            self.conversation_history[conversation_id].append(ConversationMessage(role="user", content=user_message))
-            self.conversation_history[conversation_id].append(ConversationMessage(role="assistant", content=full_response))
 
     async def make_decision(self, decision_context: dict[str, Any], options: list[str], criteria: list[str]) -> dict[str, Any]:
         """
@@ -270,11 +250,14 @@ class LLaMACore:
             logger.exception("Failed to parse understanding: %s", response.content)
             return {"intent": "unknown", "entities": {}, "sentiment": "neutral", "urgency": "low", "clarification_needed": ["Could you please clarify your request?"], "suggested_response": "I'm not sure I understood. Could you provide more details?"}
 
-    def clear_conversation(self, conversation_id: str):
-        """Clear conversation history"""
-        if conversation_id in self.conversation_history:
-            del self.conversation_history[conversation_id]
+    async def clear_conversation(self, conversation_id: str):
+        """Clear conversation history from Redis."""
+        try:
+            from backend.core.redis import cache_delete
+            await cache_delete(f"chat_history:{conversation_id}")
             logger.info("Cleared conversation: %s", conversation_id)
+        except Exception as e:
+            logger.exception("Failed to clear conversation %s: %s", conversation_id, e)
 
     def _format_context(self, context: dict[str, Any]) -> str:
         """Format context data for LLM"""
@@ -314,32 +297,16 @@ class LLaMACore:
 
     async def _call_llm(self, messages: list[ConversationMessage], require_json: bool=False) -> LLMResponse:
         """
-        Call the LLM (Groq preferred) for completions.
+        Call the LLM via the provider router with circuit breaker.
 
         If `require_json` is True, request structured JSON from the model.
         """
         formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
-        response_format = {"type": "json_object"} if require_json else None
-        if self.client is not None:
-            try:
-                completion = await self.client.chat.completions.create(model=self.model.value, messages=formatted_messages, response_format=response_format, temperature=0.2 if require_json else 0.7)
-                content = None
-                tokens = 0
-                try:
-                    choice = completion.choices[0]
-                    content = getattr(choice, "message", {}).get("content") if isinstance(choice, dict) else getattr(choice.message, "content", None)
-                except Exception:
-                    try:
-                        content = completion.choices[0]["message"]["content"]
-                    except Exception:
-                        content = getattr(completion, "text", None) or ""
-                try:
-                    tokens = getattr(completion, "usage", {}).get("total_tokens", 0) if isinstance(completion, dict) else getattr(completion.usage, "total_tokens", 0)
-                except Exception:
-                    tokens = 0
-                return LLMResponse(content=content or "", tool_calls=[], tokens_used=int(tokens))
-            except Exception as e:
-                logger.exception("Groq API Error: %s", e)
+        try:
+            response: ProviderResponse = await self.router.complete(formatted_messages, require_json=require_json)
+            return LLMResponse(content=response.content, tool_calls=[], tokens_used=response.tokens_used)
+        except Exception as e:
+            logger.exception("All LLM providers failed: %s", e)
         logger.warning("System entered DEGRADED MODE: Using keyword-based fallback logic")
         last_message = messages[-1].content if messages else ""
         if "schedule" in last_message.lower() or "book" in last_message.lower():
@@ -352,26 +319,23 @@ class LLaMACore:
 
     async def _stream_llm(self, messages: list[ConversationMessage]) -> AsyncGenerator[str, None]:
         """
-        Stream response from LLaMA (placeholder)
-
-        In production, this would connect to streaming API endpoint
+        Stream response from LLM via provider router.
         """
-        if self.client is not None:
-            try:
-                formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
-                stream = await self.client.chat.completions.create(model=self.model.value, messages=formatted_messages, stream=True, temperature=0.7)
-                async for chunk in stream:
-                    try:
-                        delta = chunk.choices[0].delta
-                        if hasattr(delta, "content") and delta.content:
-                            yield delta.content
-                        elif isinstance(delta, dict) and delta.get("content"):
-                            yield delta.get("content")
-                    except Exception:
-                        continue
-                return
-            except Exception as e:
-                logger.exception("Groq Streaming Error: %s", e)
+        formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
+        try:
+            stream = await self.router.complete_stream(formatted_messages)
+            async for chunk in stream:
+                try:
+                    delta = chunk.choices[0].delta
+                    if hasattr(delta, "content") and delta.content:
+                        yield delta.content
+                    elif isinstance(delta, dict) and delta.get("content"):
+                        yield delta.get("content")
+                except Exception:
+                    continue
+            return
+        except Exception as e:
+            logger.exception("Streaming Error: %s", e)
         response = await self._call_llm(messages)
         words = response.content.split()
         for word in words:

@@ -42,7 +42,7 @@ class DSRRecord(Base):
     """Data Subject Request record for GDPR compliance."""
     __tablename__ = "dsr_records"
     id = Column(String(100), primary_key=True, default=generate_uuid)
-    user_id = Column(String(100), ForeignKey("users.id"), nullable=True, index=True)
+    user_id = Column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     request_type = Column(SQLEnum(DSRType), nullable=False)
     status = Column(SQLEnum(DSRStatus), default=DSRStatus.SUBMITTED)
     submitted_at = Column(DateTime, default=lambda: datetime.now(UTC))

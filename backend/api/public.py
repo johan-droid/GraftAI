@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 import pytz
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +18,11 @@ from backend.models.tables import (
     BookingTable,
     EventTable,
     EventTypeTable,
+    PaymentIntentTable,
     UserTable,
 )
+from backend.services.payment import confirm_payment_intent as service_confirm_payment_intent
+from backend.services.payment import create_payment_intent as service_create_payment_intent
 from backend.services.bookings import (
     create_public_booking,
     get_event_type,
@@ -42,14 +45,17 @@ router = APIRouter(tags=["Public"])
 _LIVE_SESSIONS: dict[str, datetime] = {}
 
 class StatsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     registered_users: int
     live_visitors: int
     deleted_accounts: int
 
 class HeartbeatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     session_id: str
 
 class PublicEventResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     title: str
     description: str | None = None
     duration_minutes: int
@@ -67,14 +73,17 @@ class PublicEventResponse(BaseModel):
     travel_time_after_minutes: int | None = None
 
 class PublicUserProfileResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     username: str
     full_name: str | None = None
     timezone: str
 
 class PublicAvailabilityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     availability: dict[str, list[str]]
 
 class PublicBookingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     full_name: str
     email: EmailStr
     start_time: datetime
@@ -82,8 +91,10 @@ class PublicBookingRequest(BaseModel):
     questions: dict[str, Any] | None = None
     time_zone: str | None = None
     metadata: dict[str, Any] | None = None
+    payment_intent_id: str | None = None
 
 class PublicBookingConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     success: bool
     booking_id: str
     event_id: str
@@ -99,6 +110,7 @@ class PublicBookingConfirmation(BaseModel):
     cancel_url: str | None = None
 
 class PublicPaymentIntentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     payment_intent_id: str
     amount: float
     currency: str
@@ -106,15 +118,18 @@ class PublicPaymentIntentResponse(BaseModel):
     client_secret: str | None = None
 
 class PublicPaymentConfirmationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     payment_intent_id: str
     payment_method: str | None = None
 
 class PublicPaymentConfirmationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     success: bool
     payment_intent_id: str
     payment_status: str
 
 class PublicAvailabilitySlot(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     start: str
     end: str
     organizer_start: str
@@ -124,17 +139,21 @@ class PublicAvailabilitySlot(BaseModel):
     invitee_zone: str
 
 class PublicDailyAvailabilityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     date: str
     slots: list[PublicAvailabilitySlot]
 
 class PublicRescheduleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     new_start_time: datetime
     time_zone: str | None = None
 
 class PublicCancelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     reason: str | None = None
 
 class PublicBookingActionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     success: bool
     booking_id: str
     status: str
@@ -146,6 +165,7 @@ class PublicBookingActionResponse(BaseModel):
     invitee_zone: str | None = None
 
 class PublicBookingDetailsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     booking_id: str
     status: str
     full_name: str
@@ -281,8 +301,22 @@ async def book_public_event(request: Request, username: str, event_type: str, pa
     client_id = request.client.host if request.client else "anonymous"
     await rate_limit(client_id, api_limits["public_booking"])
     user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)
+    if event_type_obj.requires_payment:
+        if not payload.payment_intent_id:
+            raise HTTPException(status_code=400, detail="This event type requires payment. Please provide a payment_intent_id.")
+        intent = await db.get(PaymentIntentTable, payload.payment_intent_id)
+        if not intent:
+            raise HTTPException(status_code=404, detail="Payment intent not found.")
+        if intent.status != "succeeded":
+            raise HTTPException(status_code=400, detail=f"Payment intent is {intent.status}, must be 'succeeded' to book.")
+        if intent.event_type_id != event_type_obj.id:
+            raise HTTPException(status_code=400, detail="Payment intent does not match this event type.")
     try:
         booking = await create_public_booking(db, user, event_type_obj, payload.model_dump())
+        if event_type_obj.requires_payment and payload.payment_intent_id:
+            intent = await db.get(PaymentIntentTable, payload.payment_intent_id)
+            if intent:
+                intent.booking_id = booking.id
     except BookingConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except (ValidationError, TimezoneError) as exc:
@@ -306,22 +340,32 @@ async def book_public_event(request: Request, username: str, event_type: str, pa
 
 @router.post("/public/events/{username}/{event_type}/payment-intent", response_model=PublicPaymentIntentResponse)
 async def create_public_payment_intent(username: str, event_type: str, db: AsyncSession=Depends(get_db)):
-    _user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)
+    user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)
     if not event_type_obj.requires_payment:
         raise HTTPException(status_code=400, detail="This event type does not require payment.")
     amount = event_type_obj.payment_amount or 0.0
     currency = event_type_obj.payment_currency or "USD"
-    payment_intent_id = str(uuid.uuid4())
-    return {"payment_intent_id": payment_intent_id, "amount": amount, "currency": currency, "status": "requires_confirmation", "client_secret": f"secret_{payment_intent_id}"}
+    intent = await service_create_payment_intent(db, user_id=user.id, gateway="simulation", amount=amount, currency=currency, event_type_id=event_type_obj.id, metadata_payload={"public_booking": True, "username": username, "event_type_slug": event_type})
+    await db.commit()
+    return {"payment_intent_id": intent.id, "amount": intent.amount, "currency": intent.currency, "status": intent.status, "client_secret": intent.client_secret}
 
 @router.post("/public/events/{username}/{event_type}/payment-intent/confirm", response_model=PublicPaymentConfirmationResponse)
 async def confirm_public_payment_intent(username: str, event_type: str, payload: PublicPaymentConfirmationRequest, db: AsyncSession=Depends(get_db)):
-    _user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)
+    user, event_type_obj = await _resolve_public_event_or_404(db, username, event_type)
     if not event_type_obj.requires_payment:
         raise HTTPException(status_code=400, detail="This event type does not require payment.")
     if not payload.payment_intent_id:
         raise HTTPException(status_code=400, detail="Missing payment_intent_id.")
-    return {"success": True, "payment_intent_id": payload.payment_intent_id, "payment_status": "paid"}
+    intent = await db.get(PaymentIntentTable, payload.payment_intent_id)
+    if not intent:
+        raise HTTPException(status_code=404, detail="Payment intent not found.")
+    if intent.status != "initiated":
+        raise HTTPException(status_code=400, detail=f"Payment intent has already been {intent.status}.")
+    confirmed = await service_confirm_payment_intent(db, intent.id, gateway_payment_intent_id=f"public_{intent.id}")
+    if not confirmed:
+        raise HTTPException(status_code=500, detail="Failed to confirm payment intent.")
+    await db.commit()
+    return {"success": True, "payment_intent_id": confirmed.id, "payment_status": confirmed.status}
 
 @router.post("/public/users/{username}/{event_type}/book", response_model=PublicBookingConfirmation)
 async def book_public_user_event(request: Request, username: str, event_type: str, payload: PublicBookingRequest, db: AsyncSession=Depends(get_db)):

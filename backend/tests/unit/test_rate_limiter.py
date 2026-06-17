@@ -84,31 +84,32 @@ class TestRateLimitStrategies:
         """Test client identification with API key."""
         request = MockRequest(headers={"X-API-Key": "test-api-key-123"})
         client_id = memory_limiter._get_client_identifier(request)
-        assert client_id == "apikey:test-api-key-123"
+        assert client_id == "tier:free:apikey:test-api-key-123"
 
     @pytest.mark.asyncio
     async def test_client_identifier_with_user(self, memory_limiter):
         """Test client identification with authenticated user."""
         mock_user = MagicMock()
         mock_user.id = "user-123"
+        mock_user.tier = "free"
         request = MockRequest(user=mock_user)
         client_id = memory_limiter._get_client_identifier(request)
-        assert client_id == "user:user-123"
+        assert client_id == "tier:free:user:user-123"
 
     @pytest.mark.asyncio
     async def test_client_identifier_fallback_ip(self, memory_limiter):
         """Test client identification falls back to IP."""
         request = MockRequest(client_host="10.0.0.5")
         client_id = memory_limiter._get_client_identifier(request)
-        assert client_id == "ip:10.0.0.5"
+        assert client_id == "tier:free:ip:10.0.0.5"
 
     @pytest.mark.asyncio
     async def test_endpoint_limits(self, memory_limiter):
         """Test that endpoint-specific limits are applied."""
-        auth_request = MockRequest(path="/api/v1/auth/login")
+        auth_request = MockRequest(path="/api/v1/auth/social/exchange")
         limit, window = memory_limiter._get_endpoint_limit(auth_request.url.path)
-        assert limit == 5
-        assert window == 60
+        assert limit == 15
+        assert window == 300
 
     @pytest.mark.asyncio
     async def test_ai_endpoint_limits(self, memory_limiter):
@@ -141,6 +142,7 @@ class TestRateLimitMiddleware:
     @patch("backend.utils.rate_limiter.RateLimiter.is_allowed")
     async def test_middleware_allows_requests_when_allowed(self, mock_is_allowed):
         """Test that middleware allows requests when rate limit permits."""
+        reset_rate_limiter()
         mock_is_allowed.return_value = (True, 5, 0)
         app = AsyncMock()
         middleware = RateLimitMiddleware(app=app)

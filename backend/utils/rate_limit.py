@@ -46,10 +46,10 @@ class RateLimit:
             return RateLimitResult(success=success, count=count, remaining=remaining, reset_seconds=reset)
         except (RedisError, ConnectionError) as exc:
             logging.warning("Redis rate limiter unavailable: %s", exc)
-            if self.name in {"login", "register"}:
+            if self.name in {"oauth_exchange"}:
                 return RateLimitResult(success=False, count=0, remaining=0, reset_seconds=self.window_seconds)
             return RateLimitResult(success=True, count=0, remaining=self.max_requests, reset_seconds=self.window_seconds)
-api_limits = {"public_booking": RateLimit("public_booking", max_requests=10, window_seconds=3600), "availability": RateLimit("availability", max_requests=10, window_seconds=60), "create_event": RateLimit("create_event", max_requests=100, window_seconds=3600), "webhooks": RateLimit("webhooks", max_requests=100, window_seconds=60), "login": RateLimit("login", max_requests=3, window_seconds=60), "register": RateLimit("register", max_requests=1, window_seconds=3600), "oauth_callback": RateLimit("oauth_callback", max_requests=10, window_seconds=300), "oauth_exchange": RateLimit("oauth_exchange", max_requests=15, window_seconds=300), "password_reset": RateLimit("password_reset", max_requests=3, window_seconds=3600)}
+api_limits = {"public_booking": RateLimit("public_booking", max_requests=10, window_seconds=3600), "availability": RateLimit("availability", max_requests=10, window_seconds=60), "create_event": RateLimit("create_event", max_requests=100, window_seconds=3600), "webhooks": RateLimit("webhooks", max_requests=100, window_seconds=60), "oauth_callback": RateLimit("oauth_callback", max_requests=10, window_seconds=300), "oauth_exchange": RateLimit("oauth_exchange", max_requests=15, window_seconds=300), "billing_checkout": RateLimit("billing_checkout", max_requests=10, window_seconds=300), "billing_verify": RateLimit("billing_verify", max_requests=10, window_seconds=300), "billing_manual": RateLimit("billing_manual", max_requests=5, window_seconds=3600), "billing_create_intent": RateLimit("billing_create_intent", max_requests=10, window_seconds=300)}
 
 async def rate_limit(identifier: str, limit: RateLimit) -> RateLimitResult:
     if not identifier:

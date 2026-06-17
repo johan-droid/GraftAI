@@ -50,11 +50,13 @@ class EventTypePayload(BaseModel):
     team_assignment_method: str | None = None
 
 class TeamMemberPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     username: str
     assignment_method: str | None = None
     priority: int | None = None
 
 class TeamMemberEditPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     assignment_method: str | None = None
     priority: int | None = None
 

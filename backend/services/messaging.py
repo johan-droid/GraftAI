@@ -17,7 +17,7 @@ async def send_message(user_id: str, message: str, metadata: dict[str, Any] | No
     """
     redis = await get_redis_client()
     if not redis:
-        logger.error("❌ Redis unavailable for sending message to %s", user_id)
+        logger.error(" Redis unavailable for sending message to %s", user_id)
         return
     stream_key = EVENT_STREAM_KEY.format(user_id=user_id)
     payload = {"user_id": user_id, "message": message, "metadata": metadata or {}, "timestamp": datetime.now().isoformat()}
@@ -25,9 +25,9 @@ async def send_message(user_id: str, message: str, metadata: dict[str, Any] | No
     try:
         await redis.xadd(stream_key, {"data": binary_payload}, maxlen=STREAM_MAXLEN, approximate=True)
         await redis.publish(f"chat_message_{user_id}", binary_payload)
-        logger.debug("✅ Streamed precise message to user %s", user_id)
+        logger.debug(" Streamed precise message to user %s", user_id)
     except Exception as e:
-        logger.exception("❌ Failed to stream message to %s: %s", user_id, e)
+        logger.exception(" Failed to stream message to %s: %s", user_id, e)
 
 async def get_recent_messages(user_id: str, count: int=10) -> list:
     """
@@ -49,7 +49,7 @@ async def get_recent_messages(user_id: str, count: int=10) -> list:
                 messages.append(decoded)
         return messages
     except Exception as e:
-        logger.exception("❌ Failed to fetch recent messages for %s: %s", user_id, e)
+        logger.exception(" Failed to fetch recent messages for %s: %s", user_id, e)
         return []
 
 async def acknowledge_message(user_id: str, group_name: str, message_id: str):

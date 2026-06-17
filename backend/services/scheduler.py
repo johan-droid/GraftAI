@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import pytz
+from datetime import timezone
 from fastapi import BackgroundTasks
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,8 +41,8 @@ def _normalize_event_title(value: Any, default: str="Untitled event") -> str:
 
 def to_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
-        return pytz.UTC.localize(dt)
-    return dt.astimezone(pytz.UTC)
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 async def _get_active_token(db: AsyncSession, user_id: str, provider: str) -> UserTokenTable | None:
     stmt = select(UserTokenTable).where(and_(UserTokenTable.user_id == user_id, UserTokenTable.provider == provider, UserTokenTable.is_active))

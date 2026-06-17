@@ -7,7 +7,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.tables import WebhookLogTable, WebhookSubscriptionTable
-from backend.utils.arq_utils import enqueue_job
+from backend.services.task_queue import enqueue_webhook_job
 
 logger = logging.getLogger(__name__)
 ALLOWED_WEBHOOK_EVENTS = ["booking.created", "booking.cancelled", "booking.rescheduled", "event_type.created", "event_type.updated", "event_type.deleted", "user.created", "user.updated"]
@@ -123,7 +123,7 @@ async def enqueue_webhook_notifications_for_event(db: AsyncSession, user_id: str
             logger.error("Failed to create webhook log for subscription=%s event=%s: %s", subscription.id, event, exc, exc_info=True)
             continue
         try:
-            await enqueue_job("task_send_webhook", url=subscription.url, event=event, data=payload, webhook_id=subscription.id, log_id=log.id, secret=subscription.secret)
+            await enqueue_webhook_job(url=subscription.url, payload=payload, webhook_id=subscription.id, log_id=log.id, secret=subscription.secret)
             queued += 1
         except Exception as exc:
             logger.error("Failed to enqueue webhook job for subscription=%s event=%s: %s", subscription.id, event, exc, exc_info=True)

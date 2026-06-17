@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -15,6 +16,10 @@ from backend.services.integrations.token_service import ensure_valid_token
 from backend.services.token_encryption import decrypt_token_value
 
 logger = logging.getLogger(__name__)
+async def _run_google_api(api_call):
+    """Run a synchronous Google API execute() call in a thread to avoid blocking the event loop."""
+    return await asyncio.to_thread(api_call)
+
 
 def _resolve_google_calendar_credentials() -> tuple[str | None, str | None]:
     client_id = os.getenv("GOOGLE_CLIENT_ID") or os.getenv("GOOGLE_ID") or os.getenv("NEXTAUTH_GOOGLE_ID") or os.getenv("AUTH_GOOGLE_ID")
@@ -43,7 +48,7 @@ def get_google_credentials(token_data: dict) -> Credentials:
     """Reconstructs Google credentials from stored token data."""
     client_id, client_secret = _resolve_google_calendar_credentials()
     if not client_id or not client_secret:
-        logger.error("❌ CRITICAL: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment. Also check GOOGLE_ID/GOOGLE_SECRET, NEXTAUTH_GOOGLE_ID/NEXTAUTH_GOOGLE_SECRET, or AUTH_GOOGLE_ID/AUTH_GOOGLE_SECRET.")
+        logger.error(" CRITICAL: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment. Also check GOOGLE_ID/GOOGLE_SECRET, NEXTAUTH_GOOGLE_ID/NEXTAUTH_GOOGLE_SECRET, or AUTH_GOOGLE_ID/AUTH_GOOGLE_SECRET.")
     scopes = token_data.get("scopes", [])
     if isinstance(scopes, str):
         try:
@@ -54,11 +59,11 @@ def get_google_credentials(token_data: dict) -> Credentials:
     try:
         if creds and creds.expired and creds.refresh_token:
             if not client_id or not client_secret or (not creds.token_uri):
-                logger.warning("⚠️ Skipping auto-refresh: missing client credentials or token_uri.")
+                logger.warning(" Skipping auto-refresh: missing client credentials or token_uri.")
             else:
                 creds.refresh(Request())
     except Exception as e:
-        logger.warning("⚠️ Failed to refresh Google credentials: %s", e)
+        logger.warning(" Failed to refresh Google credentials: %s", e)
     return creds
 
 async def create_google_meet_event(token_data: dict, event_details: dict) -> str:
@@ -70,18 +75,18 @@ async def create_google_meet_event(token_data: dict, event_details: dict) -> str
         creds = get_google_credentials(token_data)
         service = build("calendar", "v3", credentials=creds)
         event = {"summary": event_details.get("title", "GraftAI Meeting"), "description": event_details.get("description", ""), "start": {"dateTime": event_details["start_time"].isoformat(), "timeZone": "UTC"}, "end": {"dateTime": event_details["end_time"].isoformat(), "timeZone": "UTC"}, "conferenceData": {"createRequest": {"requestId": f"graftai-{datetime.now().timestamp()}", "conferenceSolutionKey": {"type": "hangoutsMeet"}}}, "attendees": [{"email": e} for e in event_details.get("attendees", [])]}
-        created_event = service.events().insert(calendarId="primary", body=event, conferenceDataVersion=1).execute()
+        created_event = await _run_google_api(service.events().insert(calendarId="primary", body=event, conferenceDataVersion=1).execute)
         meet_link = created_event.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri")
         if not meet_link:
             meet_link = created_event.get("htmlLink")
-        logger.info("✅ Google Meet created: %s", meet_link)
+        logger.info(" Google Meet created: %s", meet_link)
         return meet_link
     except HttpError as error:
-        logger.exception("❌ Google Calendar API failed: %s", error)
+        logger.exception(" Google Calendar API failed: %s", error)
         msg = f"Could not create Google Meet: {error}"
         raise RuntimeError(msg)
     except Exception as e:
-        logger.exception("❌ Unexpected error in Google Meet creation: %s", e)
+        logger.exception(" Unexpected error in Google Meet creation: %s", e)
         raise
 
 async def create_google_event(token_data: dict, event_details: dict) -> dict:
@@ -98,15 +103,15 @@ async def create_google_event(token_data: dict, event_details: dict) -> dict:
         insert_args = {"calendarId": "primary", "body": event}
         if event_details.get("is_meeting"):
             insert_args["conferenceDataVersion"] = 1
-        created_event = service.events().insert(**insert_args).execute()
-        logger.info("✅ Google Event created: %s", created_event.get("id"))
+        created_event = await _run_google_api(service.events().insert(**insert_args).execute)
+        logger.info(" Google Event created: %s", created_event.get("id"))
         return created_event
     except HttpError as error:
-        logger.exception("❌ Google Calendar API failed: %s", error)
+        logger.exception(" Google Calendar API failed: %s", error)
         msg = f"Could not create Google event: {error}"
         raise RuntimeError(msg)
     except Exception as e:
-        logger.exception("❌ Unexpected error in Google event creation: %s", e)
+        logger.exception(" Unexpected error in Google event creation: %s", e)
         raise
 
 async def list_google_events(token_data: dict, calendar_id: str="primary", sync_token: str | None=None) -> dict:
@@ -126,7 +131,7 @@ async def list_google_events(token_data: dict, calendar_id: str="primary", sync_
                 params["syncToken"] = sync_token
             if page_token:
                 params["pageToken"] = page_token
-            response = service.events().list(**{k: v for k, v in params.items() if v is not None}).execute()
+            response = await _run_google_api(service.events().list(**{k: v for k, v in params.items() if v is not None}).execute)
             all_items.extend(response.get("items", []) or [])
             next_sync_token = response.get("nextSyncToken") or next_sync_token
             page_token = response.get("nextPageToken")
@@ -135,11 +140,11 @@ async def list_google_events(token_data: dict, calendar_id: str="primary", sync_
         return {"items": all_items, "nextSyncToken": next_sync_token}
     except HttpError as error:
         if error.resp.status == 410:
-            logger.warning("🔄 Google Sync token expired (410), performing full sync for %s", calendar_id)
+            logger.warning(" Google Sync token expired (410), performing full sync for %s", calendar_id)
             service = build("calendar", "v3", credentials=get_google_credentials(token_data))
-            response = service.events().list(calendarId=calendar_id, singleEvents=True, orderBy="startTime").execute()
+            response = await _run_google_api(service.events().list(calendarId=calendar_id, singleEvents=True, orderBy="startTime").execute)
             return {"items": response.get("items", []) or [], "nextSyncToken": response.get("nextSyncToken")}
-        logger.exception("❌ Google list_events failed: %s", error)
+        logger.exception(" Google list_events failed: %s", error)
         raise
 
 async def get_google_busy_times(token_data: dict, start_time: datetime, end_time: datetime, calendar_id: str="primary") -> list[dict]:
@@ -147,11 +152,11 @@ async def get_google_busy_times(token_data: dict, start_time: datetime, end_time
     try:
         creds = get_google_credentials(token_data)
         service = build("calendar", "v3", credentials=creds)
-        response = service.freebusy().query(requestBody={"timeMin": start_time.isoformat(), "timeMax": end_time.isoformat(), "items": [{"id": calendar_id}]}).execute()
+        response = await _run_google_api(service.freebusy().query(requestBody={"timeMin": start_time.isoformat(), "timeMax": end_time.isoformat(), "items": [{"id": calendar_id}]}).execute)
         busy_entries = response.get("calendars", {}).get(calendar_id, {}).get("busy", [])
         return [{"start": busy.get("start"), "end": busy.get("end"), "provider": "google"} for busy in busy_entries]
     except HttpError as error:
-        logger.exception("❌ Google busy-time fetch failed: %s", error)
+        logger.exception(" Google busy-time fetch failed: %s", error)
         raise
 
 async def update_google_event(token_data: dict, external_id: str, event_details: dict) -> dict:
@@ -161,11 +166,11 @@ async def update_google_event(token_data: dict, external_id: str, event_details:
         service = build("calendar", "v3", credentials=creds)
         event = {"summary": event_details.get("title"), "description": event_details.get("description"), "start": {"dateTime": event_details["start_time"].isoformat(), "timeZone": "UTC"} if "start_time" in event_details else None, "end": {"dateTime": event_details["end_time"].isoformat(), "timeZone": "UTC"} if "end_time" in event_details else None}
         event = {k: v for k, v in event.items() if v is not None}
-        updated_event = service.events().patch(calendarId="primary", eventId=external_id, body=event).execute()
-        logger.info("✅ Google Event updated: %s", external_id)
+        updated_event = await _run_google_api(service.events().patch(calendarId="primary", eventId=external_id, body=event).execute)
+        logger.info(" Google Event updated: %s", external_id)
         return updated_event
     except Exception as e:
-        logger.exception("❌ Google update failed for %s: %s", external_id, e)
+        logger.exception(" Google update failed for %s: %s", external_id, e)
         raise
 
 async def delete_google_event(token_data: dict, external_id: str) -> None:
@@ -173,8 +178,8 @@ async def delete_google_event(token_data: dict, external_id: str) -> None:
     try:
         creds = get_google_credentials(token_data)
         service = build("calendar", "v3", credentials=creds)
-        service.events().delete(calendarId="primary", eventId=external_id).execute()
-        logger.info("✅ Google Event deleted: %s", external_id)
+        await _run_google_api(service.events().delete(calendarId="primary", eventId=external_id).execute)
+        logger.info(" Google Event deleted: %s", external_id)
     except Exception as e:
-        logger.exception("❌ Google delete failed for %s: %s", external_id, e)
+        logger.exception(" Google delete failed for %s: %s", external_id, e)
         raise

@@ -22,7 +22,7 @@ async def _get_redis():
         _redis = client
         return _redis
     except Exception as exc:
-        logger.warning("⚠ Binary Redis unavailable — using in-memory cache fallback: %s", exc)
+        logger.warning(" Binary Redis unavailable — using in-memory cache fallback: %s", exc)
         return None
 
 async def set_cache(key: str, value: Any, expire_seconds: int=300):

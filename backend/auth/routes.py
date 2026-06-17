@@ -38,6 +38,13 @@ from backend.services.auth_service import (
     get_user_by_provider_account_id,
     upsert_user_token,
 )
+from backend.services.mfa import (
+    disable_mfa,
+    enable_mfa,
+    is_mfa_enabled,
+    start_mfa_enrollment,
+    verify_mfa_token,
+)
 from backend.services.oauth_service import (
     build_oauth_state,
     frontend_redirect_token,
@@ -45,7 +52,7 @@ from backend.services.oauth_service import (
     parse_oauth_state,
 )
 from backend.services.sso import get_provider_config
-from backend.services.usage import get_next_quota_reset, get_trial_days_left
+
 from backend.utils.db import get_db
 from backend.utils.rate_limit import api_limits, rate_limit
 
@@ -88,7 +95,7 @@ def _queue_calendar_sync_task(user_id: str) -> None:
         logger.info("Queued full background sync for user %s", user_id)
     except Exception:
         logger.exception("Failed to queue background sync for user %s", user_id)
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class SocialExchangeRequest(BaseModel):
@@ -225,7 +232,7 @@ async def check(request: Request, db: AsyncSession=Depends(get_db)):
     token_version = int(payload.get("version", 0))
     if getattr(user, "token_version", 0) > token_version:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Access token has been revoked. Please log in again.", headers={"WWW-Authenticate": "Bearer"})
-    return {"authenticated": True, "user": {"id": user.id, "email": user.email, "full_name": user.full_name, "username": user.username, "daily_ai_count": user.daily_ai_count, "daily_ai_limit": user.daily_ai_limit, "total_ai_tokens": user.total_ai_tokens, "total_api_calls": user.total_api_calls, "total_scheduling_count": user.total_scheduling_count, "trial_days_left": get_trial_days_left(user.created_at), "trial_active": user.trial_active, "quota_reset_at": get_next_quota_reset().isoformat()}}
+    return {"authenticated": True, "user": {"id": user.id, "email": user.email, "full_name": user.full_name, "username": user.username}}
 
 @router.post("/refresh", response_model=None)
 async def refresh(request: Request, response: Response, refresh_request: RefreshRequest | None=None, db: AsyncSession=Depends(get_db)):
@@ -332,7 +339,15 @@ async def refresh(request: Request, response: Response, refresh_request: Refresh
                 logger.warning("Failed to release refresh lock: %s", exc)
 
 @router.post("/logout", response_model=None)
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
+    token_value = _get_bearer_token_from_request(request) or request.cookies.get("graftai_access_token")
+    if token_value:
+        try:
+            import hashlib
+            token_hash = hashlib.sha256(token_value.encode()).hexdigest()
+            await cache_set(f"token_blacklist:{token_hash}", "revoked", expire=86400)
+        except Exception:
+            logger.warning("Failed to blacklist token on logout")
     response.delete_cookie("graftai_access_token", path="/")
     response.delete_cookie("graftai_refresh_token", path="/")
     return {"message": "Logged out"}
@@ -565,34 +580,13 @@ async def jwks():
 @router.post("/jwks/rotate")
 async def rotate_jwks(request: Request):
     """Rotate JWKS: generate an RSA keypair, store private key in secret manager, add kid to active list.
-    Protected by a simple admin header 'X-ADMIN-SECRET' that must equal SECRET_KEY.
-    This is intentionally small and synchronous-friendly for fast cutover; production should use a proper key management system.
+    Protected by 'X-ADMIN-API-KEY' header or internal IP whitelist.
     """
-    from backend.auth.config import SECRET_KEY as AUTH_SECRET
-    admin_api_key = os.getenv("ADMIN_API_KEY")
-
-    def _is_admin_request(req: Request) -> bool:
-        # 1) Check header X-ADMIN-SECRET equals app SECRET_KEY (legacy)
-        hdr = req.headers.get("X-ADMIN-SECRET") or req.headers.get("Authorization")
-        if hdr and (hdr == AUTH_SECRET or hdr == f"Bearer {AUTH_SECRET}"):
-            return True
-        # 2) Check admin API key header
-        if admin_api_key:
-            h = req.headers.get("X-ADMIN-API-KEY")
-            if h and h == admin_api_key:
-                return True
-        # 3) Check internal allowed IPs (comma-separated env var)
-        allowed = os.getenv("INTERNAL_ALLOWED_IPS", "").split(",")
-        client_host = None
-        try:
-            client_host = req.client.host
-        except Exception:
-            client_host = None
-        if client_host and any(client_host.strip() == a.strip() for a in allowed if a.strip()):
-            return True
-        return False
-
-    if not _is_admin_request(request):
+    admin_key = os.getenv("ADMIN_API_KEY")
+    if not admin_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ADMIN_API_KEY not configured")
+    header_key = request.headers.get("X-ADMIN-API-KEY")
+    if not header_key or header_key != admin_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     # generate RSA key
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -630,29 +624,11 @@ class DeprecateKidRequest(BaseModel):
 
 @router.post("/jwks/deprecate")
 async def deprecate_jwk(req: DeprecateKidRequest, request: Request):
-    # Admin-protected: same rules as rotate
-    from backend.auth.config import SECRET_KEY as AUTH_SECRET
-    admin_api_key = os.getenv("ADMIN_API_KEY")
-
-    def _is_admin_request(req_: Request) -> bool:
-        hdr = req_.headers.get("X-ADMIN-SECRET") or req_.headers.get("Authorization")
-        if hdr and (hdr == AUTH_SECRET or hdr == f"Bearer {AUTH_SECRET}"):
-            return True
-        if admin_api_key:
-            h = req_.headers.get("X-ADMIN-API-KEY")
-            if h and h == admin_api_key:
-                return True
-        allowed = os.getenv("INTERNAL_ALLOWED_IPS", "").split(",")
-        client_host = None
-        try:
-            client_host = req_.client.host
-        except Exception:
-            client_host = None
-        if client_host and any(client_host.strip() == a.strip() for a in allowed if a.strip()):
-            return True
-        return False
-
-    if not _is_admin_request(request):
+    admin_key = os.getenv("ADMIN_API_KEY")
+    if not admin_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ADMIN_API_KEY not configured")
+    header_key = request.headers.get("X-ADMIN-API-KEY")
+    if not header_key or header_key != admin_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     try:
         mgr = get_secret_manager()
@@ -788,3 +764,61 @@ async def complete_onboarding(req: OnboardingRequest, current_user: UserTable=De
     await db.commit()
     await db.refresh(current_user)
     return {"message": "Onboarding completed successfully", "user": {"id": current_user.id, "email": current_user.email, "name": current_user.full_name, "onboarding_completed": True}}
+
+
+class MFAEnrollResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    secret: str
+    otp_uri: str
+
+
+@router.post("/mfa/enroll", response_model=MFAEnrollResponse)
+async def mfa_enroll(current_user: UserTable=Depends(get_current_user), db: AsyncSession=Depends(get_db)):
+    """Start MFA enrollment: generates a TOTP secret and provisioning URI."""
+    result = await start_mfa_enrollment(db, current_user.id)
+    return MFAEnrollResponse(secret=result["secret"], otp_uri=result["otp_uri"])
+
+
+class MFAEnableRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    secret: str
+    token: str
+
+
+@router.post("/mfa/enable")
+async def mfa_enable(payload: MFAEnableRequest, current_user: UserTable=Depends(get_current_user), db: AsyncSession=Depends(get_db)):
+    """Enable MFA by verifying a TOTP token against the enrollment secret."""
+    ok = await enable_mfa(db, current_user.id, payload.secret, payload.token)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Invalid token. MFA not enabled.")
+    return {"status": "success", "message": "MFA enabled successfully"}
+
+
+@router.post("/mfa/disable")
+async def mfa_disable(current_user: UserTable=Depends(get_current_user), db: AsyncSession=Depends(get_db)):
+    """Disable MFA for the current user."""
+    ok = await disable_mfa(db, current_user.id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="MFA not configured for this user.")
+    return {"status": "success", "message": "MFA disabled"}
+
+
+@router.get("/mfa/status")
+async def mfa_status(current_user: UserTable=Depends(get_current_user), db: AsyncSession=Depends(get_db)):
+    """Check if MFA is enabled for the current user."""
+    enabled = await is_mfa_enabled(db, current_user.id)
+    return {"mfa_enabled": enabled}
+
+
+class MFAVerifyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    token: str
+
+
+@router.post("/mfa/verify")
+async def mfa_verify(payload: MFAVerifyRequest, current_user: UserTable=Depends(get_current_user), db: AsyncSession=Depends(get_db)):
+    """Verify a TOTP token for MFA-authenticated operations."""
+    ok = await verify_mfa_token(db, current_user.id, payload.token)
+    if not ok:
+        raise HTTPException(status_code=401, detail="Invalid MFA token.")
+    return {"status": "success", "message": "MFA token verified"}

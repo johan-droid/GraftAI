@@ -26,6 +26,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 class WorkflowStepCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Create a workflow step."""
     step_number: int = Field(..., ge=1)
     action_type: str = Field(..., pattern="^(EMAIL|SMS|WEBHOOK|SLACK|TEAMS|CALENDAR)$")
@@ -34,6 +35,7 @@ class WorkflowStepCreate(BaseModel):
     is_active: bool = True
 
 class WorkflowCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Create a new workflow."""
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
@@ -42,6 +44,7 @@ class WorkflowCreate(BaseModel):
     steps: list[WorkflowStepCreate] = Field(default_factory=list)
 
 class WorkflowUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Update an existing workflow."""
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
@@ -61,6 +64,7 @@ class WorkflowStepResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class WorkflowStepListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """List workflow steps response."""
     success: bool
     message: str
@@ -79,34 +83,40 @@ class WorkflowResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class WorkflowListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """List workflows response."""
     success: bool
     message: str
     data: list[WorkflowResponse]
 
 class WorkflowSingleResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Single workflow response."""
     success: bool
     message: str
     data: WorkflowResponse
 
 class WorkflowTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Test a workflow with sample data."""
     event_data: dict[str, Any] = Field(default_factory=lambda: {"attendee_email": "test@example.com", "attendee_name": "Test User", "booking_title": "Test Meeting", "booking_time": datetime.now(UTC).isoformat(), "booking_id": "test-booking-123"})
 
 class WorkflowTestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Workflow test response."""
     success: bool
     message: str
     data: dict[str, Any]
 
 class ActionTypeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Available action types."""
     success: bool
     message: str
     data: list[dict[str, str]]
 
 class TriggerTypeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Available trigger types."""
     success: bool
     message: str

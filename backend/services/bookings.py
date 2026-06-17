@@ -4,13 +4,14 @@ from datetime import date as date_cls
 from datetime import datetime, timedelta
 from typing import Any
 
-import pytz
+from datetime import timezone
+from zoneinfo import ZoneInfo
 from dateutil.rrule import rrulestr
 from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.tables import BookingTable, EventTable, EventTypeTable, UserTable
-from backend.services.jobs import enqueue_analytics_job, enqueue_calendar_job
+from backend.services.task_queue import enqueue_analytics_job, enqueue_calendar_job, enqueue_provision_jitsi_meeting, enqueue_provision_shortlink
 from backend.services.scheduler import create_event, get_events_for_range
 from backend.services.sync_engine import sync_user_calendar
 from backend.services.usage import increment_usage
@@ -40,7 +41,7 @@ def _parse_range_slot(range_value: str) -> tuple[str, str] | None:
         return None
     return (parts[0], parts[1])
 
-def _localize_datetime(day: date_cls, time_str: str, tz: pytz.BaseTzInfo) -> datetime:
+def _localize_datetime(day: date_cls, time_str: str, tz: ZoneInfo) -> datetime:
     hour, minute = map(int, time_str.split(":"))
     return tz.localize(datetime(day.year, day.month, day.day, hour, minute))
 
@@ -65,8 +66,8 @@ def _parse_iso_datetime(value: str) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = pytz.UTC.localize(parsed)
-    return parsed.astimezone(pytz.UTC)
+        parsed = (parsed)
+    return parsed.astimezone(timezone.utc)
 
 def _get_out_of_office_windows(user: UserTable) -> list[tuple[datetime, datetime]]:
     preferences = user.preferences or {}
@@ -92,12 +93,12 @@ def _expand_recurring_availability(event_type: EventTypeTable, start_date: datet
     if not rule_text:
         return []
     if start_date.tzinfo is None:
-        start_date = pytz.UTC.localize(start_date)
+        start_date = (start_date)
     if end_date.tzinfo is None:
-        end_date = pytz.UTC.localize(end_date)
+        end_date = (end_date)
     dt_start = event_type.created_at or start_date
     if dt_start.tzinfo is None:
-        dt_start = pytz.UTC.localize(dt_start)
+        dt_start = (dt_start)
     try:
         rule = rrulestr(rule_text, dtstart=dt_start)
     except Exception as exc:
@@ -155,7 +156,7 @@ async def validate_custom_questions(questions: dict[str, Any] | None, event_type
                 raise ValidationError(msg, f"'{question_text}' has an invalid selected option.")
     return True
 
-def _get_availability_windows(event_type: EventTypeTable, day: datetime, tz: pytz.BaseTzInfo) -> list[tuple[datetime, datetime]]:
+def _get_availability_windows(event_type: EventTypeTable, day: datetime, tz: ZoneInfo) -> list[tuple[datetime, datetime]]:
     day_name = _weekday_name(day)
     raw_availability = event_type.availability if event_type.availability is not None else DEFAULT_AVAILABILITY
     daily_ranges = raw_availability.get(day_name, []) or []
@@ -164,7 +165,7 @@ def _get_availability_windows(event_type: EventTypeTable, day: datetime, tz: pyt
         return []
     recurrence_rule = (event_type.recurrence_rule or "").strip()
     if recurrence_rule:
-        start_of_day = tz.localize(datetime(day.year, day.month, day.day, 0, 0)).astimezone(pytz.UTC)
+        start_of_day = datetime(day.year, day.month, day.day, 0, 0, tzinfo=tz).astimezone(timezone.utc)
         end_of_day = start_of_day + timedelta(days=1)
         try:
             occurrences = _expand_recurring_availability(event_type, start_of_day, end_of_day, limit_slots=10)
@@ -181,10 +182,10 @@ def _get_availability_windows(event_type: EventTypeTable, day: datetime, tz: pyt
         end_dt = _localize_datetime(day.date(), end_str, tz)
         if end_dt <= start_dt:
             continue
-        slots.append((start_dt.astimezone(pytz.UTC), end_dt.astimezone(pytz.UTC)))
+        slots.append((start_dt.astimezone(timezone.utc), end_dt.astimezone(timezone.utc)))
     return slots
 
-def _slot_to_local_display(slot_dt: datetime, tz: pytz.BaseTzInfo) -> str:
+def _slot_to_local_display(slot_dt: datetime, tz: ZoneInfo) -> str:
     return slot_dt.astimezone(tz).strftime("%Y-%m-%d %I:%M %p")
 
 def _slots_from_windows(windows: list[tuple[datetime, datetime]], duration_minutes: int, step_minutes: int) -> list[tuple[datetime, datetime]]:
@@ -198,7 +199,7 @@ def _slots_from_windows(windows: list[tuple[datetime, datetime]], duration_minut
 
 def _normalize_datetime_for_overlap(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=pytz.UTC)
+        return value.replace(tzinfo=timezone.utc)
     return value
 
 def _overlaps(start: datetime, end: datetime, busy_start: datetime, busy_end: datetime) -> bool:
@@ -265,15 +266,15 @@ async def _refresh_calendar_events_if_needed(db: AsyncSession, user: UserTable) 
         logger.warning("[Calendar Refresh] failed for %s: %s", user.id, exc)
 
 def _minimum_notice_cutoff(minimum_notice_minutes: int | None) -> datetime:
-    return datetime.now(pytz.UTC) + timedelta(minutes=minimum_notice_minutes or 0)
+    return datetime.now(timezone.utc) + timedelta(minutes=minimum_notice_minutes or 0)
 
 async def _build_available_slots(db: AsyncSession, user: UserTable, event_type: EventTypeTable, day: datetime, inviter_tz: str | None=None, busy_windows: list[tuple[datetime, datetime]] | None=None) -> list[dict[str, Any]]:
-    organizer_tz = pytz.timezone(user.timezone or "UTC")
+    organizer_tz = ZoneInfo(user.timezone or "UTC")
     if event_type.recurrence_rule:
-        day_start_local = organizer_tz.localize(datetime(day.year, day.month, day.day, 0, 0))
+        day_start_local = organizer_datetime(day.year, day.month, day.day, 0, 0, tzinfo=tz)
         day_end_local = day_start_local + timedelta(days=1)
         try:
-            recurring_occurrences = _expand_recurring_availability(event_type, day_start_local.astimezone(pytz.UTC), day_end_local.astimezone(pytz.UTC), limit_slots=512)
+            recurring_occurrences = _expand_recurring_availability(event_type, day_start_local.astimezone(timezone.utc), day_end_local.astimezone(timezone.utc), limit_slots=512)
         except Exception as exc:
             logger.warning("Recurrence expansion failed for event_type=%s: %s", event_type.id, exc)
             recurring_occurrences = []
@@ -295,7 +296,7 @@ async def _build_available_slots(db: AsyncSession, user: UserTable, event_type: 
     available_slots = _apply_busy_windows(base_slots, busy_windows)
     minimum_cutoff = _minimum_notice_cutoff(event_type.minimum_notice_minutes)
     available_slots = [(start, end) for start, end in available_slots if start > minimum_cutoff]
-    display_tz = pytz.timezone(inviter_tz) if inviter_tz else organizer_tz
+    display_tz = ZoneInfo(inviter_tz) if inviter_tz else organizer_tz
     result: list[dict[str, Any]] = []
     for start, end in available_slots:
         result.append({"start": start.isoformat(), "end": end.isoformat(), "organizer_start": start.astimezone(organizer_tz).strftime("%Y-%m-%d %I:%M %p"), "organizer_end": end.astimezone(organizer_tz).strftime("%Y-%m-%d %I:%M %p"), "invitee_start": start.astimezone(display_tz).strftime("%Y-%m-%d %I:%M %p"), "invitee_end": end.astimezone(display_tz).strftime("%Y-%m-%d %I:%M %p"), "invitee_zone": str(display_tz)})
@@ -304,9 +305,9 @@ async def _build_available_slots(db: AsyncSession, user: UserTable, event_type: 
 async def _build_availability_for_month(db: AsyncSession, user: UserTable, event_type: EventTypeTable, year: int, month: int, inviter_tz: str | None=None) -> dict[str, list[str]]:
     start_day = datetime(year, month, 1)
     end_day = (start_day.replace(day=28) + timedelta(days=4)).replace(day=1)
-    organizer_tz = pytz.timezone(user.timezone or "UTC")
-    range_start = organizer_tz.localize(datetime(year, month, 1, 0, 0)).astimezone(pytz.UTC)
-    range_end = organizer_tz.localize(datetime(end_day.year, end_day.month, end_day.day, 0, 0)).astimezone(pytz.UTC)
+    organizer_tz = ZoneInfo(user.timezone or "UTC")
+    range_start = datetime(year, month, 1, 0, 0, tzinfo=organizer_tz).astimezone(timezone.utc)
+    range_end = organizer_tz.localize(datetime(end_day.year, end_day.month, end_day.day, 0, 0)).astimezone(timezone.utc)
     busy_windows = await _get_busy_windows_for_range(db, user, range_start, range_end)
     availability: dict[str, list[str]] = {}
     day = start_day
@@ -420,7 +421,7 @@ async def update_event_type(db: AsyncSession, user_id: str, event_type_id: str, 
                 msg = "Event type slug already exists"
                 raise ValueError(msg)
             event_type.slug = slug
-    event_type.updated_at = datetime.now(pytz.UTC)
+    event_type.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(event_type)
     return event_type
@@ -520,7 +521,7 @@ async def create_public_booking(db: AsyncSession, user: UserTable, event_type: E
             msg = "payment"
             raise ValidationError(msg, "Payment is required before booking this event.")
     try:
-        user_tz = pytz.timezone(payload.get("time_zone") or user.timezone or "UTC")
+        user_tz = ZoneInfo(payload.get("time_zone") or user.timezone or "UTC")
     except Exception as exc:
         msg = f"Invalid timezone: {payload.get('time_zone') or user.timezone or 'UTC'}"
         raise TimezoneError(msg) from exc
@@ -531,9 +532,9 @@ async def create_public_booking(db: AsyncSession, user: UserTable, event_type: E
     if booking_end.tzinfo is None:
         booking_end = user_tz.localize(booking_end)
     await _refresh_calendar_events_if_needed(db, user)
-    booking_start_utc = booking_start.astimezone(pytz.UTC)
-    booking_end_utc = booking_end.astimezone(pytz.UTC)
-    now_utc = datetime.now(pytz.UTC)
+    booking_start_utc = booking_start.astimezone(timezone.utc)
+    booking_end_utc = booking_end.astimezone(timezone.utc)
+    now_utc = datetime.now(timezone.utc)
     if booking_start_utc < now_utc:
         msg = "start_time"
         raise ValidationError(msg, "Cannot book a time in the past.")
@@ -549,7 +550,7 @@ async def create_public_booking(db: AsyncSession, user: UserTable, event_type: E
             organizer_user = assigned_user
             logger.info("Booking assigned to team member: event_type=%s assigned_user=%s", event_type.id, organizer_user.id)
     try:
-        organizer_tz = pytz.timezone(organizer_user.timezone or "UTC")
+        organizer_tz = ZoneInfo(organizer_user.timezone or "UTC")
     except Exception as exc:
         msg = f"Invalid organizer timezone: {organizer_user.timezone or 'UTC'}"
         raise TimezoneError(msg) from exc
@@ -586,7 +587,7 @@ async def create_public_booking(db: AsyncSession, user: UserTable, event_type: E
         db.add(booking)
         await db.flush()
         fallback_meeting_url = await generate_meeting_url(event_type.meeting_provider, organizer_user.id, {"booking_id": booking.id, "attendee_email": booking.email, "start_time": booking.start_time.isoformat(), "duration_minutes": event_type.duration_minutes})
-        event_data = {"user_id": organizer_user.id, "title": event_type.name, "description": event_type.description, "start_time": booking.start_time, "end_time": booking.end_time, "source": "public_booking", "fingerprint": f"booking-{datetime.now(pytz.UTC).timestamp()}", "is_meeting": bool(event_type.meeting_provider), "meeting_provider": event_type.meeting_provider, "meeting_url": fallback_meeting_url, "attendees": [booking.email], "metadata_payload": {"customer_name": booking.full_name, "customer_email": booking.email, "event_type_id": event_type.id, "booking_id": booking.id}, "event_type_id": event_type.id}
+        event_data = {"user_id": organizer_user.id, "title": event_type.name, "description": event_type.description, "start_time": booking.start_time, "end_time": booking.end_time, "source": "public_booking", "fingerprint": f"booking-{datetime.now(timezone.utc).timestamp()}", "is_meeting": bool(event_type.meeting_provider), "meeting_provider": event_type.meeting_provider, "meeting_url": fallback_meeting_url, "attendees": [booking.email], "metadata_payload": {"customer_name": booking.full_name, "customer_email": booking.email, "event_type_id": event_type.id, "booking_id": booking.id}, "event_type_id": event_type.id}
         new_event = await create_event(db, event_data, commit=False, perform_external=False, notify=True)
         booking.event_id = new_event.id
         booking_meta = dict(booking.metadata_payload or {})
@@ -599,13 +600,9 @@ async def create_public_booking(db: AsyncSession, user: UserTable, event_type: E
             after_event = await create_event(db, {"user_id": organizer_user.id, "title": f"Travel time after {event_type.name}", "description": "Auto-created travel block", "start_time": booking.end_time, "end_time": booking.end_time + timedelta(minutes=after_minutes), "source": "travel_block", "fingerprint": f"travel-after-{booking.id}", "is_meeting": False, "event_type_id": event_type.id, "metadata_payload": {"booking_id": booking.id, "kind": "travel_after"}}, commit=False, perform_external=False, notify=False)
             booking_meta["travel_after_event_id"] = after_event.id
         booking.metadata_payload = booking_meta
-        booking.updated_at = datetime.now(pytz.UTC)
+        booking.updated_at = datetime.now(timezone.utc)
     await db.refresh(booking)
     try:
-        from backend.services.jobs import (
-            enqueue_provision_jitsi_meeting,
-            enqueue_provision_shortlink,
-        )
         await enqueue_provision_shortlink(booking.id)
         if (event_type.meeting_provider or "").lower() == "jitsi":
             await enqueue_provision_jitsi_meeting(booking.id)

@@ -2,7 +2,7 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import and_, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,6 +15,7 @@ from backend.models.team import TeamMember, TeamRole
 router = APIRouter(prefix="/resources", tags=["resources"])
 
 class ResourceCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Create resource request."""
     name: str = Field(..., min_length=1, max_length=200)
     description: str | None = Field(None, max_length=1000)
@@ -36,6 +37,7 @@ class ResourceCreate(BaseModel):
     approver_ids: list[str] = Field(default=[])
 
 class ResourceUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Update resource request."""
     name: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
@@ -50,6 +52,7 @@ class ResourceUpdate(BaseModel):
     hourly_rate: float | None = None
 
 class ResourceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Resource response."""
     id: str
     name: str
@@ -66,6 +69,7 @@ class ResourceResponse(BaseModel):
     requires_approval: bool
 
 class ResourceBookingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Book resource request."""
     resource_id: str
     title: str = Field(..., min_length=1, max_length=200)
@@ -76,6 +80,7 @@ class ResourceBookingRequest(BaseModel):
     booking_id: str | None = None
 
 class ResourceBookingResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Resource booking response."""
     id: str
     resource_id: str
@@ -88,6 +93,7 @@ class ResourceBookingResponse(BaseModel):
     total_cost: float | None
 
 class ResourceAvailabilityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Check resource availability."""
     start_date: datetime
     end_date: datetime

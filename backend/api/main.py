@@ -12,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import httpx
 import sentry_sdk
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -70,7 +70,13 @@ def _init_sentry() -> None:
     dsn = os.getenv("SENTRY_DSN")
     if not dsn:
         return
-    sentry_sdk.init(dsn=dsn, environment=os.getenv("SENTRY_ENVIRONMENT", os.getenv("ENV", "development")), traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")))
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=os.getenv("SENTRY_ENVIRONMENT", os.getenv("ENV", "development")),
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        integrations=[CeleryIntegration()],
+    )
 _validate_production_env()
 _init_sentry()
 
@@ -133,6 +139,30 @@ async def lifespan(app: FastAPI):
 
     api_key_refresh_task = asyncio.create_task(_refresh_prefix_index_loop())
     app.state.api_key_refresh_task = api_key_refresh_task
+    try:
+        from backend.utils.ai_cost_guard import implement_ai_cost_controls
+        from backend.utils.cache_optimizer import initialize_cache_optimizer
+        from backend.utils.cost_optimizer import implement_cost_controls
+        from backend.utils.database_optimizer import initialize_database_optimizer
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            await initialize_database_optimizer(database_url)
+        await implement_cost_controls()
+        await implement_ai_cost_controls()
+        await initialize_cache_optimizer()
+        logger.info("Cost optimization systems initialized")
+        if db_utils.DATABASE_URL:
+            from backend.utils.rate_limiter import get_rate_limiter
+            from backend.utils.db import get_db_context
+            from sqlalchemy import text
+            limiter = get_rate_limiter(redis_url=os.getenv("REDIS_URL", None))
+            async with get_db_context() as session:
+                rows = await session.execute(text("SELECT ak.key_prefix, ak.key_hash, u.tier FROM api_keys ak JOIN users u ON ak.user_id = u.id WHERE ak.is_active = true"))
+                for key_prefix, key_hash, tier in rows:
+                    limiter.api_key_prefix_index.setdefault(key_prefix, []).append((key_hash, tier))
+            logger.info("Rate limiter API key prefix index populated")
+    except Exception as e:
+        logger.exception("Failed to initialize cost optimizations: %s", e)
     yield
     if ping_task:
         ping_task.cancel()
@@ -142,6 +172,11 @@ async def lifespan(app: FastAPI):
         api_key_refresh_task.cancel()
         with suppress(asyncio.CancelledError):
             await api_key_refresh_task
+    try:
+        from backend.core.redis import close_redis
+        await close_redis()
+    except Exception:
+        logger.exception("Failed to close Redis connection during shutdown")
     if hasattr(db_utils, "engine"):
         await db_utils.engine.dispose()
 
@@ -228,6 +263,27 @@ def create_app() -> FastAPI:
                         return JSONResponse({"detail": "Request body too large."}, status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
                 except ValueError:
                     pass
+            else:
+                # No Content-Length header (chunked encoding) — enforce via streaming
+                original_receive = request.receive
+
+                async def limited_receive():
+                    total = 0
+                    while True:
+                        msg = await original_receive()
+                        if msg["type"] == "http.disconnect":
+                            return msg
+                        if msg["type"] == "http.request":
+                            chunk = msg.get("body", b"")
+                            total += len(chunk)
+                            if total > self.max_body_size:
+                                raise HTTPException(status_code=413, detail="Request body too large.")
+                            if not msg.get("more_body", False):
+                                return msg
+                            return msg
+                        return msg
+
+                request._receive = limited_receive
             return await call_next(request)
     app.add_middleware(LimitUploadSizeMiddleware)
     from backend.utils.security_middleware import (
@@ -256,34 +312,6 @@ def create_app() -> FastAPI:
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
     app.add_middleware(RateLimitMiddleware, redis_url=redis_url, default_limit=100, default_window=60, strategy="sliding_window", skip_paths=["/health", "/", "/docs", "/redoc", "/openapi.json", "/metrics"])
     from backend.utils.cost_optimizer import CostMonitoringMiddleware
-
-    @app.on_event("startup")
-    async def initialize_cost_optimizations():
-        from backend.utils.ai_cost_guard import implement_ai_cost_controls
-        from backend.utils.cache_optimizer import initialize_cache_optimizer
-        from backend.utils.cost_optimizer import implement_cost_controls
-        from backend.utils.database_optimizer import initialize_database_optimizer
-        database_url = os.getenv("DATABASE_URL")
-        if database_url:
-            await initialize_database_optimizer(database_url)
-        await implement_cost_controls()
-        await implement_ai_cost_controls()
-        await initialize_cache_optimizer()
-        logger.info("Cost optimization systems initialized")
-        # Populate rate limiter API key prefix index to speed tier resolution
-        try:
-            from backend.utils.rate_limiter import get_rate_limiter
-            from backend.utils.db import get_db_context
-            limiter = get_rate_limiter(redis_url=os.getenv("REDIS_URL", None))
-            if db_utils.DATABASE_URL:
-                async with get_db_context() as session:
-                    from sqlalchemy import text
-                    rows = await session.execute(text("SELECT ak.key_prefix, ak.key_hash, u.tier FROM api_keys ak JOIN users u ON ak.user_id = u.id WHERE ak.is_active = true"))
-                    for key_prefix, key_hash, tier in rows:
-                        limiter.api_key_prefix_index.setdefault(key_prefix, []).append((key_hash, tier))
-                logger.info("Rate limiter API key prefix index populated (%s prefixes)", len(limiter.api_key_prefix_index))
-        except Exception as e:
-            logger.exception("Failed to populate API key prefix index: %s", e)
     app.add_middleware(CostMonitoringMiddleware)
     allow_origin_regex = "^https?://(?:localhost|127\\.0\\.0\\.1)(?::\\d+)?$" if env != "production" else None
     app.add_middleware(CORSMiddleware, allow_origins=allow_origins, allow_origin_regex=allow_origin_regex, allow_credentials=True, allow_methods=["*"], allow_headers=["*"], expose_headers=["x-xsrf-token", "Location"])
@@ -357,14 +385,39 @@ def create_app() -> FastAPI:
     app.include_router(audit_router, prefix="/api/v1/audit")
 
     @app.get("/health")
-    async def health_check():
-        return {"status": "healthy", "architecture": "monolith"}
+    async def health_check(request: Request):
+        from backend.core.redis import get_redis
+        from backend.utils.db import AsyncSessionLocal
+        from sqlalchemy import text
+
+        checks = {"database": {"status": "unknown"}, "redis": {"status": "unknown"}}
+        overall = "healthy"
+
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(text("SELECT 1"))
+            checks["database"] = {"status": "healthy"}
+        except Exception as e:
+            checks["database"] = {"status": "unhealthy", "error": str(e)}
+            overall = "unhealthy"
+
+        try:
+            r = await get_redis()
+            if r:
+                await r.ping()
+                checks["redis"] = {"status": "healthy"}
+            else:
+                checks["redis"] = {"status": "degraded", "detail": "in-memory fallback"}
+        except Exception as e:
+            checks["redis"] = {"status": "unhealthy", "error": str(e)}
+            overall = "unhealthy"
+
+        return {"status": overall, "checks": checks, "request_id": getattr(request.state, "request_id", None)}
 
     @app.api_route("/", methods=["GET", "HEAD"])
     async def root():
         return {"app": "GraftAI", "status": "running", "frontend_url": os.getenv("FRONTEND_URL", os.getenv("FRONTEND_BASE_URL", "http://localhost:3000"))}
     # Backwards-compatible redirects: /api/* -> /api/v1/*
-    from fastapi import Request
     from fastapi.responses import RedirectResponse
 
     @app.get("/api", include_in_schema=False)

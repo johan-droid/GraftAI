@@ -65,6 +65,7 @@ async def delete_notification(notification_id: str, db: AsyncSession=Depends(get
     return {"status": "ok"}
 
 class NotificationTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     to_email: EmailStr
     subject: str
     message: str

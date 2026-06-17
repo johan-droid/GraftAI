@@ -140,7 +140,7 @@ class BookingAutomationService:
         start_time = datetime.now(UTC)
         metrics = get_agent_metrics()
         metrics.record_automation_start(booking_id)
-        logger.info("🚀 Booking Automation Started: %s", booking_id)
+        logger.info(" Booking Automation Started: %s", booking_id)
         try:
             logger.info("[%s] Step 1: AI Agent Triggered", booking_id)
             await get_agent_controller()
@@ -198,13 +198,13 @@ class BookingAutomationService:
             metrics.record_automation_complete(booking_id=booking_id, status=status, risk_level=decision.risk_analysis.level.value, vip_level=decision.attendee_analysis.vip_level.value, decision_score=decision_score, booking_value=perception_data.get("estimated_value", 0))
             log_automation_complete(booking_id=booking_id, status=status, decision_score=decision_score, risk_assessment=decision.risk_analysis.level.value, actions_executed=len(action_results), execution_time_ms=execution_time)
             result = AutomationResult(booking_id=booking_id, automation_status="completed" if all(r.get("success") for r in action_results) else "partial", actions_executed=action_results, agent_decisions={"actions": [a.tool_name for a in decision.actions], "reasoning": decision.reasoning, "risk_assessment": decision.risk_analysis.level.value, "confidence": decision.confidence.name}, external_results=external_results, risk_assessment=decision.risk_analysis.level.value, decision_score=decision_score, execution_time_ms=execution_time, timestamp=datetime.now(UTC).isoformat())
-            logger.info("✅ Booking Automation Complete: %s", booking_id)
+            logger.info(" Booking Automation Complete: %s", booking_id)
             logger.info("  - Status: %s", result.automation_status)
             logger.info("  - Score: %s/100", result.decision_score)
             logger.info("  - Time: %sms", execution_time)
             return result
         except Exception as e:
-            logger.exception("❌ Booking Automation Failed: %s - %s", booking_id, e)
+            logger.exception(" Booking Automation Failed: %s - %s", booking_id, e)
             metrics.record_error(error_type="automation_failure", component="booking_automation")
             metrics.record_automation_complete(booking_id=booking_id, status="failed", risk_level="unknown", vip_level="unknown", decision_score=0)
             log_automation_complete(booking_id=booking_id, status="failed", decision_score=0, risk_assessment="unknown", actions_executed=0, execution_time_ms=(datetime.now(UTC) - start_time).total_seconds() * 1000, error=str(e))

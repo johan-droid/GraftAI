@@ -46,8 +46,15 @@ jobs:
         working-directory: frontend
         continue-on-error: true
       - name: Build
-        run: npx next build --webpack
+        run: npx next build --webpack 2>&1 | tee /tmp/next-build.log
         working-directory: frontend
+      - name: Dump build log on failure
+        if: failure()
+        run: |
+          echo "## Build output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          head -c 15000 /tmp/next-build.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
   docker:
     name: Docker Build

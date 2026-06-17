@@ -132,6 +132,7 @@ class UserProfileUpdateRequest(BaseModel):
         return value
 
 class OutOfOfficeBlockCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     start_time: datetime
     end_time: datetime
     reason: str | None = None
@@ -180,14 +181,14 @@ def _mark_profile_setup_skipped(user: UserTable) -> None:
     prefs["profile_setup_skipped"] = True
     _set_preferences(user, prefs)
 
-def _serialize_profile(user: UserTable) -> dict[str, Any]:
+async def _serialize_profile(user: UserTable) -> dict[str, Any]:
     prefs = _normalize_preferences(user)
     avatar_key = prefs.get("avatar_key")
-    avatar_url = storage.get_presigned_url(avatar_key) if avatar_key else prefs.get("avatar_url")
+    avatar_url = await storage.get_presigned_url(avatar_key) if avatar_key else prefs.get("avatar_url")
     return {"id": user.id, "email": user.email, "username": user.username, "full_name": user.full_name, "display_name": prefs.get("display_name") or user.full_name, "avatar_url": avatar_url, "bio": prefs.get("bio"), "phone": prefs.get("phone"), "timezone": user.timezone or prefs.get("timezone") or "UTC", "time_format": prefs.get("time_format", "12h"), "theme": prefs.get("theme", "system"), "brand_color_light": prefs.get("brand_color_light", "#3b82f6"), "brand_color_dark": prefs.get("brand_color_dark", "#1e40af"), "booking_layout": prefs.get("booking_layout", "monthly"), "default_calendar_id": prefs.get("default_calendar_id"), "preferences": prefs, "profile_setup_completed": _profile_setup_completed(user), "profile_setup_skipped": _profile_setup_skipped(user), "onboarding_completed": bool(user.onboarding_completed), "completed_steps": prefs.get("completed_steps", []), "tier": user.tier, "subscription_status": user.subscription_status, "razorpay_subscription_id": user.razorpay_subscription_id, "daily_ai_count": user.daily_ai_count, "daily_ai_limit": user.daily_ai_limit, "daily_sync_count": user.daily_sync_count, "daily_sync_limit": user.daily_sync_limit, "quota_reset_at": user.quota_reset_at.isoformat() if user.quota_reset_at else None, "trial_expires_at": user.trial_expires_at.isoformat() if user.trial_expires_at else None, "total_ai_tokens": user.total_ai_tokens, "total_api_calls": user.total_api_calls, "total_scheduling_count": user.total_scheduling_count}
 
-def _build_profile_response(user: UserTable) -> dict[str, Any]:
-    return {"success": True, "message": "Profile retrieved successfully", "data": _serialize_profile(user)}
+async def _build_profile_response(user: UserTable) -> dict[str, Any]:
+    return {"success": True, "message": "Profile retrieved successfully", "data": await _serialize_profile(user)}
 
 def _apply_profile_payload(user: UserTable, payload: UserProfileUpdateRequest) -> UserTable:
     prefs = _normalize_preferences(user)
@@ -247,12 +248,12 @@ def _set_out_of_office_blocks(user: UserTable, blocks: list[dict[str, Any]]) -> 
 @router.get("/me")
 async def get_my_profile(current_user: UserTable=Depends(get_current_user)):
     """Fetch current user profile for the monolithic dashboard."""
-    return _serialize_profile(current_user)
+    return await _serialize_profile(current_user)
 
 @router.get("/me/profile")
 async def get_my_profile_details(current_user: UserTable=Depends(get_current_user)):
     """Fetch the authenticated user's profile data for onboarding."""
-    return _build_profile_response(current_user)
+    return await _build_profile_response(current_user)
 
 @router.post("/me/profile")
 @router.put("/me/profile")
@@ -275,7 +276,7 @@ async def create_or_update_profile(payload: UserProfileUpdateRequest, current_us
         await db.commit()
         await db.refresh(user)
         logger.info("Profile updated for user %s... (onboarding)", user.id[:8])
-        return {"success": True, "message": "Profile updated successfully", "data": _serialize_profile(user)}
+        return {"success": True, "message": "Profile updated successfully", "data": await _serialize_profile(user)}
     except HTTPException:
         raise
     except Exception:
@@ -342,10 +343,10 @@ async def upload_profile_avatar(file: UploadFile=File(...), current_user: UserTa
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not upload avatar at this time.") from exc
     if old_avatar_key:
-        old_size = storage.get_file_size(old_avatar_key)
-        storage.delete_file(old_avatar_key)
+        old_size = await storage.get_file_size(old_avatar_key)
+        await storage.delete_file(old_avatar_key)
         current_user.storage_bytes = max(0, current_user.storage_bytes - old_size)
-    avatar_url = storage.get_presigned_url(storage_key)
+    avatar_url = await storage.get_presigned_url(storage_key)
     prefs["avatar_key"] = storage_key
     prefs.pop("avatar_url", None)
     _set_preferences(current_user, prefs)
@@ -423,7 +424,7 @@ async def update_current_user_profile(payload: UserProfileUpdateRequest, current
         await db.commit()
         await db.refresh(user)
         logger.info("Profile updated for user %s...", user.id[:8])
-        return {"success": True, "message": "Profile updated successfully", "data": _serialize_profile(user)}
+        return {"success": True, "message": "Profile updated successfully", "data": await _serialize_profile(user)}
     except HTTPException:
         raise
     except Exception:

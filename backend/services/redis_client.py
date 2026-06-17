@@ -20,10 +20,10 @@ async def get_redis_client():
     try:
         _redis_client = aioredis.from_url(redis_url, encoding="utf-8", decode_responses=False)
         await _redis_client.ping()
-        logger.info("✅ Connected to Redis at %s", redis_url)
+        logger.info(" Connected to Redis at %s", redis_url)
         return _redis_client
     except Exception as e:
-        logger.exception("❌ Failed to connect to Redis at %s: %s", redis_url, e)
+        logger.exception(" Failed to connect to Redis at %s: %s", redis_url, e)
         return None
 
 async def get_redis_binary():

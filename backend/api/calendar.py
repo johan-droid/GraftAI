@@ -55,11 +55,13 @@ class EventResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class AvailabilitySlot(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     time: str
     available: bool
     reason: str | None = None
 
 class AvailabilityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     date: str
     slots: list[AvailabilitySlot]
     timezone: str

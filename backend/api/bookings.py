@@ -99,18 +99,21 @@ class BookingCreateRequest(BaseModel):
     estimated_value: float | None = Field(None, json_schema_extra={"example": 2500.0}, description="Estimated business value")
 
 class BookingCreateData(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Data payload for booking creation"""
     status: str
     booking_id: str
     automation: str
 
 class BookingCreateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Wrapped response after creating booking"""
     success: bool = True
     message: str
     data: BookingCreateData
 
 class AutomationStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Automation status for a booking"""
     booking_id: str
     status: str
@@ -125,6 +128,7 @@ class AutomationStatusResponse(BaseModel):
     error: str | None = None
 
 class AutomationResultResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Complete automation result"""
     booking_id: str
     status: str
@@ -154,6 +158,7 @@ class BookingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class SingleBookingResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Wrapped single booking response"""
     success: bool = True
     message: str = "Booking retrieved successfully"
@@ -168,6 +173,7 @@ class BookingListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class BookingUpdateSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Schema for updating a booking"""
     full_name: str | None = None
     email: str | None = None
@@ -176,6 +182,7 @@ class BookingUpdateSchema(BaseModel):
     metadata_payload: dict[str, Any] | None = None
 
 class BookingRescheduleSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Schema for rescheduling a booking"""
     start_time: datetime
     end_time: datetime | None = None
@@ -629,7 +636,10 @@ async def get_automation_queue(db: AsyncSession=Depends(get_db), current_user: U
     except Exception as e:
         logger.exception("Error getting queue status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
-AUTOMATION_WEBHOOK_SECRET = os.environ.get("AUTOMATION_WEBHOOK_SECRET", "dev-webhook-secret-change-in-production")
+AUTOMATION_WEBHOOK_SECRET = os.environ.get("AUTOMATION_WEBHOOK_SECRET")
+if os.getenv("ENV", "development").lower() == "production" and not AUTOMATION_WEBHOOK_SECRET:
+    import warnings
+    warnings.warn("AUTOMATION_WEBHOOK_SECRET not set - automation webhooks will be rejected", stacklevel=2)
 
 @router.post("/webhook/automation-complete", summary="Webhook for automation completion", description="Webhook called when automation completes (for external integrations). Requires X-Webhook-Secret header.")
 async def automation_webhook(request: Request, booking_id: str, automation_id: str, status: str, result: dict[str, Any] | None=None, db: AsyncSession=Depends(get_db)) -> dict[str, str]:

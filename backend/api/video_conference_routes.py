@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,7 @@ from backend.services.integrations.video_conference_service import (
 router = APIRouter(prefix="/video-conference", tags=["video-conference"])
 
 class VideoProviderConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Video provider configuration."""
     provider: str = Field(..., pattern="^(zoom|google_meet|microsoft_teams|webex)$")
     is_enabled: bool = True
@@ -26,6 +27,7 @@ class VideoProviderConfig(BaseModel):
     default_settings: dict | None = None
 
 class CreateMeetingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Create video meeting request."""
     provider: str = Field(..., pattern="^(zoom|google_meet|microsoft_teams)$")
     topic: str = Field(..., min_length=1, max_length=200)
@@ -35,6 +37,7 @@ class CreateMeetingRequest(BaseModel):
     booking_id: str | None = None
 
 class MeetingResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Meeting response."""
     id: str
     provider: str
@@ -48,6 +51,7 @@ class MeetingResponse(BaseModel):
     settings: dict
 
 class ProviderStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Provider connection status."""
     provider: str
     is_connected: bool

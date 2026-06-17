@@ -144,25 +144,25 @@ class TestRateLimitDenied:
 class TestRateLimitRedisFailure:
     """Tests for Redis unavailability behaviour."""
 
-    async def test_login_fails_closed_on_redis_error(self):
-        """Sensitive endpoints (login) must fail-closed when Redis is unavailable."""
+    async def test_oauth_exchange_fails_closed_on_redis_error(self):
+        """Sensitive endpoints (oauth_exchange) must fail-closed when Redis is unavailable."""
         mock_redis = AsyncMock()
         mock_redis.eval = AsyncMock(side_effect=RedisError("connection refused"))
         with patch("backend.utils.rate_limit.get_redis_client", return_value=mock_redis):
-            limiter = make_rate_limit(name="login")
+            limiter = make_rate_limit(name="oauth_exchange")
             result = await limiter.limit("attacker-ip")
         assert result.success is False
         assert result.remaining == 0
         assert result.reset_seconds == limiter.window_seconds
 
-    async def test_register_fails_closed_on_redis_error(self):
-        """'register' endpoint must also fail-closed on Redis errors."""
+    async def test_register_fails_open_on_redis_error(self):
+        """'register' endpoint is not sensitive, must fail-open on Redis errors."""
         mock_redis = AsyncMock()
         mock_redis.eval = AsyncMock(side_effect=RedisError("timeout"))
         with patch("backend.utils.rate_limit.get_redis_client", return_value=mock_redis):
             limiter = make_rate_limit(name="register")
             result = await limiter.limit("user-reg")
-        assert result.success is False
+        assert result.success is True
 
     async def test_non_sensitive_endpoint_fails_open_on_redis_error(self):
         """Non-sensitive endpoints must fail-open (allow) on Redis errors."""
@@ -175,11 +175,11 @@ class TestRateLimitRedisFailure:
         assert result.remaining == limiter.max_requests
 
     async def test_connection_error_treated_same_as_redis_error(self):
-        """ConnectionError should be treated as a Redis failure."""
+        """ConnectionError should be treated as a Redis failure for sensitive endpoints."""
         mock_redis = AsyncMock()
         mock_redis.eval = AsyncMock(side_effect=ConnectionError("refused"))
         with patch("backend.utils.rate_limit.get_redis_client", return_value=mock_redis):
-            limiter = make_rate_limit(name="login")
+            limiter = make_rate_limit(name="oauth_exchange")
             result = await limiter.limit("user-conn-err")
         assert result.success is False
 

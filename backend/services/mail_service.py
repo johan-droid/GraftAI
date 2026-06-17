@@ -29,7 +29,7 @@ def _send_sync(to_email: str, subject: str, html_content: str, text_body: str | 
             server.starttls(context=ssl.create_default_context())
             server.login(cfg["user"], cfg["pass"])
             server.send_message(msg)
-            logger.info("📧 Sent email to %s", to_email)
+            logger.info(" Sent email to %s", to_email)
     except Exception as e:
         logger.exception("Failed to send email to %s: %s", to_email, e)
 

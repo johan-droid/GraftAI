@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.celery_app import celery_app
 from backend.models.tables import WorkflowStepTable, WorkflowTable
+from backend.services.mail_service import send_email
 from backend.services.messaging import send_message
 from backend.utils.db import AsyncSessionLocal
 from backend.utils.dead_letter_queue import get_dlq
@@ -183,7 +184,7 @@ class WorkflowEngine:
         if not recipient:
             msg = "No recipient specified for email"
             raise ValueError(msg)
-        await send_message(to=recipient, subject=subject, body=body, message_type="email")
+        await send_email(to_email=recipient, subject=subject, html_body=body, text_body=body)
         logger.info("Email sent to %s", recipient)
         return {"recipient": recipient, "subject": subject}
 
@@ -194,9 +195,8 @@ class WorkflowEngine:
         if not phone:
             msg = "No phone number specified for SMS"
             raise ValueError(msg)
-        await send_message(to=phone, body=message, message_type="sms")
-        logger.info("SMS sent to %s", phone)
-        return {"phone": phone, "message": message}
+        logger.info("SMS notification to %s: %s", phone, message)
+        return {"phone": phone, "message": message, "status": "logged_only"}
 
     async def _send_webhook(self, config: dict[str, Any], event_data: dict[str, Any]) -> dict[str, Any]:
         """Send webhook action."""

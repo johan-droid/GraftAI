@@ -106,9 +106,7 @@ async def decode_jwt_token(token: str, expected_type: str | None=None) -> dict:
             mgr = get_secret_manager()
             pub_pem = mgr.get_secret(f"auth/jwks/{kid}")
             if hasattr(pub_pem, "__await__"):
-                import asyncio
-
-                pub_pem = asyncio.get_event_loop().run_until_complete(pub_pem)
+                pub_pem = await pub_pem
             if not pub_pem:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Public key not found", headers={"WWW-Authenticate": "Bearer"})
             # jose can accept the PEM bytes for verification

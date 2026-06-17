@@ -1,7 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from backend.api.deps import get_current_user
 from backend.models.tables import UserTable
@@ -9,9 +9,11 @@ from backend.models.tables import UserTable
 router = APIRouter(prefix="/proactive", tags=["proactive"])
 
 class ProactiveSuggestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     context: str | None = None
 
 class SmartAction(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     id: str
     action_type: str = Field(..., description="e.g., 'schedule', 'cancel', 'reschedule'")
     title: str
@@ -22,6 +24,7 @@ class SmartAction(BaseModel):
     payload: dict[str, Any] | None = None
 
 class ProactiveSuggestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     suggestion: str
     smart_actions: list[SmartAction] = []
 

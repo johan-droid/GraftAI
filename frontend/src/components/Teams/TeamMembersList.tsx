@@ -4,7 +4,7 @@ import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTeamMembers, removeTeamMember } from "@/lib/api";
 import { TeamMemberFull } from "@/types/api";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { Trash2, Mail, User } from "lucide-react";
 
 export default function TeamMembersList({ teamId }: { teamId: string }) {

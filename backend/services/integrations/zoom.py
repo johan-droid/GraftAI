@@ -35,15 +35,14 @@ async def create_zoom_meeting(db: AsyncSession, user_id: str, event_details: dic
         client = await get_client()
         resp = await client.post("https://api.zoom.us/v2/users/me/meetings", headers=headers, json=payload)
         if resp.status_code != 201:
-            logger.error("❌ Zoom API Error: %s - %s", resp.status_code, resp.text)
+            logger.error(" Zoom API Error: %s - %s", resp.status_code, resp.text)
             msg = f"Zoom API returned {resp.status_code}"
             raise RuntimeError(msg)
         data = resp.json()
         return {"id": str(data.get("id")), "join_url": data.get("join_url")}
     except Exception as e:
-        logger.exception("❌ Zoom meeting creation fail: %s", e)
-        import uuid
-        return {"id": None, "join_url": f"https://meet.graftai.tech/zoom-fallback-{uuid.uuid4().hex[:8]}"}
+        logger.exception("Zoom meeting creation failed: %s", e)
+        raise
 
 async def update_zoom_meeting(db: AsyncSession, user_id: str, meeting_id: str, event_details: dict[str, Any]) -> None:
     """
@@ -68,11 +67,11 @@ async def update_zoom_meeting(db: AsyncSession, user_id: str, meeting_id: str, e
         client = await get_client()
         resp = await client.patch(f"https://api.zoom.us/v2/meetings/{meeting_id}", headers=headers, json=payload)
         if resp.status_code not in (200, 204):
-            logger.error("❌ Zoom update failed: %s - %s", resp.status_code, resp.text)
+            logger.error(" Zoom update failed: %s - %s", resp.status_code, resp.text)
             msg = f"Zoom update failed with status {resp.status_code}"
             raise RuntimeError(msg)
     except Exception as e:
-        logger.exception("❌ Zoom meeting update failed: %s", e)
+        logger.exception(" Zoom meeting update failed: %s", e)
         raise
 
 async def delete_zoom_meeting(db: AsyncSession, user_id: str, meeting_id: str) -> None:
@@ -88,11 +87,11 @@ async def delete_zoom_meeting(db: AsyncSession, user_id: str, meeting_id: str) -
         client = await get_client()
         resp = await client.delete(f"https://api.zoom.us/v2/meetings/{meeting_id}", headers=headers)
         if resp.status_code not in (204, 202):
-            logger.error("❌ Zoom delete failed: %s - %s", resp.status_code, resp.text)
+            logger.error(" Zoom delete failed: %s - %s", resp.status_code, resp.text)
             msg = f"Zoom delete failed with status {resp.status_code}"
             raise RuntimeError(msg)
     except Exception as e:
-        logger.exception("❌ Zoom meeting deletion failed: %s", e)
+        logger.exception(" Zoom meeting deletion failed: %s", e)
         raise
 
 async def list_zoom_meetings(db: AsyncSession, user_id: str) -> list:
@@ -110,5 +109,5 @@ async def list_zoom_meetings(db: AsyncSession, user_id: str) -> list:
             return []
         return resp.json().get("meetings", [])
     except Exception as e:
-        logger.exception("❌ Error listing Zoom meetings: %s", e)
+        logger.exception(" Error listing Zoom meetings: %s", e)
         return []

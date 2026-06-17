@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 class WebhookSubscriptionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     url: AnyHttpUrl
     events: list[str] = Field(..., min_length=1)
     secret: str = Field(..., min_length=8)

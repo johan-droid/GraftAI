@@ -1,4 +1,5 @@
 """Apple iCloud Calendar integration via CalDAV."""
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -24,11 +25,15 @@ class AppleCalendarClient:
         self.caldav_url = ICLOUD_CALENDAR_HOME.format(apple_user_id=apple_user_id)
         self.client = caldav.DAVClient(url=self.caldav_url, username=apple_user_id, password=app_specific_password)
 
+    async def _run_sync(self, func, *args, **kwargs):
+        """Run a synchronous caldav call in a thread to avoid blocking the event loop."""
+        return await asyncio.to_thread(lambda: func(*args, **kwargs))
+
     async def list_calendars(self) -> list[dict[str, Any]]:
         """List all calendars for the user."""
         try:
-            principal = self.client.principal()
-            calendars = principal.calendars()
+            principal = await self._run_sync(self.client.principal)
+            calendars = await self._run_sync(principal.calendars)
             result = []
             for cal in calendars:
                 result.append({"id": cal.id, "name": cal.name, "url": str(cal.url), "supported_components": cal.get_supported_components() if hasattr(cal, "get_supported_components") else ["VEVENT"]})
@@ -40,11 +45,11 @@ class AppleCalendarClient:
     async def get_events(self, calendar_id: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
         """Get events from a specific calendar within date range."""
         try:
-            calendar = self.client.calendar(cal_id=calendar_id)
+            calendar = await self._run_sync(self.client.calendar, cal_id=calendar_id)
             if not calendar:
                 logger.warning("Calendar not found: %s", calendar_id)
                 return []
-            events = calendar.date_search(start=start, end=end)
+            events = await asyncio.to_thread(lambda: calendar.date_search(start=start, end=end))
             result = []
             for event in events:
                 vevent = event.vobject_instance.vevent
@@ -58,12 +63,12 @@ class AppleCalendarClient:
     async def create_event(self, calendar_id: str, title: str, start: datetime, end: datetime, description: str | None=None, location: str | None=None, attendees: list[str] | None=None) -> str | None:
         """Create a new event in the specified calendar."""
         try:
-            calendar = self.client.calendar(cal_id=calendar_id)
+            calendar = await self._run_sync(self.client.calendar, cal_id=calendar_id)
             if not calendar:
                 logger.error("Calendar not found: %s", calendar_id)
                 return None
             ical_data = self._build_ical_event(title=title, start=start, end=end, description=description, location=location, attendees=attendees)
-            event = calendar.add_event(ical_data)
+            event = await asyncio.to_thread(calendar.add_event, ical_data)
             logger.info("Created Apple Calendar event: %s", event.id)
             return event.id
         except Exception as e:
@@ -73,11 +78,11 @@ class AppleCalendarClient:
     async def update_event(self, calendar_id: str, event_id: str, title: str | None=None, start: datetime | None=None, end: datetime | None=None, description: str | None=None, location: str | None=None) -> bool:
         """Update an existing event."""
         try:
-            calendar = self.client.calendar(cal_id=calendar_id)
+            calendar = await self._run_sync(self.client.calendar, cal_id=calendar_id)
             if not calendar:
                 logger.error("Calendar not found: %s", calendar_id)
                 return False
-            event = calendar.event_by_uid(event_id)
+            event = await asyncio.to_thread(calendar.event_by_uid, event_id)
             if not event:
                 logger.warning("Event not found: %s", event_id)
                 return False
@@ -92,7 +97,7 @@ class AppleCalendarClient:
                 vevent.description.value = description
             if location:
                 vevent.location.value = location
-            event.save()
+            await asyncio.to_thread(event.save)
             logger.info("Updated Apple Calendar event: %s", event_id)
             return True
         except Exception as e:
@@ -102,15 +107,15 @@ class AppleCalendarClient:
     async def delete_event(self, calendar_id: str, event_id: str) -> bool:
         """Delete an event from the calendar."""
         try:
-            calendar = self.client.calendar(cal_id=calendar_id)
+            calendar = await self._run_sync(self.client.calendar, cal_id=calendar_id)
             if not calendar:
                 logger.error("Calendar not found: %s", calendar_id)
                 return False
-            event = calendar.event_by_uid(event_id)
+            event = await asyncio.to_thread(calendar.event_by_uid, event_id)
             if not event:
                 logger.warning("Event not found: %s", event_id)
                 return False
-            event.delete()
+            await asyncio.to_thread(event.delete)
             logger.info("Deleted Apple Calendar event: %s", event_id)
             return True
         except Exception as e:
@@ -156,15 +161,15 @@ class AppleCalendarClient:
 
 async def list_apple_calendars(token_data: dict[str, Any]) -> list[dict[str, Any]]:
     """List calendars using token data."""
-    client = AppleCalendarClient(apple_user_id=token_data.get("apple_user_id"), app_specific_password=token_data.get("app_specific_password"))
+    client = await asyncio.to_thread(lambda: AppleCalendarClient(apple_user_id=token_data.get("apple_user_id"), app_specific_password=token_data.get("app_specific_password")))
     return await client.list_calendars()
 
 async def get_apple_events(token_data: dict[str, Any], calendar_id: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
     """Get events from Apple calendar."""
-    client = AppleCalendarClient(apple_user_id=token_data.get("apple_user_id"), app_specific_password=token_data.get("app_specific_password"))
+    client = await asyncio.to_thread(lambda: AppleCalendarClient(apple_user_id=token_data.get("apple_user_id"), app_specific_password=token_data.get("app_specific_password")))
     return await client.get_events(calendar_id, start, end)
 
 async def get_apple_busy_times(token_data: dict[str, Any], start: datetime, end: datetime) -> list[dict[str, Any]]:
     """Get busy times from all Apple calendars."""
-    client = AppleCalendarClient(apple_user_id=token_data.get("apple_user_id"), app_specific_password=token_data.get("app_specific_password"))
+    client = await asyncio.to_thread(lambda: AppleCalendarClient(apple_user_id=token_data.get("apple_user_id"), app_specific_password=token_data.get("app_specific_password")))
     return await client.get_busy_times(start, end)

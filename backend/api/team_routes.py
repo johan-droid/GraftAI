@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,21 +16,25 @@ from backend.models.team import Team, TeamBooking, TeamEventType, TeamMember, Te
 router = APIRouter(prefix="/teams", tags=["teams"])
 
 class TeamCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     name: str = Field(..., min_length=1, max_length=100)
     slug: str = Field(..., min_length=1, max_length=100)
     description: str | None = None
 
 class TeamUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = None
     round_robin_enabled: bool | None = None
     require_approval: bool | None = None
 
 class TeamMemberInvite(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     email: EmailStr
     role: TeamRole = TeamRole.MEMBER
 
 class TeamEventTypeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     name: str = Field(..., min_length=1, max_length=200)
     slug: str = Field(..., min_length=1, max_length=200)
     description: str | None = None
@@ -39,6 +43,7 @@ class TeamEventTypeCreate(BaseModel):
     assignment_type: str = "all"
 
 class TeamBookingCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     event_type_id: str
     title: str
     description: str | None = None

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { addTeamMember } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { Team, TeamMemberFull } from "@/types/api";
 
 export default function AddMemberModal({

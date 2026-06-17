@@ -75,6 +75,121 @@ def run_booking_automation_task(self, booking_id: str, automation_id: str, user_
         pass
     return asyncio.run(_execute())
 
+@celery_app.task(bind=True, max_retries=3)
+def provision_shortlink(self, booking_id: str):
+    import asyncio
+    import os
+
+    from backend.models.tables import BookingTable, UserTable
+    from backend.services.integrations.unified_service import UnifiedService
+
+    async def _execute():
+        async with AsyncSessionLocal() as db:
+            booking = await db.get(BookingTable, booking_id)
+            if not booking:
+                logger.warning("Shortlink job: booking %s not found", booking_id)
+                return
+            user = await db.get(UserTable, booking.user_id)
+            if not user:
+                logger.warning("Shortlink job: user for booking %s not found", booking_id)
+                return
+            try:
+                frontend_base = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+                target_url = f"{frontend_base}/b/{booking.booking_code or booking.id}"
+                unified = UnifiedService(api_key=os.getenv("UNIFIED_TO_API_KEY"))
+                short = await unified.create_shortlink(target_url, title=booking.full_name or "Booking")
+                booking.shortlink = short.get("short_url")
+                meta = dict(booking.metadata_payload or {})
+                meta.setdefault("public", {})
+                meta["public"]["shortlink"] = short.get("short_url")
+                meta["public"]["shortlink_id"] = short.get("id")
+                meta["public"]["shortlink_external"] = bool(short.get("external"))
+                booking.metadata_payload = meta
+                booking.updated_at = datetime.now(UTC)
+                await db.commit()
+                logger.info("Shortlink provisioned for booking %s", booking_id)
+            except Exception:
+                logger.exception("Shortlink provisioning failed for %s", booking_id)
+
+    try:
+        asyncio.run(_execute())
+    except RuntimeError:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_execute())
+
+
+@celery_app.task(bind=True, max_retries=3)
+def provision_jitsi_meeting(self, booking_id: str):
+    import asyncio
+
+    from backend.models.tables import BookingTable, EventTable, EventTypeTable, UserTable
+    from backend.services.integrations.video_conference_service import (
+        VideoConferenceService,
+    )
+    from backend.services.notifications import notify_event_created
+
+    async def _execute():
+        async with AsyncSessionLocal() as db:
+            booking = await db.get(BookingTable, booking_id)
+            if not booking:
+                logger.warning("Jitsi job: booking %s not found", booking_id)
+                return
+            organizer = await db.get(UserTable, booking.user_id)
+            if not organizer:
+                logger.warning("Jitsi job: organizer for booking %s not found", booking_id)
+                return
+            try:
+                event_type = None
+                if booking.event_type_id:
+                    event_type = await db.get(EventTypeTable, booking.event_type_id)
+                vc_service = VideoConferenceService(db)
+                config = await vc_service.get_config(organizer.id, "jitsi")
+                meeting = await vc_service.create_jitsi_meeting(
+                    config=config,
+                    topic=event_type.name if event_type else booking.full_name,
+                    start_time=booking.start_time,
+                    duration_minutes=event_type.duration_minutes if event_type else 30,
+                    booking_id=booking.id,
+                )
+                if booking.event_id:
+                    event = await db.get(EventTable, booking.event_id)
+                    if event:
+                        event.meeting_url = getattr(meeting, "join_url", None)
+                meta = dict(booking.metadata_payload or {})
+                meta.setdefault("meeting", {})
+                meta["meeting"]["provider"] = "jitsi"
+                meta["meeting"]["join_url"] = getattr(meeting, "join_url", None)
+                meta["meeting"]["provider_meeting_id"] = getattr(meeting, "provider_meeting_id", None)
+                booking.metadata_payload = meta
+                booking.updated_at = datetime.now(UTC)
+                await db.commit()
+                logger.info("Jitsi meeting provisioned for booking %s", booking_id)
+            except Exception:
+                logger.exception("Jitsi provisioning failed for %s", booking_id)
+                return
+            if booking.event_id:
+                event = await db.get(EventTable, booking.event_id)
+                if event:
+                    notification_data = {
+                        "id": event.id,
+                        "title": event.title,
+                        "start_time": event.start_time.strftime("%A, %B %d at %I:%M %p"),
+                        "end_time": event.end_time.strftime("%A, %B %d at %I:%M %p"),
+                        "meeting_link": event.meeting_url,
+                        "is_meeting": event.is_meeting,
+                    }
+                    try:
+                        await notify_event_created([booking.email], [], notification_data)
+                    except Exception:
+                        logger.exception("Failed to send booking confirmation for %s", booking_id)
+
+    try:
+        asyncio.run(_execute())
+    except RuntimeError:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_execute())
+
+
 @celery_app.task(name="backend.tasks.automation_tasks.log_agent_interaction_task")
 def log_agent_interaction_task(request_data: dict[str, Any], response_data: dict[str, Any]) -> bool:
     """

@@ -8,7 +8,7 @@ This module provides endpoints for:
 - Email analytics and statistics
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,7 @@ def _is_admin(user: UserTable) -> bool:
     return False
 
 class EmailTemplateListItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Email template list item response."""
     id: str
     name: str
@@ -44,6 +45,7 @@ class EmailTemplateListItem(BaseModel):
     updated_at: str
 
 class EmailTemplateDetail(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Detailed email template response."""
     id: str
     name: str
@@ -61,6 +63,7 @@ class EmailTemplateDetail(BaseModel):
     updated_at: str
 
 class EmailTemplateCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Create email template request."""
     name: str = Field(..., min_length=1, max_length=100)
     slug: str = Field(..., min_length=1, max_length=100, pattern="^[a-z0-9_]+$")
@@ -73,6 +76,7 @@ class EmailTemplateCreate(BaseModel):
     language: str = Field(default="en", pattern="^[a-z]{2}$")
 
 class EmailTemplateUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Update email template request."""
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, max_length=500)
@@ -84,21 +88,25 @@ class EmailTemplateUpdate(BaseModel):
     is_active: bool | None = None
 
 class RenderTemplateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Render template request."""
     variables: dict[str, str] = Field(default_factory=dict)
 
 class RenderTemplateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Rendered template response."""
     subject: str
     html_body: str
     text_body: str
 
 class SendTestEmailRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Send test email request."""
     to_email: str = Field(..., pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
     variables: dict[str, str] = Field(default_factory=dict)
 
 class EmailStatsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Email statistics response."""
     total: int
     sent: int

@@ -200,7 +200,7 @@ def run_migrations(db_url: str | None=None, migration_file: str | None=None):
 if __name__ == "__main__":
     try:
         run_migrations()
-        logger.info("✅ Database migrations were successfully applied.")
+        logger.info(" Database migrations were successfully applied.")
     except Exception as exc:
-        logger.exception("❌ Failed to apply migrations: %s", type(exc).__name__)
+        logger.exception(" Failed to apply migrations: %s", type(exc).__name__)
         raise

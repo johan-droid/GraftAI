@@ -13,15 +13,14 @@ client = TestClient(app)
 
 
 def test_jwks_rotate_and_fetch():
-    # Rotate a key using admin header
-    headers = {"X-ADMIN-SECRET": SECRET_KEY}
+    os.environ["ADMIN_API_KEY"] = "test-admin-key-123"
+    headers = {"X-ADMIN-API-KEY": "test-admin-key-123"}
     resp = client.post("/api/v1/auth/jwks/rotate", headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert "kid" in data
     kid = data["kid"]
 
-    # Fetch JWKS and ensure the kid is present
     resp = client.get("/api/v1/auth/jwks")
     assert resp.status_code == 200
     ks = resp.json().get("keys", [])

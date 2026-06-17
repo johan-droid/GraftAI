@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Users, Plus, Shuffle, Layers, ShieldAlert, Link as LinkIcon, MoreVertical, Copy } from "lucide-react";
 import { useTeams } from "@/hooks/useTeams";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { Team, TeamMember } from "@/types/api";
 import AddMemberModal from "@/components/Teams/AddMemberModal";
 import TeamMembersList from "@/components/Teams/TeamMembersList";

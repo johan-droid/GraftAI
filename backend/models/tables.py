@@ -317,7 +317,7 @@ class ChatMessageTable(Base):
     """AI Copilot chat messages for conversation history and context."""
     __tablename__ = "chat_messages"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
-    user_id: Mapped[str] = mapped_column(String(100), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     conversation_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -328,11 +328,11 @@ class TeamMembershipTable(Base):
     """Team membership with role-based access (OWNER, ADMIN, MEMBER)."""
     __tablename__ = "team_memberships"
     id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
-    team_id: Mapped[str] = mapped_column(String(100), ForeignKey("teams.id"), nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(100), ForeignKey("users.id"), nullable=False, index=True)
+    team_id: Mapped[str] = mapped_column(String(100), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="MEMBER")
     is_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
-    invited_by: Mapped[str | None] = mapped_column(String(100), ForeignKey("users.id"), nullable=True)
+    invited_by: Mapped[str | None] = mapped_column(String(100), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     invite_token: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     invite_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
@@ -344,9 +344,9 @@ class WorkflowTable(Base, SoftDeleteMixin):
     """Workflows for automated sequences."""
     __tablename__ = "workflows"
     id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
-    user_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("users.id"), nullable=True, index=True)
-    team_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("teams.id"), nullable=True, index=True)
-    event_type_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("event_types.id"), nullable=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    team_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("teams.id", ondelete="CASCADE"), nullable=True, index=True)
+    event_type_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("event_types.id", ondelete="SET NULL"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     trigger: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
@@ -362,7 +362,7 @@ class WorkflowStepTable(Base):
     """Individual steps in a workflow."""
     __tablename__ = "workflow_steps"
     id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
-    workflow_id: Mapped[str] = mapped_column(String(100), ForeignKey("workflows.id"), nullable=False, index=True)
+    workflow_id: Mapped[str] = mapped_column(String(100), ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True)
     step_number: Mapped[int] = mapped_column(Integer, nullable=False)
     action_type: Mapped[str] = mapped_column(String(20), nullable=False)
     action_config: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -374,7 +374,7 @@ class ReminderLogTable(Base):
     """Scheduled reminders for bookings."""
     __tablename__ = "reminder_logs"
     id: Mapped[str] = mapped_column(String(100), primary_key=True, default=generate_uuid)
-    booking_id: Mapped[str] = mapped_column(String(100), ForeignKey("bookings.id"), nullable=False, index=True)
+    booking_id: Mapped[str] = mapped_column(String(100), ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True)
     reminder_type: Mapped[str] = mapped_column(String(20), nullable=False)
     scheduled_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     is_sent: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -469,3 +469,30 @@ class IdempotencyKeyTable(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     user: Mapped["UserTable"] = relationship("UserTable", backref="idempotency_keys")
+
+class PaymentIntentTable(Base):
+    """Tracks payment intents across Stripe and Razorpay with state machine."""
+    __tablename__ = "payment_intents"
+    __table_args__ = (
+        Index("ix_payment_intents_user_id", "user_id"),
+        Index("ix_payment_intents_booking_id", "booking_id"),
+        Index("ix_payment_intents_gateway_intent", "gateway", "gateway_payment_intent_id"),
+        Index("ix_payment_intents_status", "status"),
+        Index("ix_payment_intents_created_at", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    booking_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True)
+    event_type_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("event_types.id", ondelete="SET NULL"), nullable=True)
+    gateway: Mapped[str] = mapped_column(String(20), nullable=False)
+    gateway_payment_intent_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="USD", nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="initiated", nullable=False, index=True)
+    client_secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False)
+    user: Mapped["UserTable"] = relationship("UserTable", backref="payment_intents")
+    booking: Mapped[Optional["BookingTable"]] = relationship("BookingTable", backref="payment_intents", foreign_keys=[booking_id])

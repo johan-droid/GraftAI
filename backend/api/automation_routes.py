@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from backend.utils.pagination import (
 router = APIRouter(prefix="/automation", tags=["automation"])
 
 class AutomationRuleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Create automation rule request."""
     name: str = Field(..., min_length=1, max_length=200)
     description: str | None = Field(None, max_length=1000)
@@ -35,6 +36,7 @@ class AutomationRuleCreate(BaseModel):
     team_id: str | None = None
 
 class AutomationRuleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Update automation rule request."""
     name: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
@@ -47,6 +49,7 @@ class AutomationRuleUpdate(BaseModel):
     priority: int | None = Field(None, ge=0, le=100)
 
 class AutomationRuleResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Automation rule response."""
     id: str
     name: str
@@ -63,6 +66,7 @@ class AutomationRuleResponse(BaseModel):
     created_at: datetime
 
 class AutomationExecutionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Automation execution response."""
     id: str
     rule_id: str
@@ -76,6 +80,7 @@ class AutomationExecutionResponse(BaseModel):
     completed_at: datetime | None
 
 class AutomationTemplateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     """Automation template response."""
     id: str
     name: str

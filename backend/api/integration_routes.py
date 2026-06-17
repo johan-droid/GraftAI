@@ -2,7 +2,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, ConfigDict
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from backend.services.zoom_auth import get_zoom_auth_url
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
 class IntegrationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     provider: str = Field(..., pattern="^(zapier|slack|teams|custom)$")
     name: str = Field(..., min_length=1, max_length=100)
     webhook_url: HttpUrl
@@ -28,6 +29,7 @@ class IntegrationCreate(BaseModel):
     config: dict | None = None
 
 class IntegrationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     id: str
     provider: str
     name: str
@@ -39,6 +41,7 @@ class IntegrationResponse(BaseModel):
     last_error_at: str | None = None
 
 class IntegrationUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     name: str | None = Field(None, min_length=1, max_length=100)
     webhook_url: HttpUrl | None = None
     events: list[str] | None = None
@@ -46,6 +49,7 @@ class IntegrationUpdate(BaseModel):
     config: dict | None = None
 
 class IntegrationLogResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     id: str
     event_type: str
     status: str
@@ -55,6 +59,7 @@ class IntegrationLogResponse(BaseModel):
     response_time_ms: int | None
 
 class TestWebhookRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     event_type: str = "booking.created"
     payload: dict | None = None
 

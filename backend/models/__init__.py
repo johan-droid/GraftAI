@@ -14,11 +14,25 @@ from .resource import Resource, ResourceBooking, ResourceMaintenance
 from .tables import (
     AuditLogTable,
     BookingTable,
+    ChatMessageTable,
+    DeadLetterQueueItem,
     EventTable,
     EventTypeTable,
+    EventTypeTeamMemberTable,
+    IdempotencyKeyTable,
+    ManualActivationRequestTable,
+    NotificationTable,
+    PaymentIntentTable,
+    ReminderLogTable,
+    TeamMembershipTable,
     UserTable,
+    UserMFATable,
+    UserTokenTable,
     WebhookSubscriptionTable,
+    WebhookLogTable,
     WorkflowTable,
+    WorkflowStepTable,
+    AIAutomationTable,
 )
 from .team import Team, TeamBooking, TeamEventType, TeamMember
 from .video_conference import (
@@ -27,4 +41,4 @@ from .video_conference import (
     VideoConferenceRecording,
 )
 
-__all__ = ["AuditLogTable", "AutomationExecution", "AutomationRule", "AutomationTemplate", "Base", "BookingTable", "ConsentRecord", "DSRAuditLog", "DSRRecord", "DataBreachRecord", "DataProcessingRecord", "DataRetentionSchedule", "EmailTemplate", "EventTable", "EventTypeTable", "Integration", "Resource", "ResourceBooking", "ResourceMaintenance", "Team", "TeamBooking", "TeamEventType", "TeamMember", "UserTable", "VideoConferenceConfig", "VideoConferenceMeeting", "VideoConferenceRecording", "WebhookSubscriptionTable", "WorkflowTable"]
+__all__ = ["AIAutomationTable", "AuditLogTable", "AutomationExecution", "AutomationRule", "AutomationTemplate", "Base", "BookingTable", "ChatMessageTable", "ConsentRecord", "DSRAuditLog", "DSRRecord", "DataBreachRecord", "DataProcessingRecord", "DataRetentionSchedule", "DeadLetterQueueItem", "EmailTemplate", "EventTable", "EventTypeTable", "EventTypeTeamMemberTable", "IdempotencyKeyTable", "Integration", "ManualActivationRequestTable", "NotificationTable", "PaymentIntentTable", "ReminderLogTable", "Resource", "ResourceBooking", "ResourceMaintenance", "Team", "TeamBooking", "TeamEventType", "TeamMember", "TeamMembershipTable", "UserMFATable", "UserTable", "UserTokenTable", "VideoConferenceConfig", "VideoConferenceMeeting", "VideoConferenceRecording", "WebhookLogTable", "WebhookSubscriptionTable", "WorkflowStepTable", "WorkflowTable"]

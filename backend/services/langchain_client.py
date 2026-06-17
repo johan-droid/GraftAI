@@ -79,11 +79,11 @@ def _try_init() -> None:
                 from langchain_pinecone import PineconeVectorStore
                 embeddings = OpenAIEmbeddings()
                 vector_store = PineconeVectorStore(index_name=PINECONE_INDEX, embedding=embeddings, pinecone_api_key=PINECONE_API_KEY)
-                logger.info("✅ Vector store initialized: %s", PINECONE_INDEX)
+                logger.info(" Vector store initialized: %s", PINECONE_INDEX)
         except ImportError as e:
-            logger.warning("⚠️ Vector store dependencies missing or broken: %s. Falling back to local mode.", e)
+            logger.warning(" Vector store dependencies missing or broken: %s. Falling back to local mode.", e)
         except Exception as exc:
-            logger.warning("⚠️ Vector store initialization failed (%s): %s. Falling back to local mode.", type(exc).__name__, exc)
+            logger.warning(" Vector store initialization failed (%s): %s. Falling back to local mode.", type(exc).__name__, exc)
 try:
     _try_init()
 except Exception as exc:

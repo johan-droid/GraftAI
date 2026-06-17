@@ -7,13 +7,10 @@ def _booking_action_secret() -> str:
     secret = os.getenv("BOOKING_ACTION_SECRET", "").strip()
     if secret:
         return secret
-    jwt_secret = os.getenv("JWT_SECRET", "").strip()
-    if jwt_secret:
-        return jwt_secret
-    secret_key = os.getenv("SECRET_KEY", "").strip()
-    if secret_key:
-        return secret_key
-    msg = "BOOKING_ACTION_SECRET, JWT_SECRET, or SECRET_KEY must be configured for booking action tokens."
+    msg = (
+        "BOOKING_ACTION_SECRET must be configured separately from JWT_SECRET/SECRET_KEY "
+        "for booking action tokens. Reusing JWT signing keys for HMAC weakens security."
+    )
     raise ValueError(msg)
 
 def create_public_action_token(booking_id: str, email: str) -> str:

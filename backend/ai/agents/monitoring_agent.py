@@ -234,9 +234,15 @@ class MonitoringAgent(BaseAgent):
             return {"healthy": False, "error": str(e)}
 
     async def _check_celery_health(self) -> dict[str, Any]:
-        """Check Celery workers"""
+        """Check Celery workers via inspect API."""
         try:
-            return {"healthy": True, "active_workers": 4}
+            from backend.core.celery_app import celery_app
+            inspect = celery_app.control.inspect()
+            active = inspect.active()
+            if active is None:
+                return {"healthy": False, "active_workers": 0, "error": "No Celery workers responded"}
+            total_active = sum(len(tasks) for tasks in active.values())
+            return {"healthy": True, "active_workers": len(active), "total_active_tasks": total_active}
         except Exception as e:
             return {"healthy": False, "error": str(e)}
 

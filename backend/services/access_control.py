@@ -39,7 +39,7 @@ async def check_user_attribute(db: AsyncSession, user_id: str, attribute: str, v
     information disclosure (e.g., password_hash, mfa_secret).
     """
     if attribute not in ALLOWED_ATTRIBUTES:
-        logger.warning("🚫 Blocked check_user_attribute attempt for non-whitelisted attribute: %s", attribute)
+        logger.warning(" Blocked check_user_attribute attempt for non-whitelisted attribute: %s", attribute)
         return False
     user = await db.get(UserTable, user_id)
     if not user:

@@ -3,7 +3,7 @@
   "scripts": {
     "dev": "node ./scripts/dev-concurrent.js",
     "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && poetry run uvicorn backend.main:app --reload",
+    "dev:backend": "cd backend && poetry run uvicorn backend.api.main:app --reload",
     "build:frontend": "cd frontend && npm run build",
     "lint:frontend": "cd frontend && npm run lint",
     "test:backend": "cd backend && pytest",

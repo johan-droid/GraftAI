@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Tickle Render Backend
         run: |
-          curl -sS https://graftai-api.onrender.com/health || echo "Backend waking up..."
+          curl -sS https://graftai-abu1.onrender.com/health || echo "Backend waking up..."
       
       - name: Tickle Production Frontend (Optional)
         run: |

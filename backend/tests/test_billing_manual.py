@@ -1,3 +1,9 @@
+"""Manual billing activation tests (require S3/storage + admin SMTP).
+
+Quarantined in Phase 5: these run only when RUN_MANUAL_BILLING_TESTS=1.
+CI unit/integration jobs skip them by default.
+"""
+
 import os
 
 import pytest
@@ -5,6 +11,11 @@ from sqlalchemy import select
 
 import backend.services.storage as storage_module
 from backend.models.tables import ManualActivationRequestTable
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("RUN_MANUAL_BILLING_TESTS") != "1",
+    reason="Manual billing tests require storage/SMTP; set RUN_MANUAL_BILLING_TESTS=1 to run",
+)
 
 
 @pytest.mark.asyncio

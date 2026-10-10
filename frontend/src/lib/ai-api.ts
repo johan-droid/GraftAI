@@ -320,7 +320,7 @@ export interface WebSocketCallbacks {
 }
 
 export function normalizeWebSocketUrl(rawUrl?: string): string {
-  const fallbackUrl = "https://graftai.onrender.com";
+  const fallbackUrl = "https://graftai-abu1.onrender.com";
   const value = rawUrl?.trim() || fallbackUrl;
   let normalized = value;
 
@@ -335,7 +335,7 @@ export function normalizeWebSocketUrl(rawUrl?: string): string {
   try {
     url = new URL(normalized);
   } catch (error) {
-    return "wss://graftai.onrender.com/api/v1/monitoring/ws";
+    return "wss://graftai-abu1.onrender.com/api/v1/monitoring/ws";
   }
 
   if (url.protocol === "http:") {

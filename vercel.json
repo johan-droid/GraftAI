@@ -1,9 +1,9 @@
 {
   "version": 2,
   "name": "graftai-frontend",
-  "buildCommand": "cd frontend && npm install && npm run build && node scripts/normalize-sw.js",
+  "buildCommand": "cd frontend && npm ci && npm run build && node scripts/normalize-sw.js",
   "framework": "nextjs",
-  "installCommand": "cd frontend && npm install",
+  "installCommand": "cd frontend && npm ci",
   "env": {
     "AUTH_URL": "https://www.graftai.tech",
     "BACKEND_URL": "https://graftai-abu1.onrender.com",

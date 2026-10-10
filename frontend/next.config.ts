@@ -71,7 +71,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     const defaultBackend =
       process.env.NODE_ENV === "production"
-        ? "https://graftai.onrender.com"
+        ? "https://graftai-abu1.onrender.com"
         : "http://127.0.0.1:8000";
     const rawBackendBaseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL ||

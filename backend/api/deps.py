@@ -1,45 +1,30 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from backend.services.auth_service import decode_jwt_token
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+"""Backwards-compatible re-exports.
 
+Canonical auth dependencies live in :mod:`backend.auth.schemes`
+(cookie-aware ``get_current_user`` + ``require_admin``).
+This module re-exports them so existing ``from backend.api.deps import ...``
+imports keep working, and adds ``require_active_subscription``.
+"""
+
+from fastapi import Depends
+
+from backend.auth.schemes import (
+    get_current_user,
+    get_current_user_id,
+    oauth2_scheme,
+    require_admin,
+)
 from backend.models.tables import UserTable
 from backend.utils.db import get_db
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/social/exchange")
-from backend.auth.config import ALGORITHM, SECRET_KEY
-
-
-async def get_current_user_id(token: str=Depends(oauth2_scheme), db: AsyncSession=Depends(get_db)) -> str:
-    """Helper to get just the user ID from the token or API key."""
-    user = await get_current_user(token=token, db=db)
-    return user.id
-
-async def get_current_user(token: str=Depends(oauth2_scheme), db: AsyncSession=Depends(get_db)) -> UserTable:
-    credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
-    try:
-        payload = await decode_jwt_token(token)
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except HTTPException:
-        raise credentials_exception
-    stmt = select(UserTable).where(UserTable.id == user_id)
-    user = (await db.execute(stmt)).scalars().first()
-    if user is None:
-        raise credentials_exception
-    raw_version = payload.get("version", 0)
-    try:
-        token_version = int(raw_version)
-    except (ValueError, TypeError):
-        token_version = 0
-    if getattr(user, "token_version", 0) > token_version:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session has been revoked. Please log in again.", headers={"WWW-Authenticate": "Bearer"})
-    from backend.services.usage import increment_usage
-    await increment_usage(db, user.id, "api_calls")
-    return user
+__all__ = [
+    "get_current_user",
+    "get_current_user_id",
+    "get_db",
+    "oauth2_scheme",
+    "require_active_subscription",
+    "require_admin",
+]
 
 async def require_active_subscription(current_user: UserTable=Depends(get_current_user)) -> UserTable:
     """Dependency to enforce active paid subscription or active trial for premium endpoints."""

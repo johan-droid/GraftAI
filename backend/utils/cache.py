@@ -1,9 +1,11 @@
 """Compatibility cache helpers for modules importing `backend.utils.cache`.
 
-This module provides lightweight async `get_cache`/`set_cache`, lock helpers
-and a `get_redis_client` shim. It delegates to `backend.services.cache` or
-`backend.services.redis_client` when available, and otherwise falls back to
-in-memory implementations suitable for local development.
+CANONICAL LAYERS (Phase 3 decision):
+- Connection: ``backend.core.redis.get_redis`` (JSON codec, dev fallback).
+- Binary/msgpack cache: ``backend.services.cache`` (via ``services.redis_client``).
+- This module: backwards-compatible facade — delegates to ``services.cache``
+  when available, else in-memory fallback. New code should import from
+  ``backend.core.redis`` or ``backend.services.cache`` directly.
 """
 from __future__ import annotations
 

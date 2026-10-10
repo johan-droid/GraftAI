@@ -1,15 +1,17 @@
-# 📚 GraftAI Documentation
+# GraftAI Documentation
 
-This directory contains comprehensive developer documentation for GraftAI.
+This directory contains developer documentation for GraftAI.
 
 ## 📖 Available Documentation
 
 | Document | Description |
 |----------|-------------|
-| [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) | Complete API reference with endpoints, authentication, and examples |
-| [DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md) | Integration guide, SDK usage, and best practices |
-| [FRONTEND_DOCUMENTATION.md](./FRONTEND_DOCUMENTATION.md) | Component library, design system, and UI patterns |
-| [DATABASE_MIGRATIONS.md](./DATABASE_MIGRATIONS.md) | Database schema and migration guides |
+| [auth_openapi.yaml](./auth_openapi.yaml) | Auth API OpenAPI spec |
+| [RATE_LIMITING.md](./RATE_LIMITING.md) | Redis rate limiter: tiers, hashing, refresh |
+| [migrations/](./migrations) | API-key migration scripts and SQL |
+
+> Planned docs not yet written: API_DOCUMENTATION.md, DEVELOPER_GUIDE.md,
+> FRONTEND_DOCUMENTATION.md, DATABASE_MIGRATIONS.md. Do not link them until created.
 
 ## 🚀 Quick Links
 

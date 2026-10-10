@@ -58,6 +58,7 @@ build_log*.txt
 # =============================================================================
 .env
 .env.local
+local.env
 .env.production
 .env.production.local
 .env.development

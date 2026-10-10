@@ -2,10 +2,12 @@
 Secure configuration management for GraftAI backend.
 Provides encrypted storage and validation for sensitive configuration.
 """
+
 import base64
 import json
 import logging
 import os
+import secrets
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -16,8 +18,10 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 logger = logging.getLogger(__name__)
 
+
 class ConfigType(Enum):
     """Configuration value types."""
+
     STRING = "string"
     INTEGER = "integer"
     BOOLEAN = "boolean"
@@ -25,9 +29,11 @@ class ConfigType(Enum):
     JSON = "json"
     ENCRYPTED = "encrypted"
 
+
 @dataclass
 class ConfigField:
     """Configuration field definition."""
+
     key: str
     config_type: ConfigType
     required: bool = True
@@ -38,22 +44,186 @@ class ConfigField:
     description: str | None = None
     is_secret: bool = False
 
+
 class SecureConfig:
     """Secure configuration manager with encryption support."""
 
-    def __init__(self, encryption_key: str | None=None):
+    def __init__(self, encryption_key: str | None = None):
         self.encryption_key = encryption_key
         self.cipher_suite: Fernet | None = None
         self.config_cache: dict[str, Any] = {}
         if encryption_key:
             try:
-                kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=b"graftai_secure_config_salt", iterations=100000)
+                # Random per-process salt: nothing persists these ciphertexts, and a
+                # fixed salt lets a precomputed table attack the passphrase. 600k
+                # iterations is the OWASP floor for PBKDF2-HMAC-SHA256.
+                kdf = PBKDF2HMAC(
+                    algorithm=hashes.SHA256(),
+                    length=32,
+                    salt=secrets.token_bytes(16),
+                    iterations=600_000,
+                )
                 key = base64.urlsafe_b64encode(kdf.derive(encryption_key.encode()))
                 self.cipher_suite = Fernet(key)
             except Exception as e:
                 logger.exception("Failed to initialize encryption: %s", e)
                 self.cipher_suite = None
-        self.config_schema = {"DATABASE_URL": ConfigField(key="DATABASE_URL", config_type=ConfigType.ENCRYPTED, required=True, description="PostgreSQL connection string"), "REDIS_URL": ConfigField(key="REDIS_URL", config_type=ConfigType.STRING, required=True, default="redis://localhost:6379/0", description="Redis connection URL"), "SECRET_KEY": ConfigField(key="SECRET_KEY", config_type=ConfigType.ENCRYPTED, required=True, min_length=32, description="JWT secret key"), "JWT_SECRET": ConfigField(key="JWT_SECRET", config_type=ConfigType.ENCRYPTED, required=True, min_length=32, description="JWT signing secret"), "NEXTAUTH_SECRET": ConfigField(key="NEXTAUTH_SECRET", config_type=ConfigType.ENCRYPTED, required=True, min_length=32, description="NextAuth secret"), "GOOGLE_CLIENT_ID": ConfigField(key="GOOGLE_CLIENT_ID", config_type=ConfigType.ENCRYPTED, required=False, description="Google OAuth client ID"), "GOOGLE_CLIENT_SECRET": ConfigField(key="GOOGLE_CLIENT_SECRET", config_type=ConfigType.ENCRYPTED, required=False, description="Google OAuth client secret"), "MICROSOFT_CLIENT_ID": ConfigField(key="MICROSOFT_CLIENT_ID", config_type=ConfigType.ENCRYPTED, required=False, description="Microsoft OAuth client ID"), "MICROSOFT_CLIENT_SECRET": ConfigField(key="MICROSOFT_CLIENT_SECRET", config_type=ConfigType.ENCRYPTED, required=False, description="Microsoft OAuth client secret"), "OPENAI_API_KEY": ConfigField(key="OPENAI_API_KEY", config_type=ConfigType.ENCRYPTED, required=False, description="OpenAI API key"), "GROQ_API_KEY": ConfigField(key="GROQ_API_KEY", config_type=ConfigType.ENCRYPTED, required=False, description="Groq API key"), "PINECONE_API_KEY": ConfigField(key="PINECONE_API_KEY", config_type=ConfigType.ENCRYPTED, required=False, description="Pinecone API key"), "STRIPE_SECRET_KEY": ConfigField(key="STRIPE_SECRET_KEY", config_type=ConfigType.ENCRYPTED, required=False, description="Stripe secret key"), "STRIPE_WEBHOOK_SECRET": ConfigField(key="STRIPE_WEBHOOK_SECRET", config_type=ConfigType.ENCRYPTED, required=False, description="Stripe webhook secret"), "RAZORPAY_KEY_ID": ConfigField(key="RAZORPAY_KEY_ID", config_type=ConfigType.ENCRYPTED, required=False, description="Razorpay key ID"), "RAZORPAY_KEY_SECRET": ConfigField(key="RAZORPAY_KEY_SECRET", config_type=ConfigType.ENCRYPTED, required=False, description="Razorpay key secret"), "RESEND_API_KEY": ConfigField(key="RESEND_API_KEY", config_type=ConfigType.ENCRYPTED, required=False, description="Resend API key"), "SMTP_PASSWORD": ConfigField(key="SMTP_PASSWORD", config_type=ConfigType.ENCRYPTED, required=False, description="SMTP password"), "SENTRY_DSN": ConfigField(key="SENTRY_DSN", config_type=ConfigType.ENCRYPTED, required=False, description="Sentry DSN"), "ENV": ConfigField(key="ENV", config_type=ConfigType.STRING, required=True, default="development", pattern="^(development|staging|production)$", description="Environment"), "DEBUG": ConfigField(key="DEBUG", config_type=ConfigType.BOOLEAN, required=True, default=False, description="Debug mode"), "PORT": ConfigField(key="PORT", config_type=ConfigType.INTEGER, required=True, default=8000, description="Server port"), "BACKEND_URL": ConfigField(key="BACKEND_URL", config_type=ConfigType.STRING, required=True, default="http://localhost:8000", description="Backend URL"), "FRONTEND_URL": ConfigField(key="FRONTEND_URL", config_type=ConfigType.STRING, required=True, default="http://localhost:3000", description="Frontend URL")}
+        self.config_schema = {
+            "DATABASE_URL": ConfigField(
+                key="DATABASE_URL",
+                config_type=ConfigType.ENCRYPTED,
+                required=True,
+                description="PostgreSQL connection string",
+            ),
+            "REDIS_URL": ConfigField(
+                key="REDIS_URL",
+                config_type=ConfigType.STRING,
+                required=True,
+                default="redis://localhost:6379/0",
+                description="Redis connection URL",
+            ),
+            "SECRET_KEY": ConfigField(
+                key="SECRET_KEY",
+                config_type=ConfigType.ENCRYPTED,
+                required=True,
+                min_length=32,
+                description="JWT secret key",
+            ),
+            "JWT_SECRET": ConfigField(
+                key="JWT_SECRET",
+                config_type=ConfigType.ENCRYPTED,
+                required=True,
+                min_length=32,
+                description="JWT signing secret",
+            ),
+            "NEXTAUTH_SECRET": ConfigField(
+                key="NEXTAUTH_SECRET",
+                config_type=ConfigType.ENCRYPTED,
+                required=True,
+                min_length=32,
+                description="NextAuth secret",
+            ),
+            "GOOGLE_CLIENT_ID": ConfigField(
+                key="GOOGLE_CLIENT_ID",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Google OAuth client ID",
+            ),
+            "GOOGLE_CLIENT_SECRET": ConfigField(
+                key="GOOGLE_CLIENT_SECRET",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Google OAuth client secret",
+            ),
+            "MICROSOFT_CLIENT_ID": ConfigField(
+                key="MICROSOFT_CLIENT_ID",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Microsoft OAuth client ID",
+            ),
+            "MICROSOFT_CLIENT_SECRET": ConfigField(
+                key="MICROSOFT_CLIENT_SECRET",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Microsoft OAuth client secret",
+            ),
+            "OPENAI_API_KEY": ConfigField(
+                key="OPENAI_API_KEY",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="OpenAI API key",
+            ),
+            "GROQ_API_KEY": ConfigField(
+                key="GROQ_API_KEY",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Groq API key",
+            ),
+            "PINECONE_API_KEY": ConfigField(
+                key="PINECONE_API_KEY",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Pinecone API key",
+            ),
+            "STRIPE_SECRET_KEY": ConfigField(
+                key="STRIPE_SECRET_KEY",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Stripe secret key",
+            ),
+            "STRIPE_WEBHOOK_SECRET": ConfigField(
+                key="STRIPE_WEBHOOK_SECRET",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Stripe webhook secret",
+            ),
+            "RAZORPAY_KEY_ID": ConfigField(
+                key="RAZORPAY_KEY_ID",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Razorpay key ID",
+            ),
+            "RAZORPAY_KEY_SECRET": ConfigField(
+                key="RAZORPAY_KEY_SECRET",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Razorpay key secret",
+            ),
+            "RESEND_API_KEY": ConfigField(
+                key="RESEND_API_KEY",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Resend API key",
+            ),
+            "SMTP_PASSWORD": ConfigField(
+                key="SMTP_PASSWORD",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="SMTP password",
+            ),
+            "SENTRY_DSN": ConfigField(
+                key="SENTRY_DSN",
+                config_type=ConfigType.ENCRYPTED,
+                required=False,
+                description="Sentry DSN",
+            ),
+            "ENV": ConfigField(
+                key="ENV",
+                config_type=ConfigType.STRING,
+                required=True,
+                default="development",
+                pattern="^(development|staging|production)$",
+                description="Environment",
+            ),
+            "DEBUG": ConfigField(
+                key="DEBUG",
+                config_type=ConfigType.BOOLEAN,
+                required=True,
+                default=False,
+                description="Debug mode",
+            ),
+            "PORT": ConfigField(
+                key="PORT",
+                config_type=ConfigType.INTEGER,
+                required=True,
+                default=8000,
+                description="Server port",
+            ),
+            "BACKEND_URL": ConfigField(
+                key="BACKEND_URL",
+                config_type=ConfigType.STRING,
+                required=True,
+                default="http://localhost:8000",
+                description="Backend URL",
+            ),
+            "FRONTEND_URL": ConfigField(
+                key="FRONTEND_URL",
+                config_type=ConfigType.STRING,
+                required=True,
+                default="http://localhost:3000",
+                description="Frontend URL",
+            ),
+        }
 
     def encrypt_value(self, value: str) -> str:
         """
@@ -96,7 +266,7 @@ class SecureConfig:
             logger.exception("Failed to decrypt value: %s", e)
             raise
 
-    def get_config_value(self, key: str, use_cache: bool=True) -> Any:
+    def get_config_value(self, key: str, use_cache: bool = True) -> Any:
         """
         Get configuration value with validation and decryption.
 
@@ -201,12 +371,13 @@ class SecureConfig:
                 raise ValueError(msg)
             if field.pattern:
                 import re
+
                 if not re.match(field.pattern, value):
                     msg = f"Value for {field.key} does not match pattern: {value}"
                     raise ValueError(msg)
             return value
 
-    def set_config_value(self, key: str, value: Any, encrypt: bool=False) -> None:
+    def set_config_value(self, key: str, value: Any, encrypt: bool = False) -> None:
         """
         Set configuration value with optional encryption.
 
@@ -233,13 +404,24 @@ class SecureConfig:
         Raises:
             ValueError: If critical configuration is missing
         """
-        results = {"valid": True, "errors": [], "warnings": [], "missing_secrets": [], "configured": []}
+        results = {
+            "valid": True,
+            "errors": [],
+            "warnings": [],
+            "missing_secrets": [],
+            "configured": [],
+        }
         for key, field in self.config_schema.items():
             try:
                 value = self.get_config_value(key, use_cache=False)
                 if value is not None:
                     results["configured"].append(key)
-                    if field.is_secret and value in ["change-me-in-production", "your-secret-key", "REPLACE_ME", "dev-fallback-secret"]:
+                    if field.is_secret and value in [
+                        "change-me-in-production",
+                        "your-secret-key",
+                        "REPLACE_ME",
+                        "dev-fallback-secret",
+                    ]:
                         results["missing_secrets"].append(key)
                         results["warnings"].append(f"Using default secret for {key}")
             except ValueError as e:
@@ -259,7 +441,19 @@ class SecureConfig:
         """
         validation_results = self.validate_all_config()
         security_issues = []
-        weak_patterns = ["test", "dev", "default", "example", "sample", "demo", "123", "abc", "password", "secret", "key"]
+        weak_patterns = [
+            "test",
+            "dev",
+            "default",
+            "example",
+            "sample",
+            "demo",
+            "123",
+            "abc",
+            "password",
+            "secret",
+            "key",
+        ]
         for key in self.config_schema:
             if self.config_schema[key].is_secret:
                 try:
@@ -267,14 +461,30 @@ class SecureConfig:
                     if value:
                         for pattern in weak_patterns:
                             if pattern.lower() in str(value).lower():
-                                security_issues.append(f"Weak pattern detected in {key}")
+                                security_issues.append(
+                                    f"Weak pattern detected in {key}"
+                                )
                                 break
                 except ValueError:
                     pass
-        return {"validation": validation_results, "security_issues": security_issues, "encryption_enabled": self.cipher_suite is not None, "total_configs": len(self.config_schema), "required_configs": len([f for f in self.config_schema.values() if f.required]), "secret_configs": len([f for f in self.config_schema.values() if f.is_secret])}
+        return {
+            "validation": validation_results,
+            "security_issues": security_issues,
+            "encryption_enabled": self.cipher_suite is not None,
+            "total_configs": len(self.config_schema),
+            "required_configs": len(
+                [f for f in self.config_schema.values() if f.required]
+            ),
+            "secret_configs": len(
+                [f for f in self.config_schema.values() if f.is_secret]
+            ),
+        }
+
+
 _secure_config: SecureConfig | None = None
 
-def get_secure_config(encryption_key: str | None=None) -> SecureConfig:
+
+def get_secure_config(encryption_key: str | None = None) -> SecureConfig:
     """Get or create global secure config instance."""
     global _secure_config
     if _secure_config is None:
@@ -282,6 +492,7 @@ def get_secure_config(encryption_key: str | None=None) -> SecureConfig:
             encryption_key = os.getenv("CONFIG_ENCRYPTION_KEY")
         _secure_config = SecureConfig(encryption_key)
     return _secure_config
+
 
 def reset_secure_config():
     """Reset global secure config instance (primarily for testing)."""

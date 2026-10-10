@@ -1,40 +1,37 @@
 # GraftAI
 
-GraftAI is an AI-based scheduling and booking system.
+AI-based scheduling and booking system.
 
 ## Stack
-- Frontend: Next.js 16 (App Router), TypeScript, Tailwind CSS, npm
-- Backend: Python 3.12, FastAPI, SQLAlchemy (async), Celery, Poetry
-- Database: PostgreSQL, Redis
+
+- **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS, npm — deployed on **Vercel**
+- **Backend:** Python 3.12, FastAPI, SQLAlchemy (async), Celery — deployed on **Render** (API + worker)
+- **Data:** PostgreSQL, Redis
 
 ## Quick Start
-```
-docker-compose up
-```
 
-## Development
-
-- Run the backend in a venv (recommended):
+See [docs/development/local-setup.md](./docs/development/local-setup.md).
 
 ```bash
-python -m venv .venv
-# Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-# macOS / Linux:
-source .venv/bin/activate
-pip install -r backend/requirements.txt
+# Local infra (Postgres + Redis)
+docker compose up -d db redis
+
+# Backend: pip install -r backend/requirements.txt
+# Frontend: cd frontend && npm ci
 ```
 
-- Run unit tests:
+## Docs
 
-```bash
-# Install test deps if needed
-pip install pytest pytest-asyncio
-python -m pytest -q
-```
+- [Documentation index](./docs/README.md)
+- [Architecture overview](./docs/architecture/overview.md)
+- [API overview](./docs/api/overview.md)
+- [Vercel deployment](./docs/deployment/vercel.md)
+- [Render deployment](./docs/deployment/render.md)
 
-Run only the rate limiter tests:
+## Project layout
 
-```bash
-python -m pytest backend/tests/unit/test_rate_limiter.py -q
-```
+- `frontend/` — Next.js app (Vercel)
+- `backend/` — FastAPI API + Celery worker (Render)
+- `docs/` — canonical documentation
+- `infrastructure/docker/compose.yaml` — local Postgres + Redis
+- `scripts/` — dev and check helpers

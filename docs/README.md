@@ -1,25 +1,16 @@
 # GraftAI Documentation
 
-This directory contains developer documentation for GraftAI.
+## Index
 
-## 📖 Available Documentation
+- [Architecture overview](./architecture/overview.md) — frontend/backend boundaries, data flow
+- [Local setup](./development/local-setup.md) — reproducible dev environment
+- [Vercel deployment](./deployment/vercel.md) — frontend build, env, routing
+- [Render deployment](./deployment/render.md) — API, worker, database, queues
+- [API overview](./api/overview.md) — entrypoint, auth, contracts
+- [Repository audit](./audits/repository-audit.md) — findings and structural changes
 
-| Document | Description |
-|----------|-------------|
-| [auth_openapi.yaml](./auth_openapi.yaml) | Auth API OpenAPI spec |
-| [RATE_LIMITING.md](./RATE_LIMITING.md) | Redis rate limiter: tiers, hashing, refresh |
-| [migrations/](./migrations) | API-key migration scripts and SQL |
+## Reference (existing, kept as-is)
 
-> Planned docs not yet written: API_DOCUMENTATION.md, DEVELOPER_GUIDE.md,
-> FRONTEND_DOCUMENTATION.md, DATABASE_MIGRATIONS.md. Do not link them until created.
-
-## 🚀 Quick Links
-
-- **Developer Hub**: https://www.graftai.tech/developers
-- **API Status**: https://www.graftai.tech/api-status
-- **GitHub**: https://github.com/graftai
-
-## 💬 Support
-
-- [GitHub Discussions](https://github.com/graftai/discussions)
-- [Developer Support](mailto:dev@graftai.com)
+- [auth_openapi.yaml](./auth_openapi.yaml) — Auth API OpenAPI subset
+- [RATE_LIMITING.md](./RATE_LIMITING.md) — Redis rate limiter: tiers, hashing, refresh
+- [migrations/](./migrations) — API-key migration scripts and SQL

@@ -91,13 +91,13 @@ allGood &= check("Virtual environment exists", () => {
 });
 
 console.log("\nDevelopment Scripts:");
-allGood &= check("dev-concurrent.js exists", () => {
-  checkFile(path.join(repoRoot, "scripts", "dev-concurrent.js"));
+allGood &= check("dev.js exists", () => {
+  checkFile(path.join(repoRoot, "scripts", "dev.js"));
 });
 
 allGood &= check("package.json configured", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
-  if (!pkg.scripts.dev || !pkg.scripts.dev.includes("dev-concurrent")) {
+  if (!pkg.scripts.dev || !pkg.scripts.dev.includes("scripts/dev.js")) {
     throw new Error("package.json not configured for concurrent development");
   }
 });

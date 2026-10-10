@@ -1,11 +1,25 @@
 import asyncio
 import os
 import re
+import sys
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from backend.utils.db import DATABASE_URL
+
+
+def _refuse_in_production() -> None:
+    env = os.getenv("ENV", "development").lower()
+    if env in {"production", "prod", "live"}:
+        print("REFUSED: destructive script blocked in production (ENV=%s)." % env, file=sys.stderr)
+        raise SystemExit(1)
+    if os.getenv("ALLOW_DESTRUCTIVE_DB_SCRIPTS") != "1":
+        print(
+            "REFUSED: set ALLOW_DESTRUCTIVE_DB_SCRIPTS=1 to run this destructive script.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
 
 
 async def drop_all():
@@ -59,4 +73,5 @@ async def drop_all():
 
 
 if __name__ == "__main__":
+    _refuse_in_production()
     asyncio.run(drop_all())

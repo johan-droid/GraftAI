@@ -109,6 +109,16 @@ def parse_args():
 
 
 if __name__ == "__main__":
+    env = os.getenv("ENV", "development").lower()
+    if env in {"production", "prod", "live"}:
+        print(f"REFUSED: destructive script blocked in production (ENV={env}).", file=sys.stderr)
+        sys.exit(1)
+    if os.getenv("ALLOW_DESTRUCTIVE_DB_SCRIPTS") != "1":
+        print(
+            "REFUSED: set ALLOW_DESTRUCTIVE_DB_SCRIPTS=1 to run this destructive script.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     args = parse_args()
     if not args.yes:
         print("WARNING: This will DROP ALL TABLES in the configured database.")
